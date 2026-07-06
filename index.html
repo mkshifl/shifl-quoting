@@ -1,0 +1,967 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Shifl Trucking Quoting</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --navy:#1a2e4a;--steel:#2e75b6;--blue-bg:#e8f1fa;--blue-mid:#c5d9f0;
+  --green:#2d7d46;--green-bg:#e8f5ec;
+  --red:#c0392b;--red-bg:#fdecea;
+  --amber:#8a5c0c;--amber-bg:#fef3e0;
+  --purple:#5b21b6;--purple-bg:#ede9fe;
+  --teal:#0d7377;--teal-bg:#d1f5f5;
+  --gray-50:#f7f8fa;--gray-100:#eef0f3;--gray-200:#dde0e6;
+  --gray-300:#c4c9d4;--gray-500:#6b7280;--gray-700:#374151;--gray-900:#111827;
+  --white:#fff;--radius:8px;--radius-lg:12px;
+  --shadow-sm:0 1px 3px rgba(0,0,0,.08);--shadow-md:0 4px 16px rgba(0,0,0,.12);
+}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:14px;color:var(--gray-900);background:var(--gray-50);line-height:1.5}
+/* Setup / Loading screens */
+.screen{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:var(--gray-50);z-index:300}
+.setup-box{background:var(--white);border-radius:16px;padding:36px;width:560px;max-width:95vw;box-shadow:var(--shadow-md)}
+.setup-logo{display:flex;align-items:center;gap:12px;margin-bottom:24px}
+.setup-logo h1{font-size:22px;font-weight:800;color:var(--navy);letter-spacing:.5px}
+.setup-logo p{font-size:12px;color:var(--gray-500);margin-top:2px}
+.step{border:1px solid var(--gray-200);border-radius:var(--radius);padding:14px 16px;margin-bottom:12px}
+.step-num{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;background:var(--navy);color:#fff;border-radius:50%;font-size:11px;font-weight:700;margin-right:8px}
+.step h3{display:inline;font-size:13px;font-weight:600}
+.step p{font-size:12px;color:var(--gray-500);margin-top:6px;line-height:1.6}
+.step code{background:var(--gray-100);padding:1px 5px;border-radius:3px;font-family:monospace;font-size:11px}
+.loading-spin{width:36px;height:36px;border:3px solid var(--gray-200);border-top-color:var(--steel);border-radius:50%;animation:spin .8s linear infinite;margin-bottom:14px}
+@keyframes spin{to{transform:rotate(360deg)}}
+/* App layout */
+.app{display:flex;height:100vh;overflow:hidden}
+.sidebar{width:220px;flex-shrink:0;background:var(--navy);display:flex;flex-direction:column}
+.brand{padding:16px 18px 14px;border-bottom:1px solid rgba(255,255,255,.08)}
+.nav{flex:1;padding:6px 0;overflow-y:auto}
+.nav-btn{display:flex;align-items:center;gap:9px;width:100%;padding:10px 18px;background:none;border:none;border-left:3px solid transparent;color:rgba(255,255,255,.58);font-size:13px;cursor:pointer;text-align:left;font-family:inherit;transition:all .12s}
+.nav-btn:hover{background:rgba(255,255,255,.06);color:#fff}
+.nav-btn.active{background:rgba(255,255,255,.1);color:#fff;border-left-color:#60a5fa;font-weight:500}
+.nav-btn .ico{font-size:16px;width:20px;text-align:center}
+.sidebar-foot{padding:10px 18px;border-top:1px solid rgba(255,255,255,.07)}
+.sync-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#4ade80;margin-right:6px;flex-shrink:0}
+.sync-dot.off{background:#ef4444}
+.sync-dot.loading{background:#fbbf24;animation:pulse 1s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.sync-label{font-size:11px;color:rgba(255,255,255,.4)}
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.topbar{background:var(--white);border-bottom:1px solid var(--gray-200);padding:0 22px;height:54px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;box-shadow:var(--shadow-sm)}
+.topbar h1{font-size:15px;font-weight:600}
+.topbar-right{display:flex;gap:8px;align-items:center}
+.page{flex:1;overflow-y:auto;padding:20px 22px}
+.saving-badge{font-size:11px;color:var(--gray-500);animation:pulse 1s infinite}
+/* Buttons */
+.btn{display:inline-flex;align-items:center;gap:5px;padding:7px 14px;border-radius:var(--radius);font-size:13px;font-weight:500;cursor:pointer;border:1px solid var(--gray-200);background:var(--white);color:var(--gray-700);transition:all .12s;font-family:inherit;white-space:nowrap;line-height:1}
+.btn:hover{background:var(--gray-50);border-color:var(--gray-300)}
+.btn:active{transform:scale(.98)}
+.btn.blue{background:var(--steel);border-color:var(--steel);color:#fff}
+.btn.blue:hover{background:#1e5fa0}
+.btn.sm{padding:4px 9px;font-size:12px}
+.btn.ico-btn{padding:5px 7px;font-size:14px}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.toggle-group{display:inline-flex;border:1px solid var(--gray-200);border-radius:var(--radius);overflow:hidden;background:var(--gray-50)}
+.tgl{padding:5px 11px;font-size:12px;font-weight:500;cursor:pointer;border:none;background:transparent;color:var(--gray-500);font-family:inherit;transition:all .12s;white-space:nowrap}
+.tgl.on{background:var(--white);color:var(--steel);box-shadow:0 1px 3px rgba(0,0,0,.1)}
+/* Forms */
+.field{margin-bottom:12px}
+.field label{display:block;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--gray-500);margin-bottom:4px}
+input[type=text],input[type=number],input[type=password],select,textarea{width:100%;padding:7px 10px;border:1px solid var(--gray-200);border-radius:var(--radius);font-size:13px;color:var(--gray-900);background:var(--white);font-family:inherit;transition:border .12s}
+input:focus,select:focus{outline:none;border-color:var(--steel);box-shadow:0 0 0 3px var(--blue-bg)}
+input[type=number]{-moz-appearance:textfield}
+input[type=number]::-webkit-inner-spin-button{opacity:.4}
+/* Cards */
+.card{background:var(--white);border:1px solid var(--gray-200);border-radius:var(--radius-lg);padding:18px;box-shadow:var(--shadow-sm);margin-bottom:16px}
+.card:last-child{margin-bottom:0}
+.sec-head{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gray-500);margin-bottom:11px;padding-bottom:8px;border-bottom:1px solid var(--gray-100)}
+.charge-group-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gray-300);margin:12px 0 6px;padding-bottom:4px;border-bottom:1px dashed var(--gray-100)}
+/* Tables */
+.tbl-wrap{overflow-x:auto;border-radius:var(--radius-lg);border:1px solid var(--gray-200);background:var(--white);box-shadow:var(--shadow-sm)}
+table{width:100%;border-collapse:collapse;font-size:13px}
+thead th{padding:9px 12px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-500);background:var(--gray-50);border-bottom:1px solid var(--gray-200);white-space:nowrap}
+tbody tr{border-bottom:1px solid var(--gray-100)}
+tbody tr:last-child{border-bottom:none}
+tbody tr:hover{background:var(--gray-50)}
+tbody td{padding:9px 12px;color:var(--gray-700);vertical-align:middle}
+.carrier-row{cursor:pointer}
+.carrier-row.sel{background:var(--blue-bg)!important}
+.carrier-row.sel td{color:var(--navy)}
+/* Badges */
+.badge{display:inline-flex;align-items:center;padding:2px 7px;border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap}
+.badge.g{background:var(--green-bg);color:var(--green)}
+.badge.r{background:var(--red-bg);color:var(--red)}
+.badge.a{background:var(--amber-bg);color:var(--amber)}
+.badge.b{background:var(--blue-bg);color:var(--steel)}
+.badge.gr{background:var(--gray-100);color:var(--gray-500)}
+.badge.p{background:var(--purple-bg);color:var(--purple)}
+.badge.t{background:var(--teal-bg);color:var(--teal)}
+.badge.best{background:var(--navy);color:#fff}
+/* KPI */
+.kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
+.kpi{background:var(--white);border:1px solid var(--gray-200);border-radius:var(--radius-lg);padding:14px 18px}
+.kpi-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-500);margin-bottom:5px}
+.kpi-val{font-size:24px;font-weight:700;line-height:1}
+.kpi-val.g{color:var(--green)}.kpi-val.b{color:var(--steel)}
+/* Layout */
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+.g4{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start}
+.sticky-top{position:sticky;top:0}
+/* Preview */
+.prev-row td{padding:6px 0;vertical-align:middle;font-size:13px}
+.prev-row td:first-child{color:var(--gray-500);width:150px}
+.prev-row td:nth-child(2){color:var(--gray-400);width:85px}
+.prev-row td:nth-child(3){font-weight:600;color:var(--steel);width:85px}
+.prev-row td:last-child{color:var(--green);font-size:12px;text-align:right}
+.prev-total td{font-weight:700;border-top:2px solid var(--gray-200);padding-top:10px}
+.prev-total td:nth-child(3){font-size:18px;color:var(--steel)}
+.charge-note{font-size:10px;color:var(--gray-400);margin-top:1px}
+/* Alerts */
+.alert{padding:10px 14px;border-radius:var(--radius);font-size:13px;margin-bottom:12px;border-left:3px solid}
+.alert.info{background:var(--blue-bg);border-color:var(--steel);color:var(--navy)}
+.alert.warn{background:var(--amber-bg);border-color:var(--amber);color:var(--amber)}
+.alert.err{background:var(--red-bg);border-color:var(--red);color:var(--red)}
+/* Modal */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.42);display:flex;align-items:center;justify-content:center;z-index:200}
+.modal{background:var(--white);border-radius:var(--radius-lg);padding:26px;width:680px;max-width:95vw;max-height:90vh;overflow-y:auto;box-shadow:var(--shadow-md)}
+.modal-title{font-size:16px;font-weight:700;margin-bottom:18px;padding-bottom:12px;border-bottom:1px solid var(--gray-100)}
+.modal-foot{display:flex;gap:8px;margin-top:18px;padding-top:14px;border-top:1px solid var(--gray-100);justify-content:flex-end}
+/* Misc */
+.bold{font-weight:600}.muted{color:var(--gray-500)}.small{font-size:12px}
+.subtext{font-size:11px;color:var(--gray-400);margin-top:2px}
+.tag{display:inline-block;font-size:11px;background:var(--gray-100);color:var(--gray-500);border-radius:4px;padding:1px 5px}
+hr{border:none;border-top:1px solid var(--gray-100);margin:14px 0}
+.empty{text-align:center;padding:50px 24px;color:var(--gray-400)}
+.empty-ico{font-size:36px;margin-bottom:10px}
+.cond-note{font-size:10px;color:var(--gray-400);font-style:italic}
+</style>
+</head>
+<body>
+
+<!-- Setup screen -->
+<div class="screen" id="setup-screen" style="display:none">
+  <div class="setup-box">
+    <div class="setup-logo">
+      <svg width="44" height="44" viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg">
+        <rect width="60" height="60" rx="10" fill="#1a2e4a"/>
+        <polygon points="10,50 25,14 44,45" fill="white"/>
+        <polygon points="25,14 44,45 53,37" fill="rgba(255,255,255,.72)"/>
+        <polygon points="10,50 44,45 53,37 53,50" fill="rgba(255,255,255,.90)"/>
+        <line x1="25" y1="14" x2="44" y2="50" stroke="rgba(59,142,208,.5)" stroke-width="1.8"/>
+      </svg>
+      <div><h1>SHIFL</h1><p>Connect to Supabase to enable real-time sync between all users</p></div>
+    </div>
+
+    <div class="step">
+      <span class="step-num">1</span><h3>Create a free Supabase account</h3>
+      <p>Go to <strong>supabase.com</strong> → Sign up → Create a new project → wait ~2 minutes for it to provision.</p>
+    </div>
+    <div class="step">
+      <span class="step-num">2</span><h3>Run the setup SQL</h3>
+      <p>In your Supabase dashboard → <strong>SQL Editor</strong> → paste and run the SQL provided with this app (in the README or ask your developer).</p>
+    </div>
+    <div class="step">
+      <span class="step-num">3</span><h3>Enter your connection details</h3>
+      <p>Go to Supabase → <strong>Settings → API</strong> → copy your Project URL and anon public key below.</p>
+    </div>
+
+    <div id="setup-error" class="alert err" style="display:none"></div>
+
+    <div class="field" style="margin-top:16px">
+      <label>Supabase Project URL</label>
+      <input type="text" id="sb-url" placeholder="https://abcdefgh.supabase.co">
+    </div>
+    <div class="field">
+      <label>Supabase Anon Key</label>
+      <input type="password" id="sb-key" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...">
+    </div>
+    <button class="btn blue" onclick="connectSupabase()" style="width:100%;justify-content:center;padding:10px">
+      Connect & Load App
+    </button>
+    <p style="font-size:11px;color:var(--gray-400);margin-top:10px;text-align:center">
+      Your connection details are saved in this browser only — never shared with anyone.
+    </p>
+  </div>
+</div>
+
+<!-- Loading screen -->
+<div class="screen" id="loading-screen">
+  <div style="text-align:center">
+    <div class="loading-spin" style="margin:0 auto 14px"></div>
+    <div style="font-size:14px;color:var(--gray-500)" id="loading-msg">Connecting…</div>
+  </div>
+</div>
+
+<!-- Main app -->
+<div class="app" id="app" style="display:none">
+  <aside class="sidebar">
+    <div class="brand">
+      <div style="display:flex;align-items:center;gap:10px">
+        <svg width="36" height="36" viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg">
+          <rect width="60" height="60" rx="10" fill="#3B8ED0"/>
+          <polygon points="10,50 25,14 44,45" fill="white"/>
+          <polygon points="25,14 44,45 53,37" fill="rgba(255,255,255,.75)"/>
+          <polygon points="10,50 44,45 53,37 53,50" fill="rgba(255,255,255,.92)"/>
+          <polygon points="10,50 22,50 17,44" fill="rgba(255,255,255,.55)"/>
+          <line x1="25" y1="14" x2="44" y2="50" stroke="#3B8ED0" stroke-width="1.8" opacity=".35"/>
+        </svg>
+        <div>
+          <div style="font-size:17px;font-weight:800;color:#fff;letter-spacing:.5px;line-height:1">SHIFL</div>
+          <div style="font-size:10px;color:rgba(255,255,255,.45);letter-spacing:.04em;margin-top:2px;text-transform:uppercase">Trucking Quoting</div>
+        </div>
+      </div>
+    </div>
+    <nav class="nav">
+      <button class="nav-btn active" onclick="setView('quote')" id="nav-quote"><span class="ico">📋</span>Quote builder</button>
+      <button class="nav-btn" onclick="setView('rates')" id="nav-rates"><span class="ico">🚛</span>Carrier rates</button>
+      <button class="nav-btn" onclick="setView('log')" id="nav-log"><span class="ico">📁</span>Quote log</button>
+      <button class="nav-btn" onclick="setView('dash')" id="nav-dash"><span class="ico">📊</span>Dashboard</button>
+    </nav>
+    <div class="sidebar-foot">
+      <div style="display:flex;align-items:center;margin-bottom:4px">
+        <span class="sync-dot" id="sync-dot"></span>
+        <span class="sync-label" id="sync-label">Connected</span>
+      </div>
+      <div style="font-size:10px;color:rgba(255,255,255,.2)">
+        <span style="cursor:pointer;text-decoration:underline" onclick="disconnectSupabase()">Change connection</span>
+      </div>
+    </div>
+  </aside>
+
+  <div class="main">
+    <div class="topbar">
+      <h1 id="view-title">Quote builder</h1>
+      <div class="topbar-right" id="topbar-right"></div>
+    </div>
+    <div class="page" id="page"></div>
+  </div>
+</div>
+<div id="modal-root"></div>
+
+<script>
+// ═══════════════════════════════════════════════════════
+// CHARGES
+// ═══════════════════════════════════════════════════════
+const CHARGES=['base','chassis','prepull','det_port','det_cust','storage','ovw43','ovw48','bobtail','toll'];
+const LABELS={base:'Base',chassis:'Chassis',prepull:'Pre-pull',det_port:'Detention – Port',det_cust:'Detention – Customer',storage:'Storage',ovw43:'OVW (Over 43k lb)',ovw48:'OVW (Over 48k lb)',bobtail:'Bobtail',toll:'Toll'};
+function isApplicable(c,ld){
+  if((c==='det_port'||c==='det_cust')&&ld==='Drop') return false;
+  if(c==='bobtail'&&ld==='Live') return false;
+  return true;
+}
+const DEFAULT_FLAT_RATES={chassis:45,prepull:175,det_port:100,det_cust:100,storage:60,ovw43:200,ovw48:350,bobtail:0,toll:30};
+const DEFAULT_BASE_MARKUP={amount:150,mode:'flat'};
+const REGIONS=['NE','SE','Central','WC'];
+const SEED=[
+  {id:'r1',region:'WC',carrier:'Fitted',port:'Los Angeles, CA',destination:'Fontana, CA',zip:'92337',ld:'Live',active:true,base:500,chassis:40,prepull:150,det_port:80,det_cust:80,storage:40,ovw43:0,ovw48:0,bobtail:0,toll:0,notes:'American Stitch LLC'},
+  {id:'r2',region:'WC',carrier:'Fitted',port:'Long Beach, CA',destination:'Huntington Beach, CA',zip:'92648',ld:'Drop',active:true,base:365,chassis:40,prepull:150,det_port:0,det_cust:0,storage:40,ovw43:0,ovw48:0,bobtail:300,toll:0,notes:'Migo Trading LLC'},
+  {id:'r3',region:'WC',carrier:'Fast Freight',port:'Everport Terminal, CA',destination:'Stockton, CA',zip:'95206',ld:'Live',active:true,base:950,chassis:55,prepull:195,det_port:95,det_cust:80,storage:50,ovw43:0,ovw48:0,bobtail:0,toll:0,notes:'Best at a Glance'},
+  {id:'r4',region:'NE',carrier:'Platnum',port:'New York / Newark, NJ',destination:'Florida, NY',zip:'10923',ld:'Live',active:true,base:725,chassis:0,prepull:0,det_port:0,det_cust:0,storage:0,ovw43:0,ovw48:0,bobtail:0,toll:18,notes:''},
+  {id:'r5',region:'NE',carrier:'Blitz',port:'New York / Newark, NJ',destination:'Florida, NY',zip:'10923',ld:'Live',active:true,base:825,chassis:25,prepull:0,det_port:0,det_cust:0,storage:0,ovw43:0,ovw48:0,bobtail:0,toll:18,notes:'Bobtail INC'},
+  {id:'r6',region:'NE',carrier:'Express',port:'New York / Newark, NJ',destination:'Freehold, NJ',zip:'07728',ld:'Live',active:true,base:650,chassis:30,prepull:150,det_port:80,det_cust:80,storage:40,ovw43:150,ovw48:250,bobtail:0,toll:0,notes:''},
+  {id:'r7',region:'NE',carrier:'Platnum',port:'New York / Newark, NJ',destination:'Bayshore, NY',zip:'11706',ld:'Live',active:true,base:1595,chassis:35,prepull:150,det_port:90,det_cust:90,storage:40,ovw43:200,ovw48:300,bobtail:0,toll:25,notes:''},
+  {id:'r8',region:'NE',carrier:'Bound',port:'New York / Newark, NJ',destination:'Bayshore, NY',zip:'11706',ld:'Both',active:true,base:1330,chassis:40,prepull:150,det_port:85,det_cust:85,storage:35,ovw43:150,ovw48:250,bobtail:998,toll:25,notes:''},
+  {id:'r9',region:'NE',carrier:'Platnum',port:'New York / Newark, NJ',destination:'Wilkes-Barre, PA',zip:'18702',ld:'Live',active:true,base:1410,chassis:35,prepull:150,det_port:90,det_cust:90,storage:40,ovw43:200,ovw48:300,bobtail:0,toll:0,notes:''},
+  {id:'r10',region:'NE',carrier:'Bound',port:'New York / Newark, NJ',destination:'Wilkes-Barre, PA',zip:'18702',ld:'Live',active:true,base:1130,chassis:40,prepull:150,det_port:85,det_cust:85,storage:35,ovw43:150,ovw48:250,bobtail:0,toll:0,notes:''},
+  {id:'r11',region:'NE',carrier:'Wayz',port:'New York / Newark, NJ',destination:'Wilkes-Barre, PA',zip:'18702',ld:'Drop',active:true,base:1075,chassis:40,prepull:150,det_port:0,det_cust:0,storage:35,ovw43:250,ovw48:400,bobtail:700,toll:0,notes:''},
+  {id:'r12',region:'NE',carrier:'Bound',port:'New York / Newark, NJ',destination:'Greensburg, PA',zip:'15601',ld:'Live',active:true,base:2680,chassis:40,prepull:150,det_port:85,det_cust:85,storage:35,ovw43:150,ovw48:250,bobtail:0,toll:0,notes:''},
+  {id:'r13',region:'NE',carrier:'Platnum',port:'New York / Newark, NJ',destination:'Paterson, NJ',zip:'07513',ld:'Live',active:true,base:765,chassis:35,prepull:150,det_port:90,det_cust:90,storage:40,ovw43:200,ovw48:300,bobtail:0,toll:18,notes:''},
+];
+
+// ═══════════════════════════════════════════════════════
+// SUPABASE
+// ═══════════════════════════════════════════════════════
+let db=null;
+let realtimeChannel=null;
+
+function setSyncStatus(state){
+  const dot=$('sync-dot'), lbl=$('sync-label');
+  if(!dot||!lbl) return;
+  dot.className='sync-dot'+(state==='on'?'':state==='loading'?' loading':' off');
+  lbl.textContent=state==='on'?'Live sync on':state==='loading'?'Connecting…':'Disconnected';
+}
+
+async function connectSupabase(){
+  const url=($('sb-url')||{}).value?.trim();
+  const key=($('sb-key')||{}).value?.trim();
+  const errEl=$('setup-error');
+  if(!url||!key){if(errEl){errEl.style.display='block';errEl.textContent='Please enter both URL and key.';}return;}
+  if(!url.startsWith('https://')){if(errEl){errEl.style.display='block';errEl.textContent='URL must start with https://';}return;}
+  if(errEl) errEl.style.display='none';
+  $('loading-screen').style.display='flex';
+  $('setup-screen').style.display='none';
+  $('loading-msg').textContent='Connecting to database…';
+  try{
+    const {createClient}=window.supabase;
+    db=createClient(url,key);
+    // Test connection
+    const {error}=await db.from('rates').select('id').limit(1);
+    if(error) throw error;
+    localStorage.setItem('sb_url',url);
+    localStorage.setItem('sb_key',key);
+    await initApp();
+  }catch(e){
+    db=null;
+    $('loading-screen').style.display='none';
+    $('setup-screen').style.display='flex';
+    const errEl=$('setup-error');
+    if(errEl){errEl.style.display='block';errEl.textContent='Connection failed: '+(e.message||'Check your URL and key, and make sure you ran the setup SQL.');}
+  }
+}
+
+function disconnectSupabase(){
+  if(!confirm('Disconnect from Supabase? You will need to re-enter your connection details.')) return;
+  localStorage.removeItem('sb_url');localStorage.removeItem('sb_key');
+  db=null;
+  if(realtimeChannel&&db) db.removeChannel(realtimeChannel);
+  $('app').style.display='none';
+  $('setup-screen').style.display='flex';
+}
+
+// ═══════════════════════════════════════════════════════
+// DB HELPERS — convert between DB rows and app objects
+// ═══════════════════════════════════════════════════════
+function dbToRate(r){
+  return {id:r.id,region:r.region||'NE',carrier:r.carrier||'',port:r.port||'',destination:r.destination||'',
+    zip:r.zip||'',ld:r.ld||'Live',active:r.active!==false,notes:r.notes||'',
+    base:+r.base||0,chassis:+r.chassis||0,prepull:+r.prepull||0,det_port:+r.det_port||0,det_cust:+r.det_cust||0,
+    storage:+r.storage||0,ovw43:+r.ovw43||0,ovw48:+r.ovw48||0,bobtail:+r.bobtail||0,toll:+r.toll||0};
+}
+function rateToDb(r){
+  return {id:r.id,region:r.region,carrier:r.carrier,port:r.port||'',destination:r.destination||'',
+    zip:r.zip||'',ld:r.ld,active:r.active,notes:r.notes||'',
+    base:r.base||0,chassis:r.chassis||0,prepull:r.prepull||0,det_port:r.det_port||0,det_cust:r.det_cust||0,
+    storage:r.storage||0,ovw43:r.ovw43||0,ovw48:r.ovw48||0,bobtail:r.bobtail||0,toll:r.toll||0};
+}
+function dbToQuote(r){
+  return {id:r.id,quoteNum:r.quote_num,date:r.date,customer:r.customer||'',port:r.port||'',
+    zip:r.zip||'',ld:r.ld||'Live',carrier:r.carrier||'',destination:r.destination||'',
+    carrierRates:r.carrier_costs||{},customerRates:r.customer_prices||{},
+    baseMarkup:r.base_markup||DEFAULT_BASE_MARKUP,flatRates:r.flat_rates||{...DEFAULT_FLAT_RATES},
+    profit:+r.profit||0,profitPct:+r.profit_pct||0,status:r.status||'Quoted',notes:r.notes||''};
+}
+function quoteToDb(q){
+  return {id:q.id,quote_num:q.quoteNum,date:q.date,customer:q.customer||'',port:q.port||'',
+    zip:q.zip||'',ld:q.ld,carrier:q.carrier||'',destination:q.destination||'',
+    carrier_costs:q.carrierRates,customer_prices:q.customerRates,
+    base_markup:q.baseMarkup,flat_rates:q.flatRates,
+    profit:q.profit||0,profit_pct:q.profitPct||0,status:q.status,notes:q.notes||''};
+}
+
+// ═══════════════════════════════════════════════════════
+// DB CRUD
+// ═══════════════════════════════════════════════════════
+async function dbLoadRates(){
+  const {data,error}=await db.from('rates').select('*').order('created_at');
+  if(error) throw error;
+  return data.map(dbToRate);
+}
+async function dbLoadQuotes(){
+  const {data,error}=await db.from('quotes').select('*').order('created_at',{ascending:false});
+  if(error) throw error;
+  return data.map(dbToQuote);
+}
+async function dbSaveRate(r){
+  const {error}=await db.from('rates').upsert(rateToDb(r));
+  if(error) throw error;
+}
+async function dbDeleteRate(id){
+  const {error}=await db.from('rates').delete().eq('id',id);
+  if(error) throw error;
+}
+async function dbSaveQuote(q){
+  const {error}=await db.from('quotes').insert(quoteToDb(q));
+  if(error) throw error;
+}
+async function dbUpdateQuoteStatus(id,status){
+  const {error}=await db.from('quotes').update({status}).eq('id',id);
+  if(error) throw error;
+}
+async function dbDeleteQuote(id){
+  const {error}=await db.from('quotes').delete().eq('id',id);
+  if(error) throw error;
+}
+async function dbBulkSaveRates(rates){
+  const {error}=await db.from('rates').upsert(rates.map(rateToDb));
+  if(error) throw error;
+}
+async function dbGetNextQuoteNum(){
+  const {data}=await db.from('quotes').select('quote_num').order('quote_num',{ascending:false}).limit(1);
+  return data&&data.length?(data[0].quote_num||1000)+1:1001;
+}
+
+function setSaving(on){
+  const t=$('topbar-right');
+  if(!t) return;
+  const existing=document.getElementById('saving-badge');
+  if(on&&!existing){const s=document.createElement('span');s.id='saving-badge';s.className='saving-badge';s.textContent='Saving…';t.prepend(s);}
+  if(!on&&existing) existing.remove();
+}
+
+// ═══════════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════════
+let S={
+  view:'quote',rates:[],quotes:[],
+  qi:{customer:'',port:'New York / Newark, NJ',zip:'',ld:'Live',
+      baseMarkup:{...DEFAULT_BASE_MARKUP},flatRates:{...DEFAULT_FLAT_RATES}},
+  selId:null,rSearch:'',logFilter:'all',dashFilter:'month',
+};
+let _importRows=[];
+
+// ═══════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════
+async function initApp(){
+  $('loading-msg').textContent='Loading carrier rates…';
+  S.rates=await dbLoadRates();
+  // Seed if empty
+  if(S.rates.length===0){
+    $('loading-msg').textContent='Setting up initial data…';
+    await dbBulkSaveRates(SEED);
+    S.rates=await dbLoadRates();
+  }
+  $('loading-msg').textContent='Loading quotes…';
+  S.quotes=await dbLoadQuotes();
+  // Real-time subscriptions
+  realtimeChannel=db.channel('app-changes')
+    .on('postgres_changes',{event:'*',schema:'public',table:'rates'},async()=>{
+      S.rates=await dbLoadRates();
+      if(S.view==='rates') renderRates();
+      if($('carriers-body')) refreshCarriersAndPreview();
+    })
+    .on('postgres_changes',{event:'*',schema:'public',table:'quotes'},async()=>{
+      S.quotes=await dbLoadQuotes();
+      if(S.view==='log') renderLog();
+      if(S.view==='dash') renderDash();
+    })
+    .subscribe(status=>{
+      setSyncStatus(status==='SUBSCRIBED'?'on':status==='CLOSED'?'off':'loading');
+    });
+  $('loading-screen').style.display='none';
+  $('app').style.display='flex';
+  setSyncStatus('on');
+  render();
+}
+
+// ═══════════════════════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════════════════════
+const uid=()=>Math.random().toString(36).slice(2,9);
+const $=id=>document.getElementById(id);
+const $v=id=>($('f-'+id)||{}).value||'';
+const fmt=v=>(v&&v>0)?'$'+Math.round(v).toLocaleString():'—';
+const fmtD=v=>'$'+Number(v).toFixed(2);
+const pct=v=>Math.round(v*100)+'%';
+function totAll(r){return CHARGES.reduce((s,c)=>s+(Number(r[c])||0),0);}
+function totMode(r,ld){return CHARGES.reduce((s,c)=>isApplicable(c,ld)?s+(Number(r[c])||0):s,0);}
+function cuRate(carrierVal,charge){
+  const ld=S.qi.ld;
+  if(!isApplicable(charge,ld)) return 0;
+  if(charge==='base'){if(!carrierVal) return 0;const bm=S.qi.baseMarkup;return bm.mode==='pct'?carrierVal*(1+bm.amount/100):carrierVal+bm.amount;}
+  return carrierVal>0?(S.qi.flatRates[charge]||0):0;
+}
+function cuTot(r){return CHARGES.reduce((s,c)=>s+cuRate(Number(r[c])||0,c),0);}
+
+// ═══════════════════════════════════════════════════════
+// NAVIGATION
+// ═══════════════════════════════════════════════════════
+function setView(v){
+  S.view=v;
+  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
+  $('nav-'+v).classList.add('active');
+  $('view-title').textContent={quote:'Quote builder',rates:'Carrier rates',log:'Quote log',dash:'Dashboard'}[v];
+  render();
+}
+function render(){
+  if(S.view==='quote') renderQuote();
+  else if(S.view==='rates') renderRates();
+  else if(S.view==='log') renderLog();
+  else renderDash();
+}
+
+// ═══════════════════════════════════════════════════════
+// QUOTE BUILDER
+// ═══════════════════════════════════════════════════════
+function getMatches(){
+  return S.rates.filter(r=>r.active&&r.zip===S.qi.zip&&(r.ld===S.qi.ld||r.ld==='Both'))
+               .sort((a,b)=>totMode(a,S.qi.ld)-totMode(b,S.qi.ld));
+}
+function buildCarrierComparison(matches){
+  const qi=S.qi;
+  if(!qi.zip) return `<div class="empty"><div class="empty-ico">🔍</div><p>Enter a zip code</p></div>`;
+  if(!matches.length) return `<div class="empty"><div class="empty-ico">🚚</div><p>No active carriers for zip ${qi.zip} · ${qi.ld}</p></div>`;
+  const vis=CHARGES.filter(c=>c!=='base'&&isApplicable(c,qi.ld));
+  const rows=matches.map((r,i)=>`
+    <tr class="carrier-row${r.id===S.selId?' sel':''}" data-cid="${r.id}" onclick="selCarrier('${r.id}')">
+      <td style="text-align:center;font-weight:700;color:${r.id===S.selId?'var(--steel)':'var(--gray-300)'}">${i+1}</td>
+      <td><span class="bold">${r.carrier}</span>${i===0?' <span class="badge best">Best</span>':''}${r.ld==='Both'?' <span class="badge t" style="margin-left:3px">Both</span>':''}${r.notes?`<div class="subtext">${r.notes}</div>`:''}</td>
+      <td class="muted small">${r.destination}</td>
+      <td class="bold">${fmt(r.base)}</td>
+      ${vis.map(c=>`<td>${fmt(r[c])}</td>`).join('')}
+      <td class="bold">${fmt(totMode(r,qi.ld))}</td>
+    </tr>`).join('');
+  return `<div class="tbl-wrap"><table><thead><tr><th>#</th><th>Carrier</th><th>Destination</th><th>Base</th>${vis.map(c=>`<th>${LABELS[c]}</th>`).join('')}<th>Total (${qi.ld})</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+function buildPreviewHTML(sel){
+  if(!sel) return `<div class="empty" style="padding:30px"><p>Select a carrier above</p></div>`;
+  const ld=S.qi.ld;const ct=totMode(sel,ld);const cu=cuTot(sel);const profit=cu-ct;const margin=cu>0?profit/cu:0;
+  const rows=CHARGES.map(c=>{
+    if(!isApplicable(c,ld)) return '';
+    const cv=Number(sel[c])||0;const cuv=cuRate(cv,c);
+    if(!cv&&!cuv) return '';
+    const note=c==='ovw43'?'Over 43,000 lb':c==='ovw48'?'Over 48,000 lb':c==='det_port'?'At port':c==='det_cust'?'At customer':'';
+    return `<tr class="prev-row"><td>${LABELS[c]}${note?`<div class="charge-note">${note}</div>`:''}</td><td class="muted">${fmtD(cv)}</td><td>${fmtD(cuv)}</td><td>+${fmtD(cuv-cv)}</td></tr>`;
+  }).join('');
+  return `<div class="small muted" style="margin-bottom:10px"><strong style="color:var(--navy)">${sel.carrier}</strong> → ${sel.destination}</div>
+  <table style="width:100%"><thead><tr>
+    <th style="text-align:left;padding:5px 0;width:150px">Charge</th>
+    <th style="text-align:left;padding:5px 0;width:80px;color:var(--gray-400)">Carrier</th>
+    <th style="text-align:left;padding:5px 0;width:80px;color:var(--steel)">Your price</th>
+    <th style="text-align:right;padding:5px 0;color:var(--green)">Profit</th>
+  </tr></thead><tbody>${rows}
+    <tr class="prev-total"><td>Total</td><td class="muted">${fmtD(ct)}</td>
+      <td style="font-size:18px;color:var(--steel)">${fmtD(cu)}</td>
+      <td style="text-align:right"><div style="color:var(--green);font-weight:700">+${fmtD(profit)}</div><span class="badge ${margin>=0.10?'g':'r'}">${pct(margin)}</span></td>
+    </tr>
+  </tbody></table>
+  <div style="display:flex;gap:8px;margin-top:14px">
+    <button class="btn blue" onclick="saveQuote()" style="flex:1;justify-content:center">💾 Save</button>
+    <button class="btn" onclick="printQuote()">🖨️</button>
+    <button class="btn" onclick="downloadPDF()">📄 PDF</button>
+  </div>`;
+}
+function buildPricingSection(){
+  const qi=S.qi;const ld=qi.ld;const bm=qi.baseMarkup;const fr=qi.flatRates;
+  const extraRows=CHARGES.filter(c=>c!=='base'&&isApplicable(c,ld)).map(c=>{
+    const note=c==='det_port'?'Per hour at port':c==='det_cust'?'Per hour at customer':c==='ovw43'?'Over 43,000 lb':c==='ovw48'?'Over 48,000 lb':c==='toll'?'Only if applicable':c==='bobtail'?'Drop moves':'';
+    return `<tr><td style="color:var(--gray-600);font-weight:500;padding:5px 0;width:160px">${LABELS[c]}${note?`<div class="cond-note">${note}</div>`:''}</td>
+      <td style="padding:5px 0"><div style="display:flex;align-items:center;gap:5px"><span style="color:var(--gray-400)">$</span>
+        <input type="number" value="${fr[c]||0}" min="0" oninput="setFlatRate('${c}',+this.value)" style="width:90px;padding:5px 8px;font-size:13px"></div></td></tr>`;
+  }).join('');
+  return `<div style="margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid var(--gray-100)">
+    <p style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-500);margin-bottom:8px">Base markup</p>
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <div class="toggle-group">
+        <button class="tgl${bm.mode==='flat'?' on':''}" data-bmu="flat" onclick="setBaseMarkup('mode','flat')">Flat $</button>
+        <button class="tgl${bm.mode==='pct'?' on':''}"  data-bmu="pct"  onclick="setBaseMarkup('mode','pct')">%</button>
+      </div>
+      <input type="number" value="${bm.amount}" min="0" oninput="setBaseMarkup('amount',+this.value)" style="width:90px;padding:5px 8px;font-size:13px">
+      <span class="muted small">${bm.mode==='flat'?'flat $ added over carrier base':'% over carrier base'}</span>
+    </div>
+  </div>
+  <p style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-500);margin-bottom:4px">Your flat charges</p>
+  <p class="cond-note" style="margin-bottom:10px;font-size:11px">Enter the full amount you charge the customer · ${ld==='Live'?'Live mode: detention shown, bobtail hidden':ld==='Drop'?'Drop mode: bobtail shown, detention hidden':'All charges shown'}</p>
+  <table style="width:100%"><tbody>${extraRows}</tbody></table>`;
+}
+
+function renderQuote(){
+  const qi=S.qi;const matches=getMatches();
+  if(!S.selId&&matches.length) S.selId=matches[0].id;
+  const sel=matches.find(r=>r.id===S.selId)||matches[0]||null;
+  $('topbar-right').innerHTML=`<button class="btn" onclick="printQuote()">🖨️ Print</button><button class="btn" onclick="downloadPDF()">📄 PDF</button><button class="btn blue" onclick="saveQuote()">💾 Save quote</button>`;
+  $('page').innerHTML=`<div class="two-col">
+    <div>
+      <div class="card">
+        <div class="sec-head">Lane details</div>
+        <div class="g2">
+          <div class="field"><label>Customer name</label><input type="text" value="${qi.customer}" oninput="S.qi.customer=this.value" placeholder="e.g. Acme Imports"></div>
+          <div class="field"><label>Port / Rail origin</label><input type="text" value="${qi.port}" oninput="S.qi.port=this.value" list="port-dl" placeholder="e.g. New York / Newark, NJ">
+            <datalist id="port-dl">${['New York / Newark, NJ','Los Angeles, CA','Long Beach, CA','Oakland, CA','Everport Terminal, CA','Houston, TX','Savannah, GA','Baltimore, MD','Norfolk / Virginia Intl Gateway, VA'].map(p=>`<option value="${p}">`).join('')}</datalist></div>
+        </div>
+        <div class="g2">
+          <div class="field"><label>Delivery zip</label><input type="text" value="${qi.zip}" oninput="onZip(this.value)" placeholder="e.g. 07728" maxlength="10"></div>
+          <div class="field"><label>Live or Drop</label>
+            <select onchange="onLd(this.value)"><option${qi.ld==='Live'?' selected':''}>Live</option><option${qi.ld==='Drop'?' selected':''}>Drop</option><option${qi.ld==='Both'?' selected':''}>Both</option></select></div>
+        </div>
+      </div>
+      <div class="card"><div class="sec-head">Pricing</div><div id="pricing-section">${buildPricingSection()}</div></div>
+      <div class="card">
+        <div class="sec-head" id="carriers-head">Carriers · ${qi.zip||'—'} · ${qi.ld}${matches.length?` <span class="badge b">${matches.length} found</span>`:''}</div>
+        <div id="carriers-body">${buildCarrierComparison(matches)}</div>
+      </div>
+    </div>
+    <div class="sticky-top"><div class="card"><div class="sec-head">Customer quote preview</div><div id="preview-body">${buildPreviewHTML(sel)}</div></div></div>
+  </div>`;
+}
+
+function refreshCarriersAndPreview(){
+  const matches=getMatches();if(!S.selId&&matches.length) S.selId=matches[0].id;
+  const sel=matches.find(r=>r.id===S.selId)||matches[0]||null;const qi=S.qi;
+  const h=$('carriers-head');if(h) h.innerHTML=`Carriers · ${qi.zip||'—'} · ${qi.ld}${matches.length?` <span class="badge b">${matches.length} found</span>`:''}`;
+  const b=$('carriers-body');if(b) b.innerHTML=buildCarrierComparison(matches);
+  const p=$('preview-body');if(p) p.innerHTML=buildPreviewHTML(sel);
+}
+function refreshPricingAndPreview(){
+  const ps=$('pricing-section');if(ps) ps.innerHTML=buildPricingSection();
+  refreshPreviewOnly();
+}
+function refreshPreviewOnly(){
+  const matches=getMatches();const sel=matches.find(r=>r.id===S.selId)||matches[0]||null;
+  const p=$('preview-body');if(p) p.innerHTML=buildPreviewHTML(sel);
+}
+function refreshCarrierHighlight(id){
+  document.querySelectorAll('.carrier-row').forEach(row=>{
+    const isSel=row.dataset.cid===id;row.classList.toggle('sel',isSel);
+    const td=row.querySelector('td:first-child');if(td) td.style.color=isSel?'var(--steel)':'var(--gray-300)';
+  });
+}
+function onZip(v){S.qi.zip=v.trim();S.selId=null;if($('carriers-body')) refreshCarriersAndPreview();}
+function onLd(v){S.qi.ld=v;S.selId=null;if($('carriers-body')){refreshCarriersAndPreview();refreshPricingAndPreview();}}
+function selCarrier(id){S.selId=id;refreshCarrierHighlight(id);refreshPreviewOnly();}
+function setFlatRate(c,v){S.qi.flatRates[c]=v;refreshPreviewOnly();}
+function setBaseMarkup(k,v){
+  S.qi.baseMarkup[k]=v;
+  if(k==='mode'){document.querySelectorAll('[data-bmu]').forEach(b=>b.classList.toggle('on',b.dataset.bmu===v));}
+  refreshPreviewOnly();
+}
+
+async function saveQuote(){
+  const qi=S.qi;const sel=S.rates.find(r=>r.id===S.selId);
+  if(!qi.zip||!sel){alert('Enter a zip code and select a carrier first.');return;}
+  const ct=totMode(sel,qi.ld);
+  const cuRates=CHARGES.reduce((o,c)=>{o[c]=cuRate(Number(sel[c])||0,c);return o;},{});
+  const cu=Object.values(cuRates).reduce((s,v)=>s+v,0);
+  const profit=cu-ct;
+  setSaving(true);
+  try{
+    const qn=await dbGetNextQuoteNum();
+    const q={id:uid(),quoteNum:qn,date:new Date().toISOString().slice(0,10),
+      customer:qi.customer||'—',port:qi.port,zip:qi.zip,ld:qi.ld,carrier:sel.carrier,destination:sel.destination,
+      carrierRates:{...CHARGES.reduce((o,c)=>{o[c]=sel[c]||0;return o;},{}),total:ct},
+      customerRates:{...cuRates,total:cu},baseMarkup:{...qi.baseMarkup},flatRates:{...qi.flatRates},
+      profit,profitPct:cu>0?profit/cu:0,status:'Quoted',notes:''};
+    await dbSaveQuote(q);
+    S.quotes.unshift(q);
+    alert(`Quote #${q.quoteNum} saved!\n\nCustomer total: ${fmtD(cu)}\nProfit: ${fmtD(profit)} (${pct(q.profitPct)})`);
+  }catch(e){alert('Error saving quote: '+e.message);}finally{setSaving(false);}
+}
+
+// ═══════════════════════════════════════════════════════
+// PRINT & PDF
+// ═══════════════════════════════════════════════════════
+function getQuoteData(){const qi=S.qi;const sel=S.rates.find(r=>r.id===S.selId);if(!qi.zip||!sel){alert('Enter a zip and select a carrier first.');return null;}return{qi,sel,cu:cuTot(sel),ct:totMode(sel,qi.ld)};}
+
+function printQuote(){
+  const d=getQuoteData();if(!d) return;const{qi,sel,cu,ct}=d;
+  const date=new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
+  const rows=CHARGES.map(c=>{if(!isApplicable(c,qi.ld)) return '';const cv=Number(sel[c])||0;const cuv=cuRate(cv,c);if(!cuv&&!cv) return '';const note=c==='ovw43'?' (43k+)':c==='ovw48'?' (48k+)':c==='det_port'?' (Port)':c==='det_cust'?' (Customer)':'';return `<tr><td>${LABELS[c]}${note}</td><td style="text-align:right;font-weight:600">${fmtD(cuv)}</td></tr>`;}).join('');
+  const win=window.open('','_blank');
+  win.document.write(`<!DOCTYPE html><html><head><title>Shifl Quote</title><style>body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:560px;margin:40px auto;font-size:14px}.header{background:#1a2e4a;padding:16px 20px;border-radius:8px;margin-bottom:24px;display:flex;align-items:center;gap:14px}.header h1{color:#fff;font-size:20px;font-weight:800;margin-bottom:2px}.header-sub{color:rgba(255,255,255,.55);font-size:12px}.meta{display:grid;grid-template-columns:1fr 1fr;gap:6px 20px;margin-bottom:22px}.meta-item label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#888;display:block;margin-bottom:2px}.meta-item span{font-size:13px;color:#1a2e4a;font-weight:500}table{width:100%;border-collapse:collapse;margin-bottom:16px}th{text-align:left;padding:8px 0;border-bottom:2px solid #1a2e4a;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#1a2e4a}td{padding:7px 0;border-bottom:1px solid #eee;color:#374151}.total td{font-weight:700;font-size:15px;border-top:2px solid #1a2e4a;border-bottom:none;padding-top:10px;color:#1a2e4a}.footer{margin-top:24px;padding-top:14px;border-top:1px solid #eee;font-size:11px;color:#888}@media print{@page{margin:20mm}body{margin:0}}</style></head><body>
+  <div class="header"><svg width="40" height="40" viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg"><rect width="60" height="60" rx="10" fill="rgba(255,255,255,.12)"/><polygon points="10,50 25,14 44,45" fill="white"/><polygon points="25,14 44,45 53,37" fill="rgba(255,255,255,.7)"/><polygon points="10,50 44,45 53,37 53,50" fill="rgba(255,255,255,.88)"/><line x1="25" y1="14" x2="44" y2="50" stroke="rgba(59,142,208,.45)" stroke-width="1.8"/></svg><div><h1>SHIFL</h1><div class="header-sub">Drayage Quote · ${date}</div></div></div>
+  <div class="meta"><div class="meta-item"><label>Customer</label><span>${qi.customer||'—'}</span></div><div class="meta-item"><label>Carrier</label><span>${sel.carrier}</span></div><div class="meta-item"><label>Pickup</label><span>${qi.port||'—'}</span></div><div class="meta-item"><label>Delivery Zip</label><span>${qi.zip}</span></div><div class="meta-item"><label>Destination</label><span>${sel.destination}</span></div><div class="meta-item"><label>Mode</label><span>${qi.ld}</span></div></div>
+  <table><thead><tr><th>Charge</th><th style="text-align:right">Amount</th></tr></thead><tbody>${rows}<tr class="total"><td>Total</td><td style="text-align:right">${fmtD(cu)}</td></tr></tbody></table>
+  <div class="footer">Quote valid 30 days · mk@shifl.com</div><script>window.onload=function(){window.print()}<\/script></body></html>`);
+  win.document.close();
+}
+
+async function downloadPDF(){
+  const d=getQuoteData();if(!d) return;const{qi,sel,cu,ct}=d;
+  if(typeof window.jspdf==='undefined'){try{await new Promise((res,rej)=>{const s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';s.onload=res;s.onerror=rej;document.head.appendChild(s);});}catch(e){printQuote();return;}}
+  _generatePDF({quoteNum:'—',date:new Date().toISOString().slice(0,10),customer:qi.customer,port:qi.port,zip:qi.zip,destination:sel.destination,ld:qi.ld,carrier:sel.carrier,status:'Quote',carrierRates:{...CHARGES.reduce((o,c)=>{o[c]=sel[c]||0;return o;},{}),total:ct},customerRates:{...CHARGES.reduce((o,c)=>{o[c]=cuRate(Number(sel[c])||0,c);return o;},{}),total:cu},profit:cu-ct,profitPct:cu>0?(cu-ct)/cu:0});
+}
+
+function _generatePDF(q){
+  const{jsPDF}=window.jspdf;const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+  const W=210;const navy=[26,46,74];const steel=[46,117,182];
+  doc.setFillColor(...navy);doc.rect(0,0,W,32,'F');
+  doc.setFillColor(59,142,208);doc.roundedRect(10,5,22,22,3,3,'F');
+  const bx=10,by=5,bs=22,sc=v=>v/60*bs;
+  doc.setFillColor(255,255,255);doc.triangle(bx+sc(10),by+sc(50),bx+sc(25),by+sc(14),bx+sc(44),by+sc(45),'F');
+  doc.setFillColor(220,235,255);doc.triangle(bx+sc(25),by+sc(14),bx+sc(44),by+sc(45),bx+sc(53),by+sc(37),'F');
+  doc.setFillColor(255,255,255);doc.triangle(bx+sc(10),by+sc(50),bx+sc(44),by+sc(45),bx+sc(53),by+sc(50),'F');
+  doc.setDrawColor(59,142,208);doc.setLineWidth(.3);doc.line(bx+sc(25),by+sc(14),bx+sc(44),by+sc(50));
+  doc.setTextColor(255,255,255);doc.setFont('helvetica','bold');doc.setFontSize(20);doc.text('SHIFL',36,20);
+  doc.setFontSize(9);doc.setFont('helvetica','normal');doc.setTextColor(255,255,255,.6);doc.text('Trucking Quoting',36,27);
+  doc.setFontSize(9);doc.setTextColor(255,255,255,.5);doc.text('Quote #'+q.quoteNum+' · '+q.date,W-12,12,{align:'right'});
+  doc.setFontSize(10);doc.setTextColor(255,255,255,.8);doc.text(q.status,W-12,21,{align:'right'});
+  const meta=[['Customer',q.customer||'—'],['Carrier',q.carrier],['Pickup',q.port||'—'],['Delivery Zip',q.zip],['Destination',q.destination||'—'],['Mode',q.ld]];
+  let y=44;
+  meta.forEach(([lbl,val],i)=>{const x=i%2===0?12:110;if(i%2===0&&i>0) y+=12;doc.setFontSize(7);doc.setFont('helvetica','bold');doc.setTextColor(150,150,150);doc.text(lbl.toUpperCase(),x,y);doc.setFontSize(10);doc.setFont('helvetica','normal');doc.setTextColor(30,50,74);doc.text(String(val),x,y+5);});
+  y+=18;doc.setDrawColor(200,210,220);doc.setLineWidth(.3);doc.line(12,y,W-12,y);y+=8;
+  doc.setFillColor(...navy);doc.rect(12,y,W-24,8,'F');
+  doc.setTextColor(255,255,255);doc.setFontSize(8);doc.setFont('helvetica','bold');
+  doc.text('CHARGE',16,y+5.5);doc.text('CARRIER COST',120,y+5.5,{align:'right'});doc.text('YOUR PRICE',W-14,y+5.5,{align:'right'});y+=12;
+  let even=true;
+  CHARGES.forEach(c=>{
+    if(!isApplicable(c,q.ld)) return;
+    const cuv=q.customerRates?.[c]||0;const cv=q.carrierRates?.[c]||0;if(!cuv&&!cv) return;
+    if(even){doc.setFillColor(247,248,250);doc.rect(12,y-4,W-24,7,'F');}
+    doc.setTextColor(60,60,60);doc.setFont('helvetica','normal');doc.setFontSize(10);doc.text(LABELS[c],16,y);
+    doc.setTextColor(160,160,160);doc.setFontSize(9);doc.text(cv>0?fmtD(cv):'—',120,y,{align:'right'});
+    doc.setFont('helvetica','bold');doc.setTextColor(...navy);doc.setFontSize(10);doc.text(cuv>0?fmtD(cuv):'—',W-14,y,{align:'right'});
+    doc.setDrawColor(230,235,240);doc.setLineWidth(.2);doc.line(12,y+3,W-12,y+3);y+=8;even=!even;
+  });
+  y+=3;doc.setFillColor(...navy);doc.rect(12,y-3,W-24,12,'F');
+  doc.setFont('helvetica','bold');doc.setFontSize(12);doc.setTextColor(255,255,255);doc.text('TOTAL',16,y+5);
+  doc.setFontSize(9);doc.setTextColor(255,255,255,.6);doc.text(fmtD(q.carrierRates?.total||0),120,y+5,{align:'right'});
+  doc.setFontSize(14);doc.setTextColor(255,255,255);doc.text(fmtD(q.customerRates?.total||0),W-14,y+5,{align:'right'});y+=18;
+  doc.setFillColor(232,245,236);doc.rect(12,y,W-24,14,'F');
+  doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(45,125,70);
+  doc.text('Profit: '+fmtD(q.profit||0)+' ('+pct(q.profitPct||0)+' margin)  ·  Carrier cost: '+fmtD(q.carrierRates?.total||0),16,y+9);
+  doc.setFontSize(8);doc.setFont('helvetica','normal');doc.setTextColor(170,170,170);doc.text('Quote valid 30 days · Rates subject to change · mk@shifl.com',12,278);
+  doc.save('Shifl_Quote_'+(q.quoteNum||'draft')+'_'+q.zip+'_'+q.date+'.pdf');
+}
+
+// ═══════════════════════════════════════════════════════
+// CARRIER RATES
+// ═══════════════════════════════════════════════════════
+const regCol={NE:'g',WC:'b',SE:'a',Central:'p'};const ldCol={Live:'b',Drop:'gr',Both:'t'};
+function buildRateRows(){
+  const s=S.rSearch.toLowerCase();const filtered=S.rates.filter(r=>!s||(r.carrier+r.zip+r.destination+r.region+r.notes).toLowerCase().includes(s));
+  if(!filtered.length) return `<tr><td colspan="${CHARGES.length+4}" style="text-align:center;padding:40px;color:var(--gray-400)">No rates found</td></tr>`;
+  return filtered.map(r=>`<tr>
+    <td><span class="badge ${regCol[r.region]||'gr'}">${r.region}</span></td>
+    <td class="bold">${r.carrier}${r.notes?`<div class="subtext">${r.notes}</div>`:''}</td>
+    <td>${r.destination}</td><td>${r.zip||'—'}</td>
+    <td><span class="badge ${ldCol[r.ld]||'gr'}">${r.ld||'—'}</span></td>
+    <td class="bold">${fmt(r.base)}</td><td>${fmt(r.chassis)}</td><td>${fmt(r.prepull)}</td>
+    <td>${fmt(r.det_port)}</td><td>${fmt(r.det_cust)}</td><td>${fmt(r.storage)}</td>
+    <td>${fmt(r.ovw43)}</td><td>${fmt(r.ovw48)}</td><td>${fmt(r.bobtail)}</td><td>${fmt(r.toll)}</td>
+    <td class="bold">${fmt(totAll(r))}</td>
+    <td><span class="badge ${r.active?'g':'gr'}">${r.active?'Active':'Off'}</span></td>
+    <td style="white-space:nowrap">
+      <button class="btn sm" onclick="toggleActive('${r.id}','${r.active}')">${r.active?'Deactivate':'Activate'}</button>
+      <button class="btn sm ico-btn" onclick="duplicateRate('${r.id}')" style="margin-left:3px" title="Duplicate">📋</button>
+      <button class="btn sm ico-btn" onclick="editRate('${r.id}')" style="margin-left:3px" title="Edit">✏️</button>
+      <button class="btn sm ico-btn" onclick="delRate('${r.id}')" style="margin-left:3px" title="Delete">🗑️</button>
+    </td>
+  </tr>`).join('');
+}
+function renderRates(){
+  $('topbar-right').innerHTML=`<input type="text" id="rate-search" placeholder="Search…" value="${S.rSearch}" oninput="onRateSearch(this.value)" style="width:180px"><button class="btn" onclick="downloadTemplate()">📥 Template</button><button class="btn" onclick="triggerImport()">📤 Import CSV</button><input type="file" id="csv-fi" accept=".csv" style="display:none" onchange="handleCSVFile(this)"><button class="btn blue" onclick="showAddRate()">+ Add rate</button>`;
+  $('page').innerHTML=`<div class="tbl-wrap"><table><thead><tr><th>Region</th><th>Carrier</th><th>Destination</th><th>Zip</th><th>Mode</th><th>Base</th><th>Chassis</th><th>Pre-pull</th><th>Det.Port</th><th>Det.Cust</th><th>Storage</th><th>OVW 43k</th><th>OVW 48k</th><th>Bobtail</th><th>Toll</th><th>Total</th><th>Status</th><th></th></tr></thead><tbody id="rates-tbody">${buildRateRows()}</tbody></table></div>`;
+}
+function onRateSearch(v){S.rSearch=v;const t=$('rates-tbody');if(t) t.innerHTML=buildRateRows();}
+async function toggleActive(id,currentActive){
+  setSaving(true);try{const r=S.rates.find(r=>r.id===id);if(r){r.active=!(currentActive==='true'||currentActive===true);await dbSaveRate(r);}const t=$('rates-tbody');if(t) t.innerHTML=buildRateRows();}catch(e){alert('Error: '+e.message);}finally{setSaving(false);}
+}
+async function delRate(id){
+  if(!confirm('Delete this rate? This cannot be undone.')) return;
+  setSaving(true);try{await dbDeleteRate(id);S.rates=S.rates.filter(r=>r.id!==id);const t=$('rates-tbody');if(t) t.innerHTML=buildRateRows();}catch(e){alert('Error: '+e.message);}finally{setSaving(false);}
+}
+async function duplicateRate(id){
+  const r=S.rates.find(r=>r.id===id);if(!r) return;
+  const copy={...r,id:uid(),notes:(r.notes?r.notes+' (copy)':'copy')};
+  setSaving(true);try{await dbSaveRate(copy);S.rates.push(copy);const t=$('rates-tbody');if(t) t.innerHTML=buildRateRows();}catch(e){alert('Error: '+e.message);}finally{setSaving(false);}
+}
+function rateFields(r){
+  const fld=(id,lbl,v,note)=>`<div class="field"><label>${lbl}${note?`<span class="cond-note" style="margin-left:4px">${note}</span>`:''}</label><input type="number" id="f-${id}" value="${r?(r[id]||0):0}" min="0" placeholder="0"></div>`;
+  return `<div class="g3">
+    <div class="field"><label>Region</label><select id="f-region">${REGIONS.map(rg=>`<option${(r?r.region===rg:rg==='NE')?' selected':''}>${rg}</option>`).join('')}</select></div>
+    <div class="field"><label>Carrier name *</label><input type="text" id="f-carrier" value="${r?r.carrier:''}" placeholder="e.g. Platnum"></div>
+    <div class="field"><label>Port / Rail</label><input type="text" id="f-port" value="${r?r.port:''}" placeholder="e.g. New York / Newark, NJ"></div>
+  </div>
+  <div class="g3">
+    <div class="field"><label>Destination</label><input type="text" id="f-destination" value="${r?r.destination:''}" placeholder="e.g. Bayshore, NY"></div>
+    <div class="field"><label>Zip</label><input type="text" id="f-zip" value="${r?r.zip:''}" placeholder="07706" maxlength="10"></div>
+    <div class="field"><label>Mode</label><select id="f-ld"><option${!r||r.ld==='Live'?' selected':''}>Live</option><option${r&&r.ld==='Drop'?' selected':''}>Drop</option><option${r&&r.ld==='Both'?' selected':''}>Both</option></select><div class="cond-note" style="margin-top:3px">"Both" = carrier does Live or Drop</div></div>
+  </div>
+  <div class="charge-group-label">Core rates</div>
+  <div class="g4">${fld('base','Base')}${fld('chassis','Chassis')}${fld('prepull','Pre-pull')}${fld('storage','Storage')}</div>
+  <div class="charge-group-label">Detention <span class="cond-note">(Live only)</span></div>
+  <div class="g2">${fld('det_port','Detention – Port',null,'at port')}${fld('det_cust','Detention – Customer',null,'at customer')}</div>
+  <div class="charge-group-label">Overweight</div>
+  <div class="g2">${fld('ovw43','OVW (Over 43,000 lb)')}${fld('ovw48','OVW (Over 48,000 lb)')}</div>
+  <div class="charge-group-label">Drop moves</div>
+  <div class="g2">${fld('bobtail','Bobtail',null,'Drop moves only')}</div>
+  <div class="charge-group-label">Toll <span class="cond-note">(enter only if applicable — e.g. PLBNY, bridge)</span></div>
+  <div class="g2">${fld('toll','Toll',null,'leave $0 if no toll on this lane')}</div>
+  <div class="field" style="margin-top:8px"><label>Notes (optional)</label><input type="text" id="f-notes" value="${r?r.notes:''}" placeholder="e.g. customer name"></div>`;
+}
+function showAddRate(){$('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal"><div class="modal-title">Add carrier rate</div>${rateFields(null)}<div class="modal-foot"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn blue" onclick="submitAdd()">Save rate</button></div></div></div>`;}
+async function submitAdd(){
+  const carrier=$v('carrier');if(!carrier){alert('Carrier name required.');return;}
+  const nr={id:uid(),region:$v('region'),carrier,port:$v('port'),destination:$v('destination'),zip:$v('zip'),ld:$v('ld'),active:true,notes:$v('notes'),base:parseFloat($v('base'))||0};
+  CHARGES.filter(c=>c!=='base').forEach(c=>{nr[c]=parseFloat($v(c))||0;});
+  setSaving(true);try{await dbSaveRate(nr);S.rates.push(nr);closeModal();renderRates();}catch(e){alert('Error: '+e.message);}finally{setSaving(false);}
+}
+function editRate(id){const r=S.rates.find(r=>r.id===id);if(!r) return;$('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal"><div class="modal-title">Edit rate — ${r.carrier}</div>${rateFields(r)}<div class="modal-foot"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn blue" onclick="submitEdit('${id}')">Save changes</button></div></div></div>`;}
+async function submitEdit(id){
+  const r=S.rates.find(r=>r.id===id);if(!r) return;const carrier=$v('carrier');if(!carrier){alert('Carrier name required.');return;}
+  Object.assign(r,{region:$v('region'),carrier,port:$v('port'),destination:$v('destination'),zip:$v('zip'),ld:$v('ld'),notes:$v('notes'),base:parseFloat($v('base'))||0});
+  CHARGES.filter(c=>c!=='base').forEach(c=>{r[c]=parseFloat($v(c))||0;});
+  setSaving(true);try{await dbSaveRate(r);closeModal();renderRates();}catch(e){alert('Error: '+e.message);}finally{setSaving(false);}
+}
+
+// CSV import/export
+function downloadTemplate(){const hdrs=['Region','Carrier','Port','Destination','Zip','Live_or_Drop','Active','Base','Chassis','Prepull','Det_Port','Det_Cust','Storage','OVW_43k','OVW_48k','Bobtail','Toll','Notes'];const note=['(NE/SE/Central/WC)','','','','','(Live/Drop/Both)','(Y/N)','','','','det at port','det at cust','','over 43k lb','over 48k lb','drop only','when applicable',''];const ex=[['NE','Platnum','New York / Newark, NJ','Bayshore, NY','11706','Live','Y',1595,35,150,90,90,40,200,300,0,25,''],['NE','Bound','New York / Newark, NJ','Bayshore, NY','11706','Both','Y',1330,40,150,85,85,35,150,250,998,25,'Live or Drop']];const esc=v=>{const s=String(v);return s.includes(',')?`"${s}"`:s;};const csv=[hdrs,note,...ex].map(r=>r.map(esc).join(',')).join('\n');const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));a.download='carrier_rates_template.csv';a.click();URL.revokeObjectURL(a.href);}
+function triggerImport(){$('csv-fi').value='';$('csv-fi').click();}
+function handleCSVFile(input){const file=input.files[0];if(!file) return;const reader=new FileReader();reader.onload=e=>{try{const rows=parseCSV(e.target.result);if(!rows.length){alert('No data rows found.');return;}showImportPreview(rows);}catch(err){alert('Could not read CSV: '+err.message);}};reader.readAsText(file);}
+function parseCSV(text){const lines=text.trim().split(/\r?\n/);if(lines.length<2) return [];function parseLine(line){const cols=[];let cur='';let inQ=false;for(let i=0;i<line.length;i++){const ch=line[i];if(ch==='"'){inQ=!inQ;}else if(ch===','&&!inQ){cols.push(cur.trim());cur='';}else{cur+=ch;}}cols.push(cur.trim());return cols;}const headers=parseLine(lines[0]).map(h=>h.toLowerCase().replace(/[^a-z0-9]/g,''));const MAP={region:'region',carrier:'carrier',port:'port',destination:'destination',dest:'destination',zip:'zip',liveordrop:'ld',mode:'ld',ld:'ld',active:'active',base:'base',chassis:'chassis',prepull:'prepull',detport:'det_port',detentioncust:'det_cust',detcust:'det_cust',storage:'storage',ovw43k:'ovw43',ovw43:'ovw43',ovw48k:'ovw48',ovw48:'ovw48',bobtail:'bobtail',toll:'toll',notes:'notes'};return lines.slice(1).map(line=>{const l2=line.trim();if(!l2) return null;const cols=parseLine(l2);const row={};headers.forEach((h,idx)=>{const f=MAP[h];if(f) row[f]=cols[idx]||'';});return row.carrier?row:null;}).filter(Boolean);}
+function showImportPreview(rows){_importRows=rows;$('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal"><div class="modal-title">Import preview — ${rows.length} rate${rows.length!==1?'s':''} found</div><div style="overflow-x:auto;max-height:280px;overflow-y:auto;border:1px solid var(--gray-200);border-radius:var(--radius)"><table style="width:100%;font-size:12px"><thead style="position:sticky;top:0;background:var(--gray-50)"><tr><th>Carrier</th><th>Destination</th><th>Zip</th><th>Mode</th><th>Base</th><th>Chassis</th></tr></thead><tbody>${rows.slice(0,25).map(r=>`<tr><td class="bold">${r.carrier}</td><td>${r.destination||'—'}</td><td>${r.zip||'—'}</td><td>${r.ld||'Live'}</td><td>${r.base||0}</td><td>${r.chassis||0}</td></tr>`).join('')}</tbody></table></div>${rows.length>25?`<p class="muted small" style="margin-top:6px">…and ${rows.length-25} more</p>`:''}<div style="margin-top:12px;padding:10px;background:var(--gray-50);border-radius:var(--radius);font-size:13px"><label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="import-replace" style="width:auto">Replace all existing rates (uncheck = add alongside)</label></div><div class="modal-foot"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn blue" onclick="confirmImport()">Import ${rows.length} rate${rows.length!==1?'s':''}</button></div></div></div>`;}
+async function confirmImport(){
+  const rows=_importRows;if(!rows?.length){alert('Nothing to import.');return;}
+  const replace=$('import-replace')&&$('import-replace').checked;
+  const newRates=rows.map(r=>({id:uid(),region:(r.region||'NE').trim(),carrier:(r.carrier||'').trim(),port:(r.port||'').trim(),destination:(r.destination||'').trim(),zip:(r.zip||'').trim(),ld:/both/i.test(r.ld||'')?'Both':/drop/i.test(r.ld||'')?'Drop':'Live',active:(r.active||'Y').trim().toUpperCase()!=='N',notes:(r.notes||'').trim(),base:parseFloat(r.base)||0,chassis:parseFloat(r.chassis)||0,prepull:parseFloat(r.prepull)||0,det_port:parseFloat(r.det_port)||0,det_cust:parseFloat(r.det_cust)||0,storage:parseFloat(r.storage)||0,ovw43:parseFloat(r.ovw43)||0,ovw48:parseFloat(r.ovw48)||0,bobtail:parseFloat(r.bobtail)||0,toll:parseFloat(r.toll)||0}));
+  setSaving(true);
+  try{
+    if(replace){await db.from('rates').delete().neq('id','__none__');S.rates=[];}
+    await dbBulkSaveRates(newRates);S.rates=[...S.rates,...newRates];
+    closeModal();renderRates();alert(`✅ Imported ${newRates.length} rate${newRates.length!==1?'s':''}.`);
+  }catch(e){alert('Error importing: '+e.message);}finally{setSaving(false);}
+}
+
+// ═══════════════════════════════════════════════════════
+// QUOTE LOG
+// ═══════════════════════════════════════════════════════
+function buildLogRows(){
+  const f=S.logFilter;const filtered=S.quotes.filter(q=>f==='all'||q.status===f);
+  if(!filtered.length) return `<tr><td colspan="11" style="text-align:center;padding:40px;color:var(--gray-400)">No quotes${f!=='all'?' with status "'+f+'"':''}</td></tr>`;
+  return filtered.map(q=>`
+    <tr onclick="showQuoteModal('${q.id}')" style="cursor:pointer">
+      <td class="muted small">#${q.quoteNum}</td>
+      <td>${q.date}</td>
+      <td class="bold">${q.customer}</td>
+      <td>${q.zip} · ${q.ld}<div class="subtext">${q.destination||''}</div></td>
+      <td>${q.carrier}</td>
+      <td class="muted">${fmtD(q.carrierRates?.total||0)}</td>
+      <td class="bold" style="color:var(--steel)">${fmtD(q.customerRates?.total||0)}</td>
+      <td style="color:var(--green);font-weight:600">+${fmtD(q.profit||0)}</td>
+      <td><span class="badge ${(q.profitPct||0)>=0.10?'g':'r'}">${pct(q.profitPct||0)}</span></td>
+      <td onclick="event.stopPropagation()"><select onchange="updateStatus('${q.id}',this.value)" style="font-size:12px;padding:4px 7px;width:120px"><option${q.status==='Quoted'?' selected':''}>Quoted</option><option${q.status==='Booked'?' selected':''}>Booked</option><option${q.status==='Lost'?' selected':''}>Lost</option><option${q.status==='Cancelled'?' selected':''}>Cancelled</option></select></td>
+      <td onclick="event.stopPropagation()" style="white-space:nowrap">
+        <button class="btn sm ico-btn" onclick="downloadSavedPDF('${q.id}')" title="PDF">📄</button>
+        <button class="btn sm ico-btn" onclick="delQuote('${q.id}')" title="Delete" style="margin-left:3px">🗑️</button>
+      </td>
+    </tr>`).join('');
+}
+function renderLog(){
+  $('topbar-right').innerHTML=`<select id="log-filter" onchange="onLogFilter(this.value)" style="width:150px"><option value="all"${S.logFilter==='all'?' selected':''}>All statuses</option><option value="Quoted"${S.logFilter==='Quoted'?' selected':''}>Quoted</option><option value="Booked"${S.logFilter==='Booked'?' selected':''}>Booked</option><option value="Lost"${S.logFilter==='Lost'?' selected':''}>Lost</option></select><button class="btn" onclick="exportQuoteLog()">📥 Export CSV</button>`;
+  $('page').innerHTML=`<div class="tbl-wrap"><table><thead><tr><th>#</th><th>Date</th><th>Customer</th><th>Lane</th><th>Carrier</th><th>Carrier total</th><th>Customer total</th><th>Profit</th><th>Margin</th><th>Status</th><th></th></tr></thead><tbody id="log-tbody">${buildLogRows()}</tbody></table></div>`;
+}
+function onLogFilter(v){S.logFilter=v;const t=$('log-tbody');if(t) t.innerHTML=buildLogRows();}
+async function updateStatus(id,status){
+  setSaving(true);try{await dbUpdateQuoteStatus(id,status);const q=S.quotes.find(q=>q.id===id);if(q) q.status=status;const t=$('log-tbody');if(t) t.innerHTML=buildLogRows();}catch(e){alert('Error: '+e.message);}finally{setSaving(false);}
+}
+async function delQuote(id){
+  if(!confirm('Delete this quote?')) return;
+  setSaving(true);try{await dbDeleteQuote(id);S.quotes=S.quotes.filter(q=>q.id!==id);const t=$('log-tbody');if(t) t.innerHTML=buildLogRows();}catch(e){alert('Error: '+e.message);}finally{setSaving(false);}
+}
+
+// Quote modal + saved PDF
+function showQuoteModal(id){
+  const q=S.quotes.find(q=>q.id===id);if(!q) return;
+  const ld=q.ld;const statusColors={Quoted:'a',Booked:'g',Lost:'gr',Cancelled:'gr'};
+  const chargeRows=CHARGES.map(c=>{if(!isApplicable(c,ld)) return '';const cuv=q.customerRates?.[c]||0;const cv=q.carrierRates?.[c]||0;if(!cuv&&!cv) return '';const note=c==='ovw43'?'Over 43,000 lb':c==='ovw48'?'Over 48,000 lb':c==='det_port'?'At port':c==='det_cust'?'At customer':'';return `<tr style="border-bottom:1px solid var(--gray-100)"><td style="padding:8px 12px;color:var(--gray-600)">${LABELS[c]}${note?`<div class="charge-note">${note}</div>`:''}</td><td style="padding:8px 12px;text-align:right;color:var(--gray-400);font-size:12px">${cv>0?fmtD(cv):'—'}</td><td style="padding:8px 12px;text-align:right;font-weight:600;color:var(--steel)">${cuv>0?fmtD(cuv):'—'}</td><td style="padding:8px 12px;text-align:right;font-size:12px;color:var(--green)">${cuv>0&&cv>0?'+'+fmtD(cuv-cv):''}</td></tr>`;}).join('');
+  const cuTotal=q.customerRates?.total||0;const cvTotal=q.carrierRates?.total||0;const profit=q.profit||0;const margin=q.profitPct||0;
+  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal" style="width:620px">
+    <div style="background:var(--navy);border-radius:10px;padding:16px 20px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between">
+      <div style="display:flex;align-items:center;gap:12px">
+        <svg width="36" height="36" viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg"><rect width="60" height="60" rx="10" fill="rgba(255,255,255,.15)"/><polygon points="10,50 25,14 44,45" fill="white"/><polygon points="25,14 44,45 53,37" fill="rgba(255,255,255,.72)"/><polygon points="10,50 44,45 53,37 53,50" fill="rgba(255,255,255,.90)"/><line x1="25" y1="14" x2="44" y2="50" stroke="rgba(59,142,208,.5)" stroke-width="1.8"/></svg>
+        <div><div style="font-size:18px;font-weight:800;color:#fff;letter-spacing:.5px">SHIFL</div><div style="font-size:11px;color:rgba(255,255,255,.5)">Quote #${q.quoteNum} · ${q.date}</div></div>
+      </div>
+      <span class="badge ${statusColors[q.status]||'gr'}" style="font-size:13px;padding:4px 12px">${q.status}</span>
+    </div>
+    <div class="g3" style="margin-bottom:18px">
+      <div><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-400);margin-bottom:3px">Customer</div><div style="font-weight:600;color:var(--navy)">${q.customer}</div></div>
+      <div><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-400);margin-bottom:3px">Carrier</div><div style="font-weight:600">${q.carrier}</div></div>
+      <div><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-400);margin-bottom:3px">Mode</div><div><span class="badge ${ld==='Live'?'b':ld==='Both'?'t':'gr'}">${ld}</span></div></div>
+      <div><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-400);margin-bottom:3px">Pickup</div><div style="font-size:13px">${q.port||'—'}</div></div>
+      <div><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-400);margin-bottom:3px">Delivery zip</div><div style="font-weight:600">${q.zip}</div></div>
+      <div><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-400);margin-bottom:3px">Destination</div><div style="font-size:13px">${q.destination||'—'}</div></div>
+    </div>
+    <div style="border:1px solid var(--gray-200);border-radius:var(--radius);overflow:hidden;margin-bottom:16px">
+      <table style="width:100%;font-size:13px;border-collapse:collapse">
+        <thead><tr style="background:var(--gray-50)"><th style="padding:8px 12px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-500)">Charge</th><th style="padding:8px 12px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-400)">Carrier cost</th><th style="padding:8px 12px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--steel)">Customer price</th><th style="padding:8px 12px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--green)">Profit</th></tr></thead>
+        <tbody>${chargeRows}<tr style="background:var(--navy)"><td style="padding:10px 12px;font-weight:700;color:#fff;font-size:14px">Total</td><td style="padding:10px 12px;text-align:right;color:rgba(255,255,255,.6);font-size:13px">${fmtD(cvTotal)}</td><td style="padding:10px 12px;text-align:right;font-weight:800;color:#fff;font-size:18px">${fmtD(cuTotal)}</td><td style="padding:10px 12px;text-align:right"><div style="color:#4ade80;font-weight:700">+${fmtD(profit)}</div><span class="badge ${margin>=0.10?'g':'r'}" style="margin-top:3px">${pct(margin)}</span></td></tr></tbody>
+      </table>
+    </div>
+    <div class="modal-foot"><button class="btn" onclick="closeModal()">Close</button><button class="btn" onclick="printSavedQuote('${id}')">🖨️ Print</button><button class="btn blue" onclick="downloadSavedPDF('${id}')">📄 Download PDF</button></div>
+  </div></div>`;
+}
+async function downloadSavedPDF(id){
+  const q=S.quotes.find(q=>q.id===id);if(!q) return;
+  if(typeof window.jspdf==='undefined'){try{await new Promise((res,rej)=>{const s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';s.onload=res;s.onerror=rej;document.head.appendChild(s);});}catch(e){printSavedQuote(id);return;}}
+  _generatePDF(q);
+}
+function printSavedQuote(id){
+  const q=S.quotes.find(q=>q.id===id);if(!q) return;const ld=q.ld;
+  const date=new Date(q.date).toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
+  const rows=CHARGES.map(c=>{if(!isApplicable(c,ld)) return '';const cuv=q.customerRates?.[c]||0;if(!cuv) return '';const note=c==='ovw43'?' (43k+)':c==='ovw48'?' (48k+)':c==='det_port'?' (Port)':c==='det_cust'?' (Customer)':'';return `<tr><td>${LABELS[c]}${note}</td><td style="text-align:right;font-weight:600">${fmtD(cuv)}</td></tr>`;}).join('');
+  const win=window.open('','_blank');
+  win.document.write(`<!DOCTYPE html><html><head><title>Shifl Quote #${q.quoteNum}</title><style>body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:560px;margin:40px auto;font-size:14px}.header{background:#1a2e4a;padding:16px 20px;border-radius:8px;margin-bottom:24px;display:flex;align-items:center;justify-content:space-between}.header-left{display:flex;align-items:center;gap:12px}.header h1{color:#fff;font-size:20px;font-weight:800;margin-bottom:2px}.header-sub{color:rgba(255,255,255,.55);font-size:12px}.header-qnum{color:rgba(255,255,255,.7);font-size:12px;text-align:right}.meta{display:grid;grid-template-columns:1fr 1fr;gap:6px 20px;margin-bottom:22px}.meta-item label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#888;display:block;margin-bottom:2px}.meta-item span{font-size:13px;color:#1a2e4a;font-weight:500}table{width:100%;border-collapse:collapse;margin-bottom:16px}th{text-align:left;padding:8px 0;border-bottom:2px solid #1a2e4a;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#1a2e4a}td{padding:7px 0;border-bottom:1px solid #eee;color:#374151}.total td{font-weight:700;font-size:15px;border-top:2px solid #1a2e4a;border-bottom:none;padding-top:10px;color:#1a2e4a}.footer{margin-top:24px;padding-top:14px;border-top:1px solid #eee;font-size:11px;color:#888}@media print{@page{margin:20mm}body{margin:0}}</style></head><body>
+  <div class="header"><div class="header-left"><svg width="40" height="40" viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg"><rect width="60" height="60" rx="10" fill="rgba(255,255,255,.12)"/><polygon points="10,50 25,14 44,45" fill="white"/><polygon points="25,14 44,45 53,37" fill="rgba(255,255,255,.7)"/><polygon points="10,50 44,45 53,37 53,50" fill="rgba(255,255,255,.88)"/><line x1="25" y1="14" x2="44" y2="50" stroke="rgba(59,142,208,.45)" stroke-width="1.8"/></svg><div><h1>SHIFL</h1><div class="header-sub">Drayage Quote · ${date}</div></div></div><div class="header-qnum">Quote #${q.quoteNum}<br><strong style="color:#fff">${q.status}</strong></div></div>
+  <div class="meta"><div class="meta-item"><label>Customer</label><span>${q.customer}</span></div><div class="meta-item"><label>Carrier</label><span>${q.carrier}</span></div><div class="meta-item"><label>Pickup</label><span>${q.port||'—'}</span></div><div class="meta-item"><label>Delivery Zip</label><span>${q.zip}</span></div><div class="meta-item"><label>Destination</label><span>${q.destination||'—'}</span></div><div class="meta-item"><label>Mode</label><span>${q.ld}</span></div></div>
+  <table><thead><tr><th>Charge</th><th style="text-align:right">Amount</th></tr></thead><tbody>${rows}<tr class="total"><td>Total</td><td style="text-align:right">${fmtD(q.customerRates?.total||0)}</td></tr></tbody></table>
+  <div class="footer">Quote valid 30 days · mk@shifl.com</div><script>window.onload=function(){window.print()}<\/script></body></html>`);
+  win.document.close();
+}
+function exportQuoteLog(){if(!S.quotes.length){alert('No quotes to export.');return;}const hdrs=['Quote #','Date','Customer','Port','Zip','Mode','Carrier','Destination','Carrier Total','Customer Total','Profit $','Profit %','Status'];const esc=v=>{const s=String(v==null?'':v);return s.includes(',')||s.includes('"')?`"${s.replace(/"/g,'""')}"`:s;};const rows=S.quotes.map(q=>[q.quoteNum,q.date,q.customer,q.port,q.zip,q.ld,q.carrier,q.destination||'',(q.carrierRates?.total||0).toFixed(2),(q.customerRates?.total||0).toFixed(2),(q.profit||0).toFixed(2),((q.profitPct||0)*100).toFixed(1)+'%',q.status].map(esc).join(','));const csv=[hdrs.join(','),...rows].join('\n');const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));a.download=`shifl_quotes_${new Date().toISOString().slice(0,10)}.csv`;a.click();URL.revokeObjectURL(a.href);}
+
+// ═══════════════════════════════════════════════════════
+// DASHBOARD
+// ═══════════════════════════════════════════════════════
+function filterByRange(quotes,range){const now=new Date();const m=now.getMonth();const y=now.getFullYear();if(range==='week'){const ago=new Date(now-7*24*60*60*1000);return quotes.filter(q=>new Date(q.date)>=ago);}if(range==='month'){const s=new Date(y,m,1);return quotes.filter(q=>new Date(q.date)>=s);}if(range==='lastmonth'){const s=new Date(y,m-1,1);const e=new Date(y,m,1);return quotes.filter(q=>new Date(q.date)>=s&&new Date(q.date)<e);}return quotes;}
+function buildBarChart(months){if(!months.length) return '';const w=280,h=100,pad=28,bw=Math.floor((w-pad)/months.length)-6;const maxV=Math.max(...months.map(m=>m.total),1);const bars=months.map((m,i)=>{const x=pad+i*Math.floor((w-pad)/months.length)+2;const bh=Math.max((m.booked/maxV)*(h-pad),0);const th=Math.max((m.total/maxV)*(h-pad),0);return `<rect x="${x}" y="${h-pad-th}" width="${bw}" height="${th}" fill="#dbeafe" rx="2"/><rect x="${x}" y="${h-pad-bh}" width="${bw}" height="${bh}" fill="#2e75b6" rx="2"/><text x="${x+bw/2}" y="${h-4}" text-anchor="middle" font-size="8" fill="#9ca3af">${m.label}</text>`;}).join('');const yLines=[0,.5,1].map(v=>{const y=h-pad-(v*(h-pad));return `<line x1="${pad}" y1="${y}" x2="${w}" y2="${y}" stroke="#f3f4f6" stroke-width="1"/><text x="${pad-2}" y="${y+3}" text-anchor="end" font-size="7" fill="#d1d5db">${Math.round(v*maxV)}</text>`;}).join('');return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">${yLines}${bars}<line x1="${pad}" y1="0" x2="${pad}" y2="${h-pad}" stroke="#e5e7eb" stroke-width="1"/><line x1="${pad}" y1="${h-pad}" x2="${w}" y2="${h-pad}" stroke="#e5e7eb" stroke-width="1"/></svg><div style="display:flex;gap:12px;margin-top:6px;font-size:11px;color:var(--gray-500)"><span><span style="display:inline-block;width:10px;height:10px;background:#2e75b6;border-radius:2px;margin-right:4px;vertical-align:middle"></span>Booked</span><span><span style="display:inline-block;width:10px;height:10px;background:#dbeafe;border-radius:2px;margin-right:4px;vertical-align:middle"></span>All quotes</span></div>`;}
+function buildDonut(slices){const cx=54,cy=54,r=40,ir=26;const total=slices.reduce((s,d)=>s+d.v,0);if(!total) return `<div style="text-align:center;padding:20px;color:var(--gray-400);font-size:13px">No data yet</div>`;let angle=-Math.PI/2;const paths=slices.filter(d=>d.v>0).map(d=>{const pct=d.v/total;const sweep=pct*2*Math.PI;const x1=cx+r*Math.cos(angle),y1=cy+r*Math.sin(angle);angle+=sweep;const x2=cx+r*Math.cos(angle),y2=cy+r*Math.sin(angle);const lg=pct>0.5?1:0;return `<path d="M${cx},${cy} L${x1},${y1} A${r},${r} 0 ${lg},1 ${x2},${y2} Z" fill="${d.color}"/>`;}).join('');return `<svg width="108" height="108" viewBox="0 0 108 108">${paths}<circle cx="${cx}" cy="${cy}" r="${ir}" fill="white"/><text x="${cx}" y="${cy+4}" text-anchor="middle" font-size="14" font-weight="700" fill="#1a2e4a">${total}</text><text x="${cx}" y="${cy+14}" text-anchor="middle" font-size="8" fill="#9ca3af">quotes</text></svg>`;}
+function renderDash(){
+  $('topbar-right').innerHTML='';const range=S.dashFilter||'month';const all=S.quotes;const filtered=filterByRange(all,range);const booked=filtered.filter(q=>q.status==='Booked');const allBooked=all.filter(q=>q.status==='Booked');const rev=booked.reduce((s,q)=>s+(q.customerRates?.total||0),0);const prof=booked.reduce((s,q)=>s+(q.profit||0),0);const winRate=filtered.length>0?booked.length/filtered.length:0;const now=new Date();const months=Array.from({length:6},(_,i)=>{const d=new Date(now.getFullYear(),now.getMonth()-5+i,1);const next=new Date(now.getFullYear(),now.getMonth()-5+i+1,1);const inM=all.filter(q=>{const qd=new Date(q.date);return qd>=d&&qd<next;});return{label:d.toLocaleString('default',{month:'short'}),total:inM.length,booked:inM.filter(q=>q.status==='Booked').length};});
+  const donutData=[{v:filtered.filter(q=>q.status==='Quoted').length,color:'#fbbf24',lbl:'Quoted'},{v:booked.length,color:'#2d7d46',lbl:'Booked'},{v:filtered.filter(q=>q.status==='Lost').length,color:'#d1d5db',lbl:'Lost'},{v:filtered.filter(q=>q.status==='Cancelled').length,color:'#f3f4f6',lbl:'Cancelled'}];
+  const cMap={};allBooked.forEach(q=>{if(!cMap[q.carrier])cMap[q.carrier]={n:0,p:0,rev:0};cMap[q.carrier].n++;cMap[q.carrier].p+=(q.profit||0);cMap[q.carrier].rev+=(q.customerRates?.total||0);});const topC=Object.entries(cMap).sort((a,b)=>b[1].n-a[1].n).slice(0,6);const recent=all.slice(0,8);const rangeLabel={week:'This week',month:'This month',lastmonth:'Last month',all:'All time'}[range];
+  $('page').innerHTML=`
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <div style="font-size:13px;color:var(--gray-500)">${rangeLabel} · ${filtered.length} quote${filtered.length!==1?'s':''}</div>
+      <div class="toggle-group"><button class="tgl${range==='week'?' on':''}" onclick="setDashFilter('week')">This week</button><button class="tgl${range==='month'?' on':''}" onclick="setDashFilter('month')">This month</button><button class="tgl${range==='lastmonth'?' on':''}" onclick="setDashFilter('lastmonth')">Last month</button><button class="tgl${range==='all'?' on':''}" onclick="setDashFilter('all')">All time</button></div>
+    </div>
+    <div class="kpi-grid">
+      <div class="kpi" style="cursor:pointer" onclick="setView('log');S.logFilter='all';render()"><div class="kpi-lbl">Quotes built</div><div class="kpi-val">${filtered.length}</div><div style="font-size:11px;color:var(--gray-400);margin-top:4px">click to view →</div></div>
+      <div class="kpi" style="cursor:pointer" onclick="setView('log');S.logFilter='Booked';render()"><div class="kpi-lbl">Booked</div><div class="kpi-val b">${booked.length}</div><div style="font-size:11px;color:var(--steel);margin-top:4px">${pct(winRate)} win rate</div></div>
+      <div class="kpi"><div class="kpi-lbl">Revenue</div><div class="kpi-val g">${rev>0?fmtD(rev):'—'}</div><div style="font-size:11px;color:var(--gray-400);margin-top:4px">booked only</div></div>
+      <div class="kpi"><div class="kpi-lbl">Profit</div><div class="kpi-val g">${prof>0?fmtD(prof):'—'}</div><div style="font-size:11px;color:${prof>0?'var(--green)':'var(--gray-400)'};margin-top:4px">${booked.length>0?'avg '+pct(booked.reduce((s,q)=>s+(q.profitPct||0),0)/booked.length)+' margin':'—'}</div></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr auto 1fr;gap:14px;margin-bottom:14px">
+      <div class="card" style="margin-bottom:0"><div class="sec-head">Activity — last 6 months</div>${buildBarChart(months)}</div>
+      <div class="card" style="margin-bottom:0;min-width:200px"><div class="sec-head">Status breakdown</div><div style="display:flex;align-items:center;gap:12px;margin-top:4px">${buildDonut(donutData)}<div style="font-size:12px">${donutData.filter(d=>d.v>0).map(d=>`<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px"><span style="width:10px;height:10px;border-radius:50%;background:${d.color};flex-shrink:0;display:inline-block;border:1px solid #e5e7eb"></span><span style="color:var(--gray-600)">${d.lbl}</span><span class="bold" style="margin-left:auto;padding-left:8px">${d.v}</span></div>`).join('')}</div></div></div>
+      <div class="card" style="margin-bottom:0"><div class="sec-head">Top carriers <span class="muted" style="font-weight:400;text-transform:none;letter-spacing:0">all time</span></div>${topC.length?`<table style="width:100%;font-size:12px"><thead><tr><th style="text-align:left;padding:4px 0;font-size:10px">Carrier</th><th style="text-align:center">Booked</th><th style="text-align:right">Revenue</th><th style="text-align:right">Profit</th></tr></thead><tbody>${topC.map(([c,s])=>`<tr><td style="padding:5px 0;font-weight:600">${c}</td><td style="text-align:center"><span class="badge b">${s.n}</span></td><td style="text-align:right;color:var(--steel)">${fmtD(s.rev)}</td><td style="text-align:right;color:var(--green)">${fmtD(s.p)}</td></tr>`).join('')}</tbody></table>`:`<p class="muted small" style="margin-top:8px">Mark quotes as Booked to see carrier stats</p>`}</div>
+    </div>
+    <div class="card" style="margin-bottom:0">
+      <div class="sec-head" style="display:flex;align-items:center;justify-content:space-between"><span>Recent quotes</span><button class="btn sm" onclick="setView('log');render()">View all →</button></div>
+      ${recent.length?`<div class="tbl-wrap" style="box-shadow:none;border:none"><table><thead><tr><th>#</th><th>Date</th><th>Customer</th><th>Lane</th><th>Carrier</th><th>Customer total</th><th>Profit</th><th>Margin</th><th>Status</th></tr></thead><tbody>${recent.map(q=>`<tr onclick="showQuoteModal('${q.id}')" style="cursor:pointer"><td class="muted small">#${q.quoteNum}</td><td class="small">${q.date}</td><td class="bold">${q.customer}</td><td class="small">${q.zip} · ${q.ld}<div class="subtext">${q.destination||''}</div></td><td class="small">${q.carrier}</td><td class="bold" style="color:var(--steel)">${fmtD(q.customerRates?.total||0)}</td><td style="color:var(--green);font-weight:600">+${fmtD(q.profit||0)}</td><td><span class="badge ${(q.profitPct||0)>=0.10?'g':'r'}">${pct(q.profitPct||0)}</span></td><td onclick="event.stopPropagation()"><select onchange="updateStatus('${q.id}',this.value)" style="font-size:11px;padding:3px 5px;width:110px"><option${q.status==='Quoted'?' selected':''}>Quoted</option><option${q.status==='Booked'?' selected':''}>Booked</option><option${q.status==='Lost'?' selected':''}>Lost</option><option${q.status==='Cancelled'?' selected':''}>Cancelled</option></select></td></tr>`).join('')}</tbody></table></div>`:`<div class="empty" style="padding:30px"><p>No quotes yet</p></div>`}
+    </div>`;
+}
+function setDashFilter(f){S.dashFilter=f;renderDash();}
+
+// ═══════════════════════════════════════════════════════
+// SHARED
+// ═══════════════════════════════════════════════════════
+function closeModal(){$('modal-root').innerHTML='';}
+document.addEventListener('keydown',e=>{if(e.key==='Escape') closeModal();});
+
+// ═══════════════════════════════════════════════════════
+// BOOT — load Supabase client then check for saved config
+// ═══════════════════════════════════════════════════════
+async function boot(){
+  // Load Supabase JS
+  await new Promise((res,rej)=>{
+    const s=document.createElement('script');
+    s.src='https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
+    s.onload=res; s.onerror=rej;
+    document.head.appendChild(s);
+  });
+  const url=localStorage.getItem('sb_url');
+  const key=localStorage.getItem('sb_key');
+  if(url&&key){
+    const{createClient}=window.supabase;
+    db=createClient(url,key);
+    try{
+      const{error}=await db.from('rates').select('id').limit(1);
+      if(error) throw error;
+      await initApp();
+    }catch(e){
+      db=null;
+      $('loading-screen').style.display='none';
+      $('setup-screen').style.display='flex';
+    }
+  } else {
+    $('loading-screen').style.display='none';
+    $('setup-screen').style.display='flex';
+  }
+}
+boot().catch(e=>{$('loading-screen').style.display='none';$('setup-screen').style.display='flex';});
+</script>
+</body>
+</html>
