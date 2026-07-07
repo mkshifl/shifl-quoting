@@ -1336,25 +1336,50 @@ async function downloadCarrierRateSheet(q,overrideRate){
   doc.setDrawColor(200,210,220);doc.setLineWidth(.3);doc.line(12,y,W-12,y);y+=8;
   doc.setFillColor(...navy);doc.rect(12,y,W-24,8,'F');
   doc.setFont('helvetica','bold');doc.setFontSize(8);doc.setTextColor(255,255,255);
-  doc.text('CARRIER RATES',16,y+5.5);doc.text('AMOUNT',W-14,y+5.5,{align:'right'});y+=12;
+  doc.text('CHARGE',16,y+5.5);
+  doc.text('CARRIER RATE',95,y+5.5,{align:'right'});
+  doc.text('CUSTOMER RATE',140,y+5.5,{align:'right'});
+  doc.text('PROFIT',W-14,y+5.5,{align:'right'});
+  y+=12;
 
   let even=true;
   CHARGES.forEach(c=>{
     if(!isApplicable(c,q.ld)) return;
-    const cv=carrierRates[c]||0;if(!cv) return;
+    const cv=carrierRates[c]||0;
+    const cuv=q.customerRates?.[c]||0;
+    if(!cv&&!cuv) return;
+    const lineProfit=cuv-cv;
     if(even){doc.setFillColor(248,250,252);doc.rect(12,y-4,W-24,8,'F');}
-    doc.setFont('helvetica','normal');doc.setFontSize(10);doc.setTextColor(55,65,80);doc.text(LABELS[c],16,y);
-    doc.setFont('helvetica','bold');doc.setTextColor(...navy);doc.text(fmtD(cv),W-14,y,{align:'right'});
+    // Charge name
+    doc.setFont('helvetica','normal');doc.setFontSize(10);doc.setTextColor(55,65,80);
+    doc.text(LABELS[c],16,y);
+    // Carrier rate
+    doc.setFont('helvetica','normal');doc.setTextColor(100,115,130);
+    doc.text(cv>0?fmtD(cv):'—',95,y,{align:'right'});
+    // Customer rate
+    doc.setFont('helvetica','bold');doc.setTextColor(...navy);
+    doc.text(cuv>0?fmtD(cuv):'—',140,y,{align:'right'});
+    // Profit per line
+    doc.setFont('helvetica','bold');doc.setTextColor(...green);
+    doc.text(cv>0&&cuv>0?'+'+fmtD(lineProfit):'—',W-14,y,{align:'right'});
     doc.setDrawColor(235,238,242);doc.setLineWidth(.2);doc.line(12,y+4,W-12,y+4);
     y+=8;even=!even;
   });
 
-  // Total carrier row
+  // Total row
   y+=2;
-  doc.setFillColor(26,46,74);doc.rect(12,y-3,W-24,13,'F');
-  doc.setFont('helvetica','bold');doc.setFontSize(12);doc.setTextColor(255,255,255);
-  doc.text('TOTAL CARRIER COST',16,y+5);
-  doc.setFontSize(14);doc.text(fmtD(carrierRates.total||0),W-14,y+5,{align:'right'});
+  doc.setFillColor(...navy);doc.rect(12,y-3,W-24,13,'F');
+  doc.setFont('helvetica','bold');doc.setFontSize(10);doc.setTextColor(255,255,255);
+  doc.text('TOTAL',16,y+5);
+  // Carrier total
+  doc.setFontSize(10);doc.setTextColor(255,255,255,.7);
+  doc.text(fmtD(carrierRates.total||0),95,y+5,{align:'right'});
+  // Customer total
+  doc.setFontSize(13);doc.setTextColor(255,255,255);
+  doc.text(fmtD(q.customerRates?.total||0),140,y+5,{align:'right'});
+  // Total profit
+  doc.setTextColor(100,255,150);
+  doc.text('+'+fmtD((q.customerRates?.total||0)-(carrierRates.total||0)),W-14,y+5,{align:'right'});
   y+=18;
 
   // ── Billing summary ───────────────────────────────────────────────────
