@@ -660,7 +660,7 @@ function buildPrintHTML(customer, carrier, port, zip, destination, ld, date, quo
     .header-left{display:flex;align-items:center;gap:14px}
     .header h1{color:#fff;font-size:22px;font-weight:800;letter-spacing:.5px;margin-bottom:2px}
     .header-sub{color:rgba(255,255,255,.5);font-size:12px}
-    .header-qnum{text-align:right;color:rgba(255,255,255,.6);font-size:12px}
+    .header-qnum{text-align:right;color:#fff;font-size:12px;font-weight:600}
     .meta{display:grid;grid-template-columns:1fr 1fr;gap:8px 24px;margin-bottom:26px}
     .meta-item label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#9ca3af;display:block;margin-bottom:3px}
     .meta-item span{font-size:13px;font-weight:500;color:#1a2e4a}
@@ -746,7 +746,7 @@ function _generatePDF(q){
   doc.setDrawColor(59,142,208);doc.setLineWidth(.3);doc.line(bx+sc(25),by+sc(14),bx+sc(44),by+sc(50));
   doc.setTextColor(255,255,255);doc.setFont('helvetica','bold');doc.setFontSize(20);doc.text('SHIFL',36,20);
   doc.setFontSize(9);doc.setFont('helvetica','normal');doc.setTextColor(255,255,255,.6);doc.text('Drayage Quote',36,27);
-  doc.setFontSize(9);doc.setTextColor(255,255,255,.5);doc.text('Quote #'+q.quoteNum+' · '+q.date,W-12,12,{align:'right'});
+  doc.setFontSize(9);doc.setTextColor(255,255,255);doc.text('Quote #'+q.quoteNum+' · '+q.date,W-12,12,{align:'right'});
 
   // ── Lane details ──────────────────────────────────────
   const meta=[['Customer',q.customer||'—'],['Carrier','Shifl'],['Pickup',q.port||'—'],['Delivery Zip',q.zip],['Destination',q.destination||'—'],['Mode',q.ld]];
