@@ -404,6 +404,20 @@ async function dbDeleteCustomer(id){
   const{error}=await db.from('customers').delete().eq('id',id); if(error) throw error;
 }
 
+async function autoExpireQuotes(){
+  const cutoff=new Date(Date.now()-30*24*60*60*1000).toISOString().slice(0,10);
+  const toExpire=S.quotes.filter(q=>q.status==='Quoted'&&q.date<cutoff);
+  if(!toExpire.length) return;
+  // Batch update in Supabase
+  for(const q of toExpire){
+    try{
+      await db.from('quotes').update({status:'Expired'}).eq('id',q.id);
+      q.status='Expired';
+    }catch(e){console.log('Expire error:',e.message);}
+  }
+  console.log(`Auto-expired ${toExpire.length} quote(s) older than 30 days`);
+}
+
 function setSaving(on){
   const t=$('topbar-right');
   if(!t) return;
@@ -437,6 +451,7 @@ async function initApp(){
   }
   $('loading-msg').textContent='Loading quotes…';
   S.quotes=await dbLoadQuotes();
+  await autoExpireQuotes();
   $('loading-msg').textContent='Loading customers…';
   S.customers=await dbLoadCustomers();
   // Real-time subscriptions
@@ -610,6 +625,9 @@ function renderQuote(){
         </div>
       </div>
       <div class="card"><div class="sec-head">Pricing</div><div id="pricing-section">${buildPricingSection()}</div></div>
+      <div class="card" id="lane-history-card" style="${qi.zip?'':'display:none'}">
+        <div id="lane-history-body">${buildLaneHistory(qi.zip,qi.ld)}</div>
+      </div>
       <div class="card">
         <div class="sec-head" id="carriers-head">Carriers · ${qi.zip||'—'} · ${qi.ld}${matches.length?` <span class="badge b">${matches.length} found</span>`:''}</div>
         <div id="carriers-body">${buildCarrierComparison(matches)}</div>
@@ -778,7 +796,52 @@ async function delCustomer(id){
     const t=$('cust-tbody');if(t) t.innerHTML=buildCustomerRows();
   }catch(e){alert('Error: '+e.message);}finally{setSaving(false);}
 }
-function onZip(v){S.qi.zip=v.trim();S.selId=null;if($('carriers-body')) refreshCarriersAndPreview();}
+function buildLaneHistory(zip, ld){
+  if(!zip) return '';
+  // All past quotes for this zip regardless of mode, sorted newest first
+  const past=S.quotes
+    .filter(q=>q.zip===zip)
+    .sort((a,b)=>new Date(b.date)-new Date(a.date))
+    .slice(0,5);
+  if(!past.length) return `<div style="font-size:12px;color:var(--gray-400);padding:2px 0">No previous quotes found for zip ${zip} — this would be a new lane.</div>`;
+
+  const won=past.filter(q=>q.status==='Booked').length;
+  const lost=past.filter(q=>q.status==='Lost').length;
+  const avgCustomer=past.filter(q=>q.customerRates?.total>0).reduce((s,q,_,a)=>s+(q.customerRates.total/a.length),0);
+  const lastWon=past.find(q=>q.status==='Booked');
+
+  const rows=past.map(q=>{
+    const statusColor={Booked:'var(--green)',Lost:'var(--gray-400)',Quoted:'var(--amber)',Expired:'var(--gray-300)'}[q.status]||'var(--gray-400)';
+    return `<tr style="font-size:12px;border-bottom:1px solid var(--gray-100)">
+      <td style="padding:5px 0;color:var(--gray-500)">${q.date}</td>
+      <td style="padding:5px 0;font-weight:500">${q.customer}</td>
+      <td style="padding:5px 0;color:var(--gray-500)">${q.carrier}</td>
+      <td style="padding:5px 0;text-align:right;font-weight:600;color:var(--steel)">${fmtD(q.customerRates?.total||0)}</td>
+      <td style="padding:5px 0;text-align:right"><span style="font-size:11px;font-weight:600;color:${statusColor}">${q.status}</span></td>
+    </tr>`;
+  }).join('');
+
+  return `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+    <span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-500)">Lane history — zip ${zip}</span>
+    <div style="display:flex;gap:10px;font-size:12px">
+      ${won>0?`<span style="color:var(--green);font-weight:600">✓ ${won} won</span>`:''}
+      ${lost>0?`<span style="color:var(--gray-400)">✗ ${lost} lost</span>`:''}
+      ${avgCustomer>0?`<span style="color:var(--steel);font-weight:600">Avg ${fmtD(avgCustomer)}</span>`:''}
+      ${lastWon?`<span style="color:var(--green)">Last won at ${fmtD(lastWon.customerRates?.total||0)}</span>`:''}
+    </div>
+  </div>
+  <table style="width:100%"><tbody>${rows}</tbody></table>`;
+}
+
+function onZip(v){
+  S.qi.zip=v.trim();S.selId=null;
+  if($('carriers-body')) refreshCarriersAndPreview();
+  // Update lane history panel
+  const card=$('lane-history-card');
+  const body=$('lane-history-body');
+  if(card) card.style.display=S.qi.zip?'':'none';
+  if(body) body.innerHTML=buildLaneHistory(S.qi.zip,S.qi.ld);
+}
 function onLd(v){S.qi.ld=v;S.selId=null;if($('carriers-body')){refreshCarriersAndPreview();refreshPricingAndPreview();}}
 function selCarrier(id){S.selId=id;refreshCarrierHighlight(id);refreshPreviewOnly();}
 function setFlatRate(c,v){S.qi.flatRates[c]=v;refreshPreviewOnly();}
@@ -1109,23 +1172,220 @@ function buildLogRows(){
       <td class="bold" style="color:var(--steel)">${fmtD(q.customerRates?.total||0)}</td>
       <td style="color:var(--green);font-weight:600">+${fmtD(q.profit||0)}</td>
       <td><span class="badge ${(q.profitPct||0)>=0.10?'g':'r'}">${pct(q.profitPct||0)}</span></td>
-      <td onclick="event.stopPropagation()"><select onchange="updateStatus('${q.id}',this.value)" style="font-size:12px;padding:4px 7px;width:120px"><option${q.status==='Quoted'?' selected':''}>Quoted</option><option${q.status==='Booked'?' selected':''}>Booked</option><option${q.status==='Lost'?' selected':''}>Lost</option><option${q.status==='Cancelled'?' selected':''}>Cancelled</option></select></td>
+      <td onclick="event.stopPropagation()"><select onchange="updateStatus('${q.id}',this.value)" style="font-size:12px;padding:4px 7px;width:120px"><option${q.status==='Quoted'?' selected':''}>Quoted</option><option${q.status==='Booked'?' selected':''}>Booked</option><option${q.status==='Lost'?' selected':''}>Lost</option><option${q.status==='Cancelled'?' selected':''}>Cancelled</option><option${q.status==='Expired'?' selected':''}>Expired</option></select></td>
       <td onclick="event.stopPropagation()" style="white-space:nowrap">
-        <button class="btn sm ico-btn" onclick="downloadSavedPDF('${q.id}')" title="PDF">📄</button>
+        ${q.status==='Booked'?`<button class="btn sm ico-btn" onclick="downloadCarrierRateSheet(S.quotes.find(q=>q.id==='${q.id}'),null)" title="Carrier rate sheet" style="color:var(--green)">📋</button>`:''}
+        <button class="btn sm ico-btn" onclick="downloadSavedPDF('${q.id}')" title="Customer PDF" style="margin-left:3px">📄</button>
         <button class="btn sm ico-btn" onclick="delQuote('${q.id}')" title="Delete" style="margin-left:3px">🗑️</button>
       </td>
     </tr>`).join('');
 }
 function renderLog(){
-  $('topbar-right').innerHTML=`<select id="log-filter" onchange="onLogFilter(this.value)" style="width:150px"><option value="all"${S.logFilter==='all'?' selected':''}>All statuses</option><option value="Quoted"${S.logFilter==='Quoted'?' selected':''}>Quoted</option><option value="Booked"${S.logFilter==='Booked'?' selected':''}>Booked</option><option value="Lost"${S.logFilter==='Lost'?' selected':''}>Lost</option></select><button class="btn" onclick="exportQuoteLog()">📥 Export CSV</button>`;
+  $('topbar-right').innerHTML=`<select id="log-filter" onchange="onLogFilter(this.value)" style="width:150px"><option value="all"${S.logFilter==='all'?' selected':''}>All statuses</option><option value="Quoted"${S.logFilter==='Quoted'?' selected':''}>Quoted</option><option value="Booked"${S.logFilter==='Booked'?' selected':''}>Booked</option><option value="Lost"${S.logFilter==='Lost'?' selected':''}>Lost</option><option value="Expired"${S.logFilter==='Expired'?' selected':''}>Expired</option></select><button class="btn" onclick="exportQuoteLog()">📥 Export CSV</button>`;
   $('page').innerHTML=`<div class="tbl-wrap"><table><thead><tr><th>#</th><th>Date</th><th>Customer</th><th>Lane</th><th>Carrier</th><th>Carrier total</th><th>Customer total</th><th>Profit</th><th>Margin</th><th>Status</th><th></th></tr></thead><tbody id="log-tbody">${buildLogRows()}</tbody></table></div>`;
 }
 function onLogFilter(v){S.logFilter=v;const t=$('log-tbody');if(t) t.innerHTML=buildLogRows();}
 async function updateStatus(id,status){
   setSaving(true);try{await dbUpdateQuoteStatus(id,status);const q=S.quotes.find(q=>q.id===id);if(q) q.status=status;const t=$('log-tbody');if(t) t.innerHTML=buildLogRows();}catch(e){alert('Error: '+e.message);}finally{setSaving(false);}
 }
+async function updateStatus(id,status){
+  // Intercept Booked — show carrier confirmation modal first
+  if(status==='Booked'){showBookingModal(id);return;}
+  setSaving(true);try{await dbUpdateQuoteStatus(id,status);const q=S.quotes.find(q=>q.id===id);if(q) q.status=status;const t=$('log-tbody');if(t) t.innerHTML=buildLogRows();}catch(e){alert('Error: '+e.message);}finally{setSaving(false);}
+}
+
+// ── Booking confirmation modal ─────────────────────────────────────────────
+function showBookingModal(id){
+  const q=S.quotes.find(q=>q.id===id);if(!q) return;
+  // All active carriers on this zip so user can switch if needed
+  const carriersOnZip=S.rates.filter(r=>r.active&&r.zip===q.zip&&(r.ld===q.ld||r.ld==='Both'))
+    .sort((a,b)=>totMode(a,q.ld)-totMode(b,q.ld));
+  const opts=carriersOnZip.map(r=>`<option value="${r.id}"${r.carrier===q.carrier?' selected':''}>${r.carrier} — carrier total: ${fmt(totMode(r,q.ld))}</option>`).join('');
+
+  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+    <div class="modal" style="width:560px">
+      <div style="background:var(--green);border-radius:10px;padding:16px 20px;margin-bottom:20px;display:flex;align-items:center;gap:12px">
+        <span style="font-size:28px">✅</span>
+        <div>
+          <div style="font-size:16px;font-weight:700;color:#fff">Confirm Booking</div>
+          <div style="font-size:12px;color:rgba(255,255,255,.75)">Quote #${q.quoteNum} · ${q.customer} · ${q.zip} (${q.ld})</div>
+        </div>
+      </div>
+
+      <div class="g2" style="margin-bottom:16px">
+        <div style="background:var(--gray-50);border-radius:var(--radius);padding:12px">
+          <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-400);margin-bottom:4px">Customer invoice</div>
+          <div style="font-size:20px;font-weight:700;color:var(--steel)">${fmtD(q.customerRates?.total||0)}</div>
+        </div>
+        <div style="background:var(--green-bg);border-radius:var(--radius);padding:12px">
+          <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-400);margin-bottom:4px">Profit</div>
+          <div style="font-size:20px;font-weight:700;color:var(--green)">${fmtD(q.profit||0)} <span style="font-size:13px">(${pct(q.profitPct||0)})</span></div>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Carrier being used ${carriersOnZip.length===0?'<span style="color:var(--amber);font-weight:400">— no rates on file for this zip</span>':''}</label>
+        ${carriersOnZip.length>0
+          ?`<select id="booking-carrier-sel">${opts}</select>
+             <div style="font-size:11px;color:var(--gray-400);margin-top:4px">Switch carrier if you booked with someone different from the original quote</div>`
+          :`<input type="text" id="booking-carrier-text" value="${q.carrier}" placeholder="Enter carrier name">`}
+      </div>
+
+      <div class="alert info" style="margin-bottom:0">
+        Clicking <strong>Confirm + Download</strong> marks this as Booked and downloads the internal carrier rate sheet for your records.
+      </div>
+
+      <div class="modal-foot">
+        <button class="btn" onclick="closeModal()">Cancel</button>
+        <button class="btn" onclick="confirmBooking('${id}',false)">Confirm only</button>
+        <button class="btn blue" onclick="confirmBooking('${id}',true)">✅ Confirm + Download rate sheet</button>
+      </div>
+    </div></div>`;
+}
+
+async function confirmBooking(id, downloadSheet){
+  const q=S.quotes.find(q=>q.id===id);if(!q) return;
+  const sel=$('booking-carrier-sel');
+  const txt=$('booking-carrier-text');
+  const selRate=sel?S.rates.find(r=>r.id===sel.value):null;
+  const carrierName=selRate?selRate.carrier:(txt?txt.value.trim():q.carrier)||q.carrier;
+
+  setSaving(true);
+  try{
+    // If carrier changed, update the carrier rates on the quote
+    if(selRate&&selRate.carrier!==q.carrier){
+      const ct=totMode(selRate,q.ld);
+      const cu=q.customerRates?.total||0;
+      const newCarrierRates={...CHARGES.reduce((o,c)=>{o[c]=selRate[c]||0;return o;},{}),total:ct};
+      q.carrier=selRate.carrier;
+      q.carrierRates=newCarrierRates;
+      q.profit=cu-ct;
+      q.profitPct=cu>0?(cu-ct)/cu:0;
+      await db.from('quotes').update({...quoteToDb(q),status:'Booked'}).eq('id',id);
+    } else {
+      await dbUpdateQuoteStatus(id,'Booked');
+    }
+    q.status='Booked';
+    closeModal();
+    const t=$('log-tbody');if(t) t.innerHTML=buildLogRows();
+    if(downloadSheet) await downloadCarrierRateSheet(q,selRate);
+  }catch(e){alert('Error: '+e.message);}finally{setSaving(false);}
+}
+
+// ── Carrier rate sheet PDF (internal) ────────────────────────────────────
+async function downloadCarrierRateSheet(q,overrideRate){
+  if(typeof window.jspdf==='undefined'){
+    try{await new Promise((res,rej)=>{const s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';s.onload=res;s.onerror=rej;document.head.appendChild(s);});}
+    catch(e){alert('PDF library failed to load. Check internet connection.');return;}
+  }
+  const{jsPDF}=window.jspdf;
+  const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+  const W=210;const navy=[26,46,74];const green=[45,125,70];
+
+  // Use override carrier rates if carrier was switched, otherwise use saved quote rates
+  const carrierRates=overrideRate
+    ?{...CHARGES.reduce((o,c)=>{o[c]=overrideRate[c]||0;return o;},{}),total:totMode(overrideRate,q.ld)}
+    :q.carrierRates||{};
+  const carrierName=overrideRate?overrideRate.carrier:q.carrier;
+
+  // ── Header ────────────────────────────────────────────────────────────
+  doc.setFillColor(...navy);doc.rect(0,0,W,32,'F');
+  // Logo
+  doc.setFillColor(59,142,208);doc.roundedRect(10,5,22,22,3,3,'F');
+  const bx=10,by=5,bs=22,sc=v=>v/60*bs;
+  doc.setFillColor(255,255,255);doc.triangle(bx+sc(10),by+sc(50),bx+sc(25),by+sc(14),bx+sc(44),by+sc(45),'F');
+  doc.setFillColor(220,235,255);doc.triangle(bx+sc(25),by+sc(14),bx+sc(44),by+sc(45),bx+sc(53),by+sc(37),'F');
+  doc.setFillColor(255,255,255);doc.triangle(bx+sc(10),by+sc(50),bx+sc(44),by+sc(45),bx+sc(53),by+sc(50),'F');
+  doc.setDrawColor(59,142,208);doc.setLineWidth(.3);doc.line(bx+sc(25),by+sc(14),bx+sc(44),by+sc(50));
+  doc.setTextColor(255,255,255);doc.setFont('helvetica','bold');doc.setFontSize(18);doc.text('SHIFL',36,19);
+  doc.setFontSize(9);doc.setFont('helvetica','normal');doc.setTextColor(255,255,255,.65);doc.text('Carrier Rate Sheet',36,26);
+  // Top right — confidential tag
+  doc.setFillColor(255,80,80);doc.roundedRect(W-52,8,44,14,3,3,'F');
+  doc.setFont('helvetica','bold');doc.setFontSize(8);doc.setTextColor(255,255,255);
+  doc.text('INTERNAL USE ONLY',W-50,16.5);
+
+  // ── Quote info bar ────────────────────────────────────────────────────
+  doc.setFillColor(240,244,248);doc.rect(0,32,W,16,'F');
+  doc.setFont('helvetica','bold');doc.setFontSize(9);doc.setTextColor(...navy);
+  doc.text('Quote #'+q.quoteNum,12,42);
+  doc.setFont('helvetica','normal');doc.setTextColor(100,115,130);
+  doc.text('Date: '+q.date,12,48);
+  doc.text('Customer: '+q.customer,70,42);
+  doc.text('Status: BOOKED',70,48);
+  doc.text('Booked: '+new Date().toISOString().slice(0,10),150,42);
+
+  // ── Carrier section ───────────────────────────────────────────────────
+  let y=58;
+  doc.setFillColor(...navy);doc.rect(12,y,W-24,8,'F');
+  doc.setFont('helvetica','bold');doc.setFontSize(8);doc.setTextColor(255,255,255);
+  doc.text('CARRIER',16,y+5.5);y+=12;
+
+  doc.setFont('helvetica','bold');doc.setFontSize(16);doc.setTextColor(...navy);
+  doc.text(carrierName,16,y);y+=10;
+
+  // Lane details under carrier
+  const laneItems=[['Pickup',q.port||'—'],['Destination',q.destination||'—'],['Delivery Zip',q.zip],['Mode',q.ld]];
+  laneItems.forEach(([l,v],i)=>{
+    const x=i%2===0?16:110;if(i===2) y+=12;
+    doc.setFont('helvetica','bold');doc.setFontSize(7);doc.setTextColor(150,160,175);doc.text(l.toUpperCase(),x,y);
+    doc.setFont('helvetica','normal');doc.setFontSize(10);doc.setTextColor(50,60,75);doc.text(String(v),x,y+5);
+  });
+  y+=18;
+
+  // ── Carrier rates table ───────────────────────────────────────────────
+  doc.setDrawColor(200,210,220);doc.setLineWidth(.3);doc.line(12,y,W-12,y);y+=8;
+  doc.setFillColor(...navy);doc.rect(12,y,W-24,8,'F');
+  doc.setFont('helvetica','bold');doc.setFontSize(8);doc.setTextColor(255,255,255);
+  doc.text('CARRIER RATES',16,y+5.5);doc.text('AMOUNT',W-14,y+5.5,{align:'right'});y+=12;
+
+  let even=true;
+  CHARGES.forEach(c=>{
+    if(!isApplicable(c,q.ld)) return;
+    const cv=carrierRates[c]||0;if(!cv) return;
+    if(even){doc.setFillColor(248,250,252);doc.rect(12,y-4,W-24,8,'F');}
+    doc.setFont('helvetica','normal');doc.setFontSize(10);doc.setTextColor(55,65,80);doc.text(LABELS[c],16,y);
+    doc.setFont('helvetica','bold');doc.setTextColor(...navy);doc.text(fmtD(cv),W-14,y,{align:'right'});
+    doc.setDrawColor(235,238,242);doc.setLineWidth(.2);doc.line(12,y+4,W-12,y+4);
+    y+=8;even=!even;
+  });
+
+  // Total carrier row
+  y+=2;
+  doc.setFillColor(26,46,74);doc.rect(12,y-3,W-24,13,'F');
+  doc.setFont('helvetica','bold');doc.setFontSize(12);doc.setTextColor(255,255,255);
+  doc.text('TOTAL CARRIER COST',16,y+5);
+  doc.setFontSize(14);doc.text(fmtD(carrierRates.total||0),W-14,y+5,{align:'right'});
+  y+=18;
+
+  // ── Billing summary ───────────────────────────────────────────────────
+  doc.setDrawColor(200,210,220);doc.setLineWidth(.3);doc.line(12,y,W-12,y);y+=8;
+  doc.setFont('helvetica','bold');doc.setFontSize(8);doc.setTextColor(100,115,130);
+  doc.text('BILLING SUMMARY',12,y);y+=8;
+
+  const cuTotal=q.customerRates?.total||0;
+  const profit=cuTotal-(carrierRates.total||0);
+  const margin=cuTotal>0?profit/cuTotal:0;
+  const summaryRows=[
+    ['Customer Invoice Total',fmtD(cuTotal),[0,100,160]],
+    ['Carrier Cost',fmtD(carrierRates.total||0),[80,90,105]],
+    ['Profit',fmtD(profit),[...green]],
+    ['Margin',pct(margin),[...green]],
+  ];
+  summaryRows.forEach(([l,v,col])=>{
+    doc.setFont('helvetica','normal');doc.setFontSize(10);doc.setTextColor(80,90,105);doc.text(l,16,y);
+    doc.setFont('helvetica','bold');doc.setTextColor(...col);doc.text(v,W-14,y,{align:'right'});
+    doc.setDrawColor(235,238,242);doc.setLineWidth(.2);doc.line(12,y+3,W-12,y+3);y+=9;
+  });
+
+  // ── Footer ────────────────────────────────────────────────────────────
+  doc.setFontSize(8);doc.setFont('helvetica','italic');doc.setTextColor(180,185,195);
+  doc.text('This document is confidential and for internal use only. Do not share with carriers or customers.',12,275);
+  doc.text('Generated by Shifl Trucking Quoting · '+new Date().toISOString().slice(0,10),12,280);
+
+  doc.save('Shifl_CarrierRateSheet_'+q.quoteNum+'_'+carrierName.replace(/\s+/g,'_')+'_'+q.date+'.pdf');
+}
+
 async function delQuote(id){
-  if(!confirm('Delete this quote?')) return;
   setSaving(true);try{await dbDeleteQuote(id);S.quotes=S.quotes.filter(q=>q.id!==id);const t=$('log-tbody');if(t) t.innerHTML=buildLogRows();}catch(e){alert('Error: '+e.message);}finally{setSaving(false);}
 }
 
@@ -1157,7 +1417,10 @@ function showQuoteModal(id){
         <tbody>${chargeRows}<tr style="background:var(--navy)"><td style="padding:10px 12px;font-weight:700;color:#fff;font-size:14px">Total</td><td style="padding:10px 12px;text-align:right;color:rgba(255,255,255,.6);font-size:13px">${fmtD(cvTotal)}</td><td style="padding:10px 12px;text-align:right;font-weight:800;color:#fff;font-size:18px">${fmtD(cuTotal)}</td><td style="padding:10px 12px;text-align:right"><div style="color:#4ade80;font-weight:700">+${fmtD(profit)}</div><span class="badge ${margin>=0.10?'g':'r'}" style="margin-top:3px">${pct(margin)}</span></td></tr></tbody>
       </table>
     </div>
-    <div class="modal-foot"><button class="btn" onclick="closeModal()">Close</button><button class="btn" onclick="printSavedQuote('${id}')">🖨️ Print</button><button class="btn blue" onclick="downloadSavedPDF('${id}')">📄 Download PDF</button></div>
+    <div class="modal-foot"><button class="btn" onclick="closeModal()">Close</button>
+      ${q.status==='Booked'?`<button class="btn green" onclick="downloadCarrierRateSheet(S.quotes.find(q=>q.id==='${id}'),null)">📋 Carrier rate sheet</button>`:''}
+      <button class="btn" onclick="printSavedQuote('${id}')">🖨️ Print</button>
+      <button class="btn blue" onclick="downloadSavedPDF('${id}')">📄 Download PDF</button></div>
   </div></div>`;
 }
 async function downloadSavedPDF(id){
@@ -1181,8 +1444,17 @@ function filterByRange(quotes,range){const now=new Date();const m=now.getMonth()
 function buildBarChart(months){if(!months.length) return '';const w=280,h=100,pad=28,bw=Math.floor((w-pad)/months.length)-6;const maxV=Math.max(...months.map(m=>m.total),1);const bars=months.map((m,i)=>{const x=pad+i*Math.floor((w-pad)/months.length)+2;const bh=Math.max((m.booked/maxV)*(h-pad),0);const th=Math.max((m.total/maxV)*(h-pad),0);return `<rect x="${x}" y="${h-pad-th}" width="${bw}" height="${th}" fill="#dbeafe" rx="2"/><rect x="${x}" y="${h-pad-bh}" width="${bw}" height="${bh}" fill="#2e75b6" rx="2"/><text x="${x+bw/2}" y="${h-4}" text-anchor="middle" font-size="8" fill="#9ca3af">${m.label}</text>`;}).join('');const yLines=[0,.5,1].map(v=>{const y=h-pad-(v*(h-pad));return `<line x1="${pad}" y1="${y}" x2="${w}" y2="${y}" stroke="#f3f4f6" stroke-width="1"/><text x="${pad-2}" y="${y+3}" text-anchor="end" font-size="7" fill="#d1d5db">${Math.round(v*maxV)}</text>`;}).join('');return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">${yLines}${bars}<line x1="${pad}" y1="0" x2="${pad}" y2="${h-pad}" stroke="#e5e7eb" stroke-width="1"/><line x1="${pad}" y1="${h-pad}" x2="${w}" y2="${h-pad}" stroke="#e5e7eb" stroke-width="1"/></svg><div style="display:flex;gap:12px;margin-top:6px;font-size:11px;color:var(--gray-500)"><span><span style="display:inline-block;width:10px;height:10px;background:#2e75b6;border-radius:2px;margin-right:4px;vertical-align:middle"></span>Booked</span><span><span style="display:inline-block;width:10px;height:10px;background:#dbeafe;border-radius:2px;margin-right:4px;vertical-align:middle"></span>All quotes</span></div>`;}
 function buildDonut(slices){const cx=54,cy=54,r=40,ir=26;const total=slices.reduce((s,d)=>s+d.v,0);if(!total) return `<div style="text-align:center;padding:20px;color:var(--gray-400);font-size:13px">No data yet</div>`;let angle=-Math.PI/2;const paths=slices.filter(d=>d.v>0).map(d=>{const pct=d.v/total;const sweep=pct*2*Math.PI;const x1=cx+r*Math.cos(angle),y1=cy+r*Math.sin(angle);angle+=sweep;const x2=cx+r*Math.cos(angle),y2=cy+r*Math.sin(angle);const lg=pct>0.5?1:0;return `<path d="M${cx},${cy} L${x1},${y1} A${r},${r} 0 ${lg},1 ${x2},${y2} Z" fill="${d.color}"/>`;}).join('');return `<svg width="108" height="108" viewBox="0 0 108 108">${paths}<circle cx="${cx}" cy="${cy}" r="${ir}" fill="white"/><text x="${cx}" y="${cy+4}" text-anchor="middle" font-size="14" font-weight="700" fill="#1a2e4a">${total}</text><text x="${cx}" y="${cy+14}" text-anchor="middle" font-size="8" fill="#9ca3af">quotes</text></svg>`;}
 function renderDash(){
-  $('topbar-right').innerHTML='';const range=S.dashFilter||'month';const all=S.quotes;const filtered=filterByRange(all,range);const booked=filtered.filter(q=>q.status==='Booked');const allBooked=all.filter(q=>q.status==='Booked');const rev=booked.reduce((s,q)=>s+(q.customerRates?.total||0),0);const prof=booked.reduce((s,q)=>s+(q.profit||0),0);const winRate=filtered.length>0?booked.length/filtered.length:0;const now=new Date();const months=Array.from({length:6},(_,i)=>{const d=new Date(now.getFullYear(),now.getMonth()-5+i,1);const next=new Date(now.getFullYear(),now.getMonth()-5+i+1,1);const inM=all.filter(q=>{const qd=new Date(q.date);return qd>=d&&qd<next;});return{label:d.toLocaleString('default',{month:'short'}),total:inM.length,booked:inM.filter(q=>q.status==='Booked').length};});
-  const donutData=[{v:filtered.filter(q=>q.status==='Quoted').length,color:'#fbbf24',lbl:'Quoted'},{v:booked.length,color:'#2d7d46',lbl:'Booked'},{v:filtered.filter(q=>q.status==='Lost').length,color:'#d1d5db',lbl:'Lost'},{v:filtered.filter(q=>q.status==='Cancelled').length,color:'#f3f4f6',lbl:'Cancelled'}];
+  $('topbar-right').innerHTML='';const range=S.dashFilter||'month';const all=S.quotes;const filtered=filterByRange(all,range);const booked=filtered.filter(q=>q.status==='Booked');const allBooked=all.filter(q=>q.status==='Booked');const rev=booked.reduce((s,q)=>s+(q.customerRates?.total||0),0);const prof=booked.reduce((s,q)=>s+(q.profit||0),0);const now=new Date();const months=Array.from({length:6},(_,i)=>{const d=new Date(now.getFullYear(),now.getMonth()-5+i,1);const next=new Date(now.getFullYear(),now.getMonth()-5+i+1,1);const inM=all.filter(q=>{const qd=new Date(q.date);return qd>=d&&qd<next;});return{label:d.toLocaleString('default',{month:'short'}),total:inM.length,booked:inM.filter(q=>q.status==='Booked').length};});
+  const donutData=[
+    {v:filtered.filter(q=>q.status==='Quoted').length,color:'#fbbf24',lbl:'Quoted'},
+    {v:booked.length,color:'#2d7d46',lbl:'Booked'},
+    {v:filtered.filter(q=>q.status==='Lost').length,color:'#d1d5db',lbl:'Lost'},
+    {v:filtered.filter(q=>q.status==='Expired').length,color:'#f87171',lbl:'Expired'},
+    {v:filtered.filter(q=>q.status==='Cancelled').length,color:'#f3f4f6',lbl:'Cancelled'},
+  ];
+  // Win rate only counts decided quotes (Booked + Lost + Expired), not pending
+  const decided=filtered.filter(q=>['Booked','Lost','Expired'].includes(q.status));
+  const winRate=decided.length>0?booked.length/decided.length:0;
   const cMap={};allBooked.forEach(q=>{if(!cMap[q.carrier])cMap[q.carrier]={n:0,p:0,rev:0};cMap[q.carrier].n++;cMap[q.carrier].p+=(q.profit||0);cMap[q.carrier].rev+=(q.customerRates?.total||0);});const topC=Object.entries(cMap).sort((a,b)=>b[1].n-a[1].n).slice(0,6);const recent=all.slice(0,8);const rangeLabel={week:'This week',month:'This month',lastmonth:'Last month',all:'All time'}[range];
   $('page').innerHTML=`
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
