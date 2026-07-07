@@ -810,7 +810,14 @@ function _generatePDF(q){
 // ═══════════════════════════════════════════════════════
 const regCol={NE:'g',WC:'b',SE:'a',Central:'p'};const ldCol={Live:'b',Drop:'gr',Both:'t'};
 function buildRateRows(){
-  const s=S.rSearch.toLowerCase();const filtered=S.rates.filter(r=>!s||(r.carrier+r.zip+r.destination+r.region+r.notes).toLowerCase().includes(s));
+  const s=S.rSearch.toLowerCase();
+  const filtered=S.rates
+    .filter(r=>!s||(r.carrier+r.zip+r.destination+r.region+r.notes).toLowerCase().includes(s))
+    .sort((a,b)=>{
+      const z=(a.zip||'').localeCompare(b.zip||'');
+      if(z!==0) return z;
+      return (a.carrier||'').localeCompare(b.carrier||'');
+    });
   if(!filtered.length) return `<tr><td colspan="${CHARGES.length+4}" style="text-align:center;padding:40px;color:var(--gray-400)">No rates found</td></tr>`;
   return filtered.map(r=>`<tr>
     <td><span class="badge ${regCol[r.region]||'gr'}">${r.region}</span></td>
