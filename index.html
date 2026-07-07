@@ -645,16 +645,77 @@ async function saveQuote(){
 // ═══════════════════════════════════════════════════════
 function getQuoteData(){const qi=S.qi;const sel=S.rates.find(r=>r.id===S.selId);if(!qi.zip||!sel){alert('Enter a zip and select a carrier first.');return null;}return{qi,sel,cu:cuTot(sel),ct:totMode(sel,qi.ld)};}
 
+function buildPrintHTML(customer, carrier, port, zip, destination, ld, date, quoteNum, customerRates){
+  const baseAmt = customerRates?.base||0;
+  const accessorials = CHARGES.filter(c=>c!=='base'&&isApplicable(c,ld)&&(customerRates?.[c]||0)>0);
+  const accRows = accessorials.map(c=>{
+    const desc = CHARGE_DESC[c]||'';
+    return `<tr><td>${LABELS[c]}</td><td style="text-align:right;font-weight:700;color:#1a2e4a">${fmtD(customerRates[c])}</td><td class="desc">${desc}</td></tr>`;
+  }).join('');
+  return `<!DOCTYPE html><html><head><title>Shifl Quote${quoteNum?` #${quoteNum}`:''}</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:580px;margin:40px auto;font-size:14px;color:#1a2e4a;background:#fff}
+    .header{background:#1a2e4a;padding:18px 22px;border-radius:10px;margin-bottom:26px;display:flex;align-items:center;justify-content:space-between}
+    .header-left{display:flex;align-items:center;gap:14px}
+    .header h1{color:#fff;font-size:22px;font-weight:800;letter-spacing:.5px;margin-bottom:2px}
+    .header-sub{color:rgba(255,255,255,.5);font-size:12px}
+    .header-qnum{text-align:right;color:rgba(255,255,255,.6);font-size:12px}
+    .meta{display:grid;grid-template-columns:1fr 1fr;gap:8px 24px;margin-bottom:26px}
+    .meta-item label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#9ca3af;display:block;margin-bottom:3px}
+    .meta-item span{font-size:13px;font-weight:500;color:#1a2e4a}
+    .base-box{background:#eef4fc;border:1px solid #c5d9f0;border-radius:10px;padding:18px 22px;margin-bottom:24px;display:flex;align-items:center;justify-content:space-between}
+    .base-box .lbl{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#5b8ab8;margin-bottom:4px}
+    .base-box .amt{font-size:32px;font-weight:800;color:#1a2e4a}
+    .section-title{font-size:13px;font-style:italic;color:#6b7280;margin-bottom:14px;padding-top:4px;border-top:1px solid #e5e7eb}
+    table{width:100%;border-collapse:collapse;margin-bottom:20px}
+    td{padding:9px 0;border-bottom:1px solid #f0f2f5;font-size:13px;vertical-align:top}
+    td:first-child{color:#374151;width:45%}
+    td:nth-child(2){width:25%;text-align:right}
+    td.desc{color:#9ca3af;font-size:11px;font-style:italic;padding-left:12px;padding-top:11px}
+    .notes-box{background:#f9fafb;border-radius:8px;padding:14px 16px;margin-bottom:20px;font-size:12px;color:#6b7280;line-height:1.7}
+    .footer{margin-top:24px;padding-top:14px;border-top:1px solid #e5e7eb;font-size:11px;color:#9ca3af}
+    @media print{@page{margin:18mm}body{margin:0}}
+  </style></head><body>
+  <div class="header">
+    <div class="header-left">
+      <svg width="42" height="42" viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg"><rect width="60" height="60" rx="10" fill="rgba(255,255,255,.12)"/><polygon points="10,50 25,14 44,45" fill="white"/><polygon points="25,14 44,45 53,37" fill="rgba(255,255,255,.7)"/><polygon points="10,50 44,45 53,37 53,50" fill="rgba(255,255,255,.88)"/><line x1="25" y1="14" x2="44" y2="50" stroke="rgba(59,142,208,.45)" stroke-width="1.8"/></svg>
+      <div><h1>SHIFL</h1><div class="header-sub">Drayage Quote · ${date}</div></div>
+    </div>
+    <div class="header-qnum">${quoteNum?`Quote #${quoteNum}`:'Quote'}</div>
+  </div>
+  <div class="meta">
+    <div class="meta-item"><label>Customer</label><span>${customer||'—'}</span></div>
+    <div class="meta-item"><label>Carrier</label><span>${carrier}</span></div>
+    <div class="meta-item"><label>Pickup</label><span>${port||'—'}</span></div>
+    <div class="meta-item"><label>Delivery Zip</label><span>${zip}</span></div>
+    <div class="meta-item"><label>Destination</label><span>${destination||'—'}</span></div>
+    <div class="meta-item"><label>Mode</label><span>${ld}</span></div>
+  </div>
+  <div class="base-box">
+    <div><div class="lbl">Base Rate</div><div class="amt">${fmtD(baseAmt)}</div></div>
+  </div>
+  ${accessorials.length?`
+  <div class="section-title">The following charges will apply when applicable:</div>
+  <table><tbody>${accRows}</tbody></table>`:''}
+  <div class="notes-box">
+    <strong>Notes:</strong><br>
+    · All rates are per container<br>
+    · Detention: first 2 hours are free, billed in 1-hour increments after<br>
+    · Chassis and storage are billed per calendar day<br>
+    · Accessorial charges are only billed when the service is used
+  </div>
+  <div class="footer">Quote valid 30 days · Rates subject to change · mk@shifl.com</div>
+  <script>window.onload=function(){window.print()}<\/script>
+  </body></html>`;
+}
+
 function printQuote(){
   const d=getQuoteData();if(!d) return;const{qi,sel,cu,ct}=d;
   const date=new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
-  const rows=CHARGES.map(c=>{if(!isApplicable(c,qi.ld)) return '';const cv=Number(sel[c])||0;const cuv=cuRate(cv,c);if(!cuv&&!cv) return '';const note=c==='ovw43'?' (43k+)':c==='ovw48'?' (48k+)':c==='det_port'?' (Port)':c==='det_cust'?' (Customer)':'';return `<tr><td>${LABELS[c]}${note}</td><td style="text-align:right;font-weight:600">${fmtD(cuv)}</td></tr>`;}).join('');
+  const cuRates=CHARGES.reduce((o,c)=>{o[c]=cuRate(Number(sel[c])||0,c);return o;},{});
   const win=window.open('','_blank');
-  win.document.write(`<!DOCTYPE html><html><head><title>Shifl Quote</title><style>body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:560px;margin:40px auto;font-size:14px}.header{background:#1a2e4a;padding:16px 20px;border-radius:8px;margin-bottom:24px;display:flex;align-items:center;gap:14px}.header h1{color:#fff;font-size:20px;font-weight:800;margin-bottom:2px}.header-sub{color:rgba(255,255,255,.55);font-size:12px}.meta{display:grid;grid-template-columns:1fr 1fr;gap:6px 20px;margin-bottom:22px}.meta-item label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#888;display:block;margin-bottom:2px}.meta-item span{font-size:13px;color:#1a2e4a;font-weight:500}table{width:100%;border-collapse:collapse;margin-bottom:16px}th{text-align:left;padding:8px 0;border-bottom:2px solid #1a2e4a;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#1a2e4a}td{padding:7px 0;border-bottom:1px solid #eee;color:#374151}.total td{font-weight:700;font-size:15px;border-top:2px solid #1a2e4a;border-bottom:none;padding-top:10px;color:#1a2e4a}.footer{margin-top:24px;padding-top:14px;border-top:1px solid #eee;font-size:11px;color:#888}@media print{@page{margin:20mm}body{margin:0}}</style></head><body>
-  <div class="header"><svg width="40" height="40" viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg"><rect width="60" height="60" rx="10" fill="rgba(255,255,255,.12)"/><polygon points="10,50 25,14 44,45" fill="white"/><polygon points="25,14 44,45 53,37" fill="rgba(255,255,255,.7)"/><polygon points="10,50 44,45 53,37 53,50" fill="rgba(255,255,255,.88)"/><line x1="25" y1="14" x2="44" y2="50" stroke="rgba(59,142,208,.45)" stroke-width="1.8"/></svg><div><h1>SHIFL</h1><div class="header-sub">Drayage Quote · ${date}</div></div></div>
-  <div class="meta"><div class="meta-item"><label>Customer</label><span>${qi.customer||'—'}</span></div><div class="meta-item"><label>Carrier</label><span>${sel.carrier}</span></div><div class="meta-item"><label>Pickup</label><span>${qi.port||'—'}</span></div><div class="meta-item"><label>Delivery Zip</label><span>${qi.zip}</span></div><div class="meta-item"><label>Destination</label><span>${sel.destination}</span></div><div class="meta-item"><label>Mode</label><span>${qi.ld}</span></div></div>
-  <table><thead><tr><th>Charge</th><th style="text-align:right">Amount</th></tr></thead><tbody>${rows}<tr class="total"><td>Total</td><td style="text-align:right">${fmtD(cu)}</td></tr></tbody></table>
-  <div class="footer">Quote valid 30 days · mk@shifl.com</div><script>window.onload=function(){window.print()}<\/script></body></html>`);
+  win.document.write(buildPrintHTML(qi.customer,sel.carrier,qi.port,qi.zip,sel.destination,qi.ld,date,'',cuRates));
   win.document.close();
 }
 
@@ -664,9 +725,18 @@ async function downloadPDF(){
   _generatePDF({quoteNum:'—',date:new Date().toISOString().slice(0,10),customer:qi.customer,port:qi.port,zip:qi.zip,destination:sel.destination,ld:qi.ld,carrier:sel.carrier,status:'Quote',carrierRates:{...CHARGES.reduce((o,c)=>{o[c]=sel[c]||0;return o;},{}),total:ct},customerRates:{...CHARGES.reduce((o,c)=>{o[c]=cuRate(Number(sel[c])||0,c);return o;},{}),total:cu},profit:cu-ct,profitPct:cu>0?(cu-ct)/cu:0});
 }
 
+const CHARGE_DESC={
+  chassis:'per day',prepull:'',
+  det_port:'after 2 free hours (at port)',det_cust:'after 2 free hours (at customer)',
+  storage:'per day',ovw43:'over 43,000 lb',ovw48:'over 48,000 lb',
+  bobtail:'',toll:'when applicable'
+};
+
 function _generatePDF(q){
   const{jsPDF}=window.jspdf;const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
   const W=210;const navy=[26,46,74];const steel=[46,117,182];
+
+  // ── Header band ──────────────────────────────────────
   doc.setFillColor(...navy);doc.rect(0,0,W,32,'F');
   doc.setFillColor(59,142,208);doc.roundedRect(10,5,22,22,3,3,'F');
   const bx=10,by=5,bs=22,sc=v=>v/60*bs;
@@ -675,29 +745,63 @@ function _generatePDF(q){
   doc.setFillColor(255,255,255);doc.triangle(bx+sc(10),by+sc(50),bx+sc(44),by+sc(45),bx+sc(53),by+sc(50),'F');
   doc.setDrawColor(59,142,208);doc.setLineWidth(.3);doc.line(bx+sc(25),by+sc(14),bx+sc(44),by+sc(50));
   doc.setTextColor(255,255,255);doc.setFont('helvetica','bold');doc.setFontSize(20);doc.text('SHIFL',36,20);
-  doc.setFontSize(9);doc.setFont('helvetica','normal');doc.setTextColor(255,255,255,.6);doc.text('Trucking Quoting',36,27);
+  doc.setFontSize(9);doc.setFont('helvetica','normal');doc.setTextColor(255,255,255,.6);doc.text('Drayage Quote',36,27);
   doc.setFontSize(9);doc.setTextColor(255,255,255,.5);doc.text('Quote #'+q.quoteNum+' · '+q.date,W-12,12,{align:'right'});
-  doc.setFontSize(10);doc.setTextColor(255,255,255,.8);doc.text(q.status,W-12,21,{align:'right'});
+
+  // ── Lane details ──────────────────────────────────────
   const meta=[['Customer',q.customer||'—'],['Carrier',q.carrier],['Pickup',q.port||'—'],['Delivery Zip',q.zip],['Destination',q.destination||'—'],['Mode',q.ld]];
   let y=44;
-  meta.forEach(([lbl,val],i)=>{const x=i%2===0?12:110;if(i%2===0&&i>0) y+=12;doc.setFontSize(7);doc.setFont('helvetica','bold');doc.setTextColor(150,150,150);doc.text(lbl.toUpperCase(),x,y);doc.setFontSize(10);doc.setFont('helvetica','normal');doc.setTextColor(30,50,74);doc.text(String(val),x,y+5);});
-  y+=18;doc.setDrawColor(200,210,220);doc.setLineWidth(.3);doc.line(12,y,W-12,y);y+=8;
-  doc.setFillColor(...navy);doc.rect(12,y,W-24,8,'F');
-  doc.setTextColor(255,255,255);doc.setFontSize(8);doc.setFont('helvetica','bold');
-  doc.text('CHARGE',16,y+5.5);doc.text('AMOUNT',W-14,y+5.5,{align:'right'});y+=12;
-  let even=true;
-  CHARGES.forEach(c=>{
-    if(!isApplicable(c,q.ld)) return;
-    const cuv=q.customerRates?.[c]||0;const cv=q.carrierRates?.[c]||0;if(!cuv&&!cv) return;
-    if(even){doc.setFillColor(247,248,250);doc.rect(12,y-4,W-24,7,'F');}
-    doc.setTextColor(60,60,60);doc.setFont('helvetica','normal');doc.setFontSize(10);doc.text(LABELS[c],16,y);
-    doc.setFont('helvetica','bold');doc.setTextColor(...navy);doc.setFontSize(10);doc.text(cuv>0?fmtD(cuv):'—',W-14,y,{align:'right'});
-    doc.setDrawColor(230,235,240);doc.setLineWidth(.2);doc.line(12,y+3,W-12,y+3);y+=8;even=!even;
+  meta.forEach(([lbl,val],i)=>{
+    const x=i%2===0?12:110;if(i%2===0&&i>0) y+=13;
+    doc.setFontSize(7);doc.setFont('helvetica','bold');doc.setTextColor(150,150,150);doc.text(lbl.toUpperCase(),x,y);
+    doc.setFontSize(10);doc.setFont('helvetica','normal');doc.setTextColor(30,50,74);doc.text(String(val),x,y+5);
   });
-  y+=3;doc.setFillColor(...navy);doc.rect(12,y-3,W-24,12,'F');
-  doc.setFont('helvetica','bold');doc.setFontSize(12);doc.setTextColor(255,255,255);doc.text('TOTAL',16,y+5);
-  doc.setFontSize(14);doc.setTextColor(255,255,255);doc.text(fmtD(q.customerRates?.total||0),W-14,y+5,{align:'right'});y+=18;
-  doc.setFontSize(8);doc.setFont('helvetica','normal');doc.setTextColor(170,170,170);doc.text('Quote valid 30 days · Rates subject to change · mk@shifl.com',12,278);
+  y+=18;
+
+  // ── Base rate — prominent box ─────────────────────────
+  doc.setDrawColor(200,215,235);doc.setLineWidth(.3);doc.line(12,y,W-12,y);y+=8;
+  doc.setFillColor(232,241,252);doc.roundedRect(12,y,W-24,22,3,3,'F');
+  doc.setFont('helvetica','bold');doc.setFontSize(8);doc.setTextColor(100,130,170);
+  doc.text('BASE RATE',16,y+8);
+  doc.setFontSize(22);doc.setTextColor(...navy);
+  doc.text(fmtD(q.customerRates?.base||0),W-16,y+16,{align:'right'});
+  y+=30;
+
+  // ── Accessorial charges section ───────────────────────
+  const accessorials=CHARGES.filter(c=>c!=='base'&&isApplicable(c,q.ld)&&(q.customerRates?.[c]||0)>0);
+  if(accessorials.length>0){
+    doc.setDrawColor(200,215,235);doc.setLineWidth(.3);doc.line(12,y,W-12,y);y+=8;
+    doc.setFont('helvetica','italic');doc.setFontSize(9);doc.setTextColor(100,110,125);
+    doc.text('The following charges will apply when applicable:',12,y);y+=10;
+
+    accessorials.forEach((c,i)=>{
+      const cuv=q.customerRates?.[c]||0;
+      const desc=CHARGE_DESC[c]||'';
+      const bg=i%2===0;
+      if(bg){doc.setFillColor(248,250,252);doc.rect(12,y-4,W-24,9,'F');}
+      // Charge name
+      doc.setFont('helvetica','normal');doc.setFontSize(10);doc.setTextColor(55,65,81);
+      doc.text(LABELS[c],16,y);
+      // Amount
+      doc.setFont('helvetica','bold');doc.setFontSize(10);doc.setTextColor(...navy);
+      doc.text(fmtD(cuv),140,y,{align:'right'});
+      // Description
+      if(desc){doc.setFont('helvetica','italic');doc.setFontSize(8);doc.setTextColor(150,158,170);doc.text(desc,145,y);}
+      doc.setDrawColor(235,238,242);doc.setLineWidth(.2);doc.line(12,y+5,W-12,y+5);
+      y+=9;
+    });
+  }
+
+  // ── Footer note ───────────────────────────────────────
+  y+=6;
+  doc.setDrawColor(200,215,235);doc.setLineWidth(.3);doc.line(12,y,W-12,y);y+=7;
+  doc.setFont('helvetica','italic');doc.setFontSize(8);doc.setTextColor(140,150,165);
+  doc.text('All rates are per container. Accessorial charges are billed only when the service is used.',12,y);y+=5;
+  doc.text('Detention: first 2 hours are free. Storage and chassis are billed per calendar day.',12,y);
+
+  // ── Page footer ───────────────────────────────────────
+  doc.setFontSize(8);doc.setFont('helvetica','normal');doc.setTextColor(190,195,200);
+  doc.text('Quote valid 30 days · Rates subject to change · mk@shifl.com',12,278);
   doc.save('Shifl_Quote_'+(q.quoteNum||'draft')+'_'+q.zip+'_'+q.date+'.pdf');
 }
 
@@ -887,15 +991,10 @@ async function downloadSavedPDF(id){
   _generatePDF(q);
 }
 function printSavedQuote(id){
-  const q=S.quotes.find(q=>q.id===id);if(!q) return;const ld=q.ld;
+  const q=S.quotes.find(q=>q.id===id);if(!q) return;
   const date=new Date(q.date).toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
-  const rows=CHARGES.map(c=>{if(!isApplicable(c,ld)) return '';const cuv=q.customerRates?.[c]||0;if(!cuv) return '';const note=c==='ovw43'?' (43k+)':c==='ovw48'?' (48k+)':c==='det_port'?' (Port)':c==='det_cust'?' (Customer)':'';return `<tr><td>${LABELS[c]}${note}</td><td style="text-align:right;font-weight:600">${fmtD(cuv)}</td></tr>`;}).join('');
   const win=window.open('','_blank');
-  win.document.write(`<!DOCTYPE html><html><head><title>Shifl Quote #${q.quoteNum}</title><style>body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:560px;margin:40px auto;font-size:14px}.header{background:#1a2e4a;padding:16px 20px;border-radius:8px;margin-bottom:24px;display:flex;align-items:center;justify-content:space-between}.header-left{display:flex;align-items:center;gap:12px}.header h1{color:#fff;font-size:20px;font-weight:800;margin-bottom:2px}.header-sub{color:rgba(255,255,255,.55);font-size:12px}.header-qnum{color:rgba(255,255,255,.7);font-size:12px;text-align:right}.meta{display:grid;grid-template-columns:1fr 1fr;gap:6px 20px;margin-bottom:22px}.meta-item label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#888;display:block;margin-bottom:2px}.meta-item span{font-size:13px;color:#1a2e4a;font-weight:500}table{width:100%;border-collapse:collapse;margin-bottom:16px}th{text-align:left;padding:8px 0;border-bottom:2px solid #1a2e4a;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#1a2e4a}td{padding:7px 0;border-bottom:1px solid #eee;color:#374151}.total td{font-weight:700;font-size:15px;border-top:2px solid #1a2e4a;border-bottom:none;padding-top:10px;color:#1a2e4a}.footer{margin-top:24px;padding-top:14px;border-top:1px solid #eee;font-size:11px;color:#888}@media print{@page{margin:20mm}body{margin:0}}</style></head><body>
-  <div class="header"><div class="header-left"><svg width="40" height="40" viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg"><rect width="60" height="60" rx="10" fill="rgba(255,255,255,.12)"/><polygon points="10,50 25,14 44,45" fill="white"/><polygon points="25,14 44,45 53,37" fill="rgba(255,255,255,.7)"/><polygon points="10,50 44,45 53,37 53,50" fill="rgba(255,255,255,.88)"/><line x1="25" y1="14" x2="44" y2="50" stroke="rgba(59,142,208,.45)" stroke-width="1.8"/></svg><div><h1>SHIFL</h1><div class="header-sub">Drayage Quote · ${date}</div></div></div><div class="header-qnum">Quote #${q.quoteNum}<br><strong style="color:#fff">${q.status}</strong></div></div>
-  <div class="meta"><div class="meta-item"><label>Customer</label><span>${q.customer}</span></div><div class="meta-item"><label>Carrier</label><span>${q.carrier}</span></div><div class="meta-item"><label>Pickup</label><span>${q.port||'—'}</span></div><div class="meta-item"><label>Delivery Zip</label><span>${q.zip}</span></div><div class="meta-item"><label>Destination</label><span>${q.destination||'—'}</span></div><div class="meta-item"><label>Mode</label><span>${q.ld}</span></div></div>
-  <table><thead><tr><th>Charge</th><th style="text-align:right">Amount</th></tr></thead><tbody>${rows}<tr class="total"><td>Total</td><td style="text-align:right">${fmtD(q.customerRates?.total||0)}</td></tr></tbody></table>
-  <div class="footer">Quote valid 30 days · mk@shifl.com</div><script>window.onload=function(){window.print()}<\/script></body></html>`);
+  win.document.write(buildPrintHTML(q.customer,q.carrier,q.port,q.zip,q.destination,q.ld,date,q.quoteNum,q.customerRates));
   win.document.close();
 }
 function exportQuoteLog(){if(!S.quotes.length){alert('No quotes to export.');return;}const hdrs=['Quote #','Date','Customer','Port','Zip','Mode','Carrier','Destination','Carrier Total','Customer Total','Profit $','Profit %','Status'];const esc=v=>{const s=String(v==null?'':v);return s.includes(',')||s.includes('"')?`"${s.replace(/"/g,'""')}"`:s;};const rows=S.quotes.map(q=>[q.quoteNum,q.date,q.customer,q.port,q.zip,q.ld,q.carrier,q.destination||'',(q.carrierRates?.total||0).toFixed(2),(q.customerRates?.total||0).toFixed(2),(q.profit||0).toFixed(2),((q.profitPct||0)*100).toFixed(1)+'%',q.status].map(esc).join(','));const csv=[hdrs.join(','),...rows].join('\n');const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));a.download=`shifl_quotes_${new Date().toISOString().slice(0,10)}.csv`;a.click();URL.revokeObjectURL(a.href);}
