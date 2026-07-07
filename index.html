@@ -216,6 +216,7 @@ hr{border:none;border-top:1px solid var(--gray-100);margin:14px 0}
     </div>
     <nav class="nav">
       <button class="nav-btn active" onclick="setView('quote')" id="nav-quote"><span class="ico">📋</span>Quote builder</button>
+      <button class="nav-btn" onclick="setView('customers')" id="nav-customers"><span class="ico">👥</span>Customers</button>
       <button class="nav-btn" onclick="setView('rates')" id="nav-rates"><span class="ico">🚛</span>Carrier rates</button>
       <button class="nav-btn" onclick="setView('log')" id="nav-log"><span class="ico">📁</span>Quote log</button>
       <button class="nav-btn" onclick="setView('dash')" id="nav-dash"><span class="ico">📊</span>Dashboard</button>
@@ -392,6 +393,16 @@ async function dbGetNextQuoteNum(){
   const {data}=await db.from('quotes').select('quote_num').order('quote_num',{ascending:false}).limit(1);
   return data&&data.length?(data[0].quote_num||1000)+1:1001;
 }
+async function dbLoadCustomers(){
+  const{data,error}=await db.from('customers').select('*').order('company');
+  if(error) throw error; return data||[];
+}
+async function dbSaveCustomer(c){
+  const{error}=await db.from('customers').upsert(c); if(error) throw error;
+}
+async function dbDeleteCustomer(id){
+  const{error}=await db.from('customers').delete().eq('id',id); if(error) throw error;
+}
 
 function setSaving(on){
   const t=$('topbar-right');
@@ -405,10 +416,10 @@ function setSaving(on){
 // STATE
 // ═══════════════════════════════════════════════════════
 let S={
-  view:'quote',rates:[],quotes:[],
-  qi:{customer:'',port:'New York / Newark, NJ',zip:'',ld:'Live',
+  view:'quote',rates:[],quotes:[],customers:[],
+  qi:{customer:'',customerEmail:'',customerId:null,port:'New York / Newark, NJ',zip:'',ld:'Live',
       baseMarkup:{...DEFAULT_BASE_MARKUP},flatRates:{...DEFAULT_FLAT_RATES}},
-  selId:null,rSearch:'',logFilter:'all',dashFilter:'month',
+  selId:null,rSearch:'',logFilter:'all',dashFilter:'month',cSearch:'',
 };
 let _importRows=[];
 
@@ -426,6 +437,8 @@ async function initApp(){
   }
   $('loading-msg').textContent='Loading quotes…';
   S.quotes=await dbLoadQuotes();
+  $('loading-msg').textContent='Loading customers…';
+  S.customers=await dbLoadCustomers();
   // Real-time subscriptions
   realtimeChannel=db.channel('app-changes')
     .on('postgres_changes',{event:'*',schema:'public',table:'rates'},async()=>{
@@ -437,6 +450,10 @@ async function initApp(){
       S.quotes=await dbLoadQuotes();
       if(S.view==='log') renderLog();
       if(S.view==='dash') renderDash();
+    })
+    .on('postgres_changes',{event:'*',schema:'public',table:'customers'},async()=>{
+      S.customers=await dbLoadCustomers();
+      if(S.view==='customers') renderCustomers();
     })
     .subscribe(status=>{
       setSyncStatus(status==='SUBSCRIBED'?'on':status==='CLOSED'?'off':'loading');
@@ -473,11 +490,12 @@ function setView(v){
   S.view=v;
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
   $('nav-'+v).classList.add('active');
-  $('view-title').textContent={quote:'Quote builder',rates:'Carrier rates',log:'Quote log',dash:'Dashboard'}[v];
+  $('view-title').textContent={quote:'Quote builder',customers:'Customers',rates:'Carrier rates',log:'Quote log',dash:'Dashboard'}[v];
   render();
 }
 function render(){
   if(S.view==='quote') renderQuote();
+  else if(S.view==='customers') renderCustomers();
   else if(S.view==='rates') renderRates();
   else if(S.view==='log') renderLog();
   else renderDash();
@@ -568,7 +586,20 @@ function renderQuote(){
       <div class="card">
         <div class="sec-head">Lane details</div>
         <div class="g2">
-          <div class="field"><label>Customer name</label><input type="text" value="${qi.customer}" oninput="S.qi.customer=this.value" placeholder="e.g. Acme Imports"></div>
+          <div class="field">
+            <label>Customer</label>
+            <input type="text" value="${qi.customer}" oninput="onCustomerInput(this.value)"
+              list="cust-dl" placeholder="Type or pick from contact book" autocomplete="off">
+            <datalist id="cust-dl">${S.customers.map(c=>`<option value="${c.company||c.name}">`).join('')}</datalist>
+            <div style="margin-top:5px;min-height:22px">
+              ${qi.customerEmail
+                ?`<div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--gray-500)">
+                    <span>📧 ${qi.customerEmail}</span>
+                    <button class="btn sm blue" onclick="emailQuote()" style="padding:3px 10px;font-size:11px">Send quote by email</button>
+                  </div>`
+                :`<span style="font-size:11px;color:var(--gray-400)">Add to <span style="color:var(--steel);cursor:pointer;text-decoration:underline" onclick="setView('customers')">contact book</span> to enable email</span>`}
+            </div>
+          </div>
           <div class="field"><label>Port / Rail origin</label><input type="text" value="${qi.port}" oninput="S.qi.port=this.value" list="port-dl" placeholder="e.g. New York / Newark, NJ">
             <datalist id="port-dl">${['New York / Newark, NJ','Los Angeles, CA','Long Beach, CA','Oakland, CA','Everport Terminal, CA','Houston, TX','Savannah, GA','Baltimore, MD','Norfolk / Virginia Intl Gateway, VA'].map(p=>`<option value="${p}">`).join('')}</datalist></div>
         </div>
@@ -609,12 +640,149 @@ function refreshCarrierHighlight(id){
     const td=row.querySelector('td:first-child');if(td) td.style.color=isSel?'var(--steel)':'var(--gray-300)';
   });
 }
+function onCustomerInput(v){
+  S.qi.customer=v;
+  // Match against contact book
+  const match=S.customers.find(c=>(c.company||'').toLowerCase()===v.toLowerCase()||(c.name||'').toLowerCase()===v.toLowerCase());
+  S.qi.customerId=match?match.id:null;
+  S.qi.customerEmail=match?match.email:'';
+  // Update just the email display row without touching the input
+  const emailDiv=document.getElementById('cust-email-row');
+  if(emailDiv){
+    emailDiv.innerHTML=S.qi.customerEmail
+      ?`<div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--gray-500)"><span>📧 ${S.qi.customerEmail}</span><button class="btn sm blue" onclick="emailQuote()" style="padding:3px 10px;font-size:11px">Send quote by email</button></div>`
+      :`<span style="font-size:11px;color:var(--gray-400)">Add to <span style="color:var(--steel);cursor:pointer;text-decoration:underline" onclick="setView('customers')">contact book</span> to enable email</span>`;
+  }
+}
+
+function emailQuote(){
+  const qi=S.qi;const sel=S.rates.find(r=>r.id===S.selId);
+  if(!qi.customerEmail){alert('No email address found. Select a customer from the contact book first.');return;}
+  if(!sel){alert('Please select a carrier first.');return;}
+  const ld=qi.ld;
+  const lines=[
+    'Hi,','',
+    'Please find your drayage quote below:','',
+    'Pickup: '+(qi.port||'—'),
+    'Delivery Zip: '+qi.zip,
+    'Destination: '+sel.destination,
+    'Mode: '+ld,'',
+    'BASE RATE: '+fmtD(cuRate(Number(sel.base)||0,'base')),'',
+  ];
+  const accessorials=CHARGES.filter(c=>c!=='base'&&isApplicable(c,ld)&&cuRate(Number(sel[c])||0,c)>0);
+  if(accessorials.length){
+    lines.push('The following charges will apply when applicable:');
+    accessorials.forEach(c=>{
+      const desc=CHARGE_DESC[c]?` (${CHARGE_DESC[c]})`:'';
+      lines.push(`  ${LABELS[c]}: ${fmtD(cuRate(Number(sel[c])||0,c))}${desc}`);
+    });
+    lines.push('');
+  }
+  lines.push('All rates are per container. Detention: first 2 hours free.','');
+  lines.push('Quote valid 30 days. Please don\'t hesitate to reach out with any questions.','','Thank you!','Shifl');
+  const subject=encodeURIComponent('Drayage Quote — '+qi.zip+' ('+ld+')');
+  const body=encodeURIComponent(lines.join('\n'));
+  window.open(`mailto:${qi.customerEmail}?subject=${subject}&body=${body}`);
+}
+
+// ═══════════════════════════════════════════════════════
+// CUSTOMERS
+// ═══════════════════════════════════════════════════════
+function buildCustomerRows(){
+  const s=S.cSearch.toLowerCase();
+  const filtered=S.customers.filter(c=>!s||(c.company+c.name+c.email+c.phone).toLowerCase().includes(s));
+  if(!filtered.length) return `<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--gray-400)">No customers yet — click + Add customer to get started</td></tr>`;
+  return filtered.map(c=>`<tr>
+    <td class="bold">${c.company||'—'}</td>
+    <td>${c.name||'—'}</td>
+    <td><a href="mailto:${c.email}" style="color:var(--steel)">${c.email||'—'}</a></td>
+    <td>${c.phone||'—'}</td>
+    <td class="muted small">${c.notes||''}</td>
+    <td style="white-space:nowrap">
+      <button class="btn sm ico-btn" onclick="editCustomer('${c.id}')" title="Edit">✏️</button>
+      <button class="btn sm ico-btn" onclick="delCustomer('${c.id}')" title="Delete" style="margin-left:3px">🗑️</button>
+    </td>
+  </tr>`).join('');
+}
+
+function renderCustomers(){
+  $('topbar-right').innerHTML=`
+    <input type="text" id="cust-search" placeholder="Search customers…" value="${S.cSearch}"
+      oninput="onCustSearch(this.value)" style="width:200px">
+    <button class="btn blue" onclick="showAddCustomer()">+ Add customer</button>`;
+  $('page').innerHTML=`<div class="tbl-wrap"><table>
+    <thead><tr><th>Company</th><th>Contact name</th><th>Email</th><th>Phone</th><th>Notes</th><th></th></tr></thead>
+    <tbody id="cust-tbody">${buildCustomerRows()}</tbody>
+  </table></div>`;
+}
+
+function onCustSearch(v){S.cSearch=v;const t=$('cust-tbody');if(t) t.innerHTML=buildCustomerRows();}
+
+function customerFields(c){
+  return `
+    <div class="g2">
+      <div class="field"><label>Company name *</label><input type="text" id="f-company" value="${c?c.company:''}" placeholder="e.g. Acme Imports"></div>
+      <div class="field"><label>Contact name</label><input type="text" id="f-cname" value="${c?c.name:''}" placeholder="e.g. John Smith"></div>
+    </div>
+    <div class="g2">
+      <div class="field"><label>Email address</label><input type="text" id="f-cemail" value="${c?c.email:''}" placeholder="john@acme.com"></div>
+      <div class="field"><label>Phone</label><input type="text" id="f-cphone" value="${c?c.phone:''}" placeholder="+1 (555) 000-0000"></div>
+    </div>
+    <div class="field"><label>Notes (optional)</label><input type="text" id="f-cnotes" value="${c?c.notes:''}" placeholder="e.g. prefers email, Net 30"></div>`;
+}
+
+function showAddCustomer(){
+  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+    <div class="modal"><div class="modal-title">Add customer</div>
+    ${customerFields(null)}
+    <div class="modal-foot"><button class="btn" onclick="closeModal()">Cancel</button>
+    <button class="btn blue" onclick="submitAddCustomer()">Save customer</button></div></div></div>`;
+}
+
+async function submitAddCustomer(){
+  const company=($('f-company')||{}).value?.trim();
+  if(!company){alert('Company name is required.');return;}
+  const c={id:uid(),company,name:($('f-cname')||{}).value?.trim()||'',
+    email:($('f-cemail')||{}).value?.trim()||'',phone:($('f-cphone')||{}).value?.trim()||'',
+    notes:($('f-cnotes')||{}).value?.trim()||''};
+  setSaving(true);
+  try{await dbSaveCustomer(c);S.customers.push(c);S.customers.sort((a,b)=>(a.company||'').localeCompare(b.company||''));
+    closeModal();const t=$('cust-tbody');if(t) t.innerHTML=buildCustomerRows();
+  }catch(e){alert('Error: '+e.message);}finally{setSaving(false);}
+}
+
+function editCustomer(id){
+  const c=S.customers.find(c=>c.id===id);if(!c) return;
+  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+    <div class="modal"><div class="modal-title">Edit — ${c.company}</div>
+    ${customerFields(c)}
+    <div class="modal-foot"><button class="btn" onclick="closeModal()">Cancel</button>
+    <button class="btn blue" onclick="submitEditCustomer('${id}')">Save changes</button></div></div></div>`;
+}
+
+async function submitEditCustomer(id){
+  const c=S.customers.find(c=>c.id===id);if(!c) return;
+  const company=($('f-company')||{}).value?.trim();if(!company){alert('Company name is required.');return;}
+  Object.assign(c,{company,name:($('f-cname')||{}).value?.trim()||'',
+    email:($('f-cemail')||{}).value?.trim()||'',phone:($('f-cphone')||{}).value?.trim()||'',
+    notes:($('f-cnotes')||{}).value?.trim()||''});
+  setSaving(true);
+  try{await dbSaveCustomer(c);closeModal();const t=$('cust-tbody');if(t) t.innerHTML=buildCustomerRows();
+  }catch(e){alert('Error: '+e.message);}finally{setSaving(false);}
+}
+
+async function delCustomer(id){
+  if(!confirm('Delete this customer?')) return;
+  setSaving(true);
+  try{await dbDeleteCustomer(id);S.customers=S.customers.filter(c=>c.id!==id);
+    const t=$('cust-tbody');if(t) t.innerHTML=buildCustomerRows();
+  }catch(e){alert('Error: '+e.message);}finally{setSaving(false);}
+}
 function onZip(v){S.qi.zip=v.trim();S.selId=null;if($('carriers-body')) refreshCarriersAndPreview();}
 function onLd(v){S.qi.ld=v;S.selId=null;if($('carriers-body')){refreshCarriersAndPreview();refreshPricingAndPreview();}}
 function selCarrier(id){S.selId=id;refreshCarrierHighlight(id);refreshPreviewOnly();}
 function setFlatRate(c,v){S.qi.flatRates[c]=v;refreshPreviewOnly();}
 function setBaseMarkup(k,v){
-  S.qi.baseMarkup[k]=v;
   if(k==='mode'){document.querySelectorAll('[data-bmu]').forEach(b=>b.classList.toggle('on',b.dataset.bmu===v));}
   refreshPreviewOnly();
 }
