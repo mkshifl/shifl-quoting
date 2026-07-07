@@ -686,7 +686,7 @@ function buildPrintHTML(customer, carrier, port, zip, destination, ld, date, quo
   </div>
   <div class="meta">
     <div class="meta-item"><label>Customer</label><span>${customer||'—'}</span></div>
-    <div class="meta-item"><label>Carrier</label><span>${carrier}</span></div>
+    <div class="meta-item"><label>Carrier</label><span>Shifl</span></div>
     <div class="meta-item"><label>Pickup</label><span>${port||'—'}</span></div>
     <div class="meta-item"><label>Delivery Zip</label><span>${zip}</span></div>
     <div class="meta-item"><label>Destination</label><span>${destination||'—'}</span></div>
@@ -749,7 +749,7 @@ function _generatePDF(q){
   doc.setFontSize(9);doc.setTextColor(255,255,255,.5);doc.text('Quote #'+q.quoteNum+' · '+q.date,W-12,12,{align:'right'});
 
   // ── Lane details ──────────────────────────────────────
-  const meta=[['Customer',q.customer||'—'],['Carrier',q.carrier],['Pickup',q.port||'—'],['Delivery Zip',q.zip],['Destination',q.destination||'—'],['Mode',q.ld]];
+  const meta=[['Customer',q.customer||'—'],['Carrier','Shifl'],['Pickup',q.port||'—'],['Delivery Zip',q.zip],['Destination',q.destination||'—'],['Mode',q.ld]];
   let y=44;
   meta.forEach(([lbl,val],i)=>{
     const x=i%2===0?12:110;if(i%2===0&&i>0) y+=13;
