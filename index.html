@@ -684,24 +684,19 @@ function _generatePDF(q){
   y+=18;doc.setDrawColor(200,210,220);doc.setLineWidth(.3);doc.line(12,y,W-12,y);y+=8;
   doc.setFillColor(...navy);doc.rect(12,y,W-24,8,'F');
   doc.setTextColor(255,255,255);doc.setFontSize(8);doc.setFont('helvetica','bold');
-  doc.text('CHARGE',16,y+5.5);doc.text('CARRIER COST',120,y+5.5,{align:'right'});doc.text('YOUR PRICE',W-14,y+5.5,{align:'right'});y+=12;
+  doc.text('CHARGE',16,y+5.5);doc.text('AMOUNT',W-14,y+5.5,{align:'right'});y+=12;
   let even=true;
   CHARGES.forEach(c=>{
     if(!isApplicable(c,q.ld)) return;
     const cuv=q.customerRates?.[c]||0;const cv=q.carrierRates?.[c]||0;if(!cuv&&!cv) return;
     if(even){doc.setFillColor(247,248,250);doc.rect(12,y-4,W-24,7,'F');}
     doc.setTextColor(60,60,60);doc.setFont('helvetica','normal');doc.setFontSize(10);doc.text(LABELS[c],16,y);
-    doc.setTextColor(160,160,160);doc.setFontSize(9);doc.text(cv>0?fmtD(cv):'—',120,y,{align:'right'});
     doc.setFont('helvetica','bold');doc.setTextColor(...navy);doc.setFontSize(10);doc.text(cuv>0?fmtD(cuv):'—',W-14,y,{align:'right'});
     doc.setDrawColor(230,235,240);doc.setLineWidth(.2);doc.line(12,y+3,W-12,y+3);y+=8;even=!even;
   });
   y+=3;doc.setFillColor(...navy);doc.rect(12,y-3,W-24,12,'F');
   doc.setFont('helvetica','bold');doc.setFontSize(12);doc.setTextColor(255,255,255);doc.text('TOTAL',16,y+5);
-  doc.setFontSize(9);doc.setTextColor(255,255,255,.6);doc.text(fmtD(q.carrierRates?.total||0),120,y+5,{align:'right'});
   doc.setFontSize(14);doc.setTextColor(255,255,255);doc.text(fmtD(q.customerRates?.total||0),W-14,y+5,{align:'right'});y+=18;
-  doc.setFillColor(232,245,236);doc.rect(12,y,W-24,14,'F');
-  doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(45,125,70);
-  doc.text('Profit: '+fmtD(q.profit||0)+' ('+pct(q.profitPct||0)+' margin)  ·  Carrier cost: '+fmtD(q.carrierRates?.total||0),16,y+9);
   doc.setFontSize(8);doc.setFont('helvetica','normal');doc.setTextColor(170,170,170);doc.text('Quote valid 30 days · Rates subject to change · mk@shifl.com',12,278);
   doc.save('Shifl_Quote_'+(q.quoteNum||'draft')+'_'+q.zip+'_'+q.date+'.pdf');
 }
