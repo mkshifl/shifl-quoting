@@ -406,6 +406,59 @@ function isApplicable(c,ld){
 }
 const DEFAULT_FLAT_RATES={chassis:45,prepull:175,det_port:100,det_cust:100,storage:60,ovw43:200,ovw48:350,bobtail:0,toll:30};
 const DEFAULT_BASE_MARKUP={amount:150,mode:'flat'};
+const US_CFS=[
+  // ── Los Angeles / Long Beach, CA ──────────────────────────
+  'CFS — STG Logistics, Carson, CA','CFS — STG Logistics, Torrance, CA',
+  'CFS — CaroTrans, Long Beach, CA','CFS — DSV, Los Angeles, CA',
+  'CFS — Yusen Logistics, Torrance, CA','CFS — Phoenix International, Gardena, CA',
+  'CFS — Trans Pacific Container, Gardena, CA','CFS — Pacific Container Freight, Wilmington, CA',
+  'CFS — SEKO Logistics, Los Angeles, CA','CFS — Vanguard Logistics, Los Angeles, CA',
+  // ── New York / New Jersey ──────────────────────────────────
+  'CFS — ICT (Intl Cargo Terminals), Kearny, NJ','CFS — CaroTrans, Clark, NJ',
+  'CFS — St. George Logistics, South Kearny, NJ','CFS — Trans-Box Systems, South Kearny, NJ',
+  'CFS — DSV, Elizabeth, NJ','CFS — STG Logistics, Newark, NJ',
+  'CFS — All-Ways Forwarding, Kearny, NJ','CFS — Phoenix International, Elizabeth, NJ',
+  'CFS — Vanguard Logistics, Kearny, NJ','CFS — Expeditors, Newark, NJ',
+  // ── Chicago, IL ────────────────────────────────────────────
+  'CFS — STG Logistics, Elk Grove Village, IL','CFS — ICT, Franklin Park, IL',
+  'CFS — Pathway Logistics, Joliet, IL','CFS — DSV, Chicago, IL',
+  'CFS — Phoenix International, Chicago, IL','CFS — Vanguard Logistics, Chicago, IL',
+  'CFS — CaroTrans, Chicago, IL','CFS — St. George Warehouse, Chicago, IL',
+  // ── Houston, TX ────────────────────────────────────────────
+  'CFS — CaroTrans, Houston, TX','CFS — Southwest Freight, Houston, TX',
+  'CFS — STG Logistics, Houston, TX','CFS — St. George Warehouse, Houston, TX',
+  'CFS — DSV, Houston, TX','CFS — Phoenix International, Houston, TX',
+  // ── Miami, FL ──────────────────────────────────────────────
+  'CFS — CaroTrans, Miami, FL','CFS — ICT, Miami, FL',
+  'CFS — STG Logistics, Miami, FL','CFS — DSV, Miami, FL',
+  'CFS — Phoenix International, Miami, FL','CFS — St. George Logistics, Miami, FL',
+  'CFS — Vanguard Logistics, Miami, FL',
+  // ── Savannah, GA ───────────────────────────────────────────
+  'CFS — STG Logistics, Savannah, GA','CFS — DSV, Savannah, GA',
+  // ── Atlanta, GA ────────────────────────────────────────────
+  'CFS — ICT, College Park, GA','CFS — St. George Logistics, Fairburn, GA',
+  'CFS — STG Logistics, Atlanta, GA','CFS — DSV, Atlanta, GA',
+  // ── Baltimore, MD ──────────────────────────────────────────
+  'CFS — STG Logistics, Baltimore, MD','CFS — DSV, Baltimore, MD',
+  'CFS — Vanguard Logistics, Baltimore, MD',
+  // ── Norfolk / Virginia ─────────────────────────────────────
+  'CFS — STG Logistics, Portsmouth, VA','CFS — DSV, Norfolk, VA',
+  // ── Charleston, SC ─────────────────────────────────────────
+  'CFS — STG Logistics, Charleston, SC','CFS — DSV, Charleston, SC',
+  // ── Seattle / Tacoma, WA ───────────────────────────────────
+  'CFS — CaroTrans, Kent, WA','CFS — STG Logistics, Tukwila, WA',
+  'CFS — DSV, Seattle, WA','CFS — Vanguard Logistics, Seattle, WA',
+  // ── Dallas / Fort Worth, TX ────────────────────────────────
+  'CFS — STG Logistics, Dallas, TX','CFS — DSV, Dallas, TX',
+  // ── Other gateways ─────────────────────────────────────────
+  'CFS — STG Logistics, Jacksonville, FL','CFS — STG Logistics, Philadelphia, PA',
+  'CFS — STG Logistics, Boston, MA','CFS — STG Logistics, Portland, OR',
+  'CFS — CaroTrans, Indianapolis, IN','CFS — STG Logistics, Indianapolis, IN',
+  'CFS — STG Logistics, Kansas City, MO','CFS — STG Logistics, Memphis, TN',
+  'CFS — STG Logistics, Minneapolis, MN','CFS — STG Logistics, Detroit, MI',
+  'CFS — STG Logistics, Charlotte, NC','CFS — STG Logistics, New Orleans, LA',
+  'CFS — STG Logistics, Tampa, FL',
+];
 const NOTE_TEMPLATES=[
   'Chassis: 3-day minimum',
   'Chassis: 5-day minimum',
@@ -1272,8 +1325,13 @@ function renderFqBuilder(){
           ${fq.customerEmail?`<div style="font-size:11px;color:var(--gray-500);margin-top:4px">📧 ${fq.customerEmail}</div>`:''}
         </div>
         <div class="g2">
-          <div class="field"><label>Pickup zip</label>
-            <input type="text" value="${fq.pickupZip}" oninput="fqField('pickupZip',this.value)" placeholder="e.g. 07728" maxlength="10"></div>
+          <div class="field"><label>Pickup zip / CFS location</label>
+            <input type="text" value="${fq.pickupZip}" oninput="fqField('pickupZip',this.value)"
+              list="fq-pickup-dl" placeholder="${fq.mode==='LCL'?'e.g. CFS — STG Logistics, Kearny, NJ':'e.g. 07728'}" autocomplete="off">
+            <datalist id="fq-pickup-dl">
+              ${US_CFS.map(c=>`<option value="${c}">`).join('')}
+            </datalist>
+            ${fq.mode==='LCL'?'<div style="font-size:11px;color:var(--gray-400);margin-top:4px">Type a city or operator to search CFS locations, or enter a zip code</div>':''}</div>
           <div class="field"><label>Delivery zip</label>
             <input type="text" value="${fq.deliveryZip}" oninput="fqField('deliveryZip',this.value)" placeholder="e.g. 90210" maxlength="10"></div>
         </div>
