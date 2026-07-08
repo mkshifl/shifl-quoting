@@ -406,6 +406,19 @@ function isApplicable(c,ld){
 }
 const DEFAULT_FLAT_RATES={chassis:45,prepull:175,det_port:100,det_cust:100,storage:60,ovw43:200,ovw48:350,bobtail:0,toll:30};
 const DEFAULT_BASE_MARKUP={amount:150,mode:'flat'};
+const NOTE_TEMPLATES=[
+  'Chassis: 3-day minimum',
+  'Chassis: 5-day minimum',
+  'Chassis: 7-day minimum',
+  'Detention: billed in 1-hour increments after 2 free hours',
+  'Storage: billed per calendar day after 5 free days',
+  'Pre-pull: required for empty container return',
+  'OVW: overweight permit required — customer responsible for fees',
+  'Appointment required for delivery',
+  'Rates valid for 30 days from quote date',
+  'Subject to fuel surcharge adjustment',
+  'Hazmat: additional charges may apply',
+];
 const REGIONS=['NE','SE','Central','WC'];
 const SEED=[
   {id:'r1',region:'WC',carrier:'Fitted',port:'Los Angeles, CA',destination:'Fontana, CA',zip:'92337',ld:'Live',active:true,base:500,chassis:40,prepull:150,det_port:80,det_cust:80,storage:40,ovw43:0,ovw48:0,bobtail:0,toll:0,notes:'American Stitch LLC'},
@@ -583,7 +596,7 @@ function setSaving(on){
 let S={
   view:'quote',rates:[],quotes:[],customers:[],
   qi:{customer:'',customerEmail:'',customerId:null,port:'New York / Newark, NJ',zip:'',ld:'Live',
-      baseMarkup:{...DEFAULT_BASE_MARKUP},flatRates:{...DEFAULT_FLAT_RATES}},
+      baseMarkup:{...DEFAULT_BASE_MARKUP},flatRates:{...DEFAULT_FLAT_RATES},notes:''},
   selId:null,rSearch:'',logFilter:'all',dashFilter:'month',cSearch:'',
   fq:{mode:null,equipment:null,pickupZip:'',deliveryZip:'',weight:'',palletCount:'',
       pallets:[{w:'',l:'',h:''}],sameDims:true,singleW:'',singleL:'',singleH:'',
@@ -792,7 +805,18 @@ function renderQuote(){
         <div id="carriers-body">${buildCarrierComparison(matches)}</div>
       </div>
     </div>
-    <div class="sticky-top"><div class="card"><div class="sec-head">Customer quote preview</div><div id="preview-body">${buildPreviewHTML(sel)}</div></div></div>
+    <div class="sticky-top">
+      <div class="card"><div class="sec-head">Customer quote preview</div><div id="preview-body">${buildPreviewHTML(sel)}</div></div>
+      <div class="card" style="margin-top:14px">
+        <div class="sec-head">Notes for customer <span style="font-weight:400;font-size:11px;text-transform:none;letter-spacing:0;color:var(--gray-400)">— appear on PDF and email</span></div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px">
+          ${NOTE_TEMPLATES.map(t=>`<button class="btn sm" onclick="addNote('${t.replace(/'/g,"\\'")}')">+ ${t}</button>`).join('')}
+        </div>
+        <textarea id="qi-notes" rows="4" oninput="S.qi.notes=this.value"
+          placeholder="Add any special conditions, minimums, or instructions for the customer…"
+          style="width:100%;padding:8px 10px;font-size:12px;border:1px solid var(--gray-200);border-radius:var(--radius);resize:vertical;font-family:inherit;line-height:1.6">${S.qi.notes||''}</textarea>
+      </div>
+    </div>
   </div>`;
 }
 
@@ -2040,6 +2064,13 @@ function buildLaneHistory(zip, ld){
   <table style="width:100%"><tbody>${rows}</tbody></table>`;
 }
 
+function addNote(text){
+  const ta=$('qi-notes');
+  if(ta){
+    ta.value=(ta.value.trim()?ta.value.trim()+'\n':'')+text;
+    S.qi.notes=ta.value;
+  }
+}
 function onZip(v){
   S.qi.zip=v.trim();S.selId=null;
   if($('carriers-body')) refreshCarriersAndPreview();
@@ -2072,7 +2103,7 @@ async function saveQuote(){
       customer:qi.customer||'—',port:qi.port,zip:qi.zip,ld:qi.ld,carrier:sel.carrier,destination:sel.destination,
       carrierRates:{...CHARGES.reduce((o,c)=>{o[c]=sel[c]||0;return o;},{}),total:ct},
       customerRates:{...cuRates,total:cu},baseMarkup:{...qi.baseMarkup},flatRates:{...qi.flatRates},
-      profit,profitPct:cu>0?profit/cu:0,status:'Quoted',notes:''};
+      profit,profitPct:cu>0?profit/cu:0,status:'Quoted',notes:qi.notes||''};
     await dbSaveQuote(q);
     S.quotes.unshift(q);
     alert(`Quote #${q.quoteNum} saved!\n\nCustomer total: ${fmtD(cu)}\nProfit: ${fmtD(profit)} (${pct(q.profitPct)})`);
@@ -2084,7 +2115,7 @@ async function saveQuote(){
 // ═══════════════════════════════════════════════════════
 function getQuoteData(){const qi=S.qi;const sel=S.rates.find(r=>r.id===S.selId);if(!qi.zip||!sel){alert('Enter a zip and select a carrier first.');return null;}return{qi,sel,cu:cuTot(sel),ct:totMode(sel,qi.ld)};}
 
-function buildPrintHTML(customer, carrier, port, zip, destination, ld, date, quoteNum, customerRates){
+function buildPrintHTML(customer, carrier, port, zip, destination, ld, date, quoteNum, customerRates, notes){
   const baseAmt = customerRates?.base||0;
   const isBoth = ld==='Both';
   const liveOnly=['det_port','det_cust'];
@@ -2154,6 +2185,10 @@ function buildPrintHTML(customer, carrier, port, zip, destination, ld, date, quo
     <div><div class="lbl">Base Rate</div><div class="amt">${fmtD(baseAmt)}</div></div>
   </div>
   ${chargesHtml}
+  ${notes&&notes.trim()?`<div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:14px 16px;margin-bottom:16px;font-size:12px;color:#1e3a5f;line-height:1.7">
+    <strong style="color:#1d4ed8;text-transform:uppercase;letter-spacing:.04em;font-size:10px">Notes &amp; Conditions</strong><br>
+    ${notes.trim().split('\n').map(l=>`· ${l}`).join('<br>')}
+  </div>`:''}
   <div class="notes-box">
     <strong>Notes:</strong><br>
     · All rates are per container<br>
@@ -2171,14 +2206,14 @@ function printQuote(){
   const date=new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
   const cuRates=CHARGES.reduce((o,c)=>{o[c]=cuRate(Number(sel[c])||0,c);return o;},{});
   const win=window.open('','_blank');
-  win.document.write(buildPrintHTML(qi.customer,sel.carrier,qi.port,qi.zip,sel.destination,qi.ld,date,'',cuRates));
+  win.document.write(buildPrintHTML(qi.customer,sel.carrier,qi.port,qi.zip,sel.destination,qi.ld,date,'',cuRates,qi.notes||''));
   win.document.close();
 }
 
 async function downloadPDF(){
   const d=getQuoteData();if(!d) return;const{qi,sel,cu,ct}=d;
   if(typeof window.jspdf==='undefined'){try{await new Promise((res,rej)=>{const s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';s.onload=res;s.onerror=rej;document.head.appendChild(s);});}catch(e){printQuote();return;}}
-  _generatePDF({quoteNum:'—',date:new Date().toISOString().slice(0,10),customer:qi.customer,port:qi.port,zip:qi.zip,destination:sel.destination,ld:qi.ld,carrier:sel.carrier,status:'Quote',carrierRates:{...CHARGES.reduce((o,c)=>{o[c]=sel[c]||0;return o;},{}),total:ct},customerRates:{...CHARGES.reduce((o,c)=>{o[c]=cuRate(Number(sel[c])||0,c);return o;},{}),total:cu},profit:cu-ct,profitPct:cu>0?(cu-ct)/cu:0});
+  _generatePDF({quoteNum:'—',date:new Date().toISOString().slice(0,10),customer:qi.customer,port:qi.port,zip:qi.zip,destination:sel.destination,ld:qi.ld,carrier:sel.carrier,status:'Quote',notes:qi.notes||'',carrierRates:{...CHARGES.reduce((o,c)=>{o[c]=sel[c]||0;return o;},{}),total:ct},customerRates:{...CHARGES.reduce((o,c)=>{o[c]=cuRate(Number(sel[c])||0,c);return o;},{}),total:cu},profit:cu-ct,profitPct:cu>0?(cu-ct)/cu:0});
 }
 
 const CHARGE_DESC={
@@ -2276,6 +2311,20 @@ function _generatePDF(q){
       doc.text('The following charges will apply when applicable:',12,y);y+=10;
       drawChargeRows(accessorials);
     }
+  }
+
+  // ── Customer notes ────────────────────────────────────
+  if(q.notes&&q.notes.trim()){
+    y+=8;
+    const noteLines=doc.splitTextToSize(q.notes.trim(),W-32);
+    const boxH=noteLines.length*5+14;
+    doc.setFillColor(240,246,255);doc.roundedRect(12,y,W-24,boxH,3,3,'F');
+    doc.setDrawColor(180,210,240);doc.setLineWidth(.3);doc.roundedRect(12,y,W-24,boxH,3,3,'S');
+    doc.setFont('helvetica','bold');doc.setFontSize(7.5);doc.setTextColor(46,117,182);
+    doc.text('NOTES & CONDITIONS',16,y+7);
+    doc.setFont('helvetica','normal');doc.setFontSize(8.5);doc.setTextColor(55,70,90);
+    noteLines.forEach((line,i)=>{doc.text(line,16,y+13+(i*5));});
+    y+=boxH+4;
   }
 
   // ── Footer note ───────────────────────────────────────
@@ -2671,6 +2720,20 @@ async function downloadCarrierRateSheet(q,overrideRate){
     doc.setDrawColor(235,238,242);doc.setLineWidth(.2);doc.line(12,y+3,W-12,y+3);y+=9;
   });
 
+  // ── Customer notes (internal reference) ──────────────────────────────────
+  if(q.notes&&q.notes.trim()){
+    y+=6;
+    const noteLines=doc.splitTextToSize(q.notes.trim(),W-32);
+    const boxH=noteLines.length*5+14;
+    doc.setFillColor(240,246,255);doc.roundedRect(12,y,W-24,boxH,3,3,'F');
+    doc.setDrawColor(180,210,240);doc.setLineWidth(.3);doc.roundedRect(12,y,W-24,boxH,3,3,'S');
+    doc.setFont('helvetica','bold');doc.setFontSize(7.5);doc.setTextColor(46,117,182);
+    doc.text('CUSTOMER NOTES',16,y+7);
+    doc.setFont('helvetica','normal');doc.setFontSize(8.5);doc.setTextColor(55,70,90);
+    noteLines.forEach((line,i)=>{doc.text(line,16,y+13+(i*5));});
+    y+=boxH+4;
+  }
+
   // ── Footer ────────────────────────────────────────────────────────────
   doc.setFontSize(8);doc.setFont('helvetica','italic');doc.setTextColor(180,185,195);
   doc.text('This document is confidential and for internal use only. Do not share with carriers or customers.',12,275);
@@ -2742,7 +2805,7 @@ function printSavedQuote(id){
   const q=S.quotes.find(q=>q.id===id);if(!q) return;
   const date=new Date(q.date).toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
   const win=window.open('','_blank');
-  win.document.write(buildPrintHTML(q.customer,q.carrier,q.port,q.zip,q.destination,q.ld,date,q.quoteNum,q.customerRates));
+  win.document.write(buildPrintHTML(q.customer,q.carrier,q.port,q.zip,q.destination,q.ld,date,q.quoteNum,q.customerRates,q.notes||''));
   win.document.close();
 }
 function exportQuoteLog(){if(!S.quotes.length){alert('No quotes to export.');return;}const hdrs=['Quote #','Date','Customer','Port','Zip','Mode','Carrier','Destination','Carrier Total','Customer Total','Profit $','Profit %','Status'];const esc=v=>{const s=String(v==null?'':v);return s.includes(',')||s.includes('"')?`"${s.replace(/"/g,'""')}"`:s;};const rows=S.quotes.map(q=>[q.quoteNum,q.date,q.customer,q.port,q.zip,q.ld,q.carrier,q.destination||'',(q.carrierRates?.total||0).toFixed(2),(q.customerRates?.total||0).toFixed(2),(q.profit||0).toFixed(2),((q.profitPct||0)*100).toFixed(1)+'%',q.status].map(esc).join(','));const csv=[hdrs.join(','),...rows].join('\n');const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));a.download=`shifl_quotes_${new Date().toISOString().slice(0,10)}.csv`;a.click();URL.revokeObjectURL(a.href);}
