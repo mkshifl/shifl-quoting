@@ -140,7 +140,69 @@ hr{border:none;border-top:1px solid var(--gray-100);margin:14px 0}
 .empty{text-align:center;padding:50px 24px;color:var(--gray-400)}
 .empty-ico{font-size:36px;margin-bottom:10px}
 .cond-note{font-size:10px;color:var(--gray-400);font-style:italic}
-</style>
+
+/* ── Mobile responsive ─────────────────────────────────────── */
+@media(max-width:768px){
+  /* Sidebar becomes a collapsible bottom drawer trigger */
+  .app{flex-direction:column}
+  .sidebar{
+    width:100%;height:auto;flex-direction:row;
+    overflow-x:auto;padding:6px 4px;
+    border-right:none;border-bottom:1px solid rgba(255,255,255,.1);
+    flex-shrink:0;
+  }
+  .brand{padding:8px 12px;border-bottom:none;border-right:1px solid rgba(255,255,255,.1);flex-shrink:0}
+  .brand-name{font-size:13px}.brand-sub{display:none}
+  .sidebar-nav{flex-direction:row;padding:0 4px;gap:2px;overflow-x:auto;flex:1;align-items:center}
+  .nav-btn{
+    white-space:nowrap;padding:7px 11px;font-size:12px;border-left:none;
+    border-bottom:3px solid transparent;border-radius:6px;flex-shrink:0;
+  }
+  .nav-btn.active{border-left-color:transparent;border-bottom-color:#93c5fd;background:rgba(255,255,255,.1)}
+  /* Hide sub-nav labels on mobile — show as icons only */
+  .nav-sub{display:none}
+  /* Section labels */
+  .sidebar-nav>div[style*="font-size:10px"]{display:none}
+  /* When freight is active show a compact sub-nav below */
+  .sidebar-foot{display:none}
+
+  /* Main area */
+  .main{overflow-y:auto}
+  .topbar{padding:0 12px;height:48px;flex-wrap:wrap}
+  .topbar h1{font-size:13px}
+  .topbar-right{gap:6px;flex-wrap:wrap}
+  .topbar-right select{font-size:12px;padding:5px 6px}
+  .topbar-right .btn{font-size:12px;padding:5px 10px}
+  .page{padding:12px}
+
+  /* Grid layouts collapse to single column */
+  .g2,.g3,.kpi-grid,.two-col{grid-template-columns:1fr}
+  .kpi-grid{grid-template-columns:1fr 1fr}
+
+  /* Cards */
+  .card{padding:14px}
+
+  /* Tables scroll horizontally */
+  .tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  table{min-width:600px}
+
+  /* Mode selector cards stack */
+  .mode-cards{flex-direction:column}
+
+  /* Quote builder specifics */
+  .sticky-top{position:static}
+
+  /* Modals go full screen */
+  .modal{width:96vw!important;max-height:92vh;overflow-y:auto;margin:4vh auto}
+  .overlay{align-items:flex-start;padding-top:4vh}
+
+  /* PDF/print buttons stack */
+  .modal-foot{flex-wrap:wrap;gap:6px}
+  .modal-foot .btn{flex:1;min-width:120px;justify-content:center}
+
+  /* Freight mode selector — stack cards */
+  [style*="display:flex;gap:14px"]{flex-direction:column}
+}
 </head>
 <body>
 
