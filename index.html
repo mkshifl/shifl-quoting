@@ -1252,6 +1252,9 @@ async function confirmBooking(id, downloadSheet){
 
   setSaving(true);
   try{
+    const bookedDate=new Date().toISOString().slice(0,10);
+    // Store booked date inside baseMarkup JSONB — no schema change needed
+    q.baseMarkup={...q.baseMarkup, bookedDate};
     // If carrier changed, update the carrier rates on the quote
     if(selRate&&selRate.carrier!==q.carrier){
       const ct=totMode(selRate,q.ld);
@@ -1263,7 +1266,7 @@ async function confirmBooking(id, downloadSheet){
       q.profitPct=cu>0?(cu-ct)/cu:0;
       await db.from('quotes').update({...quoteToDb(q),status:'Booked'}).eq('id',id);
     } else {
-      await dbUpdateQuoteStatus(id,'Booked');
+      await db.from('quotes').update({status:'Booked',base_markup:q.baseMarkup}).eq('id',id);
     }
     q.status='Booked';
     closeModal();
@@ -1299,29 +1302,33 @@ async function downloadCarrierRateSheet(q,overrideRate){
   doc.setDrawColor(59,142,208);doc.setLineWidth(.3);doc.line(bx+sc(25),by+sc(14),bx+sc(44),by+sc(50));
   doc.setTextColor(255,255,255);doc.setFont('helvetica','bold');doc.setFontSize(18);doc.text('SHIFL',36,19);
   doc.setFontSize(9);doc.setFont('helvetica','normal');doc.setTextColor(255,255,255,.65);doc.text('Carrier Rate Sheet',36,26);
-  // Top right — confidential tag
-  doc.setFillColor(255,80,80);doc.roundedRect(W-52,8,44,14,3,3,'F');
+  // INTERNAL USE ONLY — centered on page
+  const badgeW=54;const badgeX=(W-badgeW)/2;
+  doc.setFillColor(200,40,40);doc.roundedRect(badgeX,9,badgeW,13,3,3,'F');
   doc.setFont('helvetica','bold');doc.setFontSize(8);doc.setTextColor(255,255,255);
-  doc.text('INTERNAL USE ONLY',W-50,16.5);
+  doc.text('INTERNAL USE ONLY',W/2,17,{align:'center'});
 
   // ── Quote info bar ────────────────────────────────────────────────────
+  const bookedDate=q.baseMarkup?.bookedDate||new Date().toISOString().slice(0,10);
   doc.setFillColor(240,244,248);doc.rect(0,32,W,16,'F');
   doc.setFont('helvetica','bold');doc.setFontSize(9);doc.setTextColor(...navy);
   doc.text('Quote #'+q.quoteNum,12,42);
   doc.setFont('helvetica','normal');doc.setTextColor(100,115,130);
-  doc.text('Date: '+q.date,12,48);
+  doc.text('Quoted: '+q.date,12,48);
   doc.text('Customer: '+q.customer,70,42);
   doc.text('Status: BOOKED',70,48);
-  doc.text('Booked: '+new Date().toISOString().slice(0,10),150,42);
+  doc.setFont('helvetica','bold');doc.setTextColor(...green);
+  doc.text('Booked: '+bookedDate,150,42);
+  doc.setFont('helvetica','normal');doc.setTextColor(100,115,130);
 
   // ── Carrier section ───────────────────────────────────────────────────
-  let y=58;
+  let y=62;
   doc.setFillColor(...navy);doc.rect(12,y,W-24,8,'F');
   doc.setFont('helvetica','bold');doc.setFontSize(8);doc.setTextColor(255,255,255);
-  doc.text('CARRIER',16,y+5.5);y+=12;
+  doc.text('CARRIER',16,y+5.5);y+=16;
 
-  doc.setFont('helvetica','bold');doc.setFontSize(16);doc.setTextColor(...navy);
-  doc.text(carrierName,16,y);y+=10;
+  doc.setFont('helvetica','bold');doc.setFontSize(18);doc.setTextColor(...navy);
+  doc.text(carrierName,16,y);y+=14;
 
   // Lane details under carrier
   const laneItems=[['Pickup',q.port||'—'],['Destination',q.destination||'—'],['Delivery Zip',q.zip],['Mode',q.ld]];
