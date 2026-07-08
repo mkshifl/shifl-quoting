@@ -655,7 +655,9 @@ let S={
       pallets:[{w:'',l:'',h:''}],sameDims:true,singleW:'',singleL:'',singleH:'',
       notes:'',customer:'',customerEmail:'',customerId:null,
       carriers:[{name:'',rate:''}], markupMode:'flat', markupAmount:150, selCarrierIdx:0,
-      selFqRateId:null, lclDetentionHours:0, lclPalletExchange:0},
+      selFqRateId:null, lclDetentionHours:0, lclPalletExchange:0,
+      lclPriceBy:'pallets', cbm:0,
+      calc:{l:'',w:'',h:'',pieces:'',weightLbs:'',unit:'in'}},
   fqTab:'builder',
 };
 let _importRows=[];
@@ -1025,13 +1027,54 @@ function onFqRateModeChange(mode){
   if(flatSec) flatSec.style.display=mode==='LCL'?'none':'';
 }
 function onFqRateTypeChange(t){
-  const ppBtn=$('fr-rt-pp');const flBtn=$('fr-rt-fl');const lbl=$('fr-rate-lbl');
+  const ppBtn=$('fr-rt-pp');const cbmBtn=$('fr-rt-cbm');const flBtn=$('fr-rt-fl');const lbl=$('fr-rate-lbl');
   if(ppBtn) ppBtn.classList.toggle('on',t==='perPallet');
+  if(cbmBtn) cbmBtn.classList.toggle('on',t==='perCbm');
   if(flBtn) flBtn.classList.toggle('on',t==='flat');
-  if(lbl) lbl.textContent=t==='perPallet'?'Rate per pallet ($)':'Flat rate ($)';
-  // store in hidden field
+  if(lbl) lbl.textContent=t==='perPallet'?'Rate per pallet ($)':t==='perCbm'?'Rate per CBM ($)':'Flat rate ($)';
   const hf=$('fr-rate-type');if(hf) hf.value=t;
 }
+
+// CBM calculator
+function calcCbm(){
+  const fq=S.fq.calc;
+  const l=parseFloat(fq.l)||0,w=parseFloat(fq.w)||0,h=parseFloat(fq.h)||0;
+  const pieces=parseInt(fq.pieces)||1;
+  const weightLbs=parseFloat(fq.weightLbs)||0;
+  if(!l||!w||!h){alert('Enter length, width and height first.');return;}
+  let cbm=fq.unit==='in'?(l*w*h*pieces)/61023.7:(l*w*h*pieces)/1000000;
+  cbm=Math.round(cbm*100)/100;
+  const cbmPerPallet=1.2;
+  const weightKg=weightLbs*0.453592;
+  const palletsByVol=Math.ceil(cbm/cbmPerPallet);
+  const palletsByWt=weightKg>0?Math.ceil(weightKg/1000):0;
+  const estPallets=Math.max(palletsByVol,palletsByWt,1);
+  const chargeableKg=Math.max(cbm*1000,weightKg);
+  $('cbm-result').innerHTML=`
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px">
+      <div style="background:var(--blue-bg);border-radius:var(--radius);padding:12px;text-align:center">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-500);margin-bottom:4px">Total CBM</div>
+        <div style="font-size:26px;font-weight:800;color:var(--steel)">${cbm}</div>
+        <div style="font-size:11px;color:var(--gray-400)">cubic meters</div>
+      </div>
+      <div style="background:var(--gray-50);border-radius:var(--radius);padding:12px;text-align:center">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-500);margin-bottom:4px">Est. Pallets</div>
+        <div style="font-size:26px;font-weight:800;color:var(--navy)">${estPallets}</div>
+        <div style="font-size:11px;color:var(--gray-400)">${palletsByVol>=palletsByWt?'volume-based':'weight-based'}</div>
+      </div>
+    </div>
+    <div style="margin-top:8px;padding:8px 12px;background:var(--gray-50);border-radius:var(--radius);font-size:12px;color:var(--gray-500);display:flex;justify-content:space-between">
+      <span>Chargeable weight: <strong>${Math.round(chargeableKg).toLocaleString()} kg</strong></span>
+      <span>Gross weight: <strong>${Math.round(weightKg).toLocaleString()} kg</strong></span>
+    </div>
+    <div style="margin-top:6px;font-size:11px;color:var(--gray-400);text-align:center">1.2 CBM per pallet · 1,000 kg per pallet · 1 CBM = 1,000 kg chargeable weight</div>
+    <button class="btn blue" style="width:100%;margin-top:10px;justify-content:center"
+      onclick="S.fq.cbm=${cbm};S.fq.palletCount='${estPallets}';S.fq.weight='${Math.round(weightLbs)}';renderFqBuilder()">
+      Use these in quote ↗ ${cbm} CBM · ${estPallets} pallets
+    </button>`;
+}
+function setCbmCalc(k,v){S.fq.calc[k]=v;}
+
 function getFqRateValue(){
   const mode=($('fr-mode')||{}).value||'FTL';
   if(mode==='LCL'){return parseFloat(($('fr-rate')||{}).value)||0;}
@@ -1072,6 +1115,7 @@ function fqRateFields(r){
       <div class="field"><label>Rate type</label>
         <div class="toggle-group" style="margin-top:4px">
           <button class="tgl${rateType==='perPallet'?' on':''}" id="fr-rt-pp" onclick="onFqRateTypeChange('perPallet')">Per pallet</button>
+          <button class="tgl${rateType==='perCbm'?' on':''}"   id="fr-rt-cbm" onclick="onFqRateTypeChange('perCbm')">Per CBM</button>
           <button class="tgl${rateType==='flat'?' on':''}"     id="fr-rt-fl" onclick="onFqRateTypeChange('flat')">Flat rate</button>
         </div>
       </div>
@@ -1250,23 +1294,27 @@ function renderFqBuilder(){
       <div class="sec-head">LCL carrier rates</div>
       ${lclRates.map(r=>{
         const pCount=parseInt(fq.palletCount)||0;
+        const cbmQty=parseFloat(fq.cbm)||0;
         const isSelected=fq.selFqRateId===r.id;
-        const baseAmt=r.rateType==='perPallet'?pCount*r.rate:r.rate;
+        const isCbmRate=r.rateType==='perCbm';
+        const baseAmt=isCbmRate?cbmQty*r.rate:r.rateType==='perPallet'?pCount*r.rate:r.rate;
         const detAmt=(fq.lclDetentionHours||0)*(r.detentionRate||0);
         const peAmt=(fq.lclPalletExchange||0)*(r.palletExchangeRate||0);
         const totalCarrier=baseAmt+detAmt+peAmt;
+        const rateLabel=isCbmRate?`${fmtD(r.rate)}/CBM`:r.rateType==='perPallet'?`${fmtD(r.rate)}/pallet`:`Flat: ${fmtD(r.rate)}`;
+        const qtyLabel=isCbmRate?(cbmQty?`${cbmQty} CBM × ${fmtD(r.rate)}`:''):(pCount?`${pCount} pallets × ${fmtD(r.rate)}`:'');
         return `<div onclick="selFqRate('${r.id}')" style="cursor:pointer;border:2px solid ${isSelected?'var(--steel)':'var(--gray-200)'};background:${isSelected?'var(--blue-bg)':'var(--white)'};border-radius:var(--radius);padding:12px 14px;margin-bottom:8px">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:${isSelected?'12':'0'}px">
             <div>
               <div style="font-weight:600;color:var(--navy)">${r.carrier}${r.equipment?' — '+r.equipment:''}</div>
               <div style="font-size:12px;color:var(--gray-500);margin-top:2px">
-                ${r.rateType==='perPallet'?`${fmtD(r.rate)} per pallet`:`Flat rate: ${fmtD(r.rate)}`}
+                ${rateLabel}
                 ${r.detentionRate?` · Detention: ${fmtD(r.detentionRate)}/hr`:''}
                 ${r.palletExchangeRate?` · Pallet exchange: ${fmtD(r.palletExchangeRate)}/pallet`:''}
               </div>
             </div>
             <div style="text-align:right">
-              ${pCount>0&&r.rateType==='perPallet'?`<div style="font-size:11px;color:var(--gray-400)">${pCount} × ${fmtD(r.rate)}</div>`:''}
+              ${qtyLabel?`<div style="font-size:11px;color:var(--gray-400)">${qtyLabel}</div>`:''}
               <div style="font-size:${isSelected?'11':'18'}px;font-weight:700;color:var(--steel)">${totalCarrier>0?fmtD(totalCarrier):'—'}</div>
             </div>
           </div>
@@ -1344,9 +1392,48 @@ function renderFqBuilder(){
           </div>
         </div>
         ${palletSection}
+        ${fq.mode==='LCL'?`
+        <div class="field">
+          <label>Quote by</label>
+          <div class="toggle-group" style="margin-top:4px">
+            <button class="tgl${fq.lclPriceBy==='pallets'?' on':''}" onclick="S.fq.lclPriceBy='pallets';renderFqBuilder()">📦 Pallets</button>
+            <button class="tgl${fq.lclPriceBy==='cbm'?' on':''}"    onclick="S.fq.lclPriceBy='cbm';renderFqBuilder()">📐 CBM</button>
+          </div>
+        </div>
+        ${fq.lclPriceBy==='cbm'?`<div class="field"><label>Total CBM</label>
+          <input type="number" value="${fq.cbm||''}" oninput="S.fq.cbm=+this.value;refreshFreightPreview()"
+            placeholder="e.g. 5.4" min="0" step="0.01" style="font-size:15px;font-weight:600"></div>`:''}
+        `:''}
         <div class="field"><label>Special instructions (optional)</label>
           <input type="text" value="${fq.notes}" oninput="fqField('notes',this.value)" placeholder="e.g. liftgate, appointment, hazmat"></div>
       </div>
+
+      ${fq.mode==='LCL'?`
+      <div class="card">
+        <div class="sec-head">📐 CBM + Weight calculator <span style="font-weight:400;font-size:11px;text-transform:none;letter-spacing:0;color:var(--gray-400)">— estimate pallets from cargo dimensions</span></div>
+        <div class="g2" style="margin-bottom:10px">
+          <div class="field" style="margin-bottom:0"><label>Units</label>
+            <div class="toggle-group" style="margin-top:4px">
+              <button class="tgl${(fq.calc&&fq.calc.unit||'in')==='in'?' on':''}" onclick="setCbmCalc('unit','in');renderFqBuilder()">Inches</button>
+              <button class="tgl${(fq.calc&&fq.calc.unit||'in')==='cm'?' on':''}" onclick="setCbmCalc('unit','cm');renderFqBuilder()">CM</button>
+            </div></div>
+          <div class="field" style="margin-bottom:0"><label>No. of pieces / cartons</label>
+            <input type="number" value="${fq.calc&&fq.calc.pieces||''}" oninput="setCbmCalc('pieces',this.value)" placeholder="e.g. 10" min="1"></div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px">
+          <div class="field" style="margin-bottom:0"><label>Length</label>
+            <input type="number" value="${fq.calc&&fq.calc.l||''}" oninput="setCbmCalc('l',this.value)" placeholder="L" min="0"></div>
+          <div class="field" style="margin-bottom:0"><label>Width</label>
+            <input type="number" value="${fq.calc&&fq.calc.w||''}" oninput="setCbmCalc('w',this.value)" placeholder="W" min="0"></div>
+          <div class="field" style="margin-bottom:0"><label>Height</label>
+            <input type="number" value="${fq.calc&&fq.calc.h||''}" oninput="setCbmCalc('h',this.value)" placeholder="H" min="0"></div>
+        </div>
+        <div class="field" style="margin-bottom:10px"><label>Total gross weight (lbs)</label>
+          <input type="number" value="${fq.calc&&fq.calc.weightLbs||''}" oninput="setCbmCalc('weightLbs',this.value)" placeholder="e.g. 2200" min="0"></div>
+        <button class="btn blue" onclick="calcCbm()" style="width:100%;justify-content:center">📐 Calculate CBM + estimated pallets</button>
+        <div id="cbm-result"></div>
+      </div>`:''}
+
       ${lclRateSection}
 
       <!-- Carriers + pricing -->
@@ -1784,7 +1871,9 @@ function buildFreightPreview(){
   let carrierRate=0;
   if(lclRate){
     const pCount=parseInt(fq.palletCount)||0;
-    const base=lclRate.rateType==='perPallet'?pCount*lclRate.rate:lclRate.rate;
+    const cbmQty=parseFloat(fq.cbm)||0;
+    const isCbmRate=lclRate.rateType==='perCbm';
+    const base=isCbmRate?cbmQty*lclRate.rate:lclRate.rateType==='perPallet'?pCount*lclRate.rate:lclRate.rate;
     const det=(fq.lclDetentionHours||0)*(lclRate.detentionRate||0);
     const pe=(fq.lclPalletExchange||0)*(lclRate.palletExchangeRate||0);
     carrierRate=base+det+pe;
