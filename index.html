@@ -1629,11 +1629,6 @@ function renderFqCarriers(){
         </tr>`).join('')}</tbody>
       </table></div>
     </div>`:''}`;
-
-  // Put Add rate button in topbar
-  const tr=$('topbar-right');
-  if(tr) tr.innerHTML+=`<button class="btn blue" onclick="showAddFqRate()">+ Add rate</button>`;
-  // Note: + Add rate is also set in renderFreight topbar for carriers tab
 }
 
 function buildFreightPreview(){
