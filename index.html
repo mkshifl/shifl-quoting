@@ -2431,10 +2431,99 @@ function buildRateRows(){
   </tr>`).join('');
 }
 function renderRates(){
-  $('topbar-right').innerHTML=`<input type="text" id="rate-search" placeholder="Search…" value="${S.rSearch}" oninput="onRateSearch(this.value)" style="width:180px"><button class="btn" onclick="downloadTemplate()">📥 Template</button><button class="btn" onclick="triggerImport()">📤 Import CSV</button><input type="file" id="csv-fi" accept=".csv" style="display:none" onchange="handleCSVFile(this)"><button class="btn blue" onclick="showAddRate()">+ Add rate</button>`;
+  const matchCount=S.rSearch?S.rates.filter(r=>(r.carrier+r.zip+r.destination+r.region+r.notes).toLowerCase().includes(S.rSearch.toLowerCase())).length:S.rates.length;
+  $('topbar-right').innerHTML=`
+    <div style="position:relative;display:flex;align-items:center">
+      <span style="position:absolute;left:10px;color:var(--gray-400);font-size:13px">🔍</span>
+      <input type="text" id="rate-search" placeholder="Search carrier, zip, destination…" value="${S.rSearch}"
+        oninput="onRateSearch(this.value)"
+        style="width:260px;padding:7px 10px 7px 32px;border-radius:var(--radius);border:1px solid var(--gray-200);font-size:13px">
+      ${S.rSearch?`<span style="position:absolute;right:10px;font-size:11px;color:var(--gray-400)">${matchCount} result${matchCount!==1?'s':''}</span>`:''}
+    </div>
+    ${S.rSearch&&matchCount>0?`<button class="btn" onclick="showBulkEdit()" title="Edit accessorials on all ${matchCount} matching rates at once">✏️ Bulk edit (${matchCount})</button>`:''}
+    <button class="btn" onclick="downloadTemplate()">📥 Template</button>
+    <button class="btn" onclick="triggerImport()">📤 Import CSV</button>
+    <input type="file" id="csv-fi" accept=".csv" style="display:none" onchange="handleCSVFile(this)">
+    <button class="btn blue" onclick="showAddRate()">+ Add rate</button>`;
   $('page').innerHTML=`<div class="tbl-wrap"><table><thead><tr><th>Region</th><th>Carrier</th><th>Destination</th><th>Zip</th><th>Mode</th><th>Base</th><th>Chassis</th><th>Pre-pull</th><th>Det.Port</th><th>Det.Cust</th><th>Storage</th><th>OVW 43k</th><th>OVW 48k</th><th>Bobtail</th><th>Toll</th><th>Total</th><th>Status</th><th></th></tr></thead><tbody id="rates-tbody">${buildRateRows()}</tbody></table></div>`;
 }
-function onRateSearch(v){S.rSearch=v;const t=$('rates-tbody');if(t) t.innerHTML=buildRateRows();}
+function onRateSearch(v){
+  S.rSearch=v;
+  const matchCount=v?S.rates.filter(r=>(r.carrier+r.zip+r.destination+r.region+r.notes).toLowerCase().includes(v.toLowerCase())).length:S.rates.length;
+  const t=$('rates-tbody');if(t) t.innerHTML=buildRateRows();
+  // Update bulk edit button and count live
+  const existing=document.querySelector('[onclick="showBulkEdit()"]');
+  const topR=$('topbar-right');
+  if(topR){
+    const countSpan=topR.querySelector('span[style*="right:10px"]');
+    if(countSpan) countSpan.textContent=v?`${matchCount} result${matchCount!==1?'s':''}` :'';
+    if(existing) existing.textContent=`✏️ Bulk edit (${matchCount})`;
+    if(!existing&&v&&matchCount>0){
+      const tmpl=document.createElement('button');
+      tmpl.className='btn';tmpl.title=`Edit accessorials on all ${matchCount} matching rates at once`;
+      tmpl.textContent=`✏️ Bulk edit (${matchCount})`;
+      tmpl.setAttribute('onclick','showBulkEdit()');
+      topR.insertBefore(tmpl,topR.children[1]);
+    } else if(existing&&(!v||matchCount===0)){
+      existing.remove();
+    }
+  }
+}
+
+function showBulkEdit(){
+  const s=S.rSearch.toLowerCase();
+  const matches=S.rates.filter(r=>(r.carrier+r.zip+r.destination+r.region+r.notes).toLowerCase().includes(s));
+  if(!matches.length) return;
+
+  // Pre-fill with the first match's current values as defaults
+  const first=matches[0];
+  const chargeFields=CHARGES.filter(c=>c!=='base').map(c=>`
+    <div class="field">
+      <label style="display:flex;align-items:center;gap:8px">
+        <input type="checkbox" id="bulk-chk-${c}" onchange="document.getElementById('bulk-${c}').disabled=!this.checked">
+        ${LABELS[c]}
+      </label>
+      <input type="number" id="bulk-${c}" value="${first[c]||0}" min="0"
+        disabled style="padding:5px 8px;font-size:13px;opacity:.5"
+        oninput="" onfocus="document.getElementById('bulk-chk-${c}').checked=true;this.style.opacity=1;this.disabled=false">
+    </div>`).join('');
+
+  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+    <div class="modal" style="width:580px">
+      <div class="modal-title">Bulk edit accessorials</div>
+      <div style="background:var(--amber-bg,#fffbeb);border:1px solid #fbbf24;border-radius:var(--radius);padding:10px 14px;margin-bottom:16px;font-size:13px">
+        ✏️ Editing <strong>${matches.length} rate${matches.length!==1?'s':''}</strong> matching <em>"${S.rSearch}"</em>
+        — <span style="color:var(--gray-500)">check a field to update it on all matching rates</span>
+      </div>
+      <div class="g3">${chargeFields}</div>
+      <div class="modal-foot">
+        <button class="btn" onclick="closeModal()">Cancel</button>
+        <button class="btn blue" onclick="applyBulkEdit()">Apply to all ${matches.length} rates</button>
+      </div>
+    </div></div>`;
+}
+
+async function applyBulkEdit(){
+  const s=S.rSearch.toLowerCase();
+  const matches=S.rates.filter(r=>(r.carrier+r.zip+r.destination+r.region+r.notes).toLowerCase().includes(s));
+  const changes={};
+  CHARGES.filter(c=>c!=='base').forEach(c=>{
+    const chk=$(`bulk-chk-${c}`);const inp=$(`bulk-${c}`);
+    if(chk&&chk.checked&&inp) changes[c]=parseFloat(inp.value)||0;
+  });
+  if(!Object.keys(changes).length){alert('Check at least one field to update.');return;}
+  if(!confirm(`Apply changes to ${matches.length} rate${matches.length!==1?'s':''}? This cannot be undone.`)) return;
+  setSaving(true);
+  try{
+    for(const r of matches){
+      Object.assign(r,changes);
+      await dbSaveRate(r);
+    }
+    closeModal();
+    const t=$('rates-tbody');if(t) t.innerHTML=buildRateRows();
+    alert(`✅ Updated ${matches.length} rate${matches.length!==1?'s':''} successfully.`);
+  }catch(e){alert('Error: '+e.message);}finally{setSaving(false);}
+}
 async function toggleActive(id,currentActive){
   setSaving(true);try{const r=S.rates.find(r=>r.id===id);if(r){r.active=!(currentActive==='true'||currentActive===true);await dbSaveRate(r);}const t=$('rates-tbody');if(t) t.innerHTML=buildRateRows();}catch(e){alert('Error: '+e.message);}finally{setSaving(false);}
 }
