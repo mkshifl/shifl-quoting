@@ -648,6 +648,45 @@ async function dbDeleteCustomer(id){
   const{error}=await db.from('customers').delete().eq('id',id); if(error) throw error;
 }
 
+async function dbLoadFqQuotes(){
+  const{data,error}=await db.from('fq_quotes').select('*').order('created_at',{ascending:false});
+  if(error) throw error;
+  return(data||[]).map(r=>typeof r.data==='object'?r.data:JSON.parse(r.data||'{}'));
+}
+async function dbSaveFqQuote(q){
+  const{error}=await db.from('fq_quotes').upsert({id:q.id,date:q.date,customer:q.customer||'',data:q});
+  if(error) throw error;
+}
+async function dbUpdateFqStatus(id,status){
+  const q=(window._fqHistory||[]).find(q=>q.id===id);if(!q) return;
+  q.status=status;
+  const{error}=await db.from('fq_quotes').update({data:q}).eq('id',id);
+  if(error) throw error;
+}
+async function dbDeleteFqQuote(id){
+  const{error}=await db.from('fq_quotes').delete().eq('id',id);
+  if(error) throw error;
+}
+async function dbLoadTlQuotes(){
+  const{data,error}=await db.from('tl_quotes').select('*').order('created_at',{ascending:false});
+  if(error) throw error;
+  return(data||[]).map(r=>typeof r.data==='object'?r.data:JSON.parse(r.data||'{}'));
+}
+async function dbSaveTlQuote(q){
+  const{error}=await db.from('tl_quotes').upsert({id:q.id,date:q.date,customer:q.customer||'',data:q});
+  if(error) throw error;
+}
+async function dbUpdateTlStatus(id,status){
+  const q=(window._tlHistory||[]).find(q=>q.id===id);if(!q) return;
+  q.status=status;
+  const{error}=await db.from('tl_quotes').update({data:q}).eq('id',id);
+  if(error) throw error;
+}
+async function dbDeleteTlQuote(id){
+  const{error}=await db.from('tl_quotes').delete().eq('id',id);
+  if(error) throw error;
+}
+
 async function autoExpireQuotes(){
   const cutoff=new Date(Date.now()-30*24*60*60*1000).toISOString().slice(0,10);
   const toExpire=S.quotes.filter(q=>q.status==='Quoted'&&q.date<cutoff);
@@ -1627,16 +1666,19 @@ async function downloadSelectedFqPDFs(){
 function updateFqStatus(idx,status){
   if(!window._fqHistory||!window._fqHistory[idx]) return;
   if(status==='Booked'){showFqBookingModal(idx);return;}
-  window._fqHistory[idx].status=status;
+  const q=window._fqHistory[idx];
+  q.status=status;
   try{localStorage.setItem('fq_history',JSON.stringify(window._fqHistory));}catch(e){}
-  // Refresh whichever view is active
+  try{dbUpdateFqStatus(q.id,status);}catch(e){}
   if(S.fqTab==='log') renderFqLog();
   if(S.fqTab==='dash') renderFqDashboard();
 }
 function deleteFqQuote(idx){
   if(!confirm('Delete this freight quote?')) return;
+  const q=window._fqHistory[idx];
   window._fqHistory.splice(idx,1);
   try{localStorage.setItem('fq_history',JSON.stringify(window._fqHistory));}catch(e){}
+  try{dbDeleteFqQuote(q.id);}catch(e){}
   renderFqLog();
 }
 
@@ -2086,6 +2128,7 @@ async function saveFqQuote(){
   };
   if(!window._fqHistory) window._fqHistory=[];
   window._fqHistory.unshift(entry);
+  try{await dbSaveFqQuote(entry);}catch(e){console.log('Supabase fq save error:',e.message);}
   try{const existing=JSON.parse(localStorage.getItem('fq_history')||'[]');existing.unshift(entry);localStorage.setItem('fq_history',JSON.stringify(existing.slice(0,500)));}catch(e){}
   alert(`✅ Freight quote saved!\n\n${carrierName}: ${fmtD(carrierRate)}\nCustomer: ${fmtD(customerRate)}\nProfit: ${fmtD(entry.profit)} (${pct(entry.profitPct)})`);
   refreshFreightPreview();
@@ -2202,9 +2245,16 @@ function renderFqDashboard(){
 }
 
 // Load freight history on init
-function loadFqHistory(){
-  try{window._fqHistory=JSON.parse(localStorage.getItem('fq_history')||'[]');}catch(e){window._fqHistory=[];}
+async function loadFqHistory(){
   loadFqRates();
+  try{
+    window._fqHistory=await dbLoadFqQuotes();
+    // Cache to localStorage
+    localStorage.setItem('fq_history',JSON.stringify(window._fqHistory));
+  }catch(e){
+    console.log('Supabase fq load failed, using localStorage:',e.message);
+    try{window._fqHistory=JSON.parse(localStorage.getItem('fq_history')||'[]');}catch(e2){window._fqHistory=[];}
+  }
 }
 // ═══════════════════════════════════════════════════════
 function buildCustomerRows(){
@@ -3049,9 +3099,15 @@ function defaultTlState(){
 
 // Warehouses DB
 function loadTlWarehouses(){try{window._tlWarehouses=JSON.parse(localStorage.getItem('tl_warehouses')||'[]');}catch(e){window._tlWarehouses=[];}}
-function loadTlHistory(){
-  try{window._tlHistory=JSON.parse(localStorage.getItem('tl_history')||'[]');}catch(e){window._tlHistory=[];}
+async function loadTlHistory(){
   loadTlWarehouses();
+  try{
+    window._tlHistory=await dbLoadTlQuotes();
+    localStorage.setItem('tl_history',JSON.stringify(window._tlHistory));
+  }catch(e){
+    console.log('Supabase tl load failed, using localStorage:',e.message);
+    try{window._tlHistory=JSON.parse(localStorage.getItem('tl_history')||'[]');}catch(e2){window._tlHistory=[];}
+  }
 }
 function saveTlWarehouses(){try{localStorage.setItem('tl_warehouses',JSON.stringify(window._tlWarehouses));}catch(e){}}
 
@@ -3765,8 +3821,20 @@ function renderTlLog(){
     <tbody>${rows}</tbody>
   </table></div>`;
 }
-function updateTlStatus(idx,status){if(!window._tlHistory?.[idx]) return;window._tlHistory[idx].status=status;try{localStorage.setItem('tl_history',JSON.stringify(window._tlHistory));}catch(e){}}
-function deleteTlQuote(idx){if(!confirm('Delete this quote?')) return;window._tlHistory.splice(idx,1);try{localStorage.setItem('tl_history',JSON.stringify(window._tlHistory));}catch(e){}renderTlLog();}
+function updateTlStatus(idx,status){
+  if(!window._tlHistory?.[idx]) return;
+  const q=window._tlHistory[idx];q.status=status;
+  try{localStorage.setItem('tl_history',JSON.stringify(window._tlHistory));}catch(e){}
+  try{dbUpdateTlStatus(q.id,status);}catch(e){}
+}
+function deleteTlQuote(idx){
+  if(!confirm('Delete this quote?')) return;
+  const q=window._tlHistory[idx];
+  window._tlHistory.splice(idx,1);
+  try{localStorage.setItem('tl_history',JSON.stringify(window._tlHistory));}catch(e){}
+  try{dbDeleteTlQuote(q.id);}catch(e){}
+  renderTlLog();
+}
 
 function showTlQuoteModal(idx){
   const q=(window._tlHistory||[])[idx];if(!q) return;
@@ -3919,7 +3987,7 @@ function renderTlDashboard(){
       </table></div></div>`:'<div class="empty"><div class="empty-ico">📊</div><p>No transload quotes yet — save a quote to see stats here</p></div>'}`;
 }
 
-function saveTlQuote(){
+async function saveTlQuote(){
   const tl=S.tl;const t=calcTlTotals(tl);
   if(!tl.drayPort){alert('Please complete Step 1 first.');return;}
   if(t.totalCustomer===0){alert('Please enter carrier rates in all sections.');return;}
@@ -3948,6 +4016,7 @@ function saveTlQuote(){
   };
   if(!window._tlHistory) window._tlHistory=[];
   window._tlHistory.unshift(entry);
+  try{await dbSaveTlQuote(entry);}catch(e){console.log('Supabase tl save error:',e.message);}
   try{localStorage.setItem('tl_history',JSON.stringify(window._tlHistory.slice(0,500)));}catch(e){}
   alert(`✅ Transload quote saved!\n\nCustomer total: ${fmtD(t.totalCustomer)}\nProfit: ${fmtD(t.totalProfit)} (${pct(t.margin)})`);
   S.tl=defaultTlState();
