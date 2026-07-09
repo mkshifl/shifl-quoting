@@ -856,8 +856,8 @@ function renderQuote(){
   const qi=S.qi;const matches=getMatches();
   if(!S.selId&&matches.length) S.selId=matches[0].id;
   const sel=matches.find(r=>r.id===S.selId)||matches[0]||null;
-  $('topbar-right').innerHTML=`<button class="btn" onclick="printQuote()">🖨️ Print</button><button class="btn" onclick="downloadPDF()">📄 PDF</button><button class="btn blue" onclick="saveQuote()">💾 Save quote</button>`;
-  $('page').innerHTML=`<div class="two-col">
+  $('topbar-right').innerHTML=`<button class="btn" onclick="saveDraft('drayage')">📋 Save draft</button><button class="btn" onclick="printQuote()">🖨️ Print</button><button class="btn" onclick="downloadPDF()">📄 PDF</button><button class="btn blue" onclick="saveQuote()">💾 Save quote</button>`;
+  $('page').innerHTML=draftBanner('drayage','drayage')+`<div class="two-col">
     <div>
       <div class="card">
         <div class="sec-head">Lane details</div>
@@ -2374,6 +2374,50 @@ function submitAddCustomCFS(){
   alert('✅ "'+entry+'" added to your CFS list.');
 }
 
+// ── Draft Quotes ──────────────────────────────────────────────────────────
+function saveDraft(type){
+  try{
+    if(type==='drayage') localStorage.setItem('draft_drayage',JSON.stringify({qi:S.qi,selId:S.selId}));
+    if(type==='freight')  localStorage.setItem('draft_freight',JSON.stringify(S.fq));
+    if(type==='transload') localStorage.setItem('draft_transload',JSON.stringify(S.tl));
+    alert('✅ Draft saved! Come back anytime to resume.');
+  }catch(e){alert('Could not save draft: '+e.message);}
+}
+function getDraft(type){
+  try{const d=localStorage.getItem('draft_'+type);return d?JSON.parse(d):null;}catch(e){return null;}
+}
+function clearDraft(type){try{localStorage.removeItem('draft_'+type);}catch(e){}}
+function resumeDraft(type){
+  const d=getDraft(type);if(!d) return;
+  if(type==='drayage'){S.qi={...S.qi,...d.qi};S.selId=d.selId||null;clearDraft('drayage');renderQuote();}
+  if(type==='freight'){S.fq={...S.fq,...d};clearDraft('freight');renderFreight();}
+  if(type==='transload'){S.tl={...defaultTlState(),...d};clearDraft('transload');renderTransload();}
+}
+function discardDraft(type){
+  if(!confirm('Discard saved draft and start fresh?')) return;
+  clearDraft(type);
+  if(type==='drayage') renderQuote();
+  if(type==='freight') renderFreight();
+  if(type==='transload'){S.tl=defaultTlState();renderTransload();}
+}
+function draftBanner(type,label){
+  const d=getDraft(type);if(!d) return '';
+  const savedAt=d.savedAt?new Date(d.savedAt).toLocaleString():'recently';
+  const preview=type==='drayage'?(d.qi?.customer?`Customer: ${d.qi.customer}`:'')
+    :type==='freight'?(d.mode?`Mode: ${d.mode}`:'')
+    :(d.step?`Step ${d.step}/4`:'');
+  return `<div style="background:#fffbeb;border:1px solid #fbbf24;border-radius:var(--radius);padding:10px 14px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+    <div>
+      <div style="font-size:12px;font-weight:700;color:#92400e">📋 You have a saved ${label} draft</div>
+      ${preview?`<div style="font-size:11px;color:#a16207;margin-top:2px">${preview}</div>`:''}
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn blue" onclick="resumeDraft('${type}')">Resume draft</button>
+      <button class="btn" onclick="discardDraft('${type}')">Start fresh</button>
+    </div>
+  </div>`;
+}
+
 function onZip(v){
   S.qi.zip=v.trim();S.selId=null;
   if($('carriers-body')) refreshCarriersAndPreview();
@@ -3026,7 +3070,7 @@ function setTlTab(t){
 }
 function renderTransload(){
   const tab=S.tlTab||'builder';
-  const topBtns={builder:'<button class="btn blue" onclick="S.tl=defaultTlState();renderTransload()">+ New quote</button>',
+  const topBtns={builder:`<button class="btn" onclick="saveDraft('transload')">📋 Save draft</button><button class="btn blue" onclick="S.tl=defaultTlState();clearDraft('transload');renderTransload()">+ New quote</button>`,
     warehouses:'<button class="btn blue" onclick="showAddTlWarehouse()">+ Add warehouse</button>',
     log:'',dash:''};
   $('topbar-right').innerHTML=topBtns[tab]||'';
@@ -3099,7 +3143,7 @@ function buildTlStepper(step){
 // ── Quote Builder ─────────────────────────────────────────────────────────
 function renderTlBuilder(){
   const tl=S.tl;
-  $('page').innerHTML=`<div id="tl-builder-inner">${buildTlStepHTML(tl)}</div>`;
+  $('page').innerHTML=`<div id="tl-builder-inner">${draftBanner('transload','transload')}${buildTlStepHTML(tl)}</div>`;
 }
 function buildTlStepHTML(tl){
   const stepper=buildTlStepper(tl.step);
@@ -3410,12 +3454,13 @@ function buildTlStep3(tl){
           </div>
         </div>
         <div class="g2">
-          <div class="field"><label>Delivery zip *</label>
-            <input type="text" value="${tl.outDeliveryZip}" oninput="S.tl.outDeliveryZip=this.value" onblur="renderTlBuilder()" placeholder="e.g. 75201" maxlength="10"></div>
+          ${!(tl.outMultiStop&&(tl.outMode||'FTL')==='LTL')?`<div class="field"><label>Delivery zip *</label>
+            <input type="text" value="${tl.outDeliveryZip}" oninput="S.tl.outDeliveryZip=this.value" onblur="renderTlBuilder()" placeholder="e.g. 75201" maxlength="10"></div>`
+          :`<div class="field"><label style="color:var(--gray-400)">Delivery zip</label><div style="font-size:12px;color:var(--gray-400);padding:8px 0">Set per delivery below</div></div>`}
           ${(tl.outMode||'FTL')==='FTL'?`<div class="field"><label>Equipment type</label>
             <div class="toggle-group" style="margin-top:4px">
               ${['Dry Van','Reefer','Flatbed','Box Truck'].map(e=>`<button class="tgl${tl.outEquipment===e?' on':''}" onclick="S.tl.outEquipment='${e}';renderTlBuilder()">${e}</button>`).join('')}
-            </div></div>`:`<div class="field"><label>LTL details</label>
+            </div></div>`:`<div class="field"><label>LTL Carrier (primary)</label>
             <input type="text" value="${tl.outLtlCarrier||''}" oninput="S.tl.outLtlCarrier=this.value" placeholder="e.g. XPO, FedEx Freight, Estes"></div>`}
         </div>
 
