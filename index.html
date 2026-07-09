@@ -1637,18 +1637,21 @@ function renderFqLog(){
 }
 
 async function syncQuotesToTeam(){
-  const btn=document.querySelector('[onclick="syncQuotesToTeam()"]');
-  if(btn){btn.textContent='Syncing…';btn.disabled=true;}
+  const btns=document.querySelectorAll('[onclick="syncQuotesToTeam()"]');
+  btns.forEach(b=>{b.textContent='Syncing...';b.disabled=true;});
   try{
     const n=await migrateLocalStorageToSupabase();
     await loadFqHistory();
     await loadTlHistory();
-    renderFqLog();
+    // Refresh whichever log is currently showing
+    if(S.view==='freight'&&S.fqTab==='log') renderFqLog();
+    else if(S.view==='transload'&&S.tlTab==='log') renderTlLog();
+    else if(S.view==='log') renderLog();
     alert(n>0?`✅ Synced ${n} quote${n!==1?'s':''} to Supabase — your team can now see them.`:'✅ All up to date — no new quotes to sync.');
   }catch(e){
     alert('Sync failed: '+e.message);
   }finally{
-    if(btn){btn.textContent='🔄 Sync to team';btn.disabled=false;}
+    btns.forEach(b=>{b.textContent='🔄 Sync to team';b.disabled=false;});
   }
 }
 
@@ -3857,6 +3860,7 @@ function renderTlLog(){
       </label>
       ${selCount>0?`<button class="btn blue" onclick="downloadSelectedTlPDFs()">📄 Download ${selCount} as 1 PDF</button>
         <button class="btn" onclick="window._tlSelected=new Set();renderTlLog()">Clear</button>`:''}
+      <button class="btn" onclick="syncQuotesToTeam()">🔄 Sync to team</button>
     </div>`;
   const rows=history.map((q,i)=>`<tr onclick="showTlQuoteModal(${i})" style="cursor:pointer">
     <td onclick="event.stopPropagation()" style="width:32px;text-align:center">
@@ -4712,6 +4716,7 @@ function renderLog(){
         <button class="btn" onclick="window._draySelected=new Set();renderLog()">Clear</button>`:''}
       <select id="log-filter" onchange="onLogFilter(this.value)" style="width:150px"><option value="all"${S.logFilter==='all'?' selected':''}>All statuses</option><option value="Quoted"${S.logFilter==='Quoted'?' selected':''}>Quoted</option><option value="Booked"${S.logFilter==='Booked'?' selected':''}>Booked</option><option value="Lost"${S.logFilter==='Lost'?' selected':''}>Lost</option><option value="Expired"${S.logFilter==='Expired'?' selected':''}>Expired</option></select>
       <button class="btn" onclick="exportQuoteLog()">📥 Export CSV</button>
+      <button class="btn" onclick="syncQuotesToTeam()">🔄 Sync to team</button>
     </div>`;
   $('page').innerHTML=`<div class="tbl-wrap"><table><thead><tr><th style="width:32px"></th><th>#</th><th>Date</th><th>Customer</th><th>Lane</th><th>Carrier</th><th>Carrier total</th><th>Customer total</th><th>Profit</th><th>Margin</th><th>Status</th><th></th></tr></thead><tbody id="log-tbody">${buildLogRows()}</tbody></table></div>`;
 }
