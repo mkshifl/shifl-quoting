@@ -747,10 +747,12 @@ async function initApp(){
   await autoExpireQuotes();
   $('loading-msg').textContent='Loading customers…';
   S.customers=await dbLoadCustomers();
-  loadFqHistory();
-  loadTlHistory();
+  await loadFqHistory();
+  await loadTlHistory();
   loadSpecialZips();
   loadCustomCFS();
+  // One-time migration: push any localStorage quotes to Supabase
+  migrateLocalStorageToSupabase().catch(e=>console.log('Migration:',e.message));
   S.tl=defaultTlState();
   // Real-time subscriptions
   realtimeChannel=db.channel('app-changes')
@@ -2245,6 +2247,38 @@ function renderFqDashboard(){
 }
 
 // Load freight history on init
+async function migrateLocalStorageToSupabase(){
+  let migrated=0;
+  // Migrate freight quotes
+  try{
+    const local=JSON.parse(localStorage.getItem('fq_history')||'[]');
+    if(local.length){
+      const{data:existing}=await db.from('fq_quotes').select('id');
+      const existingIds=new Set((existing||[]).map(r=>r.id));
+      const toMigrate=local.filter(q=>q.id&&!existingIds.has(q.id));
+      for(const q of toMigrate){
+        await db.from('fq_quotes').insert({id:q.id,date:q.date,customer:q.customer||'',data:q});
+        migrated++;
+      }
+    }
+  }catch(e){console.log('FQ migration error:',e.message);}
+  // Migrate transload quotes
+  try{
+    const local=JSON.parse(localStorage.getItem('tl_history')||'[]');
+    if(local.length){
+      const{data:existing}=await db.from('tl_quotes').select('id');
+      const existingIds=new Set((existing||[]).map(r=>r.id));
+      const toMigrate=local.filter(q=>q.id&&!existingIds.has(q.id));
+      for(const q of toMigrate){
+        await db.from('tl_quotes').insert({id:q.id,date:q.date,customer:q.customer||'',data:q});
+        migrated++;
+      }
+    }
+  }catch(e){console.log('TL migration error:',e.message);}
+  if(migrated>0) console.log(`Migrated ${migrated} quotes from localStorage to Supabase`);
+  return migrated;
+}
+
 async function loadFqHistory(){
   loadFqRates();
   try{
