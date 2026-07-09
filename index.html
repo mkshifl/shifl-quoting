@@ -1999,19 +1999,40 @@ function buildFreightPreview(){
 
 async function saveFqQuote(){
   const fq=S.fq;
-  const sel=fq.carriers[fq.selCarrierIdx]||{};
-  const carrierRate=Number(sel.rate)||0;
-  const customerRate=fqCustomerRate(carrierRate);
-  if(!fq.pickupZip||!fq.deliveryZip||!carrierRate||!sel.name){
-    alert('Please fill in pickup zip, delivery zip, carrier name, and carrier rate.');return;
+  if(!fq.mode){alert('Please select a freight mode (FTL, LTL, or LCL).');return;}
+  if(!fq.pickupZip||!fq.deliveryZip){alert('Please enter pickup and delivery zip codes.');return;}
+
+  // Resolve carrier and rate depending on mode
+  let carrierName='',carrierRate=0,customerRate=0;
+  const lclRate=fq.mode==='LCL'&&fq.selFqRateId?(window._fqRates||[]).find(r=>r.id===fq.selFqRateId):null;
+
+  if(lclRate){
+    carrierName=lclRate.carrier||'';
+    const pCount=parseInt(fq.palletCount)||0;
+    const cbmQty=parseFloat(fq.cbm)||0;
+    const isCbm=lclRate.rateType==='perCbm';
+    const base=isCbm?cbmQty*lclRate.rate:lclRate.rateType==='perPallet'?pCount*lclRate.rate:lclRate.rate;
+    const det=(fq.lclDetentionHours||0)*(lclRate.detentionRate||0);
+    const pe=(fq.lclPalletExchange||0)*(lclRate.palletExchangeRate||0);
+    carrierRate=base+det+pe;
+    customerRate=fqCustomerRate(carrierRate);
+  } else {
+    const sel=fq.carriers[fq.selCarrierIdx]||{};
+    carrierName=sel.name||'';
+    carrierRate=Number(sel.rate)||0;
+    customerRate=fqCustomerRate(carrierRate);
   }
+
+  if(!carrierName){alert('Please enter or select a carrier.');return;}
+  if(!carrierRate){alert('Please enter a carrier rate.');return;}
+
   const entry={
     id:uid(),date:new Date().toISOString().slice(0,10),
     customer:fq.customer||'—',customerEmail:fq.customerEmail||'',
     fqMode:fq.mode,fqEquip:fq.equipment||'',
     pickupZip:fq.pickupZip,deliveryZip:fq.deliveryZip,
     weight:fq.weight,palletCount:fq.palletCount,
-    carrier:sel.name,carrierRate,customerRate,
+    carrier:carrierName,carrierRate,customerRate,
     markupMode:fq.markupMode,markupAmount:fq.markupAmount,
     profit:customerRate-carrierRate,
     profitPct:customerRate>0?(customerRate-carrierRate)/customerRate:0,
@@ -2019,9 +2040,8 @@ async function saveFqQuote(){
   };
   if(!window._fqHistory) window._fqHistory=[];
   window._fqHistory.unshift(entry);
-  // Persist to localStorage for now (Supabase table can be added later)
   try{const existing=JSON.parse(localStorage.getItem('fq_history')||'[]');existing.unshift(entry);localStorage.setItem('fq_history',JSON.stringify(existing.slice(0,500)));}catch(e){}
-  alert(`✅ Freight quote saved!\n\n${sel.name}: ${fmtD(carrierRate)}\nCustomer: ${fmtD(customerRate)}\nProfit: ${fmtD(entry.profit)} (${pct(entry.profitPct)})`);
+  alert(`✅ Freight quote saved!\n\n${carrierName}: ${fmtD(carrierRate)}\nCustomer: ${fmtD(customerRate)}\nProfit: ${fmtD(entry.profit)} (${pct(entry.profitPct)})`);
   refreshFreightPreview();
 }
 
