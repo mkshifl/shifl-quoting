@@ -676,7 +676,7 @@ function setSaving(on){
 let S={
   view:'quote',rates:[],quotes:[],customers:[],
   qi:{customer:'',customerEmail:'',customerId:null,port:'New York / Newark, NJ',zip:'',ld:'Live',
-      baseMarkup:{...DEFAULT_BASE_MARKUP},flatRates:{...DEFAULT_FLAT_RATES},notes:''},
+      baseMarkup:{...DEFAULT_BASE_MARKUP},flatRates:{...DEFAULT_FLAT_RATES},notes:'',shiflRef:''},
   selId:null,rSearch:'',logFilter:'all',dashFilter:'month',cSearch:'',
   fq:{mode:null,equipment:null,pickupZip:'',deliveryZip:'',weight:'',palletCount:'',
       pallets:[{w:'',l:'',h:''}],sameDims:true,singleW:'',singleL:'',singleH:'',
@@ -710,6 +710,8 @@ async function initApp(){
   S.customers=await dbLoadCustomers();
   loadFqHistory();
   loadTlHistory();
+  loadSpecialZips();
+  loadCustomCFS();
   S.tl=defaultTlState();
   // Real-time subscriptions
   realtimeChannel=db.channel('app-changes')
@@ -878,9 +880,18 @@ function renderQuote(){
             <datalist id="port-dl">${US_PORTS.map(p=>`<option value="${p}">`).join('')}</datalist></div>
         </div>
         <div class="g2">
-          <div class="field"><label>Delivery zip</label><input type="text" value="${qi.zip}" oninput="onZip(this.value)" placeholder="e.g. 07728" maxlength="10"></div>
+          <div class="field">
+            <label>Delivery zip</label>
+            <input type="text" value="${qi.zip}" oninput="onZip(this.value)" placeholder="e.g. 07728" maxlength="10">
+            ${getSpecialZipBadge(qi.zip)}
+          </div>
           <div class="field"><label>Live or Drop</label>
             <select onchange="onLd(this.value)"><option${qi.ld==='Live'?' selected':''}>Live</option><option${qi.ld==='Drop'?' selected':''}>Drop</option><option${qi.ld==='Both'?' selected':''}>Both</option></select></div>
+        </div>
+        <div class="g2">
+          <div class="field"><label>Shifl Ref # <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:11px;color:var(--gray-400)">(optional — assigned when approved)</span></label>
+            <input type="text" value="${qi.shiflRef||''}" oninput="S.qi.shiflRef=this.value" placeholder="e.g. SHF-2026-0042"></div>
+          <div></div>
         </div>
       </div>
       <div class="card"><div class="sec-head">Pricing</div><div id="pricing-section">${buildPricingSection()}</div></div>
@@ -1410,8 +1421,9 @@ function renderFqBuilder(){
             <input type="text" value="${fq.pickupZip}" oninput="fqField('pickupZip',this.value)"
               list="fq-pickup-dl" placeholder="${fq.mode==='LCL'?'e.g. CFS — STG Logistics, Kearny, NJ':'e.g. 07728'}" autocomplete="off">
             <datalist id="fq-pickup-dl">
-              ${US_CFS.map(c=>`<option value="${c}">`).join('')}
+              ${getAllCFS().map(c=>`<option value="${c}">`).join('')}
             </datalist>
+            ${fq.mode==='LCL'?`<button class="btn sm" onclick="showAddCustomCFS()" style="margin-top:5px;font-size:11px">+ Add CFS to list</button>`:''}
             ${fq.mode==='LCL'?'<div style="font-size:11px;color:var(--gray-400);margin-top:4px">Type a city or operator to search CFS locations, or enter a zip code</div>':''}</div>
           <div class="field"><label>Delivery zip</label>
             <input type="text" value="${fq.deliveryZip}" oninput="fqField('deliveryZip',this.value)" placeholder="e.g. 90210" maxlength="10"></div>
@@ -2254,6 +2266,85 @@ function addNote(text){
     S.qi.notes=ta.value;
   }
 }
+// ── Special ZIPs (Residential / Free Drop) ───────────────────────────────
+function loadSpecialZips(){try{window._specialZips=JSON.parse(localStorage.getItem('special_zips')||'[]');}catch(e){window._specialZips=[];}}
+function saveSpecialZips(){try{localStorage.setItem('special_zips',JSON.stringify(window._specialZips));}catch(e){}}
+function getSpecialZip(zip){return(window._specialZips||[]).find(z=>z.zip===String(zip||'').trim());}
+function getSpecialZipBadge(zip){
+  const sz=getSpecialZip(zip);if(!sz||!zip) return '';
+  const cfg={residential:{color:'#d97706',bg:'#fffbeb',icon:'Residential',label:'Residential delivery'},
+    freeDrop:{color:'#2d7d46',bg:'#f0fdf4',icon:'Free Drop',label:'Free Drop zone'}};
+  const c=cfg[sz.type]||{color:'#6b7280',bg:'#f9fafb',icon:'',label:sz.type};
+  return `<div style="margin-top:5px;display:inline-flex;align-items:center;gap:5px;background:${c.bg};border:1px solid ${c.color}44;border-radius:6px;padding:3px 10px;font-size:11px;font-weight:700;color:${c.color}">${c.icon} — ${c.label}${sz.notes?' ('+sz.notes+')':''}</div>`;
+}
+function showManageSpecialZips(){
+  const zips=window._specialZips||[];
+  const rows=zips.map((z,i)=>`<tr>
+    <td class="bold">${z.zip}</td>
+    <td><span class="badge ${z.type==='residential'?'a':'g'}">${z.type==='residential'?'Residential':'Free Drop'}</span></td>
+    <td class="muted small">${z.notes||'—'}</td>
+    <td><button class="btn sm ico-btn" onclick="deleteSpecialZip(${i})">🗑️</button></td>
+  </tr>`).join('');
+  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+    <div class="modal" style="width:500px">
+      <div class="modal-title">Special ZIP Codes</div>
+      <p style="font-size:12px;color:var(--gray-500);margin-bottom:12px">Tag zips as Residential or Free Drop — a badge appears in the quote builder and on PDFs.</p>
+      <table style="width:100%;margin-bottom:16px"><thead><tr><th style="text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;color:var(--gray-400)">ZIP</th><th>Type</th><th>Notes</th><th></th></tr></thead>
+      <tbody id="special-zip-rows">${rows||'<tr><td colspan="4" style="text-align:center;padding:20px;color:var(--gray-400)">No special zips yet</td></tr>'}</tbody></table>
+      <div style="border-top:1px solid var(--gray-100);padding-top:14px">
+        <div style="font-size:12px;font-weight:600;margin-bottom:8px">Add new</div>
+        <div class="g3">
+          <div class="field" style="margin-bottom:0"><label>ZIP code</label><input type="text" id="sz-zip" placeholder="07728" maxlength="10"></div>
+          <div class="field" style="margin-bottom:0"><label>Type</label>
+            <select id="sz-type"><option value="residential">Residential</option><option value="freeDrop">Free Drop</option></select></div>
+          <div class="field" style="margin-bottom:0"><label>Notes (optional)</label><input type="text" id="sz-notes" placeholder="e.g. +$75 surcharge"></div>
+        </div>
+        <button class="btn blue" onclick="addSpecialZip()" style="margin-top:10px">+ Add ZIP</button>
+      </div>
+      <div class="modal-foot"><button class="btn" onclick="closeModal()">Done</button></div>
+    </div></div>`;
+}
+function addSpecialZip(){
+  const zip=($('sz-zip')||{}).value?.trim();
+  if(!zip){alert('Enter a zip code.');return;}
+  if(!window._specialZips) window._specialZips=[];
+  window._specialZips.push({zip,type:($('sz-type')||{}).value||'residential',notes:($('sz-notes')||{}).value?.trim()||''});
+  saveSpecialZips();
+  showManageSpecialZips();
+}
+function deleteSpecialZip(idx){
+  window._specialZips.splice(idx,1);saveSpecialZips();showManageSpecialZips();
+}
+
+// ── Custom CFS ────────────────────────────────────────────────────────────
+function loadCustomCFS(){try{window._customCFS=JSON.parse(localStorage.getItem('custom_cfs')||'[]');}catch(e){window._customCFS=[];}}
+function saveCustomCFS(){try{localStorage.setItem('custom_cfs',JSON.stringify(window._customCFS));}catch(e){}}
+function getAllCFS(){return[...US_CFS,...(window._customCFS||[])];}
+function showAddCustomCFS(){
+  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+    <div class="modal"><div class="modal-title">Add CFS location</div>
+    <div class="field"><label>CFS / Warehouse name *</label>
+      <input type="text" id="cfs-name" placeholder="e.g. XYZ Warehouse"></div>
+    <div class="g2">
+      <div class="field"><label>City</label><input type="text" id="cfs-city" placeholder="Newark"></div>
+      <div class="field"><label>State</label><input type="text" id="cfs-state" placeholder="NJ" maxlength="2"></div>
+    </div>
+    <div class="modal-foot"><button class="btn" onclick="closeModal()">Cancel</button>
+    <button class="btn blue" onclick="submitAddCustomCFS()">Save CFS</button></div>
+    </div></div>`;
+}
+function submitAddCustomCFS(){
+  const name=($('cfs-name')||{}).value?.trim();
+  const city=($('cfs-city')||{}).value?.trim();
+  const state=($('cfs-state')||{}).value?.trim();
+  if(!name){alert('CFS name is required.');return;}
+  const entry=city&&state?`CFS — ${name}, ${city}, ${state}`:name;
+  if(!window._customCFS) window._customCFS=[];
+  window._customCFS.push(entry);
+  saveCustomCFS();closeModal();
+  alert('✅ "'+entry+'" added to your CFS list.');
+}
+
 function onZip(v){
   S.qi.zip=v.trim();S.selId=null;
   if($('carriers-body')) refreshCarriersAndPreview();
@@ -2286,7 +2377,7 @@ async function saveQuote(){
       customer:qi.customer||'—',port:qi.port,zip:qi.zip,ld:qi.ld,carrier:sel.carrier,destination:sel.destination,
       carrierRates:{...CHARGES.reduce((o,c)=>{o[c]=sel[c]||0;return o;},{}),total:ct},
       customerRates:{...cuRates,total:cu},baseMarkup:{...qi.baseMarkup},flatRates:{...qi.flatRates},
-      profit,profitPct:cu>0?profit/cu:0,status:'Quoted',notes:qi.notes||''};
+      profit,profitPct:cu>0?profit/cu:0,status:'Quoted',notes:qi.notes||'',shiflRef:qi.shiflRef||''};
     await dbSaveQuote(q);
     S.quotes.unshift(q);
     alert(`Quote #${q.quoteNum} saved!\n\nCustomer total: ${fmtD(cu)}\nProfit: ${fmtD(profit)} (${pct(q.profitPct)})`);
@@ -2421,6 +2512,7 @@ function _generatePDF(q){
   doc.setTextColor(255,255,255);doc.setFont('helvetica','bold');doc.setFontSize(20);doc.text('SHIFL',36,20);
   doc.setFontSize(9);doc.setFont('helvetica','normal');doc.setTextColor(255,255,255,.6);doc.text('Drayage Quote',36,27);
   doc.setFontSize(9);doc.setTextColor(255,255,255);doc.text('Quote #'+q.quoteNum+' · '+q.date,W-12,12,{align:'right'});
+  if(q.shiflRef) doc.text('Ref: '+q.shiflRef,W-12,18,{align:'right'});
 
   // ── Lane details ──────────────────────────────────────
   const meta=[['Customer',q.customer||'—'],['Carrier','Shifl'],['Pickup',q.port||'—'],['Delivery Zip',q.zip],['Destination',q.destination||'—'],['Mode',q.ld]];
@@ -3020,7 +3112,7 @@ function buildTlStep1(tl){
         <div class="sec-head">🚢 Inbound drayage details</div>
         <div class="field"><label>Origin port / CFS</label>
           <input type="text" value="${tl.drayPort}" oninput="S.tl.drayPort=this.value" list="tl1-port-dl" placeholder="e.g. Port of Los Angeles, CA">
-          <datalist id="tl1-port-dl">${US_PORTS.map(p=>`<option value="${p}">`).join('')}${US_CFS.map(c=>`<option value="${c}">`).join('')}</datalist>
+          <datalist id="tl1-port-dl">${US_PORTS.map(p=>`<option value="${p}">`).join('')}${getAllCFS().map(c=>`<option value="${c}">`).join('')}</datalist>
         </div>
         <div class="g2">
           <div class="field"><label>Delivery zip <span style="font-weight:400;color:var(--gray-400)">(warehouse area)</span></label>
@@ -4018,6 +4110,7 @@ function renderRates(){
     <button class="btn" onclick="downloadTemplate()">📥 Template</button>
     <button class="btn" onclick="triggerImport()">📤 Import CSV</button>
     <input type="file" id="csv-fi" accept=".csv" style="display:none" onchange="handleCSVFile(this)">
+    <button class="btn" onclick="showManageSpecialZips()">🏠 Special ZIPs</button>
     <button class="btn blue" onclick="showAddRate()">+ Add rate</button>`;
   $('page').innerHTML=`<div class="tbl-wrap"><table><thead><tr><th>Region</th><th>Carrier</th><th>Destination</th><th>Zip</th><th>Mode</th><th>Base</th><th>Chassis</th><th>Pre-pull</th><th>Det.Port</th><th>Det.Cust</th><th>Storage</th><th>OVW 43k</th><th>OVW 48k</th><th>Bobtail</th><th>Toll</th><th>Total</th><th>Status</th><th></th></tr></thead><tbody id="rates-tbody">${buildRateRows()}</tbody></table></div>`;
 }
@@ -4195,10 +4288,10 @@ function buildLogRows(){
   if(!filtered.length) return `<tr><td colspan="11" style="text-align:center;padding:40px;color:var(--gray-400)">No quotes${f!=='all'?' with status "'+f+'"':''}</td></tr>`;
   return filtered.map(q=>`
     <tr onclick="showQuoteModal('${q.id}')" style="cursor:pointer">
-      <td class="muted small">#${q.quoteNum}</td>
+      <td class="muted small">#${q.quoteNum}${q.shiflRef?`<div style="font-size:10px;color:var(--steel);font-weight:600">${q.shiflRef}</div>`:''}</td>
       <td>${q.date}</td>
       <td class="bold">${q.customer}</td>
-      <td>${q.zip} · ${q.ld}<div class="subtext">${q.destination||''}</div></td>
+      <td>${q.zip} · ${q.ld}<div class="subtext">${q.destination||''}</div>${getSpecialZipBadge(q.zip)}</td>
       <td>${q.carrier}</td>
       <td class="muted">${fmtD(q.carrierRates?.total||0)}</td>
       <td class="bold" style="color:var(--steel)">${fmtD(q.customerRates?.total||0)}</td>
@@ -4344,7 +4437,7 @@ async function downloadCarrierRateSheet(q,overrideRate){
   const bookedDate=q.baseMarkup?.bookedDate||new Date().toISOString().slice(0,10);
   doc.setFillColor(240,244,248);doc.rect(0,32,W,16,'F');
   doc.setFont('helvetica','bold');doc.setFontSize(9);doc.setTextColor(...navy);
-  doc.text('Quote #'+q.quoteNum,12,42);
+  doc.text('Quote #'+q.quoteNum+(q.shiflRef?' · Ref: '+q.shiflRef:''),12,42);
   doc.setFont('helvetica','normal');doc.setTextColor(100,115,130);
   doc.text('Quoted: '+q.date,12,48);
   doc.text('Customer: '+q.customer,70,42);
@@ -4502,8 +4595,16 @@ function showQuoteModal(id){
       <div><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-400);margin-bottom:3px">Carrier</div><div style="font-weight:600">${q.carrier}</div></div>
       <div><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-400);margin-bottom:3px">Mode</div><div><span class="badge ${ld==='Live'?'b':ld==='Both'?'t':'gr'}">${ld}</span></div></div>
       <div><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-400);margin-bottom:3px">Pickup</div><div style="font-size:13px">${q.port||'—'}</div></div>
-      <div><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-400);margin-bottom:3px">Delivery zip</div><div style="font-weight:600">${q.zip}</div></div>
+      <div><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-400);margin-bottom:3px">Delivery zip</div><div style="font-weight:600">${q.zip}${getSpecialZipBadge(q.zip)}</div></div>
       <div><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-400);margin-bottom:3px">Destination</div><div style="font-size:13px">${q.destination||'—'}</div></div>
+    </div>
+    <div style="margin-bottom:14px;padding:10px 14px;background:var(--blue-bg);border-radius:var(--radius);display:flex;align-items:center;gap:12px">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-500)">Shifl Ref #</div>
+      <input type="text" value="${q.shiflRef||''}" placeholder="e.g. SHF-2026-0042"
+        oninput="S.quotes.find(q=>q.id==='${id}').shiflRef=this.value"
+        onblur="dbSaveQuote(S.quotes.find(q=>q.id==='${id}'))"
+        style="flex:1;padding:5px 10px;font-size:13px;font-weight:600;border:1px solid var(--gray-200);border-radius:var(--radius);font-family:inherit">
+      <span style="font-size:11px;color:var(--gray-400)">Type to assign or update</span>
     </div>
     <div style="border:1px solid var(--gray-200);border-radius:var(--radius);overflow:hidden;margin-bottom:16px">
       <table style="width:100%;font-size:13px;border-collapse:collapse">
