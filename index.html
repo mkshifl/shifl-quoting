@@ -2953,7 +2953,7 @@ function defaultTlState(){
     outDeliveryZip:'',outEquipment:'Dry Van',outMode:'FTL',
     selFtlId:null,outManualCarrier:'',outManualRate:'',outManualCustomer:'',
     outMarkupMode:'flat',outMarkupAmount:200,
-    outMultiStop:false,outStops:[{zip:'',address:''}],
+    outMultiStop:false,outStops:[{zip:'',address:'',carrier:'',carrierRate:'',customerRate:''}],
     notes:''};
 }
 
@@ -3062,7 +3062,10 @@ function calcTlTotals(tl){
   }
   const ftlRate=window._fqRates?.find(r=>r.id===tl.selFtlId);
   let outCarrier=0,outCustomer=0;
-  if(ftlRate){
+  if(tl.outMultiStop&&tl.outMode==='LTL'&&tl.outStops?.length){
+    // Each LTL stop has its own carrier cost + customer rate
+    tl.outStops.forEach(s=>{outCarrier+=parseFloat(s.carrierRate)||0;outCustomer+=parseFloat(s.customerRate)||0;});
+  } else if(ftlRate){
     outCarrier=ftlRate.rate;
     outCustomer=tl.outMarkupMode==='pct'?outCarrier*(1+tl.outMarkupAmount/100):outCarrier+Number(tl.outMarkupAmount);
   } else if(tl.outManualRate){
@@ -3419,20 +3422,42 @@ function buildTlStep3(tl){
         <!-- Multi-stop / Multi-zip toggle -->
         <div style="margin-top:4px;padding:10px 12px;background:var(--gray-50);border-radius:var(--radius);border:1px solid var(--gray-200)">
           <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:600;color:var(--navy)">
-            <input type="checkbox" ${tl.outMultiStop?'checked':''} onchange="S.tl.outMultiStop=this.checked;if(!S.tl.outStops?.length)S.tl.outStops=[{zip:'',address:''}];renderTlBuilder()" style="width:auto">
-            ${(tl.outMode||'FTL')==='LTL'?'Multiple delivery zip codes (LTL)':'Multiple stops (FTL)'}
+            <input type="checkbox" ${tl.outMultiStop?'checked':''} onchange="S.tl.outMultiStop=this.checked;if(!S.tl.outStops?.length)S.tl.outStops=[{zip:'',address:'',carrier:'',carrierRate:'',customerRate:''}];renderTlBuilder()" style="width:auto">
+            ${(tl.outMode||'FTL')==='LTL'?'Multiple deliveries — different carriers & rates':'Multiple stops (same carrier, single rate)'}
           </label>
           ${tl.outMultiStop?`
           <div style="margin-top:10px">
-            <div style="font-size:11px;color:var(--gray-400);margin-bottom:8px">${tl.outEquipment==='Box Truck'?'Add each delivery zip code:':'Add each stop address:'}</div>
+            ${(tl.outMode||'FTL')==='LTL'?`
+            <div style="display:grid;grid-template-columns:80px 1fr 1fr 90px 90px 24px;gap:6px;margin-bottom:4px;padding-bottom:4px;border-bottom:1px solid var(--gray-200)">
+              <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--gray-400)">ZIP</div>
+              <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--gray-400)">LTL Carrier</div>
+              <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--gray-400)">Notes</div>
+              <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--gray-400)">Carrier $</div>
+              <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--steel)">Customer $</div>
+              <div></div>
+            </div>
+            ${(tl.outStops||[]).map((stop,i)=>`
+              <div style="display:grid;grid-template-columns:80px 1fr 1fr 90px 90px 24px;gap:6px;margin-bottom:8px;align-items:center">
+                <div style="display:flex;align-items:center;gap:5px">
+                  <div style="width:18px;height:18px;border-radius:50%;background:var(--navy);color:#fff;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${i+1}</div>
+                  <input type="text" value="${stop.zip||''}" oninput="S.tl.outStops[${i}].zip=this.value" placeholder="Zip" maxlength="10" style="width:100%;padding:4px 6px;font-size:12px">
+                </div>
+                <input type="text" value="${stop.carrier||''}" oninput="S.tl.outStops[${i}].carrier=this.value" placeholder="e.g. XPO" style="padding:4px 6px;font-size:12px">
+                <input type="text" value="${stop.address||''}" oninput="S.tl.outStops[${i}].address=this.value" placeholder="Notes (optional)" style="padding:4px 6px;font-size:12px">
+                <input type="number" value="${stop.carrierRate||''}" oninput="S.tl.outStops[${i}].carrierRate=this.value" placeholder="$0" min="0" style="padding:4px 6px;font-size:12px">
+                <input type="number" value="${stop.customerRate||''}" oninput="S.tl.outStops[${i}].customerRate=this.value" placeholder="$0" min="0" style="padding:4px 6px;font-size:12px;border-color:var(--steel)">
+                ${(tl.outStops||[]).length>1?`<button onclick="S.tl.outStops.splice(${i},1);renderTlBuilder()" style="background:none;border:none;cursor:pointer;color:var(--gray-400);font-size:18px;line-height:1">×</button>`:'<div></div>'}
+              </div>`).join('')}`:`
             ${(tl.outStops||[]).map((stop,i)=>`
               <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
                 <div style="width:20px;height:20px;border-radius:50%;background:var(--navy);color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${i+1}</div>
                 <input type="text" value="${stop.zip||''}" oninput="S.tl.outStops[${i}].zip=this.value" placeholder="Zip code" maxlength="10" style="width:90px;padding:5px 8px;font-size:12px">
-                ${tl.outEquipment!=='Box Truck'?`<input type="text" value="${stop.address||''}" oninput="S.tl.outStops[${i}].address=this.value" placeholder="Address / notes (optional)" style="flex:1;padding:5px 8px;font-size:12px">`:''}
+                <input type="text" value="${stop.address||''}" oninput="S.tl.outStops[${i}].address=this.value" placeholder="Address / notes (optional)" style="flex:1;padding:5px 8px;font-size:12px">
                 ${(tl.outStops||[]).length>1?`<button onclick="S.tl.outStops.splice(${i},1);renderTlBuilder()" style="background:none;border:none;cursor:pointer;color:var(--gray-400);font-size:16px;padding:0 4px">×</button>`:''}
-              </div>`).join('')}
-            <button class="btn sm" onclick="S.tl.outStops.push({zip:'',address:''});renderTlBuilder()" style="margin-top:4px">+ Add ${tl.outEquipment==='Box Truck'?'zip code':'stop'}</button>
+              </div>`).join('')}`}
+            <button class="btn sm" onclick="S.tl.outStops.push({zip:'',address:'',carrier:'',carrierRate:'',customerRate:''});renderTlBuilder()" style="margin-top:6px">
+              + Add ${(tl.outMode||'FTL')==='LTL'?'delivery':'stop'}
+            </button>
           </div>`:''}
         </div>
       </div>
@@ -3546,10 +3571,16 @@ function buildTlStep4(tl){
   // Outbound row
   const outCarrier=selFtl?selFtl.rate:parseFloat(tl.outManualRate)||0;
   const outCustomer=tl.outMarkupMode==='pct'?outCarrier*(1+tl.outMarkupAmount/100):outCarrier+Number(tl.outMarkupAmount);
-  const outRow=row(
-    `${tl.outMode==='LTL'?'LTL':'FTL'} — ${selFtl?selFtl.carrier:tl.outManualCarrier||tl.outLtlCarrier||'—'}<br>
-    <span style="font-size:11px;color:var(--gray-400)">${tl.outEquipment||tl.outMode}${tl.outMultiStop&&tl.outStops?.length?'<br>'+tl.outStops.map((s,i)=>`Stop ${i+1}: ${s.zip||'—'}${s.address?' — '+s.address:''}`).join('<br>'):' → '+(tl.outDeliveryZip||'—')}</span>`,
-    outCarrier,outCustomer);
+  // Outbound rows
+  let outRows='';
+  if(tl.outMultiStop&&tl.outMode==='LTL'&&tl.outStops?.length){
+    tl.outStops.forEach((s,i)=>{
+      const cr=parseFloat(s.carrierRate)||0;const cu=parseFloat(s.customerRate)||0;
+      outRows+=row(`LTL Stop ${i+1} — ${s.carrier||'—'}<br><span style="font-size:11px;color:var(--gray-400)">→ ${s.zip||'—'}${s.address?' ('+s.address+')':''}</span>`,cr,cu);
+    });
+  } else {
+    outRows=row(`${tl.outMode==='LTL'?'LTL':'FTL'} — ${selFtl?selFtl.carrier:tl.outManualCarrier||tl.outLtlCarrier||'—'}<br><span style="font-size:11px;color:var(--gray-400)">${tl.outEquipment||tl.outMode}${tl.outMultiStop&&tl.outStops?.length?'<br>'+tl.outStops.map((s,i)=>`Stop ${i+1}: ${s.zip||'—'}${s.address?' — '+s.address:''}`).join('<br>'):' → '+(tl.outDeliveryZip||'—')}</span>`,outCarrier,outCustomer);
+  }
 
   return `<div class="card">
     <div class="sec-head">📋 Quote summary — ${tl.customer||'Customer'}</div>
@@ -3561,8 +3592,8 @@ function buildTlStep4(tl){
     <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#2d7d46;padding:8px 12px;background:#f0fdf4;border-radius:6px 6px 0 0;margin-top:12px">🏭 Transload Services — ${whName}</div>
     ${sectionTable(tlRows,t.tlCarrier,t.tlCustomer)}
 
-    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#d97706;padding:8px 12px;background:#fffbeb;border-radius:6px 6px 0 0;margin-top:12px">🚛 Outbound FTL</div>
-    ${sectionTable(outRow,outCarrier,outCustomer)}
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#d97706;padding:8px 12px;background:#fffbeb;border-radius:6px 6px 0 0;margin-top:12px">🚛 Outbound ${tl.outMode||'FTL'}</div>
+    ${sectionTable(outRows,outCarrier,outCustomer)}
 
     <!-- Grand total -->
     <div style="background:var(--navy);border-radius:var(--radius);padding:16px 20px;margin-top:16px;display:flex;justify-content:space-between;align-items:center">
@@ -3961,16 +3992,18 @@ async function downloadTlCustomerPDF(idx, rawTl){
     outTotal=tl.outMarkupMode==='pct'?outCarrierAmt*(1+(tl.outMarkupAmount||0)/100):outCarrierAmt+(Number(tl.outMarkupAmount)||0);
   }
   if(outTotal>0){
-    const outRows=[['FTL/LTL freight rate',outTotal]];
-    const outSubInfo=`Carrier: Shifl  |  ${outMode}${outEquip&&outMode==='FTL'?' — '+outEquip:''}`;
-    // Delivery info line
-    let deliveryInfo='';
-    if(multiStop&&stops?.length){
-      deliveryInfo='Deliveries: '+stops.filter(s=>s.zip).map((s,i)=>`Stop ${i+1}: ${s.zip}${s.address?' ('+s.address+')':''}`).join('  ·  ');
+    let outRows=[];
+    const isLtlMulti=(multiStop&&stops?.length&&(q?q.outMode:tl?.outMode)==='LTL');
+    if(isLtlMulti){
+      stops.filter(s=>s.customerRate>0||s.zip).forEach((s,i)=>{
+        outRows.push([`LTL Stop ${i+1} — ${s.carrier||'Shifl'} → ${s.zip||'—'}${s.address?' ('+s.address+')':''}`,parseFloat(s.customerRate)||0]);
+      });
     } else {
-      deliveryInfo='Delivery: '+outZip;
+      outRows=[['Freight rate',outTotal]];
     }
-    drawSection(sectionColors.out,'OUTBOUND '+outMode,outSubInfo+'\n'+deliveryInfo,outRows,outTotal);
+    const outSubInfo=`Carrier: Shifl  |  ${outMode}${outEquip&&outMode==='FTL'?' — '+outEquip:''}`;
+    const deliveryInfo=isLtlMulti?'':multiStop&&stops?.length?'Deliveries: '+stops.map((s,i)=>`Stop ${i+1}: ${s.zip}`).join('  ·  '):'Delivery: '+outZip;
+    drawSection(sectionColors.out,'OUTBOUND '+outMode,outSubInfo+(deliveryInfo?'\n'+deliveryInfo:''),outRows,outTotal);
   }
 
   // Grand total
@@ -4107,9 +4140,16 @@ async function downloadTlInternalPDF(idx){
   if(q.outMultiStop&&q.outStops?.length){
     outDeliveryLabel=q.outStops.filter(s=>s.zip).map((s,i)=>`Stop ${i+1}: ${s.zip}${s.address?' ('+s.address+')':''}`).join(' · ');
   }
-  sectionHeader([150,80,0],'OUTBOUND '+outModeLabel+'  —  Carrier: '+q.outCarrier,
+  sectionHeader([150,80,0],'OUTBOUND '+outModeLabel+'  —  '+(q.outMultiStop&&q.outMode==='LTL'?'Multiple LTL Carriers':('Carrier: '+q.outCarrier)),
     (q.outEquipment&&outModeLabel==='FTL'?q.outEquipment+' | ':'')+outDeliveryLabel);
-  dataRow('FTL freight rate',q.outCarrierCost,q.outCustomerPrice);
+  if(q.outMultiStop&&q.outMode==='LTL'&&q.outStops?.length){
+    q.outStops.forEach((s,i)=>{
+      dataRow(`LTL Stop ${i+1} — ${s.carrier||'—'} → ${s.zip||'—'}${s.address?' ('+s.address+')':''}`,
+        parseFloat(s.carrierRate)||0,parseFloat(s.customerRate)||0);
+    });
+  } else {
+    dataRow('Freight rate',q.outCarrierCost,q.outCustomerPrice);
+  }
   sectionSubtotal(q.outCarrierCost,q.outCustomerPrice);
 
   // ── Grand total ───────────────────────────────────────────────────────────
