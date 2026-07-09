@@ -140,6 +140,24 @@ hr{border:none;border-top:1px solid var(--gray-100);margin:14px 0}
 .empty{text-align:center;padding:50px 24px;color:var(--gray-400)}
 .empty-ico{font-size:36px;margin-bottom:10px}
 .cond-note{font-size:10px;color:var(--gray-400);font-style:italic}
+/* Transload stepper */
+.tl-stepper{display:flex;align-items:flex-start;margin-bottom:24px;position:relative}
+.tl-step{display:flex;flex-direction:column;align-items:center;flex:1;position:relative;cursor:pointer}
+.tl-step-num{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;border:2px solid var(--gray-300);color:var(--gray-400);background:var(--white);z-index:1;transition:all .2s}
+.tl-step.done .tl-step-num{background:var(--green);border-color:var(--green);color:#fff}
+.tl-step.active .tl-step-num{background:var(--navy);border-color:var(--navy);color:#fff;box-shadow:0 0 0 4px rgba(26,46,74,.12)}
+.tl-step-label{font-size:11px;margin-top:5px;color:var(--gray-400);font-weight:500;text-align:center;line-height:1.3}
+.tl-step.active .tl-step-label{color:var(--navy);font-weight:700}
+.tl-step.done .tl-step-label{color:var(--green);font-weight:600}
+.tl-step-line{position:absolute;top:17px;left:50%;width:100%;height:2px;background:var(--gray-200)}
+.tl-step.done .tl-step-line{background:var(--green)}
+.tl-step:last-child .tl-step-line{display:none}
+.tl-section{border-left:3px solid var(--gray-200);padding-left:14px;margin-bottom:12px}
+.tl-section.dray{border-color:#3b6ea5}
+.tl-section.tl{border-color:#2d7d46}
+.tl-section.out{border-color:#d97706}
+.charge-row{display:grid;grid-template-columns:1fr 140px 140px;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid var(--gray-100)}
+.charge-row:last-child{border-bottom:none}
 
 /* ── Mobile responsive ─────────────────────────────────────── */
 @media(max-width:768px){
@@ -296,6 +314,15 @@ hr{border:none;border-top:1px solid var(--gray-100);margin:14px 0}
       <button class="nav-sub" id="fqnav-log" onclick="setView('freight');setFqTab('log')"><span>📁</span>Quote log</button>
       <button class="nav-sub" id="fqnav-carriers" onclick="setView('freight');setFqTab('carriers')"><span>📋</span>Carrier rates</button>
       <button class="nav-sub" id="fqnav-dash" onclick="setView('freight');setFqTab('dash')"><span>📊</span>Dashboard</button>
+      <div style="margin:10px 18px;border-top:1px solid rgba(255,255,255,.1)"></div>
+      <div style="padding:4px 18px 6px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:rgba(255,255,255,.28)">Transload</div>
+      <button class="nav-btn" onclick="setView('transload');setTlTab('builder')" id="nav-transload" style="border-left-color:transparent">
+        <span class="ico">🔄</span>Transload Quoting
+      </button>
+      <button class="nav-sub" id="tlnav-builder"    onclick="setView('transload');setTlTab('builder')"><span>🏗️</span>Quote builder</button>
+      <button class="nav-sub" id="tlnav-log"        onclick="setView('transload');setTlTab('log')"><span>📁</span>Quote log</button>
+      <button class="nav-sub" id="tlnav-warehouses" onclick="setView('transload');setTlTab('warehouses')"><span>🏭</span>Warehouses</button>
+      <button class="nav-sub" id="tlnav-dash"       onclick="setView('transload');setTlTab('dash')"><span>📊</span>Dashboard</button>
     </nav>
     <div class="sidebar-foot">
       <div style="display:flex;align-items:center;margin-bottom:4px">
@@ -659,19 +686,7 @@ let S={
       lclPriceBy:'pallets', cbm:0,
       calc:{l:'',w:'',h:'',pieces:'',weightLbs:'',unit:'in'}},
   fqTab:'builder',
-  tl:{
-    mode:null, // 'full'|'inbound'|'transloadOnly'|'outbound'
-    containerSize:'40\' HC',containerType:'Dry',containerCount:1,
-    originPort:'',transloadFacility:'',deliveryZip:'',
-    weight:'',palletCount:'',commodity:'',notes:'',
-    customer:'',customerEmail:'',customerId:null,
-    services:{inbound:true,transload:true,storage:false,outbound:true},
-    storageDays:0,
-    inboundCarrier:'',inboundRate:'',
-    tlFacility:'',tlRateType:'perPallet',tlRate:'',tlStorageRate:'',
-    outboundCarrier:'',outboundRate:'',outboundMode:'FTL',
-    markupMode:'flat',markupAmount:200,
-  },
+  tl:null, // initialized in boot via defaultTlState()
   tlTab:'builder',
 };
 let _importRows=[];
@@ -695,6 +710,7 @@ async function initApp(){
   S.customers=await dbLoadCustomers();
   loadFqHistory();
   loadTlHistory();
+  S.tl=defaultTlState();
   // Real-time subscriptions
   realtimeChannel=db.channel('app-changes')
     .on('postgres_changes',{event:'*',schema:'public',table:'rates'},async()=>{
@@ -1089,6 +1105,7 @@ function calcCbm(){
       Use these in quote ↗ ${cbm} CBM · ${estPallets} pallets
     </button>`;
 }
+function refreshTlOutPreview(){const el=$('tl-step3-preview');if(el) el.innerHTML=buildTlStep3Preview(S.tl);}
 function setCbmCalc(k,v){S.fq.calc[k]=v;}
 
 function getFqRateValue(){
@@ -2504,16 +2521,101 @@ function _generatePDF(q){
 }
 
 // ═══════════════════════════════════════════════════════
-// TRANSLOAD QUOTING
+// TRANSLOAD QUOTING — Full Wizard Implementation
 // ═══════════════════════════════════════════════════════
 const TL_CONTAINER_SIZES=["20' Standard","40' Standard","40' High Cube","45' High Cube","20' Reefer","40' Reefer","40' High Cube Reefer","20' Open Top","40' Open Top","20' Flat Rack","40' Flat Rack"];
-const TL_MODES=[
-  {id:'full',icon:'🔄',label:'Full Transload',desc:'Port drayage + transloading + outbound delivery'},
-  {id:'inbound',icon:'🚢',label:'Inbound Drayage Only',desc:'Port to transload facility only'},
-  {id:'transloadOnly',icon:'🏭',label:'Transload Only',desc:'Unload, reload and warehouse services only'},
-  {id:'outbound',icon:'🚛',label:'Outbound Only',desc:'Transload facility to final destination'},
-];
+const TL_ITEMS_DEF={
+  unload:   {label:'Unloading',          icon:'📦',unit:'flat',      unitLabel:'per container'},
+  palletize:{label:'Palletizing',        icon:'🏗️',unit:'perPallet', unitLabel:'per pallet'},
+  wrap:     {label:'Stretch Wrapping',   icon:'🌀',unit:'perPallet', unitLabel:'per pallet'},
+  restack:  {label:'Restacking',         icon:'📚',unit:'perPallet', unitLabel:'per pallet'},
+  labeling: {label:'Relabeling',         icon:'🏷️',unit:'perPallet', unitLabel:'per pallet'},
+  sorting:  {label:'Sorting/Segregating',icon:'🗂️',unit:'perPallet', unitLabel:'per pallet'},
+  outbound: {label:'Outbound Loading',   icon:'🚛',unit:'flat',      unitLabel:'per load'},
+  storage:  {label:'Storage',            icon:'🏭',unit:'perPalletPerDay',unitLabel:'per pallet/day',hasdays:true},
+};
 
+function defaultTlItems(){
+  return{unload:{included:true,carrierCost:'',customerPrice:'',days:0},
+    palletize:{included:false,carrierCost:'',customerPrice:'',days:0},
+    wrap:{included:false,carrierCost:'',customerPrice:'',days:0},
+    restack:{included:false,carrierCost:'',customerPrice:'',days:0},
+    labeling:{included:false,carrierCost:'',customerPrice:'',days:0},
+    sorting:{included:false,carrierCost:'',customerPrice:'',days:0},
+    outbound:{included:false,carrierCost:'',customerPrice:'',days:0},
+    storage:{included:false,carrierCost:'',customerPrice:'',days:0}};
+}
+function defaultTlState(){
+  return{step:1,
+    customer:'',customerEmail:'',customerId:null,
+    drayPort:'',drayZip:'',selDrayId:null,drayLd:'Live',drayMarkupMode:'flat',drayMarkupAmount:150,
+    drayFlatRates:{...DEFAULT_FLAT_RATES},
+    warehouseId:null,useManual:false,
+    warehouseManual:{name:'',address:'',city:'',state:'',zip:''},
+    cargoType:'palletized',chargeMode:'byItem',
+    tlFlatCarrier:'',tlFlatCustomer:'',
+    tlItems:defaultTlItems(),palletCount:'',pieces:'',
+    outDeliveryZip:'',outEquipment:'Dry Van',
+    selFtlId:null,outManualCarrier:'',outManualRate:'',outManualCustomer:'',
+    outMarkupMode:'flat',outMarkupAmount:200,
+    notes:''};
+}
+
+// Warehouses DB
+function loadTlWarehouses(){try{window._tlWarehouses=JSON.parse(localStorage.getItem('tl_warehouses')||'[]');}catch(e){window._tlWarehouses=[];}}
+function saveTlWarehouses(){try{localStorage.setItem('tl_warehouses',JSON.stringify(window._tlWarehouses));}catch(e){}}
+
+function tlCuRate(carrierVal, charge, tl){
+  if(charge==='base'){
+    const cr=Number(carrierVal)||0;
+    return tl.drayMarkupMode==='pct'?cr*(1+tl.drayMarkupAmount/100):cr+Number(tl.drayMarkupAmount);
+  }
+  return Number(tl.drayFlatRates[charge])||0;
+}
+function tlSetFlatRate(c,v){S.tl.drayFlatRates[c]=v;refreshTlDrayPreview();}
+function tlSetBaseMarkup(k,v){S.tl['drayMarkup'+k.charAt(0).toUpperCase()+k.slice(1)]=v;refreshTlDrayPreview();}
+function refreshTlDrayPreview(){const el=$('tl-step1-preview');if(el) el.innerHTML=buildTlStep1Preview(S.tl);}
+
+function buildTlDrayPricing(tl, sel){
+  if(!sel) return '';
+  const ld=tl.drayLd;
+  const bm={mode:tl.drayMarkupMode,amount:tl.drayMarkupAmount};
+  const fr=tl.drayFlatRates;
+  const extraRows=CHARGES.filter(c=>c!=='base'&&isApplicable(c,ld)).map(c=>{
+    const note=c==='det_port'?'Per hour at port':c==='det_cust'?'Per hour at customer':
+      c==='ovw43'?'Over 43,000 lb':c==='ovw48'?'Over 48,000 lb':
+      c==='toll'?'Only if applicable':c==='bobtail'?'Drop moves':'';
+    const carrierVal=Number(sel[c])||0;
+    return `<tr>
+      <td style="color:var(--gray-600);font-weight:500;padding:5px 0;width:140px">${LABELS[c]}${note?`<div class="cond-note">${note}</div>`:''}</td>
+      <td style="padding:5px 0;color:var(--gray-400);font-size:12px;width:80px">${carrierVal>0?fmtD(carrierVal):'—'}</td>
+      <td style="padding:5px 0"><div style="display:flex;align-items:center;gap:5px"><span style="color:var(--gray-400)">$</span>
+        <input type="number" value="${fr[c]||0}" min="0" oninput="tlSetFlatRate('${c}',+this.value)" style="width:85px;padding:5px 8px;font-size:13px"></div></td>
+    </tr>`;
+  }).join('');
+  return `<div class="card">
+    <div class="sec-head">Drayage pricing</div>
+    <div style="margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid var(--gray-100)">
+      <p style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-500);margin-bottom:8px">Base markup</p>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <div class="toggle-group">
+          <button class="tgl${bm.mode==='flat'?' on':''}" onclick="S.tl.drayMarkupMode='flat';refreshTlDrayPreview()">Flat $</button>
+          <button class="tgl${bm.mode==='pct'?' on':''}"  onclick="S.tl.drayMarkupMode='pct';refreshTlDrayPreview()">%</button>
+        </div>
+        <input type="number" value="${bm.amount}" min="0" oninput="S.tl.drayMarkupAmount=+this.value;refreshTlDrayPreview()" style="width:90px;padding:5px 8px;font-size:13px">
+        <span class="muted small">${bm.mode==='flat'?'added over carrier base':'% over carrier base'}</span>
+      </div>
+    </div>
+    <p style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-500);margin-bottom:2px">Accessorial charges</p>
+    <p class="cond-note" style="margin-bottom:8px;font-size:11px">Carrier cost shown · Enter full customer charge · ${ld==='Live'?'Live mode':ld==='Drop'?'Drop mode':'All charges'}</p>
+    <table style="width:100%">
+      <thead><tr><th style="text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;color:var(--gray-400);padding-bottom:6px;width:140px">Charge</th>
+        <th style="text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;color:var(--gray-400);padding-bottom:6px;width:80px">Carrier</th>
+        <th style="text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;color:var(--steel);padding-bottom:6px">Customer</th></tr></thead>
+      <tbody>${extraRows}</tbody>
+    </table>
+  </div>`;
+}
 function setTlTab(t){
   S.tlTab=t;
   document.querySelectorAll('.nav-sub').forEach(b=>b.classList.remove('active'));
@@ -2522,462 +2624,892 @@ function setTlTab(t){
   const nt=$('nav-transload');if(nt) nt.classList.add('active');
   renderTransload();
 }
-function tlField(k,v){S.tl[k]=v;}
-function tlService(k,v){S.tl.services[k]=v;renderTlBuilder();}
-
 function renderTransload(){
   const tab=S.tlTab||'builder';
-  $('topbar-right').innerHTML=tab==='carriers'?`<button class="btn blue" onclick="showAddTlRate()">+ Add rate</button>`:'';
-  if(tab==='log')      return renderTlLog();
-  if(tab==='carriers') return renderTlCarriers();
-  if(tab==='dash')     return renderTlDashboard();
+  const topBtns={builder:'<button class="btn blue" onclick="S.tl=defaultTlState();renderTransload()">+ New quote</button>',
+    warehouses:'<button class="btn blue" onclick="showAddTlWarehouse()">+ Add warehouse</button>',
+    log:'',dash:''};
+  $('topbar-right').innerHTML=topBtns[tab]||'';
+  if(tab==='log')        return renderTlLog();
+  if(tab==='warehouses') return renderTlWarehouses();
+  if(tab==='dash')       return renderTlDashboard();
   renderTlBuilder();
 }
 
-// ── Transload Quote Builder ───────────────────────────────────────────────
+// ── Totals calculator ─────────────────────────────────────────────────────
+function calcTlTotals(tl){
+  const sel=S.rates.find(r=>r.id===tl.selDrayId);
+  let drayCarrier=0,drayCustomer=0;
+  if(sel){
+    drayCarrier=CHARGES.filter(c=>isApplicable(c,tl.drayLd)).reduce((s,c)=>s+(Number(sel[c])||0),0);
+    drayCustomer=CHARGES.filter(c=>isApplicable(c,tl.drayLd)).reduce((s,c)=>s+tlCuRate(Number(sel[c])||0,c,tl),0);
+  }
+  let tlCarrier=0,tlCustomer=0;
+  if(tl.chargeMode==='flat'){
+    tlCarrier=parseFloat(tl.tlFlatCarrier)||0;
+    tlCustomer=parseFloat(tl.tlFlatCustomer)||0;
+  } else {
+    const pCount=parseInt(tl.palletCount)||1;
+    Object.entries(tl.tlItems).forEach(([k,item])=>{
+      if(!item.included) return;
+      const def=TL_ITEMS_DEF[k];
+      let qty=1;
+      if(def.unit==='perPallet') qty=pCount;
+      if(def.unit==='perPalletPerDay') qty=pCount*(parseInt(item.days)||0);
+      tlCarrier+=(parseFloat(item.carrierCost)||0)*qty;
+      tlCustomer+=(parseFloat(item.customerPrice)||0)*qty;
+    });
+  }
+  const ftlRate=window._fqRates?.find(r=>r.id===tl.selFtlId);
+  let outCarrier=0,outCustomer=0;
+  if(ftlRate){
+    outCarrier=ftlRate.rate;
+    outCustomer=tl.outMarkupMode==='pct'?outCarrier*(1+tl.outMarkupAmount/100):outCarrier+Number(tl.outMarkupAmount);
+  } else if(tl.outManualRate){
+    outCarrier=parseFloat(tl.outManualRate)||0;
+    outCustomer=parseFloat(tl.outManualCustomer)||outCarrier+Number(tl.outMarkupAmount);
+  }
+  const totalCarrier=drayCarrier+tlCarrier+outCarrier;
+  const totalCustomer=drayCustomer+tlCustomer+outCustomer;
+  const totalProfit=totalCustomer-totalCarrier;
+  const margin=totalCustomer>0?totalProfit/totalCustomer:0;
+  return{drayCarrier,drayCustomer,drayProfit:drayCustomer-drayCarrier,
+    tlCarrier,tlCustomer,tlProfit:tlCustomer-tlCarrier,
+    outCarrier,outCustomer,outProfit:outCustomer-outCarrier,
+    totalCarrier,totalCustomer,totalProfit,margin};
+}
+
+// ── Step stepper UI ───────────────────────────────────────────────────────
+function buildTlStepper(step){
+  const steps=[{n:1,label:'Inbound\nDrayage'},{n:2,label:'Transload\nServices'},{n:3,label:'Outbound\nFTL'},{n:4,label:'Review\n& Save'}];
+  return `<div class="tl-stepper">${steps.map((s,i)=>{
+    const cls=step>s.n?'done':step===s.n?'active':'';
+    const clickable=step>s.n?`onclick="S.tl.step=${s.n};renderTlBuilder()"`:'' ;
+    return `<div class="tl-step ${cls}" ${clickable}>
+      ${i<steps.length-1?'<div class="tl-step-line"></div>':''}
+      <div class="tl-step-num">${step>s.n?'✓':s.n}</div>
+      <div class="tl-step-label">${s.label.replace('\n','<br>')}</div>
+    </div>`;
+  }).join('')}</div>`;
+}
+
+// ── Quote Builder ─────────────────────────────────────────────────────────
 function renderTlBuilder(){
   const tl=S.tl;
+  $('page').innerHTML=`<div id="tl-builder-inner">${buildTlStepHTML(tl)}</div>`;
+}
+function buildTlStepHTML(tl){
+  const stepper=buildTlStepper(tl.step);
+  let content='';
+  if(tl.step===1) content=buildTlStep1(tl);
+  else if(tl.step===2) content=buildTlStep2(tl);
+  else if(tl.step===3) content=buildTlStep3(tl);
+  else content=buildTlStep4(tl);
+  return stepper+content;
+}
 
-  // Mode selector cards
-  const modeCards=TL_MODES.map(m=>`
-    <div onclick="S.tl.mode='${m.id}';renderTlBuilder()" style="
-      flex:1;cursor:pointer;border-radius:var(--radius-lg);padding:18px 16px;
-      border:2px solid ${tl.mode===m.id?'var(--steel)':'var(--gray-200)'};
-      background:${tl.mode===m.id?'var(--blue-bg)':'var(--white)'};
-      transition:all .15s;box-shadow:${tl.mode===m.id?'0 0 0 3px var(--blue-mid)':'var(--shadow-sm)'}">
-      <div style="font-size:24px;margin-bottom:6px">${m.icon}</div>
-      <div style="font-size:13px;font-weight:700;color:${tl.mode===m.id?'var(--navy)':'var(--gray-700)'};margin-bottom:3px">${m.label}</div>
-      <div style="font-size:11px;color:var(--gray-400);line-height:1.4">${m.desc}</div>
-    </div>`).join('');
-
-  if(!tl.mode){
-    $('page').innerHTML=`
-      <div class="card"><div class="sec-head">Select transload service type</div>
-        <div style="display:flex;gap:12px">${modeCards}</div>
+// ── STEP 1: Inbound Drayage ───────────────────────────────────────────────
+function buildTlStep1(tl){
+  // Find matching drayage carriers
+  const matches=S.rates.filter(r=>r.active&&r.zip===tl.drayZip&&(r.ld===tl.drayLd||r.ld==='Both')).sort((a,b)=>totMode(a,tl.drayLd)-totMode(b,tl.drayLd));
+  const sel=S.rates.find(r=>r.id===tl.selDrayId);
+  const carrierCards=matches.map(r=>{
+    const isSelected=tl.selDrayId===r.id;
+    const ct=totMode(r,tl.drayLd);
+    return `<div onclick="S.tl.selDrayId='${r.id}';refreshTlStep1()" style="cursor:pointer;border:2px solid ${isSelected?'var(--steel)':'var(--gray-200)'};background:${isSelected?'var(--blue-bg)':'var(--white)'};border-radius:var(--radius);padding:12px 14px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center">
+      <div>
+        <div style="font-weight:700;color:var(--navy)">${r.carrier}</div>
+        <div style="font-size:12px;color:var(--gray-500)">${r.destination||r.zip} · ${r.ld}</div>
       </div>
-      <div class="empty"><div class="empty-ico">🔄</div><p>Select a service type above to build your transload quote</p></div>`;
-    return;
-  }
+      <div style="text-align:right">
+        <div style="font-size:18px;font-weight:800;color:var(--steel)">${fmtD(ct)}</div>
+        <div style="font-size:11px;color:var(--gray-400)">carrier cost</div>
+      </div>
+    </div>`;
+  }).join('');
 
-  // Show selected mode + services checklist
-  const svc=tl.services;
-  const showInbound =tl.mode==='full'||tl.mode==='inbound';
-  const showTransload=tl.mode==='full'||tl.mode==='transloadOnly';
-  const showOutbound =tl.mode==='full'||tl.mode==='outbound';
-
-  // Calculate totals
-  const inboundCarrierCost=showInbound?parseFloat(tl.inboundRate)||0:0;
-  const tlCost=showTransload?(tl.tlRateType==='perPallet'?(parseInt(tl.palletCount)||0)*(parseFloat(tl.tlRate)||0):parseFloat(tl.tlRate)||0):0;
-  const storageCost=svc.storage?(parseInt(tl.palletCount)||0)*(parseFloat(tl.tlStorageRate)||0)*(parseInt(tl.storageDays)||0):0;
-  const outboundCarrierCost=showOutbound?parseFloat(tl.outboundRate)||0:0;
-  const totalCarrier=inboundCarrierCost+tlCost+storageCost+outboundCarrierCost;
-  const markup=tl.markupMode==='pct'?totalCarrier*(tl.markupAmount/100):Number(tl.markupAmount)||0;
-  const customerTotal=totalCarrier+markup;
-  const profit=customerTotal-totalCarrier;
-
-  $('page').innerHTML=`<div class="two-col">
+  return `<div class="two-col">
     <div>
-      <!-- Mode selector -->
-      <div class="card">
-        <div class="sec-head">Service type</div>
-        <div style="display:flex;gap:10px">${modeCards}</div>
-      </div>
-
-      <!-- Customer -->
       <div class="card">
         <div class="sec-head">Customer</div>
         <div class="field">
-          <input type="text" value="${tl.customer}" oninput="tlField('customer',this.value)"
+          <input type="text" value="${tl.customer}" oninput="S.tl.customer=this.value"
             list="tl-cust-dl" placeholder="Type or pick from contact book" autocomplete="off">
           <datalist id="tl-cust-dl">${S.customers.map(c=>`<option value="${c.company||c.name}">`).join('')}</datalist>
         </div>
       </div>
-
-      <!-- Container + Cargo -->
       <div class="card">
-        <div class="sec-head">Container & cargo details</div>
-        <div class="g3">
-          <div class="field"><label>Container size</label>
-            <select onchange="tlField('containerSize',this.value)">
-              ${TL_CONTAINER_SIZES.map(s=>`<option${tl.containerSize===s?' selected':''}>${s}</option>`).join('')}
-            </select></div>
-          <div class="field"><label>No. of containers</label>
-            <input type="number" value="${tl.containerCount}" min="1" oninput="tlField('containerCount',+this.value)" placeholder="1"></div>
-          <div class="field"><label>Pallet count</label>
-            <input type="number" value="${tl.palletCount}" min="0" oninput="tlField('palletCount',this.value)" placeholder="e.g. 20"></div>
+        <div class="sec-head">🚢 Inbound drayage details</div>
+        <div class="field"><label>Origin port / CFS</label>
+          <input type="text" value="${tl.drayPort}" oninput="S.tl.drayPort=this.value" list="tl1-port-dl" placeholder="e.g. Port of Los Angeles, CA">
+          <datalist id="tl1-port-dl">${US_PORTS.map(p=>`<option value="${p}">`).join('')}${US_CFS.map(c=>`<option value="${c}">`).join('')}</datalist>
         </div>
         <div class="g2">
-          <div class="field"><label>Total weight (lbs)</label>
-            <input type="number" value="${tl.weight}" min="0" oninput="tlField('weight',this.value)" placeholder="e.g. 40000"></div>
-          <div class="field"><label>Commodity</label>
-            <input type="text" value="${tl.commodity}" oninput="tlField('commodity',this.value)" placeholder="e.g. Consumer electronics"></div>
-        </div>
-      </div>
-
-      <!-- Locations -->
-      <div class="card">
-        <div class="sec-head">Locations</div>
-        ${showInbound?`<div class="field"><label>Origin port / CFS</label>
-          <input type="text" value="${tl.originPort}" oninput="tlField('originPort',this.value)"
-            list="tl-port-dl" placeholder="e.g. Port of Los Angeles, CA">
-          <datalist id="tl-port-dl">${US_PORTS.map(p=>`<option value="${p}">`).join('')}</datalist>
-        </div>`:''}
-        <div class="field"><label>Transload facility</label>
-          <input type="text" value="${tl.transloadFacility}" oninput="tlField('transloadFacility',this.value)"
-            list="tl-cfs-dl" placeholder="e.g. CFS — STG Logistics, Carson, CA">
-          <datalist id="tl-cfs-dl">${US_CFS.map(c=>`<option value="${c}">`).join('')}</datalist>
-        </div>
-        ${showOutbound?`<div class="field"><label>Delivery zip / destination</label>
-          <input type="text" value="${tl.deliveryZip}" oninput="tlField('deliveryZip',this.value)" placeholder="e.g. 75201"></div>`:''}
-      </div>
-
-      <!-- Services + Pricing -->
-      ${showInbound?`<div class="card">
-        <div class="sec-head">🚢 Inbound drayage</div>
-        <div class="g2">
-          <div class="field"><label>Carrier</label>
-            <input type="text" value="${tl.inboundCarrier}" oninput="tlField('inboundCarrier',this.value)" placeholder="Carrier name"></div>
-          <div class="field"><label>Carrier rate (flat per container)</label>
-            <input type="number" value="${tl.inboundRate}" oninput="tlField('inboundRate',this.value)" placeholder="e.g. 850" min="0"></div>
-        </div>
-      </div>`:''}
-
-      ${showTransload?`<div class="card">
-        <div class="sec-head">🏭 Transload services</div>
-        <div class="g2">
-          <div class="field"><label>Facility / operator</label>
-            <input type="text" value="${tl.tlFacility}" oninput="tlField('tlFacility',this.value)" placeholder="e.g. XYZ Warehouse"></div>
-          <div class="field"><label>Rate type</label>
+          <div class="field"><label>Delivery zip <span style="font-weight:400;color:var(--gray-400)">(warehouse area)</span></label>
+            <input type="text" value="${tl.drayZip}" oninput="S.tl.drayZip=this.value" onblur="refreshTlStep1()" placeholder="e.g. 90248" maxlength="10"></div>
+          <div class="field"><label>Move type</label>
             <div class="toggle-group" style="margin-top:4px">
-              <button class="tgl${tl.tlRateType==='perPallet'?' on':''}" onclick="tlField('tlRateType','perPallet')">Per pallet</button>
-              <button class="tgl${tl.tlRateType==='flat'?' on':''}" onclick="tlField('tlRateType','flat')">Flat rate</button>
+              <button class="tgl${tl.drayLd==='Live'?' on':''}" onclick="S.tl.drayLd='Live';refreshTlStep1()">Live</button>
+              <button class="tgl${tl.drayLd==='Drop'?' on':''}" onclick="S.tl.drayLd='Drop';refreshTlStep1()">Drop</button>
             </div>
           </div>
         </div>
-        <div class="g2">
-          <div class="field"><label>${tl.tlRateType==='perPallet'?'Handling rate (per pallet)':'Flat handling rate'}</label>
-            <input type="number" value="${tl.tlRate}" oninput="tlField('tlRate',this.value)"
-              placeholder="${tl.tlRateType==='perPallet'?'e.g. 18':'e.g. 650'}" min="0"></div>
-          <div class="field">
-            <label style="display:flex;align-items:center;gap:8px">
-              <input type="checkbox" ${svc.storage?'checked':''} onchange="tlService('storage',this.checked)" style="width:auto">
-              Storage (per pallet / per day)
-            </label>
-            ${svc.storage?`<div class="g2" style="margin-top:6px">
-              <input type="number" value="${tl.tlStorageRate}" oninput="tlField('tlStorageRate',this.value)" placeholder="$/pallet/day" min="0" style="padding:5px 8px;font-size:13px">
-              <div style="display:flex;align-items:center;gap:6px">
-                <input type="number" value="${tl.storageDays}" oninput="tlField('storageDays',this.value)" placeholder="Days" min="0" style="padding:5px 8px;font-size:13px;width:80px">
-                <span style="font-size:12px;color:var(--gray-400)">days</span>
-              </div>
-            </div>`:''}
+      </div>
+      ${tl.drayZip?`<div class="card">
+        <div class="sec-head">Select drayage carrier <span style="font-weight:400;font-size:11px;color:${matches.length?'var(--green)':'var(--amber)'}">${matches.length?'✓ '+matches.length+' on file':'No carriers on file for this zip'}</span></div>
+        ${carrierCards}
+        ${!matches.length||!tl.selDrayId?`<div class="field" style="margin-top:${matches.length?'12':'0'}px"><label>${matches.length?'Or enter manually:':'Carrier name'}</label>
+          <input type="text" value="${tl.drayManualCarrier||''}" oninput="S.tl.drayManualCarrier=this.value" placeholder="Enter carrier name"></div>`:''}
+      </div>`:''}
+      ${sel?buildTlDrayPricing(tl,sel):''}
+    </div>
+    <!-- Preview -->
+    <div class="sticky-top">
+      <div class="card" id="tl-step1-preview">
+        ${buildTlStep1Preview(tl)}
+      </div>
+    </div>
+  </div>
+  <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:16px">
+    <button class="btn blue" onclick="tlNext(1)" ${!tl.drayPort?'disabled':''}>Next: Transload Services →</button>
+  </div>`;
+}
+function refreshTlStep1(){
+  const el=$('tl-step1-preview');if(el) el.innerHTML=buildTlStep1Preview(S.tl);
+  // Re-render if dray zip/ld changed to update carrier list
+  const b=$('tl-builder-inner');if(b) b.innerHTML=buildTlStepHTML(S.tl);
+}
+function buildTlStep1Preview(tl){
+  const sel=S.rates.find(r=>r.id===tl.selDrayId);
+  if(!sel&&!tl.drayPort) return `<div style="font-size:12px;color:var(--gray-400);padding:12px 0">Enter port and zip to see drayage quote</div>`;
+  if(!sel) return `<div style="font-size:12px;color:var(--gray-500)">📍 ${tl.drayPort||'—'} → ${tl.drayZip||'—'}<br><span style="color:var(--gray-400)">Select a carrier to see pricing</span></div>`;
+  const ld=tl.drayLd;
+  const charges=CHARGES.filter(c=>isApplicable(c,ld)).map(c=>{
+    const cv=Number(sel[c])||0;
+    const cuv=tlCuRate(cv,c,tl);
+    if(!cuv&&!cv) return '';
+    return `<tr style="border-bottom:1px solid var(--gray-100)">
+      <td style="padding:4px 0;font-size:12px;color:var(--gray-600)">${LABELS[c]}</td>
+      <td style="padding:4px 0;font-size:12px;text-align:right;color:var(--gray-400)">${cv>0?fmtD(cv):'—'}</td>
+      <td style="padding:4px 0;font-size:12px;text-align:right;font-weight:600;color:var(--navy)">${cuv>0?fmtD(cuv):'—'}</td>
+    </tr>`;
+  }).join('');
+  const totalCarrier=CHARGES.filter(c=>isApplicable(c,ld)).reduce((s,c)=>s+(Number(sel[c])||0),0);
+  const totalCustomer=CHARGES.filter(c=>isApplicable(c,ld)).reduce((s,c)=>s+tlCuRate(Number(sel[c])||0,c,tl),0);
+  return `<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#3b6ea5;margin-bottom:8px">🚢 Inbound Drayage Preview</div>
+  <div style="font-size:13px;font-weight:600;color:var(--navy);margin-bottom:2px">${sel.carrier}</div>
+  <div style="font-size:12px;color:var(--gray-500);margin-bottom:10px">${tl.drayPort||'—'} → ${tl.drayZip} (${ld})</div>
+  <table style="width:100%;margin-bottom:8px">
+    <thead><tr>
+      <th style="text-align:left;font-size:10px;color:var(--gray-400);padding-bottom:4px">Charge</th>
+      <th style="text-align:right;font-size:10px;color:var(--gray-400);padding-bottom:4px">Carrier</th>
+      <th style="text-align:right;font-size:10px;color:var(--steel);padding-bottom:4px">Customer</th>
+    </tr></thead>
+    <tbody>${charges}</tbody>
+    <tfoot><tr style="border-top:2px solid var(--gray-200)">
+      <td style="padding:7px 0;font-weight:700">Total</td>
+      <td style="padding:7px 0;text-align:right;font-weight:600;color:var(--gray-500)">${fmtD(totalCarrier)}</td>
+      <td style="padding:7px 0;text-align:right;font-weight:800;font-size:15px;color:var(--steel)">${fmtD(totalCustomer)}</td>
+    </tfoot>
+  </table>
+  <div style="display:flex;align-items:center;gap:8px">
+    <span style="color:var(--green);font-weight:600;font-size:13px">Profit: +${fmtD(totalCustomer-totalCarrier)}</span>
+    <span class="badge ${totalCarrier>0&&(totalCustomer-totalCarrier)/totalCustomer>=0.10?'g':'r'}">${totalCarrier>0?pct((totalCustomer-totalCarrier)/totalCustomer):'—'}</span>
+  </div>`;
+}
+
+// ── STEP 2: Transload Services ────────────────────────────────────────────
+function buildTlStep2(tl){
+  const warehouses=window._tlWarehouses||[];
+  const nearbyWH=warehouses; // could filter by zip proximity
+  const activeWH=tl.warehouseId?warehouses.find(w=>w.id===tl.warehouseId):null;
+  const pCount=parseInt(tl.palletCount)||0;
+
+  const whCards=nearbyWH.map(w=>`
+    <div onclick="S.tl.warehouseId='${w.id}';S.tl.useManual=false;renderTlBuilder()" style="cursor:pointer;border:2px solid ${tl.warehouseId===w.id?'var(--steel)':'var(--gray-200)'};background:${tl.warehouseId===w.id?'var(--blue-bg)':'var(--white)'};border-radius:var(--radius);padding:12px 14px;margin-bottom:8px">
+      <div style="font-weight:700;color:var(--navy)">${w.name}</div>
+      <div style="font-size:12px;color:var(--gray-500)">${w.address}, ${w.city}, ${w.state} ${w.zip}</div>
+    </div>`).join('');
+
+  const itemRows=Object.entries(TL_ITEMS_DEF).map(([k,def])=>{
+    const item=tl.tlItems[k];
+    const pricedQty=def.unit==='perPallet'?pCount:def.unit==='perPalletPerDay'?pCount*(parseInt(item.days)||0):1;
+    return `<div style="padding:10px 0;border-bottom:1px solid var(--gray-100)">
+      <label style="display:flex;align-items:center;gap:10px;cursor:pointer;margin-bottom:${item.included?'10':'0'}px">
+        <input type="checkbox" ${item.included?'checked':''} onchange="S.tl.tlItems['${k}'].included=this.checked;renderTlBuilder()" style="width:auto">
+        <span style="font-size:13px;font-weight:600">${def.icon} ${def.label}</span>
+        <span style="font-size:11px;color:var(--gray-400)">${def.unitLabel}</span>
+      </label>
+      ${item.included?`<div class="charge-row">
+        <div style="font-size:12px;color:var(--gray-500)">
+          ${def.hasdays?`<div style="display:flex;align-items:center;gap:6px"><input type="number" value="${item.days||0}" min="0" oninput="S.tl.tlItems['${k}'].days=+this.value" style="width:60px;padding:4px 6px;font-size:12px"> days</div>`:''}
+        </div>
+        <div>
+          <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--gray-400);margin-bottom:3px">Warehouse cost</div>
+          <div style="display:flex;align-items:center;gap:4px">
+            <span style="color:var(--gray-400);font-size:13px">$</span>
+            <input type="number" value="${item.carrierCost}" min="0" oninput="S.tl.tlItems['${k}'].carrierCost=this.value" style="width:100px;padding:5px 8px;font-size:13px">
+            <span style="font-size:11px;color:var(--gray-400)">${def.unit!=='flat'&&pCount>0?'× '+pricedQty:'flat'}</span>
+          </div>
+        </div>
+        <div>
+          <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--steel);margin-bottom:3px">Customer price</div>
+          <div style="display:flex;align-items:center;gap:4px">
+            <span style="color:var(--gray-400);font-size:13px">$</span>
+            <input type="number" value="${item.customerPrice}" min="0" oninput="S.tl.tlItems['${k}'].customerPrice=this.value" style="width:100px;padding:5px 8px;font-size:13px;border-color:var(--steel)">
+            <span style="font-size:11px;color:var(--gray-400)">${def.unit!=='flat'&&pCount>0?'× '+pricedQty:'flat'}</span>
           </div>
         </div>
       </div>`:''}
+    </div>`;
+  }).join('');
 
-      ${showOutbound?`<div class="card">
-        <div class="sec-head">🚛 Outbound freight</div>
-        <div class="g2">
-          <div class="field"><label>Carrier</label>
-            <input type="text" value="${tl.outboundCarrier}" oninput="tlField('outboundCarrier',this.value)" placeholder="Carrier name"></div>
-          <div class="field"><label>Mode</label>
-            <div class="toggle-group" style="margin-top:4px">
-              <button class="tgl${tl.outboundMode==='FTL'?' on':''}" onclick="tlField('outboundMode','FTL')">FTL</button>
-              <button class="tgl${tl.outboundMode==='LTL'?' on':''}" onclick="tlField('outboundMode','LTL')">LTL</button>
-            </div>
-          </div>
-        </div>
-        <div class="field"><label>Carrier rate (flat)</label>
-          <input type="number" value="${tl.outboundRate}" oninput="tlField('outboundRate',this.value)" placeholder="e.g. 1200" min="0"></div>
-      </div>`:''}
-
-      <!-- Your markup -->
+  return `<div class="two-col">
+    <div>
+      <!-- Warehouse -->
       <div class="card">
-        <div class="sec-head">Your markup <span style="font-weight:400;font-size:11px;text-transform:none;letter-spacing:0;color:var(--gray-400)">— $200 suggested, enter any amount</span></div>
-        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-          <div class="toggle-group">
-            <button class="tgl${tl.markupMode==='flat'?' on':''}" onclick="tlField('markupMode','flat')">Flat $</button>
-            <button class="tgl${tl.markupMode==='pct'?' on':''}"  onclick="tlField('markupMode','pct')">%</button>
+        <div class="sec-head">🏭 Transload warehouse</div>
+        ${whCards}
+        <button class="btn sm" onclick="S.tl.useManual=!S.tl.useManual;S.tl.warehouseId=null;renderTlBuilder()" style="margin-bottom:${tl.useManual?'12':'0'}px">
+          ${tl.useManual?'← Select from list':'+ Enter warehouse manually / Add new'}
+        </button>
+        ${tl.useManual?`<div class="g2">
+          <div class="field"><label>Warehouse name *</label>
+            <input type="text" value="${tl.warehouseManual.name}" oninput="S.tl.warehouseManual.name=this.value" placeholder="e.g. XYZ Logistics"></div>
+          <div class="field"><label>Zip code *</label>
+            <input type="text" value="${tl.warehouseManual.zip}" oninput="S.tl.warehouseManual.zip=this.value" placeholder="e.g. 90248" maxlength="10"></div>
+        </div>
+        <div class="field"><label>Address</label>
+          <input type="text" value="${tl.warehouseManual.address}" oninput="S.tl.warehouseManual.address=this.value" placeholder="Street address"></div>
+        <div class="g2">
+          <div class="field"><label>City</label>
+            <input type="text" value="${tl.warehouseManual.city}" oninput="S.tl.warehouseManual.city=this.value" placeholder="City"></div>
+          <div class="field"><label>State</label>
+            <input type="text" value="${tl.warehouseManual.state}" oninput="S.tl.warehouseManual.state=this.value" placeholder="CA" maxlength="2"></div>
+        </div>
+        <button class="btn sm" onclick="saveTlWarehouseFromQuote()" style="margin-top:6px">💾 Save to warehouse list</button>`:''}
+      </div>
+
+      <!-- Cargo type -->
+      <div class="card">
+        <div class="sec-head">Cargo details</div>
+        <div class="g2">
+          <div class="field"><label>Cargo type</label>
+            <div class="toggle-group" style="margin-top:4px">
+              <button class="tgl${tl.cargoType==='palletized'?' on':''}" onclick="S.tl.cargoType='palletized';S.tl.tlItems.palletize.included=false;renderTlBuilder()">📦 Palletized</button>
+              <button class="tgl${tl.cargoType==='floorLoaded'?' on':''}" onclick="S.tl.cargoType='floorLoaded';S.tl.tlItems.palletize.included=true;renderTlBuilder()">🏗️ Floor Loaded</button>
+            </div>
+            ${tl.cargoType==='floorLoaded'?'<div style="font-size:11px;color:var(--amber,#d97706);margin-top:4px">⚠️ Palletizing auto-added for floor loaded cargo</div>':''}
           </div>
-          <input type="number" value="${tl.markupAmount}" min="0" oninput="tlField('markupAmount',+this.value)" style="width:100px;padding:6px 10px;font-size:13px">
-          <span style="font-size:12px;color:var(--gray-400)">${tl.markupMode==='flat'?'flat $ added to total carrier cost':'% over total carrier cost'}</span>
+          <div class="field"><label>Pallet count <span style="font-weight:400;color:var(--gray-400)">(for pricing)</span></label>
+            <input type="number" value="${tl.palletCount}" min="0" oninput="S.tl.palletCount=this.value" onblur="renderTlBuilder()" placeholder="e.g. 20"></div>
         </div>
       </div>
 
-      <!-- Notes -->
+      <!-- Charge mode -->
       <div class="card">
-        <div class="sec-head">Notes for customer</div>
-        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px">
-          ${NOTE_TEMPLATES.slice(0,6).map(t=>`<button class="btn sm" onclick="document.getElementById('tl-notes').value+=(document.getElementById('tl-notes').value?'\\n':'')+'${t.replace(/'/g,"\\'")}';tlField('notes',document.getElementById('tl-notes').value)">+ ${t}</button>`).join('')}
+        <div class="sec-head">Transload pricing</div>
+        <div class="field">
+          <label>Charge method</label>
+          <div class="toggle-group" style="margin-top:4px">
+            <button class="tgl${tl.chargeMode==='byItem'?' on':''}" onclick="S.tl.chargeMode='byItem';renderTlBuilder()">📋 By service item</button>
+            <button class="tgl${tl.chargeMode==='flat'?' on':''}"   onclick="S.tl.chargeMode='flat';renderTlBuilder()">💰 Flat fee</button>
+          </div>
         </div>
-        <textarea id="tl-notes" rows="3" oninput="tlField('notes',this.value)"
-          placeholder="Add any special conditions or instructions…"
-          style="width:100%;padding:8px 10px;font-size:12px;border:1px solid var(--gray-200);border-radius:var(--radius);resize:vertical;font-family:inherit;line-height:1.6">${tl.notes}</textarea>
+        ${tl.chargeMode==='flat'?`<div style="margin-top:2px">
+          <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--gray-500);margin-bottom:10px;display:grid;grid-template-columns:1fr 140px 140px;gap:10px"><span></span><span>Warehouse cost</span><span style="color:var(--steel)">Customer price</span></div>
+          <div class="charge-row">
+            <span style="font-weight:600">Full transload service</span>
+            <div style="display:flex;align-items:center;gap:4px"><span style="color:var(--gray-400)">$</span>
+              <input type="number" value="${tl.tlFlatCarrier}" min="0" oninput="S.tl.tlFlatCarrier=this.value" placeholder="0" style="width:100px;padding:5px 8px;font-size:13px"></div>
+            <div style="display:flex;align-items:center;gap:4px"><span style="color:var(--gray-400)">$</span>
+              <input type="number" value="${tl.tlFlatCustomer}" min="0" oninput="S.tl.tlFlatCustomer=this.value" placeholder="0" style="width:100px;padding:5px 8px;font-size:13px;border-color:var(--steel)"></div>
+          </div>
+        </div>`:`
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--gray-500);margin:8px 0;display:grid;grid-template-columns:1fr 140px 140px;gap:10px"><span>Service</span><span>Warehouse cost</span><span style="color:var(--steel)">Customer price</span></div>
+        ${itemRows}`}
       </div>
     </div>
 
-    <!-- Right column: quote preview -->
+    <!-- Preview -->
     <div class="sticky-top">
-      <div class="card">
-        <div class="sec-head">Quote preview</div>
-        ${buildTlPreview(tl,{totalCarrier,tlCost,storageCost,inboundCarrierCost,outboundCarrierCost,customerTotal,profit,markup})}
+      <div class="card">${buildTlStep2Preview(tl)}</div>
+    </div>
+  </div>
+  <div style="display:flex;justify-content:space-between;margin-top:16px">
+    <button class="btn" onclick="S.tl.step=1;renderTlBuilder()">← Back</button>
+    <button class="btn blue" onclick="tlNext(2)">Next: Outbound FTL →</button>
+  </div>`;
+}
+function buildTlStep2Preview(tl){
+  let tlCarrier=0,tlCustomer=0;
+  const pCount=parseInt(tl.palletCount)||1;
+  if(tl.chargeMode==='flat'){
+    tlCarrier=parseFloat(tl.tlFlatCarrier)||0;tlCustomer=parseFloat(tl.tlFlatCustomer)||0;
+  } else {
+    Object.entries(tl.tlItems).forEach(([k,item])=>{
+      if(!item.included) return;
+      const def=TL_ITEMS_DEF[k];
+      let qty=def.unit==='perPallet'?pCount:def.unit==='perPalletPerDay'?pCount*(parseInt(item.days)||0):1;
+      tlCarrier+=(parseFloat(item.carrierCost)||0)*qty;
+      tlCustomer+=(parseFloat(item.customerPrice)||0)*qty;
+    });
+  }
+  const wh=tl.warehouseId?(window._tlWarehouses||[]).find(w=>w.id===tl.warehouseId):null;
+  const whName=wh?wh.name:tl.useManual?tl.warehouseManual.name||'Manual warehouse':'—';
+  return `<div style="margin-bottom:12px">
+    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#2d7d46;margin-bottom:6px">🏭 Transload Services</div>
+    <div style="font-size:13px;font-weight:600;color:var(--navy);margin-bottom:4px">${whName}</div>
+    <div style="font-size:12px;color:var(--gray-500)">${tl.cargoType==='floorLoaded'?'Floor Loaded':'Palletized'}${tl.palletCount?' · '+tl.palletCount+' pallets':''}</div>
+  </div>
+  ${tlCustomer>0||tlCarrier>0?`<table style="width:100%;font-size:12px">
+    <tr><td style="padding:4px 0;color:var(--gray-500)">Warehouse cost</td><td style="text-align:right">${fmtD(tlCarrier)}</td></tr>
+    <tr style="border-top:2px solid var(--gray-200)"><td style="padding:8px 0;font-weight:700">Customer price</td><td style="text-align:right;font-weight:800;font-size:16px;color:var(--steel)">${fmtD(tlCustomer)}</td></tr>
+    <tr><td style="color:var(--green);font-weight:600">Profit</td><td style="text-align:right;color:var(--green);font-weight:600">+${fmtD(tlCustomer-tlCarrier)}</td></tr>
+  </table>`:'<div style="font-size:12px;color:var(--gray-400)">Enter pricing above to see preview</div>'}`;
+}
+
+// ── STEP 3: Outbound FTL ──────────────────────────────────────────────────
+function buildTlStep3(tl){
+  const wh=tl.warehouseId?(window._tlWarehouses||[]).find(w=>w.id===tl.warehouseId):null;
+  const pickupZip=wh?wh.zip:tl.useManual?tl.warehouseManual.zip:'';
+  const pickupName=wh?wh.name:tl.useManual?tl.warehouseManual.name:'Transload warehouse';
+  // Search _fqRates for matching FTL
+  const ftlMatches=(window._fqRates||[]).filter(r=>r.active&&r.mode==='FTL'&&r.equipment===tl.outEquipment&&(!r.pickupZip||r.pickupZip===pickupZip)&&(!r.deliveryZip||r.deliveryZip===tl.outDeliveryZip));
+  const selFtl=window._fqRates?.find(r=>r.id===tl.selFtlId);
+
+  const ftlCards=ftlMatches.map(r=>`
+    <div onclick="S.tl.selFtlId='${r.id}';renderTlBuilder()" style="cursor:pointer;border:2px solid ${tl.selFtlId===r.id?'var(--steel)':'var(--gray-200)'};background:${tl.selFtlId===r.id?'var(--blue-bg)':'var(--white)'};border-radius:var(--radius);padding:12px 14px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center">
+      <div>
+        <div style="font-weight:700;color:var(--navy)">${r.carrier}</div>
+        <div style="font-size:12px;color:var(--gray-500)">${r.pickupZip||'Any'} → ${r.deliveryZip||'Any'}</div>
       </div>
+      <div style="text-align:right">
+        <div style="font-size:18px;font-weight:800;color:var(--steel)">${fmtD(r.rate)}</div>
+        <div style="font-size:11px;color:var(--gray-400)">carrier cost</div>
+      </div>
+    </div>`).join('');
+
+  return `<div class="two-col">
+    <div>
+      <div class="card">
+        <div class="sec-head">🚛 Outbound FTL details</div>
+        <div style="background:var(--gray-50);border-radius:var(--radius);padding:12px;margin-bottom:14px">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-400);margin-bottom:4px">Pickup (auto-filled from transload warehouse)</div>
+          <div style="font-weight:600;color:var(--navy)">${pickupName}</div>
+          ${pickupZip?`<div style="font-size:12px;color:var(--gray-500)">Zip: ${pickupZip}</div>`:''}
+        </div>
+        <div class="g2">
+          <div class="field"><label>Delivery zip *</label>
+            <input type="text" value="${tl.outDeliveryZip}" oninput="S.tl.outDeliveryZip=this.value" onblur="renderTlBuilder()" placeholder="e.g. 75201" maxlength="10"></div>
+          <div class="field"><label>Equipment type</label>
+            <div class="toggle-group" style="margin-top:4px">
+              ${['Dry Van','Reefer','Flatbed','Box Truck'].map(e=>`<button class="tgl${tl.outEquipment===e?' on':''}" onclick="S.tl.outEquipment='${e}';renderTlBuilder()">${e}</button>`).join('')}
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="sec-head">Select FTL carrier
+          <span style="font-weight:400;font-size:11px;color:${ftlMatches.length?'var(--green)':'var(--amber)'}">${ftlMatches.length?'✓ '+ftlMatches.length+' on file':'No carriers on file for this lane'}</span>
+        </div>
+        ${ftlCards}
+        ${!ftlMatches.length||!tl.selFtlId?`<div class="g2" style="margin-top:${ftlMatches.length?'12':'0'}px">
+          <div class="field"><label>Carrier name</label>
+            <input type="text" value="${tl.outManualCarrier}" oninput="S.tl.outManualCarrier=this.value" placeholder="e.g. Echo Logistics"></div>
+          <div class="field"><label>Carrier rate (flat)</label>
+            <input type="number" value="${tl.outManualRate}" min="0" oninput="S.tl.outManualRate=this.value" onblur="refreshTlOutPreview()" placeholder="e.g. 1800"></div>
+        </div>`:''}
+        <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--gray-100)">
+          <div class="sec-head" style="margin-bottom:8px">Your markup on outbound</div>
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+            <div class="toggle-group">
+              <button class="tgl${tl.outMarkupMode==='flat'?' on':''}" onclick="S.tl.outMarkupMode='flat';refreshTlOutPreview()">Flat $</button>
+              <button class="tgl${tl.outMarkupMode==='pct'?' on':''}"  onclick="S.tl.outMarkupMode='pct';refreshTlOutPreview()">%</button>
+            </div>
+            <input type="number" value="${tl.outMarkupAmount}" min="0"
+              oninput="S.tl.outMarkupAmount=+this.value" onblur="refreshTlOutPreview()"
+              style="width:100px;padding:6px 10px;font-size:13px">
+            <span style="font-size:12px;color:var(--gray-400)">${tl.outMarkupMode==='flat'?'flat $ over carrier rate':'% over carrier rate'}</span>
+          </div>
+        </div>
+    </div>
+    <div class="sticky-top">
+      <div class="card" id="tl-step3-preview">${buildTlStep3Preview(tl)}</div>
+    </div>
+  </div>
+  <div style="display:flex;justify-content:space-between;margin-top:16px">
+    <button class="btn" onclick="S.tl.step=2;renderTlBuilder()">← Back</button>
+    <button class="btn blue" onclick="tlNext(3)">Next: Review & Save →</button>
+  </div>`;
+}
+function buildTlStep3Preview(tl){
+  const selFtl=window._fqRates?.find(r=>r.id===tl.selFtlId);
+  const outCarrier=selFtl?selFtl.rate:parseFloat(tl.outManualRate)||0;
+  const outCustomer=tl.outMarkupMode==='pct'?outCarrier*(1+tl.outMarkupAmount/100):outCarrier+Number(tl.outMarkupAmount);
+  if(!outCarrier) return `<div style="font-size:12px;color:var(--gray-400);padding:12px 0">Enter carrier rate to see pricing</div>`;
+  return `<div style="margin-bottom:12px">
+    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#d97706;margin-bottom:6px">🚛 Outbound FTL</div>
+    <div style="font-size:13px;font-weight:600;color:var(--navy);margin-bottom:4px">${selFtl?selFtl.carrier:tl.outManualCarrier||'—'}</div>
+    <div style="font-size:12px;color:var(--gray-500)">${tl.outEquipment} · → ${tl.outDeliveryZip||'—'}</div>
+  </div>
+  <table style="width:100%;font-size:12px">
+    <tr><td style="padding:4px 0;color:var(--gray-500)">Carrier cost</td><td style="text-align:right">${fmtD(outCarrier)}</td></tr>
+    <tr><td style="padding:4px 0;color:var(--gray-500)">Markup</td><td style="text-align:right">+${tl.outMarkupMode==='flat'?fmtD(tl.outMarkupAmount):tl.outMarkupAmount+'%'}</td></tr>
+    <tr style="border-top:2px solid var(--gray-200)"><td style="padding:8px 0;font-weight:700">Customer price</td><td style="text-align:right;font-weight:800;font-size:16px;color:var(--steel)">${fmtD(outCustomer)}</td></tr>
+    <tr><td style="color:var(--green);font-weight:600">Profit</td><td style="text-align:right;color:var(--green);font-weight:600">+${fmtD(outCustomer-outCarrier)}</td></tr>
+  </table>`;
+}
+
+// ── STEP 4: Review & Save ─────────────────────────────────────────────────
+function buildTlStep4(tl){
+  const t=calcTlTotals(tl);
+  const wh=tl.warehouseId?(window._tlWarehouses||[]).find(w=>w.id===tl.warehouseId):null;
+  const whName=wh?wh.name:tl.useManual?tl.warehouseManual.name:'—';
+  const selDray=S.rates.find(r=>r.id===tl.selDrayId);
+  const selFtl=window._fqRates?.find(r=>r.id===tl.selFtlId);
+
+  function sectionTable(rows,carrierTotal,customerTotal){
+    return `<div style="border:1px solid var(--gray-200);border-radius:var(--radius);overflow:hidden;margin-bottom:4px">
+      <table style="width:100%;font-size:12px;border-collapse:collapse">
+        <thead><tr style="background:var(--gray-50)">
+          <th style="padding:6px 12px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;color:var(--gray-500)">Service</th>
+          <th style="padding:6px 12px;text-align:right;font-size:10px;font-weight:700;color:var(--gray-400)">Carrier cost</th>
+          <th style="padding:6px 12px;text-align:right;font-size:10px;font-weight:700;color:var(--steel)">Customer price</th>
+          <th style="padding:6px 12px;text-align:right;font-size:10px;font-weight:700;color:var(--green)">Profit</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+        <tfoot><tr style="background:var(--gray-100)">
+          <td style="padding:8px 12px;font-weight:700">Section total</td>
+          <td style="padding:8px 12px;text-align:right;font-weight:600">${fmtD(carrierTotal)}</td>
+          <td style="padding:8px 12px;text-align:right;font-weight:700;color:var(--steel)">${fmtD(customerTotal)}</td>
+          <td style="padding:8px 12px;text-align:right;font-weight:700;color:var(--green)">+${fmtD(customerTotal-carrierTotal)}</td>
+        </tr></tfoot>
+      </table>
+    </div>`;
+  }
+
+  function row(label,carrier,customer){
+    return `<tr style="border-bottom:1px solid var(--gray-100)">
+      <td style="padding:7px 12px">${label}</td>
+      <td style="padding:7px 12px;text-align:right;color:var(--gray-500)">${carrier>0?fmtD(carrier):'—'}</td>
+      <td style="padding:7px 12px;text-align:right;font-weight:600;color:var(--navy)">${customer>0?fmtD(customer):'—'}</td>
+      <td style="padding:7px 12px;text-align:right;color:var(--green)">${customer>0&&carrier>0?'+'+fmtD(customer-carrier):'—'}</td>
+    </tr>`;
+  }
+
+  // Drayage rows
+  const drayRow=row(`Drayage — ${selDray?selDray.carrier:tl.drayManualCarrier||'—'}<br><span style="font-size:11px;color:var(--gray-400)">${tl.drayPort||'—'} → ${tl.drayZip||'—'} (${tl.drayLd})</span>`,t.drayCarrier,t.drayCustomer);
+
+  // Transload rows
+  let tlRows='';
+  if(tl.chargeMode==='flat'){
+    tlRows=row('Full transload service',parseFloat(tl.tlFlatCarrier)||0,parseFloat(tl.tlFlatCustomer)||0);
+  } else {
+    const pCount=parseInt(tl.palletCount)||1;
+    Object.entries(tl.tlItems).forEach(([k,item])=>{
+      if(!item.included) return;
+      const def=TL_ITEMS_DEF[k];
+      let qty=def.unit==='perPallet'?pCount:def.unit==='perPalletPerDay'?pCount*(parseInt(item.days)||0):1;
+      tlRows+=row(`${def.icon} ${def.label}${qty>1?' × '+qty:''}`,
+        (parseFloat(item.carrierCost)||0)*qty,(parseFloat(item.customerPrice)||0)*qty);
+    });
+  }
+
+  // Outbound row
+  const outCarrier=selFtl?selFtl.rate:parseFloat(tl.outManualRate)||0;
+  const outCustomer=tl.outMarkupMode==='pct'?outCarrier*(1+tl.outMarkupAmount/100):outCarrier+Number(tl.outMarkupAmount);
+  const outRow=row(`FTL — ${selFtl?selFtl.carrier:tl.outManualCarrier||'—'}<br><span style="font-size:11px;color:var(--gray-400)">${tl.outEquipment} → ${tl.outDeliveryZip||'—'}</span>`,outCarrier,outCustomer);
+
+  return `<div class="card">
+    <div class="sec-head">📋 Quote summary — ${tl.customer||'Customer'}</div>
+    <div style="font-size:12px;color:var(--gray-500);margin-bottom:16px">${tl.cargoType==='floorLoaded'?'Floor Loaded':'Palletized'} · ${tl.palletCount||'?'} pallets · ${wh?(wh.name):tl.useManual?tl.warehouseManual.name:'—'}</div>
+
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#3b6ea5;padding:8px 12px;background:#eff6ff;border-radius:6px 6px 0 0">🚢 Inbound Drayage</div>
+    ${sectionTable(drayRow,t.drayCarrier,t.drayCustomer)}
+
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#2d7d46;padding:8px 12px;background:#f0fdf4;border-radius:6px 6px 0 0;margin-top:12px">🏭 Transload Services — ${whName}</div>
+    ${sectionTable(tlRows,t.tlCarrier,t.tlCustomer)}
+
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#d97706;padding:8px 12px;background:#fffbeb;border-radius:6px 6px 0 0;margin-top:12px">🚛 Outbound FTL</div>
+    ${sectionTable(outRow,outCarrier,outCustomer)}
+
+    <!-- Grand total -->
+    <div style="background:var(--navy);border-radius:var(--radius);padding:16px 20px;margin-top:16px;display:flex;justify-content:space-between;align-items:center">
+      <div>
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:rgba(255,255,255,.5);margin-bottom:4px">Grand total — customer invoice</div>
+        <div style="font-size:30px;font-weight:800;color:#fff">${fmtD(t.totalCustomer)}</div>
+      </div>
+      <div style="text-align:right">
+        <div style="color:rgba(255,255,255,.6);font-size:12px">Carrier cost: ${fmtD(t.totalCarrier)}</div>
+        <div style="color:#86efac;font-weight:700;font-size:15px">Profit: +${fmtD(t.totalProfit)}</div>
+        <span class="badge ${t.margin>=0.10?'g':'r'}" style="margin-top:4px">${pct(t.margin)} margin</span>
+      </div>
+    </div>
+
+    <!-- Notes -->
+    <div class="field" style="margin-top:16px">
+      <label>Notes for customer (optional)</label>
+      <textarea rows="3" oninput="S.tl.notes=this.value" placeholder="Add any conditions or instructions…"
+        style="width:100%;padding:8px 10px;font-size:12px;border:1px solid var(--gray-200);border-radius:var(--radius);resize:vertical;font-family:inherit">${tl.notes}</textarea>
+    </div>
+  </div>
+  <div style="display:flex;justify-content:space-between;margin-top:16px;gap:10px">
+    <button class="btn" onclick="S.tl.step=3;renderTlBuilder()">← Back</button>
+    <div style="display:flex;gap:10px">
+      <button class="btn" onclick="downloadTlCustomerPDF(null,S.tl)">📄 Customer PDF</button>
+      <button class="btn blue" onclick="saveTlQuote()">💾 Save quote</button>
     </div>
   </div>`;
 }
 
-function buildTlPreview(tl,costs){
-  const {totalCarrier,tlCost,storageCost,inboundCarrierCost,outboundCarrierCost,customerTotal,profit,markup}=costs;
-  const showInbound =tl.mode==='full'||tl.mode==='inbound';
-  const showTransload=tl.mode==='full'||tl.mode==='transloadOnly';
-  const showOutbound =tl.mode==='full'||tl.mode==='outbound';
-  const margin=customerTotal>0?profit/customerTotal:0;
-  const hasAny=totalCarrier>0||customerTotal>0;
-  if(!hasAny&&!tl.customer) return `<div style="font-size:12px;color:var(--gray-400);text-align:center;padding:20px 0">Fill in carrier rates to see the quote preview</div>`;
-
-  const rows=[];
-  if(showInbound&&inboundCarrierCost>0) rows.push(['Inbound drayage',tl.inboundCarrier||'—',inboundCarrierCost]);
-  if(showTransload&&tlCost>0) rows.push(['Transload handling',tl.tlFacility||'—',tlCost]);
-  if(storageCost>0) rows.push([`Storage (${tl.storageDays} days × ${tl.palletCount} pallets)`,tl.tlFacility||'—',storageCost]);
-  if(showOutbound&&outboundCarrierCost>0) rows.push([`Outbound ${tl.outboundMode}`,tl.outboundCarrier||'—',outboundCarrierCost]);
-
-  return `
-    <!-- Shipment summary -->
-    <div style="margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--gray-100)">
-      ${tl.customer?`<div style="font-weight:700;color:var(--navy);margin-bottom:6px">${tl.customer}</div>`:''}
-      ${tl.containerSize?`<div style="font-size:12px;color:var(--gray-500)">${tl.containerCount||1} × ${tl.containerSize}${tl.commodity?' · '+tl.commodity:''}</div>`:''}
-      ${tl.palletCount?`<div style="font-size:12px;color:var(--gray-500)">${tl.palletCount} pallets${tl.weight?' · '+Number(tl.weight).toLocaleString()+' lbs':''}</div>`:''}
-      ${tl.originPort?`<div style="font-size:12px;color:var(--gray-400);margin-top:4px">📍 ${tl.originPort}${tl.transloadFacility?' → '+tl.transloadFacility:''}${tl.deliveryZip?' → '+tl.deliveryZip:''}</div>`:''}
-    </div>
-
-    <!-- Cost breakdown -->
-    ${rows.length?`<div style="margin-bottom:14px">
-      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-500);margin-bottom:8px">Cost breakdown</div>
-      <table style="width:100%;font-size:12px">
-        ${rows.map(([svc,carrier,cost])=>`<tr>
-          <td style="padding:5px 0;color:var(--gray-600)">${svc}</td>
-          <td style="padding:5px 0;color:var(--gray-400);font-size:11px">${carrier}</td>
-          <td style="padding:5px 0;text-align:right;font-weight:500">${fmtD(cost)}</td>
-        </tr>`).join('')}
-        <tr style="border-top:1px solid var(--gray-100)">
-          <td colspan="2" style="padding:6px 0;font-weight:600;color:var(--gray-600)">Total carrier cost</td>
-          <td style="padding:6px 0;text-align:right;font-weight:700">${fmtD(totalCarrier)}</td>
-        </tr>
-        <tr>
-          <td colspan="2" style="padding:4px 0;color:var(--gray-500)">Markup (${tl.markupMode==='flat'?fmtD(tl.markupAmount):tl.markupAmount+'%'})</td>
-          <td style="padding:4px 0;text-align:right;color:var(--gray-500)">+${fmtD(markup)}</td>
-        </tr>
-      </table>
-    </div>`:''}
-
-    <!-- Customer total -->
-    ${customerTotal>0?`<div style="background:var(--blue-bg);border-radius:var(--radius);padding:14px;margin-bottom:14px">
-      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-500);margin-bottom:4px">Customer invoice total</div>
-      <div style="font-size:28px;font-weight:800;color:var(--steel)">${fmtD(customerTotal)}</div>
-      <div style="margin-top:8px;display:flex;align-items:center;gap:8px">
-        <span style="color:var(--green);font-weight:600">Profit: +${fmtD(profit)}</span>
-        <span class="badge ${margin>=0.10?'g':'r'}">${pct(margin)} margin</span>
-      </div>
-    </div>`:''}
-
-    <div style="display:flex;gap:8px">
-      <button class="btn blue" onclick="saveTlQuote()" style="flex:1;justify-content:center">💾 Save quote</button>
-    </div>`;
+// Step navigation
+function tlNext(from){
+  if(from===1){
+    if(!S.tl.drayPort){alert('Please enter the origin port.');return;}
+    if(!S.tl.drayZip){alert('Please enter the delivery zip code.');return;}
+    S.tl.step=2;
+  } else if(from===2){
+    if(!S.tl.warehouseId&&!S.tl.useManual&&!window._tlWarehouses?.length){S.tl.useManual=true;}
+    if(S.tl.useManual&&!S.tl.warehouseManual.name){alert('Please enter the warehouse name.');return;}
+    S.tl.step=3;
+  } else if(from===3){
+    if(!S.tl.outDeliveryZip){alert('Please enter the delivery zip code.');return;}
+    S.tl.step=4;
+  }
+  renderTlBuilder();
 }
 
-async function saveTlQuote(){
-  const tl=S.tl;
-  const showInbound=tl.mode==='full'||tl.mode==='inbound';
-  const showTransload=tl.mode==='full'||tl.mode==='transloadOnly';
-  const showOutbound=tl.mode==='full'||tl.mode==='outbound';
-  const inboundCarrierCost=showInbound?parseFloat(tl.inboundRate)||0:0;
-  const tlCost=showTransload?(tl.tlRateType==='perPallet'?(parseInt(tl.palletCount)||0)*(parseFloat(tl.tlRate)||0):parseFloat(tl.tlRate)||0):0;
-  const storageCost=tl.services.storage?(parseInt(tl.palletCount)||0)*(parseFloat(tl.tlStorageRate)||0)*(parseInt(tl.storageDays)||0):0;
-  const outboundCarrierCost=showOutbound?parseFloat(tl.outboundRate)||0:0;
-  const totalCarrier=inboundCarrierCost+tlCost+storageCost+outboundCarrierCost;
-  const markup=tl.markupMode==='pct'?totalCarrier*(tl.markupAmount/100):Number(tl.markupAmount)||0;
-  const customerTotal=totalCarrier+markup;
-  if(!tl.mode){alert('Select a service type first.');return;}
-  if(!customerTotal){alert('Please enter at least one carrier rate before saving.');return;}
-  const entry={id:uid(),date:new Date().toISOString().slice(0,10),
-    customer:tl.customer||'—',mode:tl.mode,
-    containerSize:tl.containerSize,containerCount:tl.containerCount,
-    palletCount:tl.palletCount,weight:tl.weight,commodity:tl.commodity,
-    originPort:tl.originPort,transloadFacility:tl.transloadFacility,deliveryZip:tl.deliveryZip,
-    inboundCarrier:tl.inboundCarrier,inboundRate:inboundCarrierCost,
-    tlFacility:tl.tlFacility,tlCost,storageCost,
-    outboundCarrier:tl.outboundCarrier,outboundMode:tl.outboundMode,outboundRate:outboundCarrierCost,
-    totalCarrier,customerTotal,profit:customerTotal-totalCarrier,
-    profitPct:customerTotal>0?(customerTotal-totalCarrier)/customerTotal:0,
-    notes:tl.notes,status:'Quoted'};
+// ── Save quote ────────────────────────────────────────────────────────────
+function saveTlQuote(){
+  const tl=S.tl;const t=calcTlTotals(tl);
+  if(!tl.drayPort){alert('Please complete Step 1 first.');return;}
+  if(t.totalCustomer===0){alert('Please enter carrier rates in all sections.');return;}
+  const wh=tl.warehouseId?(window._tlWarehouses||[]).find(w=>w.id===tl.warehouseId):null;
+  const selDray=S.rates.find(r=>r.id===tl.selDrayId);
+  const selFtl=window._fqRates?.find(r=>r.id===tl.selFtlId);
+  const entry={
+    id:uid(),date:new Date().toISOString().slice(0,10),
+    customer:tl.customer||'—',
+    drayPort:tl.drayPort,drayZip:tl.drayZip,drayLd:tl.drayLd,
+    drayCarrier:selDray?selDray.carrier:tl.drayManualCarrier||'—',
+    drayCarrierCost:t.drayCarrier,drayCustomerPrice:t.drayCustomer,
+    warehouseName:wh?wh.name:tl.useManual?tl.warehouseManual.name:'—',
+    warehouseAddress:wh?`${wh.address}, ${wh.city}, ${wh.state} ${wh.zip}`:tl.useManual?`${tl.warehouseManual.address}, ${tl.warehouseManual.city}, ${tl.warehouseManual.state} ${tl.warehouseManual.zip}`:'—',
+    cargoType:tl.cargoType,chargeMode:tl.chargeMode,palletCount:tl.palletCount,
+    tlItems:JSON.parse(JSON.stringify(tl.tlItems)),tlFlatCarrier:tl.tlFlatCarrier,tlFlatCustomer:tl.tlFlatCustomer,
+    tlCarrierCost:t.tlCarrier,tlCustomerPrice:t.tlCustomer,
+    outDeliveryZip:tl.outDeliveryZip,outEquipment:tl.outEquipment,
+    outCarrier:selFtl?selFtl.carrier:tl.outManualCarrier||'—',
+    outCarrierCost:t.outCarrier,outCustomerPrice:t.outCustomer,
+    totalCarrier:t.totalCarrier,totalCustomer:t.totalCustomer,
+    profit:t.totalProfit,profitPct:t.margin,
+    notes:tl.notes,status:'Quoted',
+    rawTl:JSON.parse(JSON.stringify(tl))
+  };
   if(!window._tlHistory) window._tlHistory=[];
   window._tlHistory.unshift(entry);
   try{localStorage.setItem('tl_history',JSON.stringify(window._tlHistory.slice(0,500)));}catch(e){}
-  alert(`✅ Transload quote saved!\n\nCustomer total: ${fmtD(customerTotal)}\nProfit: ${fmtD(entry.profit)} (${pct(entry.profitPct)})`);
+  alert(`✅ Transload quote saved!\n\nCustomer total: ${fmtD(t.totalCustomer)}\nProfit: ${fmtD(t.totalProfit)} (${pct(t.margin)})`);
+  S.tl=defaultTlState();
+  setTlTab('log');
 }
 
-// ── Transload Quote Log ───────────────────────────────────────────────────
-function renderTlLog(){
-  const history=window._tlHistory||[];
-  if(!history.length){
-    $('page').innerHTML=`<div class="empty"><div class="empty-ico">📁</div><p>No transload quotes yet</p><small>Build a quote on the Quote builder tab and save it</small></div>`;return;
+// PDF placeholder (will be fleshed out)
+// ── Transload PDFs ────────────────────────────────────────────────────────
+async function loadJsPDF(){
+  if(typeof window.jspdf!=='undefined') return true;
+  try{await new Promise((res,rej)=>{const s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';s.onload=res;s.onerror=rej;document.head.appendChild(s);});return true;}
+  catch(e){alert('PDF library failed to load.');return false;}
+}
+
+async function downloadTlCustomerPDF(idx, rawTl){
+  if(!await loadJsPDF()) return;
+  const q=idx!==null&&idx!==undefined?(window._tlHistory||[])[idx]:null;
+  const tl=rawTl||(q?q.rawTl:null);
+  if(!tl&&!q){alert('No quote data.');return;}
+  const{jsPDF}=window.jspdf;
+  const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+  const W=210;const navy=[26,46,74];
+  const date=q?q.date:new Date().toISOString().slice(0,10);
+  const customer=q?q.customer:tl?.customer||'—';
+
+  // Header
+  doc.setFillColor(...navy);doc.rect(0,0,W,32,'F');
+  doc.setFillColor(59,142,208);doc.roundedRect(10,5,22,22,3,3,'F');
+  const bx=10,by=5,sc=v=>v/60*22;
+  doc.setFillColor(255,255,255);doc.triangle(bx+sc(10),by+sc(50),bx+sc(25),by+sc(14),bx+sc(44),by+sc(45),'F');
+  doc.setFillColor(220,235,255);doc.triangle(bx+sc(25),by+sc(14),bx+sc(44),by+sc(45),bx+sc(53),by+sc(37),'F');
+  doc.setFillColor(255,255,255);doc.triangle(bx+sc(10),by+sc(50),bx+sc(44),by+sc(45),bx+sc(53),by+sc(50),'F');
+  doc.setDrawColor(59,142,208);doc.setLineWidth(.3);doc.line(bx+sc(25),by+sc(14),bx+sc(44),by+sc(50));
+  doc.setTextColor(255,255,255);doc.setFont('helvetica','bold');doc.setFontSize(18);doc.text('SHIFL',36,19);
+  doc.setFontSize(9);doc.setFont('helvetica','normal');doc.setTextColor(255,255,255,.65);doc.text('Transload Service Quote',36,26);
+  doc.setFontSize(9);doc.setTextColor(255,255,255);doc.text(date,W-12,20,{align:'right'});
+
+  // Meta
+  doc.setFillColor(240,244,248);doc.rect(0,32,W,14,'F');
+  doc.setFont('helvetica','bold');doc.setFontSize(9);doc.setTextColor(...navy);
+  doc.text('Customer: '+customer,12,41);
+  if(tl||q){
+    const cargo=(q?q.cargoType:tl?.cargoType)==='floorLoaded'?'Floor Loaded':'Palletized';
+    const pallets=q?q.palletCount:tl?.palletCount;
+    doc.setFont('helvetica','normal');doc.setTextColor(100,115,130);
+    if(pallets) doc.text(pallets+' pallets  |  '+cargo,110,41);
   }
-  const modeLabel={full:'Full Transload',inbound:'Inbound Only',transloadOnly:'Transload Only',outbound:'Outbound Only'};
-  const rows=history.map((q,i)=>`<tr onclick="showTlQuoteModal(${i})" style="cursor:pointer">
-    <td class="muted small">${q.date}</td>
-    <td class="bold">${q.customer}</td>
-    <td><span class="badge b">${modeLabel[q.mode]||q.mode}</span></td>
-    <td>${q.containerCount||1} × ${q.containerSize}</td>
-    <td class="muted">${q.originPort?q.originPort.split(',')[0]:'—'}</td>
-    <td class="muted">${q.transloadFacility?q.transloadFacility.split(',')[0]:'—'}</td>
-    <td class="bold" style="color:var(--steel)">${fmtD(q.customerTotal)}</td>
-    <td style="color:var(--green);font-weight:600">+${fmtD(q.profit)}</td>
-    <td><span class="badge ${q.profitPct>=0.10?'g':'r'}">${pct(q.profitPct)}</span></td>
-    <td onclick="event.stopPropagation()">
-      <select onchange="updateTlStatus(${i},this.value)" style="font-size:12px;padding:4px 7px;width:120px">
-        <option${q.status==='Quoted'?' selected':''}>Quoted</option>
-        <option${q.status==='Booked'?' selected':''}>Booked</option>
-        <option${q.status==='Lost'?' selected':''}>Lost</option>
-        <option${q.status==='Cancelled'?' selected':''}>Cancelled</option>
-      </select>
-    </td>
-    <td onclick="event.stopPropagation()" style="white-space:nowrap">
-      <button class="btn sm ico-btn" onclick="showTlQuoteModal(${i})" title="View">📄</button>
-      <button class="btn sm ico-btn" onclick="deleteTlQuote(${i})" title="Delete" style="margin-left:3px">🗑️</button>
-    </td>
-  </tr>`).join('');
-  $('page').innerHTML=`<div class="tbl-wrap"><table>
-    <thead><tr><th>Date</th><th>Customer</th><th>Service</th><th>Container</th><th>Origin</th><th>Facility</th><th>Customer total</th><th>Profit</th><th>Margin</th><th>Status</th><th></th></tr></thead>
-    <tbody>${rows}</tbody>
-  </table></div>`;
-}
-function updateTlStatus(idx,status){if(!window._tlHistory?.[idx]) return;window._tlHistory[idx].status=status;try{localStorage.setItem('tl_history',JSON.stringify(window._tlHistory));}catch(e){}}
-function deleteTlQuote(idx){if(!confirm('Delete this quote?')) return;window._tlHistory.splice(idx,1);try{localStorage.setItem('tl_history',JSON.stringify(window._tlHistory));}catch(e){}renderTlLog();}
 
-function showTlQuoteModal(idx){
+  let y=56;
+  const sectionColors={dray:[26,80,150],tl:[30,100,60],out:[150,80,0]};
+
+  function drawSection(colorArr,title,subInfo,rows,subtotal){
+    // Title bar
+    doc.setFillColor(...colorArr);doc.rect(12,y,W-24,9,'F');
+    doc.setFont('helvetica','bold');doc.setFontSize(9);doc.setTextColor(255,255,255);
+    doc.text(title,16,y+6.5);
+    y+=11;
+    // Sub info line
+    if(subInfo){
+      doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(100,115,130);
+      doc.text(subInfo,16,y+4);y+=8;
+    }
+    // Rows
+    let even=true;
+    rows.forEach(([label,amount])=>{
+      if(amount<=0) return;
+      if(even){doc.setFillColor(248,250,252);doc.rect(12,y-3,W-24,8,'F');}
+      doc.setFont('helvetica','normal');doc.setFontSize(9.5);doc.setTextColor(55,65,80);doc.text(label,16,y);
+      doc.setFont('helvetica','bold');doc.setTextColor(...navy);doc.text(fmtD(amount),W-14,y,{align:'right'});
+      doc.setDrawColor(235,238,242);doc.setLineWidth(.2);doc.line(12,y+5,W-12,y+5);
+      y+=8;even=!even;
+    });
+    // Subtotal
+    doc.setFillColor(230,235,245);doc.rect(12,y-2,W-24,10,'F');
+    doc.setFont('helvetica','bold');doc.setFontSize(9);doc.setTextColor(...navy);
+    doc.text('Section total',16,y+5);
+    doc.setFontSize(12);doc.text(fmtD(subtotal),W-14,y+5,{align:'right'});
+    y+=14;
+  }
+
+  // Drayage
+  const drayRows=[];let drayTotal=0;
+  const sel=tl?S.rates.find(r=>r.id===tl.selDrayId):null;
+  if(sel&&tl){
+    CHARGES.filter(c=>isApplicable(c,tl.drayLd)).forEach(c=>{
+      const cuv=tlCuRate(Number(sel[c])||0,c,tl);
+      if(cuv>0){drayRows.push([LABELS[c],cuv]);drayTotal+=cuv;}
+    });
+  } else if(q&&q.drayCustomerPrice>0){
+    drayRows.push(['Drayage',q.drayCustomerPrice]);drayTotal=q.drayCustomerPrice;
+  }
+  if(drayTotal>0){
+    const ld=q?q.drayLd:tl?.drayLd||'Live';
+    const port=q?q.drayPort:tl?.drayPort||'—';
+    const zip=q?q.drayZip:tl?.drayZip||'—';
+    drawSection(sectionColors.dray,'INBOUND DRAYAGE',
+      'Carrier: Shifl  |  '+port+' to '+zip+' ('+ld+')',drayRows,drayTotal);
+  }
+
+  // Transload
+  const tlRows=[];let tlTotal=0;
+  const pCount=parseInt(q?q.palletCount:tl?.palletCount)||1;
+  const chargeMode=q?q.chargeMode:tl?.chargeMode;
+  if(chargeMode==='flat'){
+    const cuv=parseFloat(q?q.tlFlatCustomer:tl?.tlFlatCustomer)||0;
+    if(cuv>0){tlRows.push(['Full transload service',cuv]);tlTotal=cuv;}
+  } else {
+    const items=q?q.tlItems:tl?.tlItems;
+    if(items) Object.entries(items).forEach(([k,item])=>{
+      if(!item.included) return;const def=TL_ITEMS_DEF[k];if(!def) return;
+      let qty=def.unit==='perPallet'?pCount:def.unit==='perPalletPerDay'?pCount*(parseInt(item.days)||0):1;
+      const cuv=(parseFloat(item.customerPrice)||0)*qty;
+      if(cuv>0){tlRows.push([def.label+(qty>1?' x '+qty:''),cuv]);tlTotal+=cuv;}
+    });
+  }
+  if(tlTotal>0){
+    drawSection(sectionColors.tl,'TRANSLOAD SERVICES','Facility: Shifl',tlRows,tlTotal);
+  }
+
+  // Outbound
+  const outEquip=q?q.outEquipment:tl?.outEquipment||'Dry Van';
+  const outZip=q?q.outDeliveryZip:tl?.outDeliveryZip||'—';
+  let outTotal=0;
+  if(q){outTotal=q.outCustomerPrice||0;}
+  else if(tl){
+    const outCarrier=parseFloat(tl.outManualRate)||0;
+    outTotal=tl.outMarkupMode==='pct'?outCarrier*(1+(tl.outMarkupAmount||0)/100):outCarrier+(Number(tl.outMarkupAmount)||0);
+  }
+  if(outTotal>0){
+    drawSection(sectionColors.out,'OUTBOUND FTL',
+      'Carrier: Shifl  |  '+outEquip+'  |  Delivery: '+outZip,
+      [['FTL freight rate',outTotal]],outTotal);
+  }
+
+  // Grand total
+  const grandTotal=drayTotal+tlTotal+outTotal;
+  y+=4;
+  doc.setFillColor(...navy);doc.rect(12,y,W-24,16,'F');
+  doc.setFont('helvetica','bold');doc.setFontSize(12);doc.setTextColor(255,255,255);
+  doc.text('GRAND TOTAL',16,y+10);
+  doc.setFontSize(18);doc.text(fmtD(grandTotal),W-14,y+11,{align:'right'});
+  y+=22;
+
+  // Notes
+  const notes=q?q.notes:tl?.notes;
+  if(notes&&notes.trim()){
+    const noteLines=doc.splitTextToSize(notes.trim(),W-32);
+    const boxH=noteLines.length*5+14;
+    doc.setFillColor(240,246,255);doc.roundedRect(12,y,W-24,boxH,3,3,'F');
+    doc.setDrawColor(180,210,240);doc.setLineWidth(.3);doc.roundedRect(12,y,W-24,boxH,3,3,'S');
+    doc.setFont('helvetica','bold');doc.setFontSize(7.5);doc.setTextColor(46,117,182);doc.text('NOTES & CONDITIONS',16,y+7);
+    doc.setFont('helvetica','normal');doc.setFontSize(8.5);doc.setTextColor(55,70,90);
+    noteLines.forEach((line,i)=>doc.text(line,16,y+13+(i*5)));
+  }
+  doc.setFontSize(8);doc.setFont('helvetica','italic');doc.setTextColor(190,195,200);
+  doc.text('Quote valid 30 days  |  Rates subject to change  |  mk@shifl.com',12,278);
+  doc.save('Shifl_Transload_'+customer.replace(/\s+/g,'_')+'_'+date+'.pdf');
+}
+
+async function downloadTlInternalPDF(idx){
+  if(!await loadJsPDF()) return;
   const q=(window._tlHistory||[])[idx];if(!q) return;
-  const modeLabel={full:'Full Transload',inbound:'Inbound Drayage Only',transloadOnly:'Transload Only',outbound:'Outbound Only'};
-  const statusColors={Quoted:'a',Booked:'g',Lost:'gr',Cancelled:'gr'};
-  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
-    <div class="modal" style="width:600px">
-      <div style="background:var(--navy);border-radius:10px;padding:16px 20px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between">
-        <div style="display:flex;align-items:center;gap:12px">
-          <span style="font-size:28px">🔄</span>
-          <div>
-            <div style="font-size:17px;font-weight:800;color:#fff">SHIFL — Transload Quote</div>
-            <div style="font-size:11px;color:rgba(255,255,255,.5)">${q.date} · ${modeLabel[q.mode]||q.mode}</div>
-          </div>
-        </div>
-        <span class="badge ${statusColors[q.status]||'gr'}" style="font-size:13px;padding:4px 12px">${q.status}</span>
-      </div>
-      <div class="g3" style="margin-bottom:18px">
-        <div><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-400);margin-bottom:3px">Customer</div><div style="font-weight:600">${q.customer}</div></div>
-        <div><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-400);margin-bottom:3px">Container</div><div>${q.containerCount||1} × ${q.containerSize}</div></div>
-        <div><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-400);margin-bottom:3px">Pallets / Weight</div><div>${q.palletCount||'—'} pallets${q.weight?' · '+Number(q.weight).toLocaleString()+' lbs':''}</div></div>
-        <div><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-400);margin-bottom:3px">Origin</div><div>${q.originPort||'—'}</div></div>
-        <div><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-400);margin-bottom:3px">Transload Facility</div><div>${q.transloadFacility||'—'}</div></div>
-        <div><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-400);margin-bottom:3px">Delivery</div><div>${q.deliveryZip||'—'}</div></div>
-      </div>
-      <div style="border:1px solid var(--gray-200);border-radius:var(--radius);overflow:hidden;margin-bottom:16px">
-        <table style="width:100%;font-size:13px;border-collapse:collapse">
-          <thead><tr style="background:var(--gray-50)">
-            <th style="padding:8px 14px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-500)">Service</th>
-            <th style="padding:8px 14px;text-align:right;font-size:10px;font-weight:700;color:var(--gray-400)">Carrier cost</th>
-            <th style="padding:8px 14px;text-align:right;font-size:10px;font-weight:700;color:var(--steel)">Customer rate</th>
-          </tr></thead>
-          <tbody>
-            ${q.inboundRate>0?`<tr><td style="padding:10px 14px">Inbound Drayage — ${q.inboundCarrier||'—'}</td><td style="padding:10px 14px;text-align:right;color:var(--gray-400)">${fmtD(q.inboundRate)}</td><td style="padding:10px 14px;text-align:right"></td></tr>`:''}
-            ${q.tlCost>0?`<tr><td style="padding:10px 14px">Transload Handling — ${q.tlFacility||'—'}</td><td style="padding:10px 14px;text-align:right;color:var(--gray-400)">${fmtD(q.tlCost)}</td><td style="padding:10px 14px;text-align:right"></td></tr>`:''}
-            ${q.storageCost>0?`<tr><td style="padding:10px 14px">Storage</td><td style="padding:10px 14px;text-align:right;color:var(--gray-400)">${fmtD(q.storageCost)}</td><td style="padding:10px 14px;text-align:right"></td></tr>`:''}
-            ${q.outboundRate>0?`<tr><td style="padding:10px 14px">Outbound ${q.outboundMode} — ${q.outboundCarrier||'—'}</td><td style="padding:10px 14px;text-align:right;color:var(--gray-400)">${fmtD(q.outboundRate)}</td><td style="padding:10px 14px;text-align:right"></td></tr>`:''}
-            <tr style="background:var(--navy)">
-              <td style="padding:12px 14px;font-weight:700;font-size:13px;color:#fff">TOTAL</td>
-              <td style="padding:12px 14px;text-align:right;color:rgba(255,255,255,.8);font-size:12px">${fmtD(q.totalCarrier)}</td>
-              <td style="padding:12px 14px;text-align:right;font-weight:800;font-size:18px;color:#fff">${fmtD(q.customerTotal)}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-      <div class="modal-foot">
-        <button class="btn" onclick="closeModal()">Close</button>
-        <button class="btn blue" onclick="alert('PDF coming soon!')">📄 Download PDF</button>
-      </div>
-    </div></div>`;
-}
+  const{jsPDF}=window.jspdf;
+  const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+  const W=210;const navy=[26,46,74];const green=[45,125,70];
 
-// ── Transload Carrier Rates ───────────────────────────────────────────────
-let _tlRates=[];
-function loadTlRates(){try{_tlRates=JSON.parse(localStorage.getItem('tl_rates')||'[]');}catch(e){_tlRates=[];}}
-function saveTlRates(){try{localStorage.setItem('tl_rates',JSON.stringify(_tlRates));}catch(e){}}
-function showAddTlRate(){alert('Add transload carrier rate — coming in next build!');}
+  // Header
+  doc.setFillColor(...navy);doc.rect(0,0,W,32,'F');
+  doc.setFillColor(59,142,208);doc.roundedRect(10,5,22,22,3,3,'F');
+  const bx=10,by=5,sc=v=>v/60*22;
+  doc.setFillColor(255,255,255);doc.triangle(bx+sc(10),by+sc(50),bx+sc(25),by+sc(14),bx+sc(44),by+sc(45),'F');
+  doc.setFillColor(220,235,255);doc.triangle(bx+sc(25),by+sc(14),bx+sc(44),by+sc(45),bx+sc(53),by+sc(37),'F');
+  doc.setFillColor(255,255,255);doc.triangle(bx+sc(10),by+sc(50),bx+sc(44),by+sc(45),bx+sc(53),by+sc(50),'F');
+  doc.setDrawColor(59,142,208);doc.setLineWidth(.3);doc.line(bx+sc(25),by+sc(14),bx+sc(44),by+sc(50));
+  doc.setTextColor(255,255,255);doc.setFont('helvetica','bold');doc.setFontSize(18);doc.text('SHIFL',36,19);
+  doc.setFontSize(9);doc.setFont('helvetica','normal');doc.setTextColor(255,255,255,.65);doc.text('Transload Rate Sheet',36,26);
+  const badgeW=54;doc.setFillColor(200,40,40);doc.roundedRect((W-badgeW)/2,9,badgeW,13,3,3,'F');
+  doc.setFont('helvetica','bold');doc.setFontSize(8);doc.setTextColor(255,255,255);
+  doc.text('INTERNAL USE ONLY',W/2,17,{align:'center'});
 
-function renderTlCarriers(){
-  if(!_tlRates.length&&!(window._tlHistory||[]).length){
-    $('page').innerHTML=`<div class="empty"><div class="empty-ico">📋</div><p>No transload carrier rates yet</p><small>Click + Add rate or save quotes to build your rate history</small></div>`;return;
+  // Meta bar
+  const bookedDate=q.bookedDate||'';
+  doc.setFillColor(240,244,248);doc.rect(0,32,W,14,'F');
+  doc.setFont('helvetica','bold');doc.setFontSize(9);doc.setTextColor(...navy);
+  doc.text('Customer: '+q.customer,12,41);
+  doc.setFont('helvetica','normal');doc.setTextColor(100,115,130);
+  doc.text('Date: '+q.date,12,47);
+  doc.text('Status: '+q.status,110,41);
+  if(bookedDate){doc.setTextColor(...green);doc.text('Booked: '+bookedDate,150,41);}
+
+  let y=56;
+  const CX=95,CU=145,CP=W-14; // column x positions: carrier, customer, profit
+
+  function sectionHeader(colorArr,title,subInfo){
+    // Colored title bar
+    doc.setFillColor(...colorArr);doc.rect(12,y,W-24,9,'F');
+    doc.setFont('helvetica','bold');doc.setFontSize(9);doc.setTextColor(255,255,255);
+    doc.text(title,16,y+6.5);
+    y+=11;
+    // Sub info
+    if(subInfo){
+      doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(100,115,130);
+      doc.text(subInfo,16,y+4);y+=8;
+    }
+    // Column header row
+    doc.setFillColor(240,242,246);doc.rect(12,y,W-24,7,'F');
+    doc.setFont('helvetica','bold');doc.setFontSize(7);doc.setTextColor(120,130,145);
+    doc.text('SERVICE',16,y+4.5);
+    doc.text('CARRIER COST',CX,y+4.5,{align:'right'});
+    doc.text('CUSTOMER PRICE',CU,y+4.5,{align:'right'});
+    doc.text('PROFIT',CP,y+4.5,{align:'right'});
+    y+=9;
   }
-  const history=window._tlHistory||[];
-  const histRows=history.map(q=>`<tr>
-    <td class="bold">${q.customer}</td>
-    <td><span class="badge b">${{full:'Full',inbound:'Inbound',transloadOnly:'TL Only',outbound:'Outbound'}[q.mode]||q.mode}</span></td>
-    <td>${q.originPort?q.originPort.split(',')[0]:'—'} → ${q.transloadFacility?q.transloadFacility.split(',')[0]:'—'}</td>
-    <td class="muted">${q.inboundCarrier||'—'} / ${q.tlFacility||'—'} / ${q.outboundCarrier||'—'}</td>
-    <td class="bold">${fmtD(q.totalCarrier)}</td>
-    <td class="muted small">${q.date}</td>
-    <td><span class="badge ${q.status==='Booked'?'g':q.status==='Lost'?'gr':'a'}">${q.status}</span></td>
-  </tr>`).join('');
-  $('page').innerHTML=`<div class="card"><div class="sec-head">Quote history — carrier rates reference</div>
-    <div class="tbl-wrap" style="box-shadow:none;border:none"><table>
-      <thead><tr><th>Customer</th><th>Type</th><th>Lane</th><th>Carriers</th><th>Total cost</th><th>Date</th><th>Status</th></tr></thead>
-      <tbody>${histRows}</tbody>
-    </table></div></div>`;
+
+  function dataRow(label,carrier,customer){
+    const profit=customer-carrier;
+    doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(55,65,80);
+    doc.text(label,16,y);
+    doc.setTextColor(120,130,145);doc.text(carrier>0?fmtD(carrier):'—',CX,y,{align:'right'});
+    doc.setFont('helvetica','bold');doc.setTextColor(...navy);doc.text(customer>0?fmtD(customer):'—',CU,y,{align:'right'});
+    doc.setTextColor(...green);doc.text(profit>0?'+'+fmtD(profit):'—',CP,y,{align:'right'});
+    doc.setDrawColor(235,238,242);doc.setLineWidth(.2);doc.line(12,y+4,W-12,y+4);
+    y+=8;
+  }
+
+  function sectionSubtotal(carrier,customer){
+    const profit=customer-carrier;
+    doc.setFillColor(228,233,242);doc.rect(12,y-2,W-24,11,'F');
+    doc.setFont('helvetica','bold');doc.setFontSize(9);doc.setTextColor(...navy);
+    doc.text('Section total',16,y+5.5);
+    doc.setTextColor(80,90,105);doc.text(fmtD(carrier),CX,y+5.5,{align:'right'});
+    doc.setTextColor(...navy);doc.text(fmtD(customer),CU,y+5.5,{align:'right'});
+    doc.setTextColor(...green);doc.text('+'+fmtD(profit),CP,y+5.5,{align:'right'});
+    y+=15;
+  }
+
+  // ── Drayage ──────────────────────────────────────────────────────────────
+  sectionHeader([26,80,150],'INBOUND DRAYAGE  —  Carrier: '+q.drayCarrier,
+    'Origin: '+q.drayPort+'  to  '+q.drayZip+' ('+q.drayLd+')');
+  const tl=q.rawTl;const sel=tl?S.rates.find(r=>r.id===tl.selDrayId):null;
+  if(sel&&tl){
+    CHARGES.filter(c=>isApplicable(c,tl.drayLd)).forEach(c=>{
+      const cv=Number(sel[c])||0;const cuv=tlCuRate(cv,c,tl);
+      if(!cuv&&!cv) return;dataRow(LABELS[c],cv,cuv);
+    });
+  } else {dataRow('Drayage',q.drayCarrierCost,q.drayCustomerPrice);}
+  sectionSubtotal(q.drayCarrierCost,q.drayCustomerPrice);
+
+  // ── Transload ─────────────────────────────────────────────────────────────
+  sectionHeader([30,100,60],'TRANSLOAD SERVICES  —  Warehouse: '+q.warehouseName,
+    q.warehouseAddress||'');
+  const pCount=parseInt(q.palletCount)||1;
+  if(q.chargeMode==='byItem'&&q.tlItems){
+    Object.entries(q.tlItems).forEach(([k,item])=>{
+      if(!item.included) return;const def=TL_ITEMS_DEF[k];if(!def) return;
+      let qty=def.unit==='perPallet'?pCount:def.unit==='perPalletPerDay'?pCount*(parseInt(item.days)||0):1;
+      dataRow(def.label+(qty>1?' x '+qty:''),
+        (parseFloat(item.carrierCost)||0)*qty,(parseFloat(item.customerPrice)||0)*qty);
+    });
+  } else {dataRow('Full transload service',parseFloat(q.tlFlatCarrier)||0,parseFloat(q.tlFlatCustomer)||0);}
+  sectionSubtotal(q.tlCarrierCost,q.tlCustomerPrice);
+
+  // ── Outbound ──────────────────────────────────────────────────────────────
+  sectionHeader([150,80,0],'OUTBOUND FTL  —  Carrier: '+q.outCarrier,
+    q.outEquipment+' | Delivery: '+q.outDeliveryZip);
+  dataRow('FTL freight rate',q.outCarrierCost,q.outCustomerPrice);
+  sectionSubtotal(q.outCarrierCost,q.outCustomerPrice);
+
+  // ── Grand total ───────────────────────────────────────────────────────────
+  y+=2;
+  doc.setFillColor(...navy);doc.rect(12,y,W-24,15,'F');
+  doc.setFont('helvetica','bold');doc.setFontSize(11);doc.setTextColor(255,255,255);
+  doc.text('GRAND TOTAL',16,y+9.5);
+  doc.setFontSize(8.5);doc.setTextColor(255,255,255,.65);
+  doc.text(fmtD(q.totalCarrier),CX,y+9.5,{align:'right'});
+  doc.setFontSize(15);doc.setTextColor(255,255,255);
+  doc.text(fmtD(q.totalCustomer),CU,y+9.5,{align:'right'});
+  doc.setFontSize(10);doc.setTextColor(100,255,150);
+  doc.text('+'+fmtD(q.profit),CP,y+9.5,{align:'right'});
+  y+=20;
+
+  // ── Billing summary ───────────────────────────────────────────────────────
+  doc.setDrawColor(200,210,220);doc.setLineWidth(.3);doc.line(12,y,W-12,y);y+=8;
+  doc.setFont('helvetica','bold');doc.setFontSize(8);doc.setTextColor(100,115,130);
+  doc.text('BILLING SUMMARY',12,y);y+=8;
+  [['Customer Invoice Total',fmtD(q.totalCustomer),[0,100,160]],
+   ['Carrier Cost',fmtD(q.totalCarrier),[80,90,105]],
+   ['Profit',fmtD(q.profit),[...green]],
+   ['Margin',pct(q.profitPct),[...green]]
+  ].forEach(([l,v,col])=>{
+    doc.setFont('helvetica','normal');doc.setFontSize(10);doc.setTextColor(80,90,105);doc.text(l,16,y);
+    doc.setFont('helvetica','bold');doc.setTextColor(...col);doc.text(v,W-14,y,{align:'right'});
+    doc.setDrawColor(235,238,242);doc.setLineWidth(.2);doc.line(12,y+3,W-12,y+3);y+=9;
+  });
+
+  doc.setFontSize(8);doc.setFont('helvetica','italic');doc.setTextColor(180,185,195);
+  doc.text('Confidential — do not share with carriers or customers.',12,275);
+  doc.text('Generated by Shifl Trucking Quoting  |  '+new Date().toISOString().slice(0,10),12,280);
+  doc.save('Shifl_TL_RateSheet_'+q.customer.replace(/\s+/g,'_')+'_'+q.date+'.pdf');
 }
 
-// ── Transload Dashboard ───────────────────────────────────────────────────
-function renderTlDashboard(){
-  const all=window._tlHistory||[];
-  const booked=all.filter(q=>q.status==='Booked');
-  const decided=all.filter(q=>['Booked','Lost','Cancelled'].includes(q.status));
-  const rev=booked.reduce((s,q)=>s+(q.customerTotal||0),0);
-  const prof=booked.reduce((s,q)=>s+(q.profit||0),0);
-  const winRate=decided.length>0?booked.length/decided.length:0;
-  const modeMap={full:'Full Transload',inbound:'Inbound Only',transloadOnly:'Transload Only',outbound:'Outbound Only'};
-  const modeStats=Object.entries(modeMap).map(([id,lbl])=>({
-    label:lbl,total:all.filter(q=>q.mode===id).length,booked:booked.filter(q=>q.mode===id).length
-  }));
-  $('page').innerHTML=`
-    <div class="kpi-grid" style="margin-bottom:16px">
-      <div class="kpi"><div class="kpi-lbl">Total quotes</div><div class="kpi-val">${all.length}</div><div style="font-size:11px;color:var(--gray-400);margin-top:4px">${booked.length} booked</div></div>
-      <div class="kpi"><div class="kpi-lbl">Win rate</div><div class="kpi-val b">${decided.length>0?pct(winRate):'—'}</div><div style="font-size:11px;color:var(--gray-400);margin-top:4px">of decided quotes</div></div>
-      <div class="kpi"><div class="kpi-lbl">Revenue</div><div class="kpi-val g">${rev>0?fmtD(rev):'—'}</div><div style="font-size:11px;color:var(--gray-400);margin-top:4px">booked only</div></div>
-      <div class="kpi"><div class="kpi-lbl">Profit</div><div class="kpi-val g">${prof>0?fmtD(prof):'—'}</div></div>
-    </div>
-    <div class="card">
-      <div class="sec-head">By service type</div>
-      <table style="width:100%;font-size:13px">
-        <thead><tr><th style="text-align:left;padding:4px 0;font-size:10px">Type</th><th style="text-align:center">Quoted</th><th style="text-align:center">Booked</th></tr></thead>
-        <tbody>${modeStats.map(m=>`<tr>
-          <td style="padding:7px 0">${m.label}</td>
-          <td style="text-align:center;font-weight:600">${m.total}</td>
-          <td style="text-align:center"><span class="badge g">${m.booked}</span></td>
-        </tr>`).join('')}</tbody>
-      </table>
-    </div>
-    ${all.length?`<div class="card" style="margin-top:14px"><div class="sec-head">Recent transload quotes</div>
-      <div class="tbl-wrap" style="box-shadow:none;border:none"><table>
-        <thead><tr><th>Date</th><th>Customer</th><th>Type</th><th>Container</th><th>Total</th><th>Status</th></tr></thead>
-        <tbody>${all.slice(0,5).map(q=>`<tr>
-          <td class="muted small">${q.date}</td><td class="bold">${q.customer}</td>
-          <td><span class="badge b">${{full:'Full',inbound:'Inbound',transloadOnly:'TL Only',outbound:'Outbound'}[q.mode]||q.mode}</span></td>
-          <td>${q.containerCount||1} × ${q.containerSize}</td>
-          <td class="bold" style="color:var(--steel)">${fmtD(q.customerTotal)}</td>
-          <td><span class="badge ${q.status==='Booked'?'g':q.status==='Lost'?'gr':'a'}">${q.status}</span></td>
-        </tr>`).join('')}</tbody>
-      </table></div></div>`:''}`;
-}
-
-function loadTlHistory(){
-  try{window._tlHistory=JSON.parse(localStorage.getItem('tl_history')||'[]');}catch(e){window._tlHistory=[];}
-  loadTlRates();
-}
 // ═══════════════════════════════════════════════════════
 const regCol={NE:'g',WC:'b',SE:'a',Central:'p'};const ldCol={Live:'b',Drop:'gr',Both:'t'};
 function buildRateRows(){
