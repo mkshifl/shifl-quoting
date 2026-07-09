@@ -4196,8 +4196,9 @@ function buildRateRows(){
       if(z!==0) return z;
       return (a.carrier||'').localeCompare(b.carrier||'');
     });
-  if(!filtered.length) return `<tr><td colspan="${CHARGES.length+4}" style="text-align:center;padding:40px;color:var(--gray-400)">No rates found</td></tr>`;
-  return filtered.map(r=>`<tr>
+  if(!filtered.length) return `<tr><td colspan="${CHARGES.length+5}" style="text-align:center;padding:40px;color:var(--gray-400)">No rates found</td></tr>`;
+  return filtered.map((r,i)=>`<tr>
+    <td class="muted small" style="text-align:center;color:var(--gray-400);font-weight:600;width:30px">${i+1}</td>
     <td><span class="badge ${regCol[r.region]||'gr'}">${r.region}</span></td>
     <td class="bold">${r.carrier}${r.notes?`<div class="subtext">${r.notes}</div>`:''}</td>
     <td>${r.destination}</td><td>${r.zip||'—'}</td>
@@ -4231,7 +4232,7 @@ function renderRates(){
     <input type="file" id="csv-fi" accept=".csv" style="display:none" onchange="handleCSVFile(this)">
     <button class="btn" onclick="showManageSpecialZips()">🏠 Special ZIPs</button>
     <button class="btn blue" onclick="showAddRate()">+ Add rate</button>`;
-  $('page').innerHTML=`<div class="tbl-wrap"><table><thead><tr><th>Region</th><th>Carrier</th><th>Destination</th><th>Zip</th><th>Mode</th><th>Base</th><th>Chassis</th><th>Pre-pull</th><th>Det.Port</th><th>Det.Cust</th><th>Storage</th><th>OVW 43k</th><th>OVW 48k</th><th>Bobtail</th><th>Toll</th><th>Total</th><th>Status</th><th></th></tr></thead><tbody id="rates-tbody">${buildRateRows()}</tbody></table></div>`;
+  $('page').innerHTML=`<div class="tbl-wrap"><table><thead><tr><th style="width:30px;text-align:center">#</th><th>Region</th><th>Carrier</th><th>Destination</th><th>Zip</th><th>Mode</th><th>Base</th><th>Chassis</th><th>Pre-pull</th><th>Det.Port</th><th>Det.Cust</th><th>Storage</th><th>OVW 43k</th><th>OVW 48k</th><th>Bobtail</th><th>Toll</th><th>Total</th><th>Status</th><th></th></tr></thead><tbody id="rates-tbody">${buildRateRows()}</tbody></table></div>`;
 }
 function onRateSearch(v){
   S.rSearch=v;
