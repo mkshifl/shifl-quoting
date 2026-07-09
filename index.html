@@ -3185,6 +3185,192 @@ function tlNext(from){
 }
 
 // ── Save quote ────────────────────────────────────────────────────────────
+// ── Transload Quote Log ───────────────────────────────────────────────────
+function renderTlLog(){
+  const history=window._tlHistory||[];
+  if(!history.length){$('page').innerHTML=`<div class="empty"><div class="empty-ico">📁</div><p>No transload quotes yet</p><small>Build a quote on the Quote builder tab and save it</small></div>`;return;}
+  const rows=history.map((q,i)=>`<tr onclick="showTlQuoteModal(${i})" style="cursor:pointer">
+    <td class="muted small">${q.date}</td>
+    <td class="bold">${q.customer}</td>
+    <td class="muted small">${q.drayPort?q.drayPort.split(',')[0]:'—'}</td>
+    <td class="muted small">${q.warehouseName||'—'}</td>
+    <td class="muted small">${q.outDeliveryZip||'—'}</td>
+    <td>${q.palletCount||'—'} pallets</td>
+    <td class="bold" style="color:var(--steel)">${fmtD(q.totalCustomer)}</td>
+    <td style="color:var(--green);font-weight:600">+${fmtD(q.profit)}</td>
+    <td><span class="badge ${q.profitPct>=0.10?'g':'r'}">${pct(q.profitPct)}</span></td>
+    <td onclick="event.stopPropagation()">
+      <select onchange="updateTlStatus(${i},this.value)" style="font-size:12px;padding:4px 7px;width:110px">
+        <option${q.status==='Quoted'?' selected':''}>Quoted</option>
+        <option${q.status==='Booked'?' selected':''}>Booked</option>
+        <option${q.status==='Lost'?' selected':''}>Lost</option>
+        <option${q.status==='Cancelled'?' selected':''}>Cancelled</option>
+      </select>
+    </td>
+    <td onclick="event.stopPropagation()" style="white-space:nowrap">
+      <button class="btn sm ico-btn" onclick="showTlQuoteModal(${i})" title="View">📄</button>
+      <button class="btn sm ico-btn" onclick="deleteTlQuote(${i})" title="Delete" style="margin-left:3px">🗑️</button>
+    </td>
+  </tr>`).join('');
+  $('page').innerHTML=`<div class="tbl-wrap"><table>
+    <thead><tr><th>Date</th><th>Customer</th><th>Origin</th><th>Warehouse</th><th>Delivery</th><th>Pallets</th><th>Total</th><th>Profit</th><th>Margin</th><th>Status</th><th></th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table></div>`;
+}
+function updateTlStatus(idx,status){if(!window._tlHistory?.[idx]) return;window._tlHistory[idx].status=status;try{localStorage.setItem('tl_history',JSON.stringify(window._tlHistory));}catch(e){}}
+function deleteTlQuote(idx){if(!confirm('Delete this quote?')) return;window._tlHistory.splice(idx,1);try{localStorage.setItem('tl_history',JSON.stringify(window._tlHistory));}catch(e){}renderTlLog();}
+
+function showTlQuoteModal(idx){
+  const q=(window._tlHistory||[])[idx];if(!q) return;
+  const statusColors={Quoted:'a',Booked:'g',Lost:'gr',Cancelled:'gr'};
+  function secRow(lbl,carrier,customer){return `<tr><td style="padding:8px 12px">${lbl}</td><td style="padding:8px 12px;text-align:right;color:var(--gray-400)">${carrier>0?fmtD(carrier):'—'}</td><td style="padding:8px 12px;text-align:right;font-weight:600;color:var(--navy)">${customer>0?fmtD(customer):'—'}</td><td style="padding:8px 12px;text-align:right;color:var(--green)">${carrier>0&&customer>0?'+'+fmtD(customer-carrier):'—'}</td></tr>`;}
+  let tlRows='';
+  if(q.chargeMode==='byItem'&&q.tlItems){
+    const pCount=parseInt(q.palletCount)||1;
+    Object.entries(q.tlItems).forEach(([k,item])=>{
+      if(!item.included) return;const def=TL_ITEMS_DEF[k];if(!def) return;
+      let qty=def.unit==='perPallet'?pCount:def.unit==='perPalletPerDay'?pCount*(parseInt(item.days)||0):1;
+      tlRows+=secRow(def.label+(qty>1?' x '+qty:''),(parseFloat(item.carrierCost)||0)*qty,(parseFloat(item.customerPrice)||0)*qty);
+    });
+  } else {tlRows=secRow('Full transload service',parseFloat(q.tlFlatCarrier)||0,parseFloat(q.tlFlatCustomer)||0);}
+  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+    <div class="modal" style="width:680px">
+      <div style="background:var(--navy);border-radius:10px;padding:16px 20px;margin-bottom:20px;display:flex;justify-content:space-between;align-items:center">
+        <div><div style="font-size:17px;font-weight:800;color:#fff">Transload Quote</div>
+        <div style="font-size:11px;color:rgba(255,255,255,.5)">${q.date} · ${q.customer}</div></div>
+        <span class="badge ${statusColors[q.status]||'gr'}" style="font-size:13px;padding:4px 12px">${q.status}</span>
+      </div>
+      <div class="g3" style="margin-bottom:18px">
+        <div><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-400);margin-bottom:3px">Customer</div><div style="font-weight:600">${q.customer}</div></div>
+        <div><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-400);margin-bottom:3px">Pallets</div><div>${q.palletCount||'—'} (${q.cargoType==='floorLoaded'?'Floor Loaded':'Palletized'})</div></div>
+        <div><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-400);margin-bottom:3px">Warehouse</div><div>${q.warehouseName||'—'}</div></div>
+        <div><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-400);margin-bottom:3px">Origin</div><div>${q.drayPort||'—'}</div></div>
+        <div><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-400);margin-bottom:3px">Delivery</div><div>${q.outDeliveryZip||'—'}</div></div>
+        <div><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-400);margin-bottom:3px">Equipment</div><div>${q.outEquipment||'—'}</div></div>
+      </div>
+      ${[
+        {color:'#3b6ea5',bg:'#eff6ff',label:'INBOUND DRAYAGE — '+q.drayCarrier,rows:secRow(q.drayPort+' to '+q.drayZip+' ('+q.drayLd+')',q.drayCarrierCost,q.drayCustomerPrice),ct:q.drayCarrierCost,cu:q.drayCustomerPrice},
+        {color:'#2d7d46',bg:'#f0fdf4',label:'TRANSLOAD — '+q.warehouseName,rows:tlRows,ct:q.tlCarrierCost,cu:q.tlCustomerPrice},
+        {color:'#d97706',bg:'#fffbeb',label:'OUTBOUND FTL — '+q.outCarrier+' ('+q.outEquipment+')',rows:secRow('To '+q.outDeliveryZip,q.outCarrierCost,q.outCustomerPrice),ct:q.outCarrierCost,cu:q.outCustomerPrice},
+      ].map(s=>`
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:${s.color};padding:6px 12px;background:${s.bg};border-radius:6px 6px 0 0">${s.label}</div>
+        <div style="border:1px solid var(--gray-200);border-radius:0 0 6px 6px;overflow:hidden;margin-bottom:10px">
+          <table style="width:100%;font-size:12px;border-collapse:collapse">
+            <thead><tr style="background:var(--gray-50)">
+              <th style="padding:5px 12px;text-align:left;font-size:10px;font-weight:700;color:var(--gray-500)">Service</th>
+              <th style="padding:5px 12px;text-align:right;font-size:10px;font-weight:700;color:var(--gray-400)">Carrier cost</th>
+              <th style="padding:5px 12px;text-align:right;font-size:10px;font-weight:700;color:var(--steel)">Customer price</th>
+              <th style="padding:5px 12px;text-align:right;font-size:10px;font-weight:700;color:var(--green)">Profit</th>
+            </tr></thead>
+            <tbody>${s.rows}</tbody>
+            <tfoot><tr style="background:var(--gray-50)">
+              <td style="padding:7px 12px;font-weight:700">Section total</td>
+              <td style="padding:7px 12px;text-align:right;font-weight:600">${fmtD(s.ct)}</td>
+              <td style="padding:7px 12px;text-align:right;font-weight:700;color:var(--steel)">${fmtD(s.cu)}</td>
+              <td style="padding:7px 12px;text-align:right;font-weight:700;color:var(--green)">+${fmtD(s.cu-s.ct)}</td>
+            </tr></tfoot>
+          </table>
+        </div>`).join('')}
+      <div style="background:var(--navy);border-radius:var(--radius);padding:12px 16px;display:flex;justify-content:space-between;align-items:center">
+        <div style="font-size:15px;font-weight:700;color:#fff">GRAND TOTAL</div>
+        <div style="text-align:right"><div style="font-size:20px;font-weight:800;color:#fff">${fmtD(q.totalCustomer)}</div>
+        <div style="color:#86efac;font-size:12px">+${fmtD(q.profit)} profit · ${pct(q.profitPct)} margin</div></div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn" onclick="closeModal()">Close</button>
+        <button class="btn" onclick="downloadTlCustomerPDF(${idx},null)">📄 Customer PDF</button>
+        <button class="btn green" onclick="downloadTlInternalPDF(${idx})">📋 Rate sheet</button>
+      </div>
+    </div></div>`;
+}
+
+// ── Warehouses ─────────────────────────────────────────────────────────────
+function renderTlWarehouses(){
+  const whs=window._tlWarehouses||[];
+  const rows=whs.map(w=>`<tr>
+    <td class="bold">${w.name}</td><td>${w.address||'—'}</td>
+    <td>${w.city||'—'}, ${w.state||'—'}</td><td>${w.zip}</td>
+    <td class="muted small">${w.phone||'—'}</td><td class="muted small">${w.contact||'—'}</td>
+    <td style="white-space:nowrap">
+      <button class="btn sm ico-btn" onclick="editTlWarehouse('${w.id}')">✏️</button>
+      <button class="btn sm ico-btn" onclick="deleteTlWarehouse('${w.id}')" style="margin-left:3px">🗑️</button>
+    </td>
+  </tr>`).join('');
+  $('page').innerHTML=`<div class="tbl-wrap"><table>
+    <thead><tr><th>Name</th><th>Address</th><th>City/State</th><th>Zip</th><th>Phone</th><th>Contact</th><th></th></tr></thead>
+    <tbody>${rows||'<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--gray-400)">No warehouses yet — click + Add warehouse</td></tr>'}</tbody>
+  </table></div>`;
+}
+function showAddTlWarehouse(prefill){
+  const p=prefill||{};
+  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+    <div class="modal"><div class="modal-title">Add warehouse</div>
+    <div class="g2">
+      <div class="field"><label>Warehouse name *</label><input type="text" id="wh-name" value="${p.name||''}" placeholder="e.g. XYZ Logistics"></div>
+      <div class="field"><label>Zip code *</label><input type="text" id="wh-zip" value="${p.zip||''}" placeholder="90248" maxlength="10"></div>
+    </div>
+    <div class="field"><label>Address</label><input type="text" id="wh-addr" value="${p.address||''}" placeholder="Street address"></div>
+    <div class="g2">
+      <div class="field"><label>City</label><input type="text" id="wh-city" value="${p.city||''}" placeholder="City"></div>
+      <div class="field"><label>State</label><input type="text" id="wh-state" value="${p.state||''}" placeholder="CA" maxlength="2"></div>
+    </div>
+    <div class="g2">
+      <div class="field"><label>Phone (optional)</label><input type="text" id="wh-phone" value="${p.phone||''}" placeholder="+1 (555) 000-0000"></div>
+      <div class="field"><label>Contact name (optional)</label><input type="text" id="wh-contact" value="${p.contact||''}" placeholder="John Smith"></div>
+    </div>
+    <div class="modal-foot"><button class="btn" onclick="closeModal()">Cancel</button>
+    <button class="btn blue" onclick="submitAddTlWarehouse('${p.editId||''}')">Save warehouse</button></div>
+    </div></div>`;
+}
+function submitAddTlWarehouse(editId){
+  const name=($('wh-name')||{}).value?.trim();const zip=($('wh-zip')||{}).value?.trim();
+  if(!name||!zip){alert('Name and zip are required.');return;}
+  const w={id:editId||uid(),name,zip,address:($('wh-addr')||{}).value?.trim()||'',
+    city:($('wh-city')||{}).value?.trim()||'',state:($('wh-state')||{}).value?.trim()||'',
+    phone:($('wh-phone')||{}).value?.trim()||'',contact:($('wh-contact')||{}).value?.trim()||''};
+  if(editId){const idx=(window._tlWarehouses||[]).findIndex(x=>x.id===editId);if(idx>=0) window._tlWarehouses[idx]=w;}
+  else{if(!window._tlWarehouses) window._tlWarehouses=[];window._tlWarehouses.push(w);}
+  saveTlWarehouses();closeModal();renderTlWarehouses();
+}
+function editTlWarehouse(id){const w=(window._tlWarehouses||[]).find(x=>x.id===id);if(!w) return;showAddTlWarehouse({...w,editId:id});}
+function deleteTlWarehouse(id){if(!confirm('Delete this warehouse?')) return;window._tlWarehouses=(window._tlWarehouses||[]).filter(w=>w.id!==id);saveTlWarehouses();renderTlWarehouses();}
+function saveTlWarehouseFromQuote(){
+  const m=S.tl.warehouseManual;if(!m.name||!m.zip){alert('Enter warehouse name and zip first.');return;}
+  const w={id:uid(),name:m.name,zip:m.zip,address:m.address||'',city:m.city||'',state:m.state||'',phone:'',contact:''};
+  if(!window._tlWarehouses) window._tlWarehouses=[];
+  window._tlWarehouses.push(w);saveTlWarehouses();
+  S.tl.warehouseId=w.id;S.tl.useManual=false;
+  alert('✅ "'+m.name+'" saved to warehouse list.');renderTlBuilder();
+}
+
+// ── Dashboard ─────────────────────────────────────────────────────────────
+function renderTlDashboard(){
+  const all=window._tlHistory||[];
+  const booked=all.filter(q=>q.status==='Booked');
+  const decided=all.filter(q=>['Booked','Lost','Cancelled'].includes(q.status));
+  const rev=booked.reduce((s,q)=>s+(q.totalCustomer||0),0);
+  const prof=booked.reduce((s,q)=>s+(q.profit||0),0);
+  const winRate=decided.length>0?booked.length/decided.length:0;
+  $('page').innerHTML=`
+    <div class="kpi-grid" style="margin-bottom:16px">
+      <div class="kpi"><div class="kpi-lbl">Total quotes</div><div class="kpi-val">${all.length}</div><div style="font-size:11px;color:var(--gray-400);margin-top:4px">${booked.length} booked</div></div>
+      <div class="kpi"><div class="kpi-lbl">Win rate</div><div class="kpi-val b">${decided.length>0?pct(winRate):'—'}</div><div style="font-size:11px;color:var(--gray-400);margin-top:4px">of decided quotes</div></div>
+      <div class="kpi"><div class="kpi-lbl">Revenue</div><div class="kpi-val g">${rev>0?fmtD(rev):'—'}</div><div style="font-size:11px;color:var(--gray-400);margin-top:4px">booked only</div></div>
+      <div class="kpi"><div class="kpi-lbl">Profit</div><div class="kpi-val g">${prof>0?fmtD(prof):'—'}</div></div>
+    </div>
+    ${all.length?`<div class="card"><div class="sec-head">Recent transload quotes</div>
+      <div class="tbl-wrap" style="box-shadow:none;border:none"><table>
+        <thead><tr><th>Date</th><th>Customer</th><th>Origin</th><th>Warehouse</th><th>Total</th><th>Status</th></tr></thead>
+        <tbody>${all.slice(0,8).map(q=>`<tr>
+          <td class="muted small">${q.date}</td><td class="bold">${q.customer}</td>
+          <td class="muted small">${q.drayPort?q.drayPort.split(',')[0]:'—'}</td>
+          <td class="muted small">${q.warehouseName||'—'}</td>
+          <td class="bold" style="color:var(--steel)">${fmtD(q.totalCustomer)}</td>
+          <td><span class="badge ${q.status==='Booked'?'g':q.status==='Lost'?'gr':'a'}">${q.status}</span></td>
+        </tr>`).join('')}</tbody>
+      </table></div></div>`:'<div class="empty"><div class="empty-ico">📊</div><p>No transload quotes yet — save a quote to see stats here</p></div>'}`;
+}
+
 function saveTlQuote(){
   const tl=S.tl;const t=calcTlTotals(tl);
   if(!tl.drayPort){alert('Please complete Step 1 first.');return;}
