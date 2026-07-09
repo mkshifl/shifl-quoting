@@ -3782,7 +3782,9 @@ function tlNext(from){
     if(S.tl.useManual&&!S.tl.warehouseManual.name){alert('Please enter the warehouse name.');return;}
     S.tl.step=3;
   } else if(from===3){
-    if(!S.tl.outDeliveryZip){alert('Please enter the delivery zip code.');return;}
+    const hasMainZip=S.tl.outDeliveryZip;
+    const hasMultiStopZips=S.tl.outMultiStop&&(S.tl.outStops||[]).some(s=>s.zip);
+    if(!hasMainZip&&!hasMultiStopZips){alert('Please enter at least one delivery zip code.');return;}
     S.tl.step=4;
   }
   renderTlBuilder();
