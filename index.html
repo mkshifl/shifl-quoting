@@ -2717,8 +2717,8 @@ const CHARGE_DESC={
   bobtail:'',toll:'when applicable'
 };
 
-function _generatePDF(q){
-  const{jsPDF}=window.jspdf;const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+function _generatePDF(q, existingDoc){
+  const{jsPDF}=window.jspdf;const doc=existingDoc||new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
   const W=210;const navy=[26,46,74];const steel=[46,117,182];
 
   // ── Header band ──────────────────────────────────────
@@ -2832,7 +2832,7 @@ function _generatePDF(q){
   // ── Page footer ───────────────────────────────────────
   doc.setFontSize(8);doc.setFont('helvetica','normal');doc.setTextColor(190,195,200);
   doc.text('Quote valid 30 days · Rates subject to change · mk@shifl.com',12,278);
-  doc.save('Shifl_Quote_'+(q.quoteNum||'draft')+'_'+q.zip+'_'+q.date+'.pdf');
+  if(!existingDoc) doc.save('Shifl_Quote_'+(q.quoteNum||'draft')+'_'+q.zip+'_'+q.date+'.pdf');
 }
 
 // ═══════════════════════════════════════════════════════
@@ -3846,7 +3846,21 @@ function tlNext(from){
 function renderTlLog(){
   const history=window._tlHistory||[];
   if(!history.length){$('page').innerHTML=`<div class="empty"><div class="empty-ico">📁</div><p>No transload quotes yet</p><small>Build a quote on the Quote builder tab and save it</small></div>`;return;}
+  if(!window._tlSelected) window._tlSelected=new Set();
+  const sel=window._tlSelected;
+  const selCount=sel.size;
+  $('topbar-right').innerHTML=`
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;color:var(--gray-500)">
+        <input type="checkbox" ${selCount===history.length&&selCount>0?'checked':''} onchange="if(this.checked){window._tlSelected=new Set(Array.from({length:${history.length}},(_,i)=>i));}else{window._tlSelected=new Set();}renderTlLog()" style="width:auto">
+        ${selCount>0?`<span style="font-weight:600;color:var(--navy)">${selCount} selected</span>`:'Select all'}
+      </label>
+      ${selCount>0?`<button class="btn blue" onclick="downloadSelectedTlPDFs()">📄 Download ${selCount} as 1 PDF</button>
+        <button class="btn" onclick="window._tlSelected=new Set();renderTlLog()">Clear</button>`:''}
+    </div>`;
   const rows=history.map((q,i)=>`<tr onclick="showTlQuoteModal(${i})" style="cursor:pointer">
+    <td onclick="event.stopPropagation()" style="width:32px;text-align:center">
+      <input type="checkbox" ${sel.has(i)?'checked':''} onchange="toggleTlSelect(${i},this.checked)" style="width:auto;cursor:pointer"></td>
     <td class="muted small">${q.date}</td>
     <td class="bold">${q.customer}</td>
     <td class="muted small">${q.drayPort?q.drayPort.split(',')[0]:'—'}</td>
@@ -3870,9 +3884,29 @@ function renderTlLog(){
     </td>
   </tr>`).join('');
   $('page').innerHTML=`<div class="tbl-wrap"><table>
-    <thead><tr><th>Date</th><th>Customer</th><th>Origin</th><th>Warehouse</th><th>Delivery</th><th>Pallets</th><th>Total</th><th>Profit</th><th>Margin</th><th>Status</th><th></th></tr></thead>
+    <thead><tr><th style="width:32px"></th><th>Date</th><th>Customer</th><th>Origin</th><th>Warehouse</th><th>Delivery</th><th>Pallets</th><th>Total</th><th>Profit</th><th>Margin</th><th>Status</th><th></th></tr></thead>
     <tbody>${rows}</tbody>
   </table></div>`;
+}
+function toggleTlSelect(idx,checked){
+  if(!window._tlSelected) window._tlSelected=new Set();
+  if(checked) window._tlSelected.add(idx); else window._tlSelected.delete(idx);
+  renderTlLog();
+}
+async function downloadSelectedTlPDFs(){
+  const indices=Array.from(window._tlSelected||[]).sort((a,b)=>a-b);
+  if(!indices.length){alert('Select at least one quote first.');return;}
+  if(!await loadJsPDF()) return;
+  const{jsPDF}=window.jspdf;
+  const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+  indices.forEach((idx,i)=>{
+    const q=(window._tlHistory||[])[idx];if(!q) return;
+    if(i>0) doc.addPage();
+    downloadTlCustomerPDF(idx,null,doc); // pass doc to avoid saving
+  });
+  doc.save('Shifl_Transload_Quotes_Combined_'+new Date().toISOString().slice(0,10)+'.pdf');
+  window._tlSelected=new Set();
+  renderTlLog();
 }
 function updateTlStatus(idx,status){
   if(!window._tlHistory?.[idx]) return;
@@ -4084,13 +4118,13 @@ async function loadJsPDF(){
   catch(e){alert('PDF library failed to load.');return false;}
 }
 
-async function downloadTlCustomerPDF(idx, rawTl){
-  if(!await loadJsPDF()) return;
+async function downloadTlCustomerPDF(idx, rawTl, existingDoc){
+  if(!existingDoc&&!await loadJsPDF()) return;
   const q=idx!==null&&idx!==undefined?(window._tlHistory||[])[idx]:null;
   const tl=rawTl||(q?q.rawTl:null);
   if(!tl&&!q){alert('No quote data.');return;}
   const{jsPDF}=window.jspdf;
-  const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+  const doc=existingDoc||new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
   const W=210;const navy=[26,46,74];
   const date=q?q.date:new Date().toISOString().slice(0,10);
   const customer=q?q.customer:tl?.customer||'—';
@@ -4244,7 +4278,7 @@ async function downloadTlCustomerPDF(idx, rawTl){
   }
   doc.setFontSize(8);doc.setFont('helvetica','italic');doc.setTextColor(190,195,200);
   doc.text('Quote valid 30 days  |  Rates subject to change  |  mk@shifl.com',12,278);
-  doc.save('Shifl_Transload_'+customer.replace(/\s+/g,'_')+'_'+date+'.pdf');
+  if(!existingDoc) doc.save('Shifl_Transload_'+customer.replace(/\s+/g,'_')+'_'+date+'.pdf');
 }
 
 async function downloadTlInternalPDF(idx){
@@ -4621,9 +4655,13 @@ async function confirmImport(){
 // ═══════════════════════════════════════════════════════
 function buildLogRows(){
   const f=S.logFilter;const filtered=S.quotes.filter(q=>f==='all'||q.status===f);
-  if(!filtered.length) return `<tr><td colspan="11" style="text-align:center;padding:40px;color:var(--gray-400)">No quotes${f!=='all'?' with status "'+f+'"':''}</td></tr>`;
+  if(!filtered.length) return `<tr><td colspan="12" style="text-align:center;padding:40px;color:var(--gray-400)">No quotes${f!=='all'?' with status "'+f+'"':''}</td></tr>`;
+  if(!window._draySelected) window._draySelected=new Set();
+  const sel=window._draySelected;
   return filtered.map(q=>`
     <tr onclick="showQuoteModal('${q.id}')" style="cursor:pointer">
+      <td onclick="event.stopPropagation()" style="width:32px;text-align:center">
+        <input type="checkbox" ${sel.has(q.id)?'checked':''} onchange="toggleDraySelect('${q.id}',this.checked)" style="width:auto;cursor:pointer"></td>
       <td class="muted small">#${q.quoteNum}${q.shiflRef?`<div style="font-size:10px;color:var(--steel);font-weight:600">${q.shiflRef}</div>`:''}</td>
       <td>${q.date}</td>
       <td class="bold">${q.customer}</td>
@@ -4641,9 +4679,41 @@ function buildLogRows(){
       </td>
     </tr>`).join('');
 }
+function toggleDraySelect(id,checked){
+  if(!window._draySelected) window._draySelected=new Set();
+  if(checked) window._draySelected.add(id); else window._draySelected.delete(id);
+  renderLog();
+}
+async function downloadSelectedDrayPDFs(){
+  const ids=Array.from(window._draySelected||[]);
+  if(!ids.length){alert('Select at least one quote first.');return;}
+  if(!await loadJsPDF()) return;
+  const{jsPDF}=window.jspdf;
+  const quotes=ids.map(id=>S.quotes.find(q=>q.id===id)).filter(Boolean);
+  const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+  for(let i=0;i<quotes.length;i++){
+    if(i>0) doc.addPage();
+    await _renderSavedQuoteOnDoc(doc,quotes[i]);
+  }
+  doc.save('Shifl_Drayage_Quotes_Combined_'+new Date().toISOString().slice(0,10)+'.pdf');
+  window._draySelected=new Set();
+  renderLog();
+}
 function renderLog(){
-  $('topbar-right').innerHTML=`<select id="log-filter" onchange="onLogFilter(this.value)" style="width:150px"><option value="all"${S.logFilter==='all'?' selected':''}>All statuses</option><option value="Quoted"${S.logFilter==='Quoted'?' selected':''}>Quoted</option><option value="Booked"${S.logFilter==='Booked'?' selected':''}>Booked</option><option value="Lost"${S.logFilter==='Lost'?' selected':''}>Lost</option><option value="Expired"${S.logFilter==='Expired'?' selected':''}>Expired</option></select><button class="btn" onclick="exportQuoteLog()">📥 Export CSV</button>`;
-  $('page').innerHTML=`<div class="tbl-wrap"><table><thead><tr><th>#</th><th>Date</th><th>Customer</th><th>Lane</th><th>Carrier</th><th>Carrier total</th><th>Customer total</th><th>Profit</th><th>Margin</th><th>Status</th><th></th></tr></thead><tbody id="log-tbody">${buildLogRows()}</tbody></table></div>`;
+  if(!window._draySelected) window._draySelected=new Set();
+  const selCount=window._draySelected.size;
+  $('topbar-right').innerHTML=`
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;color:var(--gray-500)">
+        <input type="checkbox" ${selCount===S.quotes.length&&selCount>0?'checked':''} onchange="if(this.checked){window._draySelected=new Set(S.quotes.map(q=>q.id));}else{window._draySelected=new Set();}renderLog()" style="width:auto">
+        ${selCount>0?`<span style="font-weight:600;color:var(--navy)">${selCount} selected</span>`:'Select all'}
+      </label>
+      ${selCount>0?`<button class="btn blue" onclick="downloadSelectedDrayPDFs()">📄 Download ${selCount} as 1 PDF</button>
+        <button class="btn" onclick="window._draySelected=new Set();renderLog()">Clear</button>`:''}
+      <select id="log-filter" onchange="onLogFilter(this.value)" style="width:150px"><option value="all"${S.logFilter==='all'?' selected':''}>All statuses</option><option value="Quoted"${S.logFilter==='Quoted'?' selected':''}>Quoted</option><option value="Booked"${S.logFilter==='Booked'?' selected':''}>Booked</option><option value="Lost"${S.logFilter==='Lost'?' selected':''}>Lost</option><option value="Expired"${S.logFilter==='Expired'?' selected':''}>Expired</option></select>
+      <button class="btn" onclick="exportQuoteLog()">📥 Export CSV</button>
+    </div>`;
+  $('page').innerHTML=`<div class="tbl-wrap"><table><thead><tr><th style="width:32px"></th><th>#</th><th>Date</th><th>Customer</th><th>Lane</th><th>Carrier</th><th>Carrier total</th><th>Customer total</th><th>Profit</th><th>Margin</th><th>Status</th><th></th></tr></thead><tbody id="log-tbody">${buildLogRows()}</tbody></table></div>`;
 }
 function onLogFilter(v){S.logFilter=v;const t=$('log-tbody');if(t) t.innerHTML=buildLogRows();}
 async function updateStatus(id,status){
@@ -4957,7 +5027,22 @@ function showQuoteModal(id){
       <button class="btn blue" onclick="downloadSavedPDF('${id}')">📄 Download PDF</button></div>
   </div></div>`;
 }
-async function downloadSavedPDF(id){
+async function downloadSelectedDrayPDFs(){
+  const ids=Array.from(window._draySelected||[]);
+  if(!ids.length){alert('Select at least one quote first.');return;}
+  if(!await loadJsPDF()) return;
+  const{jsPDF}=window.jspdf;
+  const quotes=ids.map(id=>S.quotes.find(q=>q.id===id)).filter(Boolean);
+  if(!quotes.length) return;
+  const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+  quotes.forEach((q,i)=>{
+    if(i>0) doc.addPage();
+    _generatePDF(q,doc);
+  });
+  doc.save('Shifl_Drayage_Quotes_Combined_'+new Date().toISOString().slice(0,10)+'.pdf');
+  window._draySelected=new Set();
+  renderLog();
+}
   const q=S.quotes.find(q=>q.id===id);if(!q) return;
   if(typeof window.jspdf==='undefined'){try{await new Promise((res,rej)=>{const s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';s.onload=res;s.onerror=rej;document.head.appendChild(s);});}catch(e){printSavedQuote(id);return;}}
   _generatePDF(q);
