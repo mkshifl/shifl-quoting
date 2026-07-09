@@ -888,11 +888,6 @@ function renderQuote(){
           <div class="field"><label>Live or Drop</label>
             <select onchange="onLd(this.value)"><option${qi.ld==='Live'?' selected':''}>Live</option><option${qi.ld==='Drop'?' selected':''}>Drop</option><option${qi.ld==='Both'?' selected':''}>Both</option></select></div>
         </div>
-        <div class="g2">
-          <div class="field"><label>Shifl Ref # <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:11px;color:var(--gray-400)">(optional — assigned when approved)</span></label>
-            <input type="text" value="${qi.shiflRef||''}" oninput="S.qi.shiflRef=this.value" placeholder="e.g. SHF-2026-0042"></div>
-          <div></div>
-        </div>
       </div>
       <div class="card"><div class="sec-head">Pricing</div><div id="pricing-section">${buildPricingSection()}</div></div>
       <div class="card" id="lane-history-card" style="${qi.zip?'':'display:none'}">
@@ -4607,13 +4602,16 @@ function showQuoteModal(id){
       <div><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-400);margin-bottom:3px">Delivery zip</div><div style="font-weight:600">${q.zip}${getSpecialZipBadge(q.zip)}</div></div>
       <div><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-400);margin-bottom:3px">Destination</div><div style="font-size:13px">${q.destination||'—'}</div></div>
     </div>
-    <div style="margin-bottom:14px;padding:10px 14px;background:var(--blue-bg);border-radius:var(--radius);display:flex;align-items:center;gap:12px">
-      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-500)">Shifl Ref #</div>
-      <input type="text" value="${q.shiflRef||''}" placeholder="e.g. SHF-2026-0042"
+    <div style="margin-bottom:14px;padding:10px 14px;background:${q.status==='Booked'?'#f0fdf4;border:1px solid #86efac':'var(--blue-bg)'};border-radius:var(--radius);display:flex;align-items:center;gap:12px">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:${q.status==='Booked'?'#2d7d46':'var(--gray-500)'}">Shifl Ref #${q.status==='Booked'?' ✱':''}</div>
+      <input type="text" value="${q.shiflRef||''}" placeholder="${q.status==='Booked'?'Assign reference number…':'Only assigned after booking'}"
+        ${q.status!=='Booked'?'disabled':''} 
         oninput="S.quotes.find(q=>q.id==='${id}').shiflRef=this.value"
         onblur="dbSaveQuote(S.quotes.find(q=>q.id==='${id}'))"
-        style="flex:1;padding:5px 10px;font-size:13px;font-weight:600;border:1px solid var(--gray-200);border-radius:var(--radius);font-family:inherit">
-      <span style="font-size:11px;color:var(--gray-400)">Type to assign or update</span>
+        style="flex:1;padding:5px 10px;font-size:13px;font-weight:600;border:1px solid ${q.status==='Booked'?'#86efac':'var(--gray-200)'};border-radius:var(--radius);font-family:inherit;background:${q.status==='Booked'?'#fff':'var(--gray-50)'}">
+      <span style="font-size:11px;color:${q.status==='Booked'?'#2d7d46':'var(--gray-400)'}">
+        ${q.status==='Booked'?'Type to assign — auto-saves':'Mark as Booked to assign ref#'}
+      </span>
     </div>
     <div style="border:1px solid var(--gray-200);border-radius:var(--radius);overflow:hidden;margin-bottom:16px">
       <table style="width:100%;font-size:13px;border-collapse:collapse">
