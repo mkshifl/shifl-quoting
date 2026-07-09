@@ -1538,13 +1538,17 @@ function renderFqLog(){
     $('page').innerHTML=`<div class="empty"><div class="empty-ico">📁</div><p>No freight quotes saved yet</p><small>Build a quote on the Quote builder tab and save it</small></div>`;
     return;
   }
+  if(!window._fqSelected) window._fqSelected=new Set();
+  const sel=window._fqSelected;
   const rows=history.map((q,i)=>`
-    <tr onclick="showFqQuoteModal(${i})" style="cursor:pointer" title="Click to view quote">
+    <tr style="cursor:pointer" onclick="showFqQuoteModal(${i})" title="Click to view">
+      <td onclick="event.stopPropagation()" style="width:32px;text-align:center">
+        <input type="checkbox" ${sel.has(i)?'checked':''} onchange="toggleFqSelect(${i},this.checked)" style="width:auto;cursor:pointer"></td>
       <td class="muted small">${q.date}</td>
       <td class="bold">${q.customer||'—'}</td>
       <td><span class="badge ${q.fqMode==='FTL'?'b':q.fqMode==='LTL'?'p':'t'}">${q.fqMode}</span>
           ${q.fqEquip?`<span class="badge gr" style="margin-left:4px">${q.fqEquip}</span>`:''}</td>
-      <td class="bold">${q.pickupZip} → ${q.deliveryZip}</td>
+      <td class="bold">${q.pickupZip} -> ${q.deliveryZip}</td>
       <td>${q.carrier}</td>
       <td class="muted">${fmtD(q.carrierRate)}</td>
       <td class="bold" style="color:var(--steel)">${fmtD(q.customerRate)}</td>
@@ -1564,14 +1568,60 @@ function renderFqLog(){
         <button class="btn sm ico-btn" onclick="deleteFqQuote(${i})" title="Delete" style="margin-left:3px">🗑️</button>
       </td>
     </tr>`).join('');
+
+  // Topbar — show batch download when items selected
+  const selCount=sel.size;
+  $('topbar-right').innerHTML=`
+    <div style="display:flex;align-items:center;gap:10px">
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;color:var(--gray-500)">
+        <input type="checkbox" id="fq-select-all" ${selCount===history.length&&selCount>0?'checked':''} onchange="toggleFqSelectAll(this.checked)" style="width:auto">
+        ${selCount>0?`<span style="font-weight:600;color:var(--navy)">${selCount} selected</span>`:' Select all'}
+      </label>
+      ${selCount>0?`
+        <button class="btn blue" onclick="downloadSelectedFqPDFs()">📄 Download ${selCount} as 1 PDF</button>
+        <button class="btn" onclick="window._fqSelected=new Set();renderFqLog()">Clear</button>
+      `:''}
+    </div>`;
+
   $('page').innerHTML=`
     <div class="tbl-wrap"><table>
       <thead><tr>
+        <th style="width:32px"></th>
         <th>Date</th><th>Customer</th><th>Type</th><th>Lane</th><th>Carrier</th>
         <th>Carrier rate</th><th>Customer rate</th><th>Profit</th><th>Margin</th><th>Status</th><th></th>
       </tr></thead>
       <tbody>${rows}</tbody>
     </table></div>`;
+}
+
+function toggleFqSelect(idx,checked){
+  if(!window._fqSelected) window._fqSelected=new Set();
+  if(checked) window._fqSelected.add(idx); else window._fqSelected.delete(idx);
+  renderFqLog();
+}
+function toggleFqSelectAll(checked){
+  const history=window._fqHistory||[];
+  window._fqSelected=checked?new Set(history.map((_,i)=>i)):new Set();
+  renderFqLog();
+}
+
+async function downloadSelectedFqPDFs(){
+  const sel=Array.from(window._fqSelected||[]).sort((a,b)=>a-b);
+  if(!sel.length){alert('Select at least one quote first.');return;}
+  if(!await loadJsPDF()) return;
+  const{jsPDF}=window.jspdf;
+  const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+  const W=210;const navy=[26,46,74];
+
+  for(let i=0;i<sel.length;i++){
+    const q=(window._fqHistory||[])[sel[i]];
+    if(!q) continue;
+    if(i>0) doc.addPage();
+    renderFqQuoteOnDoc(doc,q,W,navy);
+  }
+  doc.save('Shifl_Freight_Quotes_Combined_'+new Date().toISOString().slice(0,10)+'.pdf');
+  window._fqSelected=new Set();
+  renderFqLog();
 }
 
 function updateFqStatus(idx,status){
@@ -1838,19 +1888,10 @@ function printFqQuote(idx){
   win.document.close();
 }
 
-async function downloadFqPDF(idx){
-  const q=(window._fqHistory||[])[idx];if(!q) return;
-  if(typeof window.jspdf==='undefined'){
-    try{await new Promise((res,rej)=>{const s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';s.onload=res;s.onerror=rej;document.head.appendChild(s);});}
-    catch(e){printFqQuote(idx);return;}
-  }
-  const{jsPDF}=window.jspdf;
-  const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
-  const W=210;const navy=[26,46,74];const steel=[46,117,182];
-  // Header
-  doc.setFillColor(...navy);doc.rect(0,0,W,32,'F');
-  doc.setFillColor(59,142,208);doc.roundedRect(10,5,22,22,3,3,'F');
+function renderFqQuoteOnDoc(doc,q,W,navy){
   const bx=10,by=5,bs=22,sc=v=>v/60*bs;
+  doc.setFillColor(...navy);doc.rect(0,0,W,32,'F');
+  doc.setFillColor(59,142,208);doc.roundedRect(bx,by,bs,bs,3,3,'F');
   doc.setFillColor(255,255,255);doc.triangle(bx+sc(10),by+sc(50),bx+sc(25),by+sc(14),bx+sc(44),by+sc(45),'F');
   doc.setFillColor(220,235,255);doc.triangle(bx+sc(25),by+sc(14),bx+sc(44),by+sc(45),bx+sc(53),by+sc(37),'F');
   doc.setFillColor(255,255,255);doc.triangle(bx+sc(10),by+sc(50),bx+sc(44),by+sc(45),bx+sc(53),by+sc(50),'F');
@@ -1858,20 +1899,25 @@ async function downloadFqPDF(idx){
   doc.setTextColor(255,255,255);doc.setFont('helvetica','bold');doc.setFontSize(20);doc.text('SHIFL',36,20);
   doc.setFontSize(9);doc.setFont('helvetica','normal');doc.setTextColor(255,255,255,.6);doc.text('Freight Quote',36,27);
   doc.setFontSize(9);doc.setTextColor(255,255,255);doc.text(q.date,W-12,20,{align:'right'});
-  // Meta
-  const date=new Date(q.date).toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
-  const meta=[['Customer',q.customer||'—'],['Carrier','Shifl'],['Freight type',fqTypeLabel(q)],['Weight',q.weight?Number(q.weight).toLocaleString()+' lbs':'—'],['Pickup zip',q.pickupZip],['Delivery zip',q.deliveryZip],...(q.transitTime?[['Est. transit time',q.transitTime]]:[])];
+  const meta=[['Customer',q.customer||'-'],['Carrier','Shifl'],['Freight type',fqTypeLabel(q)],['Weight',q.weight?Number(q.weight).toLocaleString()+' lbs':'-'],['Pickup zip',q.pickupZip],['Delivery zip',q.deliveryZip],...(q.transitTime?[['Est. transit time',q.transitTime]]:[])];
   let y=44;
-  meta.forEach(([lbl,val],i)=>{const x=i%2===0?12:110;if(i%2===0&&i>0) y+=13;doc.setFontSize(7);doc.setFont('helvetica','bold');doc.setTextColor(150,150,150);doc.text(lbl.toUpperCase(),x,y);doc.setFontSize(10);doc.setFont('helvetica','normal');doc.setTextColor(30,50,74);doc.text(String(val),x,y+5);});
+  meta.forEach(([lbl,val],i)=>{const x=i%2===0?12:110;if(i%2===0&&i>0) y+=13;doc.setFontSize(7);doc.setFont('helvetica','bold');doc.setTextColor(150,150,150);doc.text(lbl.toUpperCase(),x,y);doc.setFontSize(10);doc.setFont('helvetica','normal');doc.setTextColor(30,50,74);doc.text(String(val||'-'),x,y+5);});
   y+=20;
-  // Rate box
   doc.setFillColor(232,241,252);doc.roundedRect(12,y,W-24,28,3,3,'F');
   doc.setDrawColor(197,217,240);doc.setLineWidth(.5);doc.roundedRect(12,y,W-24,28,3,3,'S');
   doc.setFont('helvetica','bold');doc.setFontSize(8);doc.setTextColor(91,138,184);doc.text('FREIGHT RATE',16,y+10);
   doc.setFontSize(28);doc.setTextColor(...navy);doc.text(fmtD(q.customerRate),W-16,y+22,{align:'right'});
   y+=36;
-  if(q.notes){doc.setFillColor(249,250,251);doc.roundedRect(12,y,W-24,14,2,2,'F');doc.setFont('helvetica','bold');doc.setFontSize(9);doc.setTextColor(80,90,105);doc.text('Notes: ',16,y+9);doc.setFont('helvetica','normal');doc.text(q.notes,36,y+9);}
-  doc.setFontSize(8);doc.setFont('helvetica','normal');doc.setTextColor(190,195,200);doc.text('Quote valid 30 days · Rates subject to change · mk@shifl.com',12,278);
+  if(q.notes){doc.setFillColor(249,250,251);doc.roundedRect(12,y,W-24,14,2,2,'F');doc.setFont('helvetica','bold');doc.setFontSize(9);doc.setTextColor(80,90,105);doc.text('Notes: ',16,y+9);doc.setFont('helvetica','normal');const nl=doc.splitTextToSize(q.notes,W-50);doc.text(nl[0],36,y+9);y+=18;}
+  doc.setFontSize(8);doc.setFont('helvetica','normal');doc.setTextColor(190,195,200);doc.text('Quote valid 30 days - Rates subject to change - mk@shifl.com',12,278);
+}
+async function downloadFqPDF(idx){
+  if(!await loadJsPDF()) return;
+  const q=(window._fqHistory||[])[idx];if(!q) return;
+  const{jsPDF}=window.jspdf;
+  const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+  const W=210;const navy=[26,46,74];
+  renderFqQuoteOnDoc(doc,q,W,navy);
   doc.save('Shifl_FreightQuote_'+q.pickupZip+'_'+q.deliveryZip+'_'+q.date+'.pdf');
 }
 
