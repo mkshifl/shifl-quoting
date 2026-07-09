@@ -880,9 +880,9 @@ function renderQuote(){
             <datalist id="port-dl">${US_PORTS.map(p=>`<option value="${p}">`).join('')}</datalist></div>
         </div>
         <div class="g2">
-          <div class="field">
+          <div class="field" style="max-width:160px">
             <label>Delivery zip</label>
-            <input type="text" value="${qi.zip}" oninput="onZip(this.value)" placeholder="e.g. 07728" maxlength="10">
+            <input type="text" value="${qi.zip}" oninput="onZip(this.value)" placeholder="e.g. 07728" maxlength="10" style="width:100%">
             ${getSpecialZipBadge(qi.zip)}
           </div>
           <div class="field"><label>Live or Drop</label>
