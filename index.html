@@ -1726,6 +1726,8 @@ function showFqQuoteModal(idx){
   // Pre-compute conditionals to avoid nested template literals
   const carrierBtn=q.status==='Booked'
     ?'<button class="btn green" onclick="downloadFqCarrierPDF('+idx+')">📋 Carrier rate sheet</button>':'';
+  const bolBtn=(q.status==='Booked'&&(q.fqMode==='FTL'||(q.fqMode==='LCL'&&q.fqEquip==='Box Truck')))
+    ?'<button class="btn" onclick="showBolModal('+idx+',\'fq\')">📝 Generate BOL</button>':'';
   const notesHtml=q.notes
     ?'<div style="background:var(--gray-50);border-radius:var(--radius);padding:10px 14px;margin-bottom:14px;font-size:13px;color:var(--gray-600)"><strong>Notes:</strong> '+q.notes+'</div>':'';
   $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
@@ -1770,6 +1772,7 @@ function showFqQuoteModal(idx){
       <div class="modal-foot">
         <button class="btn" onclick="closeModal()">Close</button>
         ${carrierBtn}
+        ${bolBtn}
         <button class="btn" onclick="printFqQuote(${idx})">🖨️ Print</button>
         <button class="btn blue" onclick="downloadFqPDF(${idx})">📄 Download PDF</button>
       </div>
@@ -2521,7 +2524,278 @@ function _generatePDF(q){
 }
 
 // ═══════════════════════════════════════════════════════
-// TRANSLOAD QUOTING — Full Wizard Implementation
+// BILL OF LADING
+// ═══════════════════════════════════════════════════════
+function showBolModal(idx, source){
+  const q=source==='fq'?(window._fqHistory||[])[idx]:null;
+  if(!q) return;
+  const bolNum='BOL-'+new Date().toISOString().slice(0,10).replace(/-/g,'')+'-'+(idx+1).toString().padStart(3,'0');
+  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+    <div class="modal" style="width:600px">
+      <div class="modal-title">📝 Generate Bill of Lading</div>
+      <div style="background:var(--blue-bg);border-radius:var(--radius);padding:12px 14px;margin-bottom:16px;font-size:12px;color:var(--gray-600)">
+        <strong>Booking party:</strong> SHIFL · 343 Spook Rock Road, Suffern, NY 10901<br>
+        <strong>Carrier:</strong> ${q.carrier} &nbsp;|&nbsp; <strong>Mode:</strong> ${q.fqMode} ${q.fqEquip||''} &nbsp;|&nbsp; <strong>Customer:</strong> ${q.customer||'—'}
+      </div>
+      <div class="g2">
+        <div class="field"><label>BOL Number</label>
+          <input type="text" id="bol-num" value="${bolNum}" placeholder="BOL-20260709-001"></div>
+        <div class="field"><label>Shipment Date</label>
+          <input type="date" id="bol-date" value="${new Date().toISOString().slice(0,10)}"></div>
+      </div>
+      <div class="charge-group-label" style="margin-bottom:10px">Pickup address (Ship From)</div>
+      <div class="field"><label>Pickup company / CFS name</label>
+        <input type="text" id="bol-pickup-name" value="" placeholder="e.g. CFS — STG Logistics, Carson, CA"></div>
+      <div class="field"><label>Pickup street address</label>
+        <input type="text" id="bol-pickup-addr" placeholder="e.g. 2401 E Dominguez St"></div>
+      <div class="g3">
+        <div class="field"><label>City</label>
+          <input type="text" id="bol-pickup-city" placeholder="City"></div>
+        <div class="field"><label>State</label>
+          <input type="text" id="bol-pickup-state" placeholder="CA" maxlength="2"></div>
+        <div class="field"><label>Zip</label>
+          <input type="text" id="bol-pickup-zip" value="${q.pickupZip||''}" placeholder="90810" maxlength="10"></div>
+      </div>
+      <div class="charge-group-label" style="margin-bottom:10px">Delivery address (Ship To)</div>
+      <div class="field"><label>Company / Consignee name *</label>
+        <input type="text" id="bol-consignee" value="${q.customer||''}" placeholder="e.g. Acme Imports Inc."></div>
+      <div class="field"><label>Street address</label>
+        <input type="text" id="bol-addr" placeholder="e.g. 100 Commerce Drive"></div>
+      <div class="g3">
+        <div class="field"><label>City</label>
+          <input type="text" id="bol-city" placeholder="City"></div>
+        <div class="field"><label>State</label>
+          <input type="text" id="bol-state" placeholder="NY" maxlength="2"></div>
+        <div class="field"><label>Zip</label>
+          <input type="text" id="bol-zip" value="${q.deliveryZip||''}" placeholder="10952" maxlength="10"></div>
+      </div>
+      <div class="charge-group-label" style="margin-bottom:10px">Shipment details</div>
+      <div class="g2">
+        <div class="field"><label>No. of pallets / units</label>
+          <input type="number" id="bol-pallets" value="${q.palletCount||''}" placeholder="e.g. 20" min="0"></div>
+        <div class="field"><label>Total weight (lbs)</label>
+          <input type="number" id="bol-weight" value="${q.weight||''}" placeholder="e.g. 40000" min="0"></div>
+      </div>
+      <div class="g2">
+        <div class="field"><label>Commodity / Description</label>
+          <input type="text" id="bol-commodity" value="${q.notes?q.notes.split('\n')[0]:''}" placeholder="e.g. Consumer goods, General freight"></div>
+        <div class="field"><label>Freight charge terms</label>
+          <select id="bol-terms">
+            <option value="Prepaid">Prepaid</option>
+            <option value="Collect">Collect</option>
+            <option value="3rd Party">3rd Party</option>
+          </select></div>
+      </div>
+      <div class="field"><label>Special instructions (optional)</label>
+        <input type="text" id="bol-instructions" placeholder="e.g. Appointment required, fragile items"></div>
+      <div class="modal-foot">
+        <button class="btn" onclick="closeModal()">Cancel</button>
+        <button class="btn blue" onclick="downloadBOL(${idx},'${source}')">📝 Download BOL</button>
+      </div>
+    </div></div>`;
+}
+
+async function downloadBOL(idx, source){
+  if(!await loadJsPDF()) return;
+  const q=source==='fq'?(window._fqHistory||[])[idx]:null;
+  if(!q) return;
+
+  const bolNum=($('bol-num')||{}).value?.trim()||'BOL-'+Date.now();
+  const bolDate=($('bol-date')||{}).value||new Date().toISOString().slice(0,10);
+  const pickupName=($('bol-pickup-name')||{}).value?.trim()||q.pickupZip||'—';
+  const pickupAddr=($('bol-pickup-addr')||{}).value?.trim()||'';
+  const pickupCity=($('bol-pickup-city')||{}).value?.trim()||'';
+  const pickupState=($('bol-pickup-state')||{}).value?.trim()||'';
+  const pickupZip=($('bol-pickup-zip')||{}).value?.trim()||q.pickupZip||'';
+  const consignee=($('bol-consignee')||{}).value?.trim()||q.customer||'—';
+  const addr=($('bol-addr')||{}).value?.trim()||'';
+  const city=($('bol-city')||{}).value?.trim()||'';
+  const state=($('bol-state')||{}).value?.trim()||'';
+  const zip=($('bol-zip')||{}).value?.trim()||q.deliveryZip||'';
+  const pallets=($('bol-pallets')||{}).value||q.palletCount||'';
+  const weight=($('bol-weight')||{}).value||q.weight||'';
+  const commodity=($('bol-commodity')||{}).value?.trim()||'General Freight';
+  const terms=($('bol-terms')||{}).value||'Prepaid';
+  const instructions=($('bol-instructions')||{}).value?.trim()||'';
+
+  const{jsPDF}=window.jspdf;
+  const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+  const W=210;const M=10;const IW=W-M*2;const navy=[26,46,74];
+
+  function rect(x,y,w,h){doc.setDrawColor(160,175,195);doc.setLineWidth(.3);doc.rect(x,y,w,h);}
+  function hline(x1,y,x2){doc.setDrawColor(160,175,195);doc.setLineWidth(.25);doc.line(x1,y,x2,y);}
+  function vline(x,y1,y2){doc.setDrawColor(160,175,195);doc.setLineWidth(.25);doc.line(x,y1,x,y2);}
+  function lbl(x,y,txt){doc.setFont('helvetica','bold');doc.setFontSize(6.5);doc.setTextColor(90,105,125);doc.text(txt,x,y);}
+  function val(x,y,txt,size){doc.setFont('helvetica',size>9?'bold':'normal');doc.setFontSize(size||9.5);doc.setTextColor(15,25,45);doc.text(txt,x,y);}
+
+  // ── HEADER ────────────────────────────────────────────
+  doc.setFillColor(...navy);doc.rect(M,M,IW,14,'F');
+  doc.setFont('helvetica','bold');doc.setFontSize(18);doc.setTextColor(255,255,255);
+  doc.text('BILL OF LADING',W/2,M+9.5,{align:'center'});
+  doc.setFontSize(7.5);doc.setFont('helvetica','normal');doc.setTextColor(255,255,255,.55);
+  doc.text('STRAIGHT BILL — NOT NEGOTIABLE',W/2,M+13,{align:'center'});
+
+  // BOL# and Date — top right of header area
+  doc.setFillColor(240,244,250);rect(130,M,W-M-130,14);
+  lbl(132,M+4,'BOL NUMBER');val(132,M+10,bolNum,8.5);
+  lbl(165,M+4,'DATE');val(165,M+10,bolDate,8.5);
+
+  let y=M+16; // start below header
+
+  // ── BOOKING PARTY / BILL TO (always SHIFL) ────────────
+  const billH=14;
+  rect(M,y,IW,billH);
+  lbl(M+2,y+5,'THIRD PARTY FREIGHT CHARGES — BILL TO (BOOKING PARTY)');
+  hline(M,y+7,W-M);
+  doc.setFont('helvetica','bold');doc.setFontSize(10);doc.setTextColor(...navy);
+  doc.text('SHIFL  —  343 Spook Rock Road, Suffern, NY 10901',M+3,y+12);
+  y+=billH+2;
+
+  // ── SHIP FROM / SHIP TO ───────────────────────────────
+  const rowH1=30;
+  // Ship From (pickup)
+  rect(M,y,95,rowH1);
+  lbl(M+2,y+5,'SHIP FROM (PICKUP LOCATION)');
+  hline(M,y+7,M+95);
+  val(M+3,y+14,pickupName,10);
+  doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(35,45,65);
+  if(pickupAddr) doc.text(pickupAddr,M+3,y+20);
+  const pickupCityStr=[pickupCity,pickupState,pickupZip].filter(Boolean).join(', ');
+  if(pickupCityStr) doc.text(pickupCityStr,M+3,pickupAddr?y+26:y+20);
+  // Ship To
+  rect(M+97,y,IW-97,rowH1);
+  lbl(M+99,y+5,'SHIP TO / CONSIGNEE');
+  hline(M+97,y+7,W-M);
+  val(M+100,y+14,consignee,10);
+  doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(35,45,65);
+  if(addr) doc.text(addr,M+100,y+20);
+  const cityStr=[city,state,zip].filter(Boolean).join(', ');
+  if(cityStr) doc.text(cityStr,M+100,addr?y+26:y+20);
+
+  // ── CARRIER ROW ───────────────────────────────────────
+  y+=rowH1+2;
+  const rowH2=20;
+  rect(M,y,IW,rowH2);
+  lbl(M+2,y+5,'CARRIER INFORMATION');
+  hline(M,y+7,W-M);
+  // Carrier name
+  lbl(M+3,y+13,'CARRIER NAME:');
+  val(M+28,y+13,q.carrier||'—',9.5);
+  // Pro No
+  vline(M+110,y+7,y+rowH2);
+  lbl(M+112,y+13,'PRO NO:');val(M+126,y+13,'___________________',9);
+  // Mode
+  lbl(M+3,y+19,'MODE / EQUIPMENT:');
+  val(M+36,y+19,(q.fqMode||'')+(q.fqEquip?' — '+q.fqEquip:''),9);
+  // Trailer
+  lbl(M+112,y+19,'TRAILER NO:');val(M+132,y+19,'___________________',9);
+
+  // ── FREIGHT TERMS ─────────────────────────────────────
+  y+=rowH2+2;
+  const rowH3=14;
+  rect(M,y,IW,rowH3);
+  lbl(M+2,y+5,'FREIGHT CHARGE TERMS');
+  hline(M,y+7,W-M);
+  const termsOpts=[{lbl:'Prepaid',x:M+5},{lbl:'Collect',x:M+45},{lbl:'3rd Party',x:M+85}];
+  termsOpts.forEach(t=>{
+    doc.setDrawColor(60,75,95);doc.setLineWidth(.4);doc.rect(t.x,y+8,4,4);
+    if(terms===t.lbl){doc.setFont('helvetica','bold');doc.setFontSize(8);doc.setTextColor(...navy);doc.text('X',t.x+0.8,y+11.5);}
+    doc.setFont('helvetica','normal');doc.setFontSize(8.5);doc.setTextColor(25,35,55);
+    doc.text(t.lbl,t.x+6,y+11.5);
+  });
+  lbl(M+125,y+11.5,'Master BOL');
+  doc.setDrawColor(60,75,95);doc.setLineWidth(.4);doc.rect(M+140,y+8,4,4);
+
+  // ── COMMODITY TABLE ───────────────────────────────────
+  y+=rowH3+2;
+  // Col definitions
+  const COLS=[
+    {x:M,    w:16, lbl:'QTY'},
+    {x:M+16, w:18, lbl:'TYPE'},
+    {x:M+34, w:28, lbl:'WEIGHT (LBS)'},
+    {x:M+62, w:72, lbl:'COMMODITY DESCRIPTION'},
+    {x:M+134,w:24, lbl:'NMFC NO.'},
+    {x:M+158,w:16, lbl:'CLASS'},
+    {x:M+174,w:W-M-174,lbl:'H.M.'},
+  ];
+  // Header row
+  doc.setFillColor(225,232,244);doc.rect(M,y,IW,9,'F');rect(M,y,IW,9);
+  COLS.forEach(c=>{vline(c.x,y,y+9);lbl(c.x+1.5,y+6,c.lbl);});
+  vline(W-M,y,y+9);
+  // Data rows (3)
+  const dataRows=[
+    {qty:pallets?String(pallets):'',type:'PLT',wt:weight?Number(weight).toLocaleString():'',desc:commodity},
+    {qty:'',type:'',wt:'',desc:''},
+    {qty:'',type:'',wt:'',desc:''},
+  ];
+  dataRows.forEach((r,i)=>{
+    const ry=y+9+(i*11);
+    doc.setFillColor(i%2===0?255:249,i%2===0?255:251,i%2===0?255:255);
+    doc.rect(M,ry,IW,11,'FD');
+    COLS.forEach(c=>vline(c.x,ry,ry+11));vline(W-M,ry,ry+11);
+    doc.setFont('helvetica','normal');doc.setFontSize(9.5);doc.setTextColor(15,25,45);
+    if(r.qty) doc.text(r.qty,COLS[0].x+2,ry+7.5);
+    if(r.type) doc.text(r.type,COLS[1].x+2,ry+7.5);
+    if(r.wt) doc.text(r.wt,COLS[2].x+2,ry+7.5);
+    if(r.desc){const dlines=doc.splitTextToSize(r.desc,COLS[3].w-3);doc.text(dlines[0],COLS[3].x+2,ry+7.5);}
+  });
+  // Totals row
+  const ty=y+9+33;
+  doc.setFillColor(235,240,250);doc.rect(M,ty,IW,9,'F');rect(M,ty,IW,9);
+  COLS.forEach(c=>vline(c.x,ty,ty+9));vline(W-M,ty,ty+9);
+  doc.setFont('helvetica','bold');doc.setFontSize(8);doc.setTextColor(40,50,70);
+  doc.text('TOTALS',M+2,ty+6);
+  if(pallets) doc.text(String(pallets)+' PLT',COLS[1].x+2,ty+6);
+  if(weight) doc.text(Number(weight).toLocaleString()+' LBS',COLS[2].x+2,ty+6);
+
+  // ── SPECIAL INSTRUCTIONS ──────────────────────────────
+  y+=9+33+9+4;
+  rect(M,y,IW,18);
+  lbl(M+2,y+5,'SPECIAL INSTRUCTIONS:');
+  hline(M,y+7,W-M);
+  if(instructions){doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(25,35,55);doc.text(instructions,M+3,y+13);}
+
+  // ── CERTIFICATION TEXT ────────────────────────────────
+  y+=20;
+  doc.setFont('helvetica','normal');doc.setFontSize(7);doc.setTextColor(70,80,95);
+  const cert='RECEIVED, subject to individually determined rates or contracts agreed upon in writing between the carrier and shipper, if applicable, otherwise to the rates, classifications and rules established by the carrier and available to the shipper on request, and to all applicable state and federal regulations. Shipper certifies that the above named materials are properly classified, packaged, marked and labeled, and are in proper condition for transportation according to applicable DOT regulations.';
+  const certLines=doc.splitTextToSize(cert,IW);
+  doc.text(certLines,M,y);
+  y+=certLines.length*3.5+4;
+
+  // ── SIGNATURES ───────────────────────────────────────
+  const sigW=(IW-4)/2;
+  rect(M,y,sigW,26);
+  lbl(M+2,y+5,'SHIPPER SIGNATURE & DATE');hline(M,y+7,M+sigW);
+  lbl(M+3,y+15,'Signature:');hline(M+20,y+15,M+sigW-3);
+  lbl(M+3,y+23,'Date:');hline(M+15,y+23,M+sigW-3);
+
+  rect(M+sigW+4,y,sigW,26);
+  lbl(M+sigW+6,y+5,'CARRIER SIGNATURE & PICKUP DATE');hline(M+sigW+4,y+7,M+sigW*2+4);
+  lbl(M+sigW+6,y+15,'Signature:');hline(M+sigW+23,y+15,M+sigW*2+1);
+  lbl(M+sigW+6,y+23,'Pickup Date:');hline(M+sigW+26,y+23,M+sigW*2+1);
+
+  // Trailer loaded / Freight counted
+  y+=28;
+  rect(M,y,sigW,12);
+  lbl(M+2,y+5,'TRAILER LOADED:');
+  doc.setDrawColor(60,75,95);doc.setLineWidth(.4);
+  doc.rect(M+3,y+7,3.5,3.5);lbl(M+8,y+10,'By Shipper',7.5);
+  doc.rect(M+sigW/2,y+7,3.5,3.5);lbl(M+sigW/2+5,y+10,'By Driver',7.5);
+
+  rect(M+sigW+4,y,sigW,12);
+  lbl(M+sigW+6,y+5,'FREIGHT COUNTED:');
+  doc.rect(M+sigW+7,y+7,3.5,3.5);lbl(M+sigW+13,y+10,'By Shipper',7.5);
+  doc.rect(M+sigW+4+sigW/2,y+7,3.5,3.5);lbl(M+sigW+4+sigW/2+5,y+10,'By Driver',7.5);
+
+  // ── FOOTER ────────────────────────────────────────────
+  doc.setFont('helvetica','italic');doc.setFontSize(6.5);doc.setTextColor(150,158,170);
+  doc.text('NOTE: Liability Limitation for loss or damage may apply. See 49 U.S.C. 14706(c)(1)(A) and (B).',W/2,284,{align:'center'});
+  doc.text('SHIFL  |  343 Spook Rock Road, Suffern, NY 10901  |  Generated '+new Date().toISOString().slice(0,10),W/2,289,{align:'center'});
+
+  closeModal();
+  doc.save('Shifl_BOL_'+bolNum+'_'+consignee.replace(/\s+/g,'_')+'.pdf');
+}
 // ═══════════════════════════════════════════════════════
 const TL_CONTAINER_SIZES=["20' Standard","40' Standard","40' High Cube","45' High Cube","20' Reefer","40' Reefer","40' High Cube Reefer","20' Open Top","40' Open Top","20' Flat Rack","40' Flat Rack"];
 const TL_ITEMS_DEF={
