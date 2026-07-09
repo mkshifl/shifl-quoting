@@ -1622,6 +1622,7 @@ function renderFqLog(){
         <button class="btn blue" onclick="downloadSelectedFqPDFs()">📄 Download ${selCount} as 1 PDF</button>
         <button class="btn" onclick="window._fqSelected=new Set();renderFqLog()">Clear</button>
       `:''}
+      <button class="btn" onclick="syncQuotesToTeam()" title="Push all your browser quotes to Supabase so everyone can see them">🔄 Sync to team</button>
     </div>`;
 
   $('page').innerHTML=`
@@ -1633,6 +1634,22 @@ function renderFqLog(){
       </tr></thead>
       <tbody>${rows}</tbody>
     </table></div>`;
+}
+
+async function syncQuotesToTeam(){
+  const btn=document.querySelector('[onclick="syncQuotesToTeam()"]');
+  if(btn){btn.textContent='Syncing…';btn.disabled=true;}
+  try{
+    const n=await migrateLocalStorageToSupabase();
+    await loadFqHistory();
+    await loadTlHistory();
+    renderFqLog();
+    alert(n>0?`✅ Synced ${n} quote${n!==1?'s':''} to Supabase — your team can now see them.`:'✅ All up to date — no new quotes to sync.');
+  }catch(e){
+    alert('Sync failed: '+e.message);
+  }finally{
+    if(btn){btn.textContent='🔄 Sync to team';btn.disabled=false;}
+  }
 }
 
 function toggleFqSelect(idx,checked){
