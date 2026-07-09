@@ -2953,6 +2953,7 @@ function defaultTlState(){
     outDeliveryZip:'',outEquipment:'Dry Van',
     selFtlId:null,outManualCarrier:'',outManualRate:'',outManualCustomer:'',
     outMarkupMode:'flat',outMarkupAmount:200,
+    outMultiStop:false,outStops:[{zip:'',address:''}],
     notes:''};
 }
 
@@ -3407,6 +3408,26 @@ function buildTlStep3(tl){
             </div>
           </div>
         </div>
+
+        <!-- Multi-stop / Multi-zip toggle -->
+        <div style="margin-top:4px;padding:10px 12px;background:var(--gray-50);border-radius:var(--radius);border:1px solid var(--gray-200)">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:600;color:var(--navy)">
+            <input type="checkbox" ${tl.outMultiStop?'checked':''} onchange="S.tl.outMultiStop=this.checked;if(!S.tl.outStops?.length)S.tl.outStops=[{zip:'',address:''}];renderTlBuilder()" style="width:auto">
+            ${tl.outEquipment==='Dry Van'||tl.outEquipment==='Reefer'||tl.outEquipment==='Flatbed'?'Multiple stops (FTL)':'Multiple delivery zip codes (LTL)'}
+          </label>
+          ${tl.outMultiStop?`
+          <div style="margin-top:10px">
+            <div style="font-size:11px;color:var(--gray-400);margin-bottom:8px">${tl.outEquipment==='Box Truck'?'Add each delivery zip code:':'Add each stop address:'}</div>
+            ${(tl.outStops||[]).map((stop,i)=>`
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+                <div style="width:20px;height:20px;border-radius:50%;background:var(--navy);color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${i+1}</div>
+                <input type="text" value="${stop.zip||''}" oninput="S.tl.outStops[${i}].zip=this.value" placeholder="Zip code" maxlength="10" style="width:90px;padding:5px 8px;font-size:12px">
+                ${tl.outEquipment!=='Box Truck'?`<input type="text" value="${stop.address||''}" oninput="S.tl.outStops[${i}].address=this.value" placeholder="Address / notes (optional)" style="flex:1;padding:5px 8px;font-size:12px">`:''}
+                ${(tl.outStops||[]).length>1?`<button onclick="S.tl.outStops.splice(${i},1);renderTlBuilder()" style="background:none;border:none;cursor:pointer;color:var(--gray-400);font-size:16px;padding:0 4px">×</button>`:''}
+              </div>`).join('')}
+            <button class="btn sm" onclick="S.tl.outStops.push({zip:'',address:''});renderTlBuilder()" style="margin-top:4px">+ Add ${tl.outEquipment==='Box Truck'?'zip code':'stop'}</button>
+          </div>`:''}
+        </div>
       </div>
       <div class="card">
         <div class="sec-head">Select FTL carrier
@@ -3518,7 +3539,7 @@ function buildTlStep4(tl){
   // Outbound row
   const outCarrier=selFtl?selFtl.rate:parseFloat(tl.outManualRate)||0;
   const outCustomer=tl.outMarkupMode==='pct'?outCarrier*(1+tl.outMarkupAmount/100):outCarrier+Number(tl.outMarkupAmount);
-  const outRow=row(`FTL — ${selFtl?selFtl.carrier:tl.outManualCarrier||'—'}<br><span style="font-size:11px;color:var(--gray-400)">${tl.outEquipment} → ${tl.outDeliveryZip||'—'}</span>`,outCarrier,outCustomer);
+  const outRow=row(`FTL — ${selFtl?selFtl.carrier:tl.outManualCarrier||'—'}<br><span style="font-size:11px;color:var(--gray-400)">${tl.outEquipment}${tl.outMultiStop&&tl.outStops?.length?' · '+tl.outStops.length+' stops':' → '+(tl.outDeliveryZip||'—')}</span>`,outCarrier,outCustomer);
 
   return `<div class="card">
     <div class="sec-head">📋 Quote summary — ${tl.customer||'Customer'}</div>
@@ -3785,6 +3806,7 @@ function saveTlQuote(){
     tlItems:JSON.parse(JSON.stringify(tl.tlItems)),tlFlatCarrier:tl.tlFlatCarrier,tlFlatCustomer:tl.tlFlatCustomer,
     tlCarrierCost:t.tlCarrier,tlCustomerPrice:t.tlCustomer,
     outDeliveryZip:tl.outDeliveryZip,outEquipment:tl.outEquipment,
+    outMultiStop:tl.outMultiStop||false,outStops:tl.outMultiStop?[...(tl.outStops||[])]:null,
     outCarrier:selFtl?selFtl.carrier:tl.outManualCarrier||'—',
     outCarrierCost:t.outCarrier,outCustomerPrice:t.outCustomer,
     totalCarrier:t.totalCarrier,totalCustomer:t.totalCustomer,
