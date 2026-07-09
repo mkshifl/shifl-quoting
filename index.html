@@ -683,7 +683,7 @@ let S={
       notes:'',customer:'',customerEmail:'',customerId:null,
       carriers:[{name:'',rate:''}], markupMode:'flat', markupAmount:150, selCarrierIdx:0,
       selFqRateId:null, lclDetentionHours:0, lclPalletExchange:0,
-      lclPriceBy:'pallets', cbm:0,
+      lclPriceBy:'pallets', cbm:0, transitTime:'',
       calc:{l:'',w:'',h:'',pieces:'',weightLbs:'',unit:'in'}},
   fqTab:'builder',
   tl:null, // initialized in boot via defaultTlState()
@@ -1006,6 +1006,12 @@ function setFreightMode(mode){
   renderFreight();
 }
 function setFreightEquip(eq){S.fq.equipment=eq;renderFreight();}
+function fqTypeLabel(q){
+  if(!q||!q.fqMode) return '';
+  if(q.fqMode==='LCL'&&q.fqEquip==='LTL') return 'LTL';
+  if(q.fqMode==='LCL'&&q.fqEquip) return 'LCL — '+q.fqEquip;
+  return q.fqMode+(q.fqEquip?' — '+q.fqEquip:'');
+}
 function fqField(key,val){S.fq[key]=val;}
 function fqPallet(idx,dim,val){S.fq.pallets[idx][dim]=val;}
 function addPallet(){S.fq.pallets.push({w:'',l:'',h:''});renderFreight();}
@@ -1451,6 +1457,9 @@ function renderFqBuilder(){
         `:''}
         <div class="field"><label>Special instructions (optional)</label>
           <input type="text" value="${fq.notes}" oninput="fqField('notes',this.value)" placeholder="e.g. liftgate, appointment, hazmat"></div>
+        ${fq.mode==='LTL'||(fq.mode==='LCL'&&fq.equipment==='LTL')||fq.mode==='FTL'?`
+        <div class="field"><label>Estimated transit time</label>
+          <input type="text" value="${fq.transitTime||''}" oninput="fqField('transitTime',this.value)" placeholder="e.g. 3-5 business days"></div>`:''}
       </div>
 
       ${fq.mode==='LCL'?`
@@ -1672,7 +1681,7 @@ async function downloadFqCarrierPDF(idx){
 
   // Lane details
   const laneItems=[['Pickup zip',q.pickupZip],['Delivery zip',q.deliveryZip],
-    ['Mode',q.fqMode+(q.fqEquip?' — '+q.fqEquip:'')],['Weight',q.weight?Number(q.weight).toLocaleString()+' lbs':'—']];
+    ['Mode',fqTypeLabel(q)],['Weight',q.weight?Number(q.weight).toLocaleString()+' lbs':'—']];
   laneItems.forEach(([lbl,val],i)=>{
     const x=i%2===0?16:110;if(i===2) y+=12;
     doc.setFont('helvetica','bold');doc.setFontSize(7);doc.setTextColor(150,160,175);doc.text(lbl.toUpperCase(),x,y);
@@ -1692,7 +1701,7 @@ async function downloadFqCarrierPDF(idx){
   // Main freight rate row
   doc.setFillColor(248,250,252);doc.rect(12,y-4,W-24,8,'F');
   doc.setFont('helvetica','normal');doc.setFontSize(10);doc.setTextColor(55,65,80);
-  doc.text(q.fqMode+(q.fqEquip?' — '+q.fqEquip:'')+' Freight',16,y);
+  doc.text(fqTypeLabel(q)+' Freight',16,y);
   doc.setFont('helvetica','normal');doc.setTextColor(140,150,165);doc.setFontSize(9);
   doc.text(fmtD(q.carrierRate),120,y,{align:'right'});
   doc.setFont('helvetica','bold');doc.setTextColor(...navy);doc.setFontSize(10);
@@ -1772,7 +1781,7 @@ function showFqQuoteModal(idx){
           </tr></thead>
           <tbody>
             <tr>
-              <td style="padding:12px 14px;font-weight:600">${q.fqMode}${q.fqEquip?' — '+q.fqEquip:''} Freight</td>
+              <td style="padding:12px 14px;font-weight:600">${fqTypeLabel(q)} Freight</td>
               <td style="padding:12px 14px;text-align:right;color:var(--gray-400)">${fmtD(q.carrierRate)}</td>
               <td style="padding:12px 14px;text-align:right;font-weight:800;font-size:18px;color:var(--steel)">${fmtD(q.customerRate)}</td>
               <td style="padding:12px 14px;text-align:right"><div style="color:var(--green);font-weight:700">+${fmtD(q.profit)}</div><span class="badge ${q.profitPct>=0.10?'g':'r'}">${pct(q.profitPct)}</span></td>
@@ -1815,7 +1824,7 @@ function printFqQuote(idx){
   <div class="meta">
     <div class="meta-item"><label>Customer</label><span>${q.customer||'—'}</span></div>
     <div class="meta-item"><label>Carrier</label><span>Shifl</span></div>
-    <div class="meta-item"><label>Freight type</label><span>${q.fqMode}${q.fqEquip?' — '+q.fqEquip:''}</span></div>
+    <div class="meta-item"><label>Freight type</label><span>${fqTypeLabel(q)}</span></div>
     <div class="meta-item"><label>Weight</label><span>${q.weight?Number(q.weight).toLocaleString()+' lbs':'—'}</span></div>
     <div class="meta-item"><label>Pickup zip</label><span>${q.pickupZip}</span></div>
     <div class="meta-item"><label>Delivery zip</label><span>${q.deliveryZip}</span></div>
@@ -1851,7 +1860,7 @@ async function downloadFqPDF(idx){
   doc.setFontSize(9);doc.setTextColor(255,255,255);doc.text(q.date,W-12,20,{align:'right'});
   // Meta
   const date=new Date(q.date).toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
-  const meta=[['Customer',q.customer||'—'],['Carrier','Shifl'],['Freight type',q.fqMode+(q.fqEquip?' — '+q.fqEquip:'')],['Weight',q.weight?Number(q.weight).toLocaleString()+' lbs':'—'],['Pickup zip',q.pickupZip],['Delivery zip',q.deliveryZip]];
+  const meta=[['Customer',q.customer||'—'],['Carrier','Shifl'],['Freight type',fqTypeLabel(q)],['Weight',q.weight?Number(q.weight).toLocaleString()+' lbs':'—'],['Pickup zip',q.pickupZip],['Delivery zip',q.deliveryZip],...(q.transitTime?[['Est. transit time',q.transitTime]]:[])];
   let y=44;
   meta.forEach(([lbl,val],i)=>{const x=i%2===0?12:110;if(i%2===0&&i>0) y+=13;doc.setFontSize(7);doc.setFont('helvetica','bold');doc.setTextColor(150,150,150);doc.text(lbl.toUpperCase(),x,y);doc.setFontSize(10);doc.setFont('helvetica','normal');doc.setTextColor(30,50,74);doc.text(String(val),x,y+5);});
   y+=20;
@@ -2006,7 +2015,7 @@ async function saveFqQuote(){
     markupMode:fq.markupMode,markupAmount:fq.markupAmount,
     profit:customerRate-carrierRate,
     profitPct:customerRate>0?(customerRate-carrierRate)/customerRate:0,
-    status:'Quoted',notes:fq.notes,
+    status:'Quoted',notes:fq.notes,transitTime:fq.transitTime||'',
   };
   if(!window._fqHistory) window._fqHistory=[];
   window._fqHistory.unshift(entry);
