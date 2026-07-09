@@ -885,9 +885,9 @@ function renderQuote(){
             <input type="text" value="${qi.zip}" oninput="onZip(this.value)" placeholder="07728" maxlength="10" style="width:130px">
             ${getSpecialZipBadge(qi.zip)}
           </div>
-          <div class="field" style="width:160px;flex-shrink:0;margin-bottom:0">
+          <div class="field" style="width:110px;flex-shrink:0;margin-bottom:0">
             <label>Live or Drop</label>
-            <select onchange="onLd(this.value)" style="width:160px"><option${qi.ld==='Live'?' selected':''}>Live</option><option${qi.ld==='Drop'?' selected':''}>Drop</option><option${qi.ld==='Both'?' selected':''}>Both</option></select>
+            <select onchange="onLd(this.value)" style="width:110px"><option${qi.ld==='Live'?' selected':''}>Live</option><option${qi.ld==='Drop'?' selected':''}>Drop</option><option${qi.ld==='Both'?' selected':''}>Both</option></select>
           </div>
         </div>
       </div>
