@@ -2563,6 +2563,10 @@ function defaultTlState(){
 
 // Warehouses DB
 function loadTlWarehouses(){try{window._tlWarehouses=JSON.parse(localStorage.getItem('tl_warehouses')||'[]');}catch(e){window._tlWarehouses=[];}}
+function loadTlHistory(){
+  try{window._tlHistory=JSON.parse(localStorage.getItem('tl_history')||'[]');}catch(e){window._tlHistory=[];}
+  loadTlWarehouses();
+}
 function saveTlWarehouses(){try{localStorage.setItem('tl_warehouses',JSON.stringify(window._tlWarehouses));}catch(e){}}
 
 function tlCuRate(carrierVal, charge, tl){
