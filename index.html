@@ -3546,7 +3546,10 @@ function buildTlStep4(tl){
   // Outbound row
   const outCarrier=selFtl?selFtl.rate:parseFloat(tl.outManualRate)||0;
   const outCustomer=tl.outMarkupMode==='pct'?outCarrier*(1+tl.outMarkupAmount/100):outCarrier+Number(tl.outMarkupAmount);
-  const outRow=row(`FTL — ${selFtl?selFtl.carrier:tl.outManualCarrier||'—'}<br><span style="font-size:11px;color:var(--gray-400)">${tl.outEquipment}${tl.outMultiStop&&tl.outStops?.length?' · '+tl.outStops.length+' stops':' → '+(tl.outDeliveryZip||'—')}</span>`,outCarrier,outCustomer);
+  const outRow=row(
+    `${tl.outMode==='LTL'?'LTL':'FTL'} — ${selFtl?selFtl.carrier:tl.outManualCarrier||tl.outLtlCarrier||'—'}<br>
+    <span style="font-size:11px;color:var(--gray-400)">${tl.outEquipment||tl.outMode}${tl.outMultiStop&&tl.outStops?.length?'<br>'+tl.outStops.map((s,i)=>`Stop ${i+1}: ${s.zip||'—'}${s.address?' — '+s.address:''}`).join('<br>'):' → '+(tl.outDeliveryZip||'—')}</span>`,
+    outCarrier,outCustomer);
 
   return `<div class="card">
     <div class="sec-head">📋 Quote summary — ${tl.customer||'Customer'}</div>
@@ -3875,15 +3878,18 @@ async function downloadTlCustomerPDF(idx, rawTl){
   const sectionColors={dray:[26,80,150],tl:[30,100,60],out:[150,80,0]};
 
   function drawSection(colorArr,title,subInfo,rows,subtotal){
-    // Title bar
     doc.setFillColor(...colorArr);doc.rect(12,y,W-24,9,'F');
     doc.setFont('helvetica','bold');doc.setFontSize(9);doc.setTextColor(255,255,255);
     doc.text(title,16,y+6.5);
     y+=11;
-    // Sub info line
     if(subInfo){
-      doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(100,115,130);
-      doc.text(subInfo,16,y+4);y+=8;
+      const subLines=subInfo.split('\n');
+      subLines.forEach(line=>{
+        if(!line.trim()) return;
+        const wrapped=doc.splitTextToSize(line.trim(),W-28);
+        doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(100,115,130);
+        doc.text(wrapped,16,y+4);y+=wrapped.length*4+2;
+      });
     }
     // Rows
     let even=true;
@@ -3943,18 +3949,28 @@ async function downloadTlCustomerPDF(idx, rawTl){
   }
 
   // Outbound
+  const outMode=q?q.outMode:tl?.outMode||'FTL';
   const outEquip=q?q.outEquipment:tl?.outEquipment||'Dry Van';
   const outZip=q?q.outDeliveryZip:tl?.outDeliveryZip||'—';
+  const multiStop=q?q.outMultiStop:tl?.outMultiStop;
+  const stops=q?q.outStops:tl?.outStops;
   let outTotal=0;
   if(q){outTotal=q.outCustomerPrice||0;}
   else if(tl){
-    const outCarrier=parseFloat(tl.outManualRate)||0;
-    outTotal=tl.outMarkupMode==='pct'?outCarrier*(1+(tl.outMarkupAmount||0)/100):outCarrier+(Number(tl.outMarkupAmount)||0);
+    const outCarrierAmt=parseFloat(tl.outManualRate)||0;
+    outTotal=tl.outMarkupMode==='pct'?outCarrierAmt*(1+(tl.outMarkupAmount||0)/100):outCarrierAmt+(Number(tl.outMarkupAmount)||0);
   }
   if(outTotal>0){
-    drawSection(sectionColors.out,'OUTBOUND FTL',
-      'Carrier: Shifl  |  '+outEquip+'  |  Delivery: '+outZip,
-      [['FTL freight rate',outTotal]],outTotal);
+    const outRows=[['FTL/LTL freight rate',outTotal]];
+    const outSubInfo=`Carrier: Shifl  |  ${outMode}${outEquip&&outMode==='FTL'?' — '+outEquip:''}`;
+    // Delivery info line
+    let deliveryInfo='';
+    if(multiStop&&stops?.length){
+      deliveryInfo='Deliveries: '+stops.filter(s=>s.zip).map((s,i)=>`Stop ${i+1}: ${s.zip}${s.address?' ('+s.address+')':''}`).join('  ·  ');
+    } else {
+      deliveryInfo='Delivery: '+outZip;
+    }
+    drawSection(sectionColors.out,'OUTBOUND '+outMode,outSubInfo+'\n'+deliveryInfo,outRows,outTotal);
   }
 
   // Grand total
@@ -4086,8 +4102,13 @@ async function downloadTlInternalPDF(idx){
   sectionSubtotal(q.tlCarrierCost,q.tlCustomerPrice);
 
   // ── Outbound ──────────────────────────────────────────────────────────────
-  sectionHeader([150,80,0],'OUTBOUND FTL  —  Carrier: '+q.outCarrier,
-    q.outEquipment+' | Delivery: '+q.outDeliveryZip);
+  const outModeLabel=q.outMode||'FTL';
+  let outDeliveryLabel=q.outDeliveryZip||'—';
+  if(q.outMultiStop&&q.outStops?.length){
+    outDeliveryLabel=q.outStops.filter(s=>s.zip).map((s,i)=>`Stop ${i+1}: ${s.zip}${s.address?' ('+s.address+')':''}`).join(' · ');
+  }
+  sectionHeader([150,80,0],'OUTBOUND '+outModeLabel+'  —  Carrier: '+q.outCarrier,
+    (q.outEquipment&&outModeLabel==='FTL'?q.outEquipment+' | ':'')+outDeliveryLabel);
   dataRow('FTL freight rate',q.outCarrierCost,q.outCustomerPrice);
   sectionSubtotal(q.outCarrierCost,q.outCustomerPrice);
 
