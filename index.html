@@ -271,6 +271,49 @@ hr{border:none;border-top:1px solid var(--gray-100);margin:14px 0}
   </div>
 </div>
 
+
+<!-- Login screen -->
+<div class="screen" id="login-screen" style="display:none">
+  <div style="background:#fff;border-radius:16px;padding:40px;width:100%;max-width:430px;box-shadow:0 20px 60px rgba(0,0,0,.14)">
+    <div style="display:flex;align-items:center;gap:14px;margin-bottom:28px">
+      <svg width="52" height="52" viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg">
+        <rect width="60" height="60" rx="10" fill="#1a2e4a"/>
+        <polygon points="10,50 25,14 44,45" fill="white"/>
+        <polygon points="25,14 44,45 53,37" fill="rgba(255,255,255,.72)"/>
+        <polygon points="10,50 44,45 53,37 53,50" fill="rgba(255,255,255,.90)"/>
+      </svg>
+      <div>
+        <div style="font-size:24px;font-weight:900;color:#1a2e4a;letter-spacing:-.5px">SHIFL</div>
+        <div style="font-size:12px;color:var(--gray-400);margin-top:2px">Freight Quoting Platform</div>
+      </div>
+    </div>
+    <div id="login-error" style="display:none;background:#fff0f0;border:1px solid #fca5a5;border-radius:var(--radius);padding:10px 14px;margin-bottom:16px;font-size:13px;color:#dc2626;font-weight:600"></div>
+    <div id="first-user-banner" style="display:none;background:#fffbeb;border:1px solid #fbbf24;border-radius:var(--radius);padding:12px 14px;margin-bottom:16px;font-size:13px;color:#92400e">
+      <strong>First time setup:</strong> No users exist yet. Create your admin account below.
+    </div>
+    <div class="field" id="login-name-field" style="display:none">
+      <label>Your name</label>
+      <input type="text" id="login-name" placeholder="Your full name" onkeydown="if(event.key==='Enter')document.getElementById('login-email').focus()">
+    </div>
+    <div class="field">
+      <label>Email address</label>
+      <input type="email" id="login-email" placeholder="you@shifl.com" autocomplete="email"
+        onkeydown="if(event.key==='Enter')document.getElementById('login-password').focus()">
+    </div>
+    <div class="field">
+      <label>Password</label>
+      <input type="password" id="login-password" placeholder="Enter your password" autocomplete="current-password"
+        onkeydown="if(event.key==='Enter')doLogin()">
+    </div>
+    <button class="btn blue" id="login-btn" onclick="doLogin()"
+      style="width:100%;justify-content:center;padding:13px;font-size:15px;margin-top:4px">
+      Sign in
+    </button>
+    <p style="font-size:11px;color:var(--gray-400);margin-top:14px;text-align:center">
+      Contact your admin if you need access
+    </p>
+  </div>
+</div>
 <!-- Loading screen -->
 <div class="screen" id="loading-screen">
   <div style="text-align:center">
@@ -4685,7 +4728,7 @@ function renderActive(){
           <div><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--gray-400);margin-bottom:2px">Carrier</div><div style="font-weight:600;color:var(--navy)">${s.carrier||'—'}</div></div>
           <div><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--gray-400);margin-bottom:2px">From</div><div style="font-weight:500">${s.from?s.from.split(',')[0]:'—'}</div></div>
           <div><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--gray-400);margin-bottom:2px">${s.type==='transload'?'Warehouse':'Delivery'}</div><div style="font-weight:500">${s.type==='transload'?(s.warehouse||'—'):(s.to||'—')}</div></div>
-          ${s.shiflRef?`<div><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--gray-400);margin-bottom:2px">Ref#</div><div style="font-weight:600;color:var(--steel)">${s.shiflRef}</div></div>`:''}
+          <div><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--gray-400);margin-bottom:2px">Shifl Ref #</div><div style="font-weight:600;color:var(--steel);min-height:18px">${s.shiflRef||'<span style="color:var(--gray-300)">—</span>'}</div></div>
           ${s.mode?`<div><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--gray-400);margin-bottom:2px">Mode</div><div style="font-weight:500">${s.mode}</div></div>`:''}
           <div><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--gray-400);margin-bottom:2px">Expected delivery</div>
             <input type="date" value="${tracking.expectedDate||''}" onchange="setActiveTracking('${s.id}','expectedDate',this.value)"
@@ -4946,14 +4989,15 @@ async function confirmImport(){
 // ═══════════════════════════════════════════════════════
 function buildLogRows(){
   const f=S.logFilter;const filtered=S.quotes.filter(q=>f==='all'||q.status===f);
-  if(!filtered.length) return `<tr><td colspan="12" style="text-align:center;padding:40px;color:var(--gray-400)">No quotes${f!=='all'?' with status "'+f+'"':''}</td></tr>`;
+  if(!filtered.length) return `<tr><td colspan="13" style="text-align:center;padding:40px;color:var(--gray-400)">No quotes${f!=='all'?' with status "'+f+'"':''}</td></tr>`;
   if(!window._draySelected) window._draySelected=new Set();
   const sel=window._draySelected;
   return filtered.map(q=>`
     <tr onclick="showQuoteModal('${q.id}')" style="cursor:pointer">
       <td onclick="event.stopPropagation()" style="width:32px;text-align:center">
         <input type="checkbox" ${sel.has(q.id)?'checked':''} onchange="toggleDraySelect('${q.id}',this.checked)" style="width:auto;cursor:pointer"></td>
-      <td class="muted small">#${q.quoteNum}${q.shiflRef?`<div style="font-size:10px;color:var(--steel);font-weight:600">${q.shiflRef}</div>`:''}</td>
+      <td class="muted small">#${q.quoteNum}</td>
+      <td style="font-weight:600;color:var(--steel);font-size:13px;white-space:nowrap">${q.shiflRef||''}</td>
       <td>${q.date}</td>
       <td class="bold">${q.customer}</td>
       <td>${q.zip} · ${q.ld}<div class="subtext">${q.destination||''}</div>${getSpecialZipBadge(q.zip)}</td>
@@ -4966,6 +5010,7 @@ function buildLogRows(){
       <td onclick="event.stopPropagation()" style="white-space:nowrap">
         ${q.status==='Booked'?`<button class="btn sm ico-btn" onclick="downloadCarrierRateSheet(S.quotes.find(q=>q.id==='${q.id}'),null)" title="Carrier rate sheet" style="color:var(--green)">📋</button>`:''}
         <button class="btn sm ico-btn" onclick="downloadSavedPDF('${q.id}')" title="Customer PDF" style="margin-left:3px">📄</button>
+        <button class="btn sm ico-btn" onclick="sendQuoteToCarrier('${q.id}')" title="Send to carrier" style="margin-left:3px">📧</button>
         <button class="btn sm ico-btn" onclick="delQuote('${q.id}')" title="Delete" style="margin-left:3px">🗑️</button>
       </td>
     </tr>`).join('');
@@ -5005,7 +5050,7 @@ function renderLog(){
       <button class="btn" onclick="exportQuoteLog()">📥 Export CSV</button>
       <button class="btn" onclick="syncQuotesToTeam()">🔄 Sync to team</button>
     </div>`;
-  $('page').innerHTML=`<div class="tbl-wrap"><table><thead><tr><th style="width:32px"></th><th>#</th><th>Date</th><th>Customer</th><th>Lane</th><th>Carrier</th><th>Carrier total</th><th>Customer total</th><th>Profit</th><th>Margin</th><th>Status</th><th></th></tr></thead><tbody id="log-tbody">${buildLogRows()}</tbody></table></div>`;
+  $('page').innerHTML=`<div class="tbl-wrap"><table><thead><tr><th style="width:32px"></th><th>#</th><th>Ref #</th><th>Date</th><th>Customer</th><th>Lane</th><th>Carrier</th><th>Carrier total</th><th>Customer total</th><th>Profit</th><th>Margin</th><th>Status</th><th></th></tr></thead><tbody id="log-tbody">${buildLogRows()}</tbody></table></div>`;
 }
 function onLogFilter(v){S.logFilter=v;const t=$('log-tbody');if(t) t.innerHTML=buildLogRows();}
 async function updateStatus(id,status){
@@ -5255,6 +5300,7 @@ async function downloadCarrierRateSheet(q,overrideRate){
 }
 
 async function delQuote(id){
+  if(!confirm('Delete this quote? This cannot be undone.')) return;
   setSaving(true);try{await dbDeleteQuote(id);S.quotes=S.quotes.filter(q=>q.id!==id);const t=$('log-tbody');if(t) t.innerHTML=buildLogRows();}catch(e){alert('Error: '+e.message);}finally{setSaving(false);}
 }
 
@@ -5603,6 +5649,7 @@ async function renderAdmin(){
       `:'<span class="muted small">(you)</span>'}
     </td>
   </tr>`).join('');
+  const resendKey = localStorage.getItem('shifl_resend_key')||'';
   $('page').innerHTML=`<div class="card">
     <div class="sec-head">Team members</div>
     <div class="tbl-wrap" style="box-shadow:none;border:none;margin:0">
@@ -5610,6 +5657,21 @@ async function renderAdmin(){
       <tbody>${rows||'<tr><td colspan="6" style="text-align:center;padding:30px;color:var(--gray-400)">No users yet</td></tr>'}</tbody>
       </table>
     </div>
+  </div>
+  <div class="card" style="margin-top:14px">
+    <div class="sec-head">Email Settings</div>
+    <p style="font-size:13px;color:var(--gray-500);margin-bottom:14px">
+      Shifl uses <strong>Resend</strong> to send rate confirmation emails with PDF attachments directly from trucking@shifl.com.<br>
+      Get your API key at <a href="https://resend.com" target="_blank" style="color:var(--steel)">resend.com</a> and verify the shifl.com domain.
+    </p>
+    <div style="display:flex;align-items:flex-end;gap:10px;max-width:520px">
+      <div class="field" style="flex:1;margin:0">
+        <label>Resend API key</label>
+        <input type="password" id="resend-key-input" value="${resendKey}" placeholder="re_xxxxxxxxxxxxxxxxxx" style="font-family:monospace">
+      </div>
+      <button class="btn blue" onclick="saveResendKey()" style="flex-shrink:0;padding:8px 18px">Save</button>
+    </div>
+    ${resendKey?'<div style="font-size:12px;color:var(--green);margin-top:8px;font-weight:600">✓ Resend API key saved</div>':''}
   </div>`;
 }
 
@@ -5946,6 +6008,170 @@ async function showCarrierDetail(id){
     </div></div>`;
 }
 
+
+
+// ── Send Quote to Carrier via Email via Resend ───────────────────────────
+
+// Get drayage quote PDF as base64 string (for email attachment)
+async function getQuotePDFBase64(q){
+  if(!await loadJsPDF()) throw new Error('jsPDF not loaded');
+  const{jsPDF}=window.jspdf;
+  // Temporarily patch doc.save so _generatePDF doesn't trigger download
+  const origSave = jsPDF.prototype.save;
+  let pdfBase64 = null;
+  jsPDF.prototype.save = function(){ pdfBase64 = this.output('datauristring').split(',')[1]; };
+  try{ _generatePDF(q); } finally { jsPDF.prototype.save = origSave; }
+  return pdfBase64;
+}
+
+async function sendQuoteToCarrier(quoteId){
+  const q = S.quotes.find(x => x.id === quoteId);
+  if(!q){ alert('Quote not found.'); return; }
+
+  // Get Resend API key from settings
+  const resendKey = localStorage.getItem('shifl_resend_key')||'';
+
+  // Try to find carrier email from carrier network
+  let carrierEmail = '';
+  let carrierContact = '';
+  try{
+    const{data:carr} = await db.from('carriers').select('email,contact_name').eq('name', q.carrier).limit(1);
+    if(carr && carr[0]){ carrierEmail = carr[0].email||''; carrierContact = carr[0].contact_name||''; }
+  }catch(e){}
+
+  const userEmail = _currentUser?.email||'';
+  const userName  = _currentUser?.name||'Shifl Team';
+
+  $('modal-root').innerHTML = `<div class="overlay" onclick="if(event.target===this)closeModal()">
+    <div class="modal" style="max-width:500px">
+      <div class="modal-title">📧 Email quote to carrier</div>
+      ${!resendKey?`<div style="background:#fffbeb;border:1px solid #fbbf24;border-radius:var(--radius);padding:12px 14px;margin-bottom:14px;font-size:13px;color:#92400e">
+        ⚠️ <strong>Resend API key not set.</strong> Go to Admin Panel → Settings → Resend API key to enable email sending.
+      </div>`:''}
+      <div class="field">
+        <label>To — Carrier email *</label>
+        <input type="email" id="send-to-em" value="${carrierEmail}" placeholder="dispatch@carrier.com">
+        ${carrierEmail?'<div style="font-size:11px;color:var(--green);margin-top:3px">✓ Found in carrier network</div>':'<div style="font-size:11px;color:var(--gray-400);margin-top:3px">Not saved in carrier network — enter manually and it will be saved</div>'}
+      </div>
+      <div class="field">
+        <label>CC — Your email</label>
+        <input type="email" id="send-cc-em" value="${userEmail}" placeholder="you@shifl.com">
+      </div>
+      <div style="background:var(--gray-50);border-radius:var(--radius);padding:12px 14px;margin-bottom:4px;font-size:13px">
+        <div style="font-weight:700;color:var(--navy);margin-bottom:3px">Quote #${q.quoteNum} — ${q.carrier}</div>
+        <div style="color:var(--gray-500)">${q.port||'—'} → ${q.zip||'—'} · ${q.ld} · $${(q.customerRates?.total||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
+        <div style="color:var(--gray-500);margin-top:2px;font-size:12px">📎 Customer rate sheet PDF will be attached</div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn" onclick="closeModal()">Cancel</button>
+        <button class="btn blue" id="send-email-btn" onclick="doSendCarrierEmail('${quoteId}')">📧 Send email</button>
+      </div>
+    </div></div>`;
+}
+
+async function doSendCarrierEmail(quoteId){
+  const toEmail = ($('send-to-em')||{}).value?.trim();
+  const ccEmail = ($('send-cc-em')||{}).value?.trim();
+  if(!toEmail){ alert('Enter the carrier email address.'); return; }
+
+  const resendKey = localStorage.getItem('shifl_resend_key')||'';
+  if(!resendKey){ alert('Resend API key not set. Go to Admin Panel → Settings to add it.'); return; }
+
+  const btn = $('send-email-btn');
+  if(btn){ btn.textContent='Sending...'; btn.disabled=true; }
+
+  const q = S.quotes.find(x => x.id === quoteId);
+  if(!q){ alert('Quote not found.'); return; }
+
+  const userName = _currentUser?.name||'Shifl Team';
+  const ct = q.carrierRates?.total||0;
+
+  // Build itemized charges HTML
+  const LABEL_MAP={base:'Base Rate',det_port:'Port Detention',det_cust:'Customer Detention',
+    chassis:'Chassis','chassis_split':'Chassis Split',prepull:'Pre-Pull',bobtail:'Bobtail',
+    ovw:'Overweight',yard:'Yard Storage',plny:'PLNY Toll',exam:'Exam/ISF',flexi:'Flexitank',oog:'OOG Fee'};
+  const chargesHtml = Object.entries(q.carrierRates||{})
+    .filter(([k,v])=>k!=='total'&&Number(v)>0)
+    .map(([k,v])=>`<tr><td style="padding:5px 12px;color:#374151">${LABEL_MAP[k]||k}</td><td style="padding:5px 12px;text-align:right;font-weight:700;color:#1a2e4a">$${Number(v).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</td></tr>`)
+    .join('');
+
+  const htmlBody = `<!DOCTYPE html><html><body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:560px;margin:0 auto;padding:24px;color:#1a2e4a">
+    <div style="background:#1a2e4a;border-radius:10px;padding:18px 24px;margin-bottom:24px;display:flex;align-items:center;justify-content:space-between">
+      <div style="color:#fff;font-size:22px;font-weight:900;letter-spacing:.5px">SHIFL</div>
+      <div style="color:rgba(255,255,255,.6);font-size:12px">Quote #${q.quoteNum} · ${q.date}</div>
+    </div>
+    <p style="font-size:15px;margin-bottom:18px">Hi${q.carrier?' '+q.carrier+',':','}</p>
+    <p style="margin-bottom:18px">Please see the rate confirmation below. The customer quote PDF is attached for your records.</p>
+    <table style="width:100%;border-collapse:collapse;margin-bottom:20px">
+      <tr style="background:#f8fafc"><td style="padding:8px 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6b7280">Customer</td><td style="padding:8px 12px;font-weight:600">${q.customer||'—'}</td></tr>
+      <tr><td style="padding:8px 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6b7280">Origin</td><td style="padding:8px 12px">${q.port||'—'}</td></tr>
+      <tr style="background:#f8fafc"><td style="padding:8px 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6b7280">Destination</td><td style="padding:8px 12px">${q.zip||'—'}${q.destination?' — '+q.destination:''}</td></tr>
+      <tr><td style="padding:8px 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6b7280">Load type</td><td style="padding:8px 12px">${q.ld||'—'}</td></tr>
+      ${q.shiflRef?`<tr style="background:#f8fafc"><td style="padding:8px 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6b7280">Shifl Ref #</td><td style="padding:8px 12px;font-weight:700;color:#1d4ed8">${q.shiflRef}</td></tr>`:''}
+    </table>
+    <div style="background:#f8fafc;border-radius:8px;padding:16px;margin-bottom:24px">
+      <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6b7280;margin-bottom:10px">Carrier Rate Breakdown</div>
+      <table style="width:100%;border-collapse:collapse">${chargesHtml}
+        <tr style="border-top:2px solid #e5e7eb"><td style="padding:8px 12px;font-weight:700">Total</td><td style="padding:8px 12px;text-align:right;font-size:17px;font-weight:800;color:#1a2e4a">$${ct.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</td></tr>
+      </table>
+    </div>
+    <p style="margin-bottom:24px">Please reply to confirm acceptance of this rate.</p>
+    <p style="color:#6b7280;font-size:13px">Thank you,<br><strong>${userName}</strong><br>Shifl Logistics<br>trucking@shifl.com</p>
+    <div style="border-top:1px solid #e5e7eb;margin-top:28px;padding-top:14px;font-size:11px;color:#9ca3af">This email was sent from the Shifl Quoting Platform. The customer rate sheet PDF is attached.</div>
+  </body></html>`;
+
+  try{
+    // Generate PDF as base64
+    let pdfB64 = null;
+    try{ pdfB64 = await getQuotePDFBase64(q); }catch(e){ console.warn('PDF gen failed:',e.message); }
+
+    const payload = {
+      from: 'Shifl Logistics <trucking@shifl.com>',
+      to: [toEmail],
+      cc: ccEmail ? [ccEmail] : [],
+      subject: 'Rate Confirmation — ' + (q.customer||'') + ' | ' + (q.port||'') + ' → ' + (q.zip||'') + ' | Quote #' + q.quoteNum,
+      html: htmlBody,
+    };
+    if(pdfB64){
+      payload.attachments = [{
+        filename: 'Shifl_Quote_' + q.quoteNum + '_' + q.zip + '_' + q.date + '.pdf',
+        content: pdfB64,
+      }];
+    }
+
+    const resp = await fetch('https://api.resend.com/emails',{
+      method:'POST',
+      headers:{'Authorization':'Bearer '+resendKey,'Content-Type':'application/json'},
+      body:JSON.stringify(payload),
+    });
+    const result = await resp.json();
+    if(!resp.ok) throw new Error(result.message||result.error||'Send failed');
+
+    // Save carrier email back to network
+    if(toEmail && q.carrier){
+      db.from('carriers').select('id').eq('name',q.carrier).limit(1).then(({data})=>{
+        if(data&&data[0]) db.from('carriers').update({email:toEmail,updated_at:new Date().toISOString()}).eq('id',data[0].id).then(()=>{});
+      });
+    }
+
+    closeModal();
+    alert('✅ Email sent to '+toEmail+(pdfB64?' with PDF attached':'')+'!');
+  }catch(e){
+    if(btn){ btn.textContent='📧 Send email'; btn.disabled=false; }
+    alert("Send failed: " + e.message + "\n\nCheck your Resend API key and confirm trucking@shifl.com is verified in Resend.");
+  }
+}
+
+
+
+
+function saveResendKey(){
+  const k = ($('resend-key-input')||{}).value?.trim();
+  if(!k){ alert('Enter a Resend API key.'); return; }
+  localStorage.setItem('shifl_resend_key', k);
+  renderAdmin();
+  alert('✅ Resend API key saved!');
+}
 
 boot().catch(e=>{$('loading-screen').style.display='none';$('setup-screen').style.display='flex';});
 </script>
