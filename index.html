@@ -4642,19 +4642,21 @@ function renderActive(){
 
   // ── Stats bar ────────────────────────────────────────────────────────────
   const counts={all:all.length,drayage:all.filter(s=>s.type==='drayage').length,
-    ltl:all.filter(s=>s.type==='freight'&&s.fqMode==='LTL').length,
     ftl:all.filter(s=>s.type==='freight'&&s.fqMode==='FTL').length,
+    ltl:all.filter(s=>s.type==='freight'&&(s.fqMode==='LTL'||(s.fqMode==='LCL'&&s.fqEquip==='LTL'))).length,
+    lcl:all.filter(s=>s.type==='freight'&&s.fqMode==='LCL'&&s.fqEquip!=='LTL').length,
     transload:all.filter(s=>s.type==='transload').length};
   const urgent=all.filter(s=>window._activeTracking[s.id]?.urgent).length;
   const filters=[
     {id:'all',label:'All',count:counts.all,color:'var(--navy)'},
     {id:'drayage',label:'Drayage',count:counts.drayage,color:'#3b6ea5'},
-    {id:'ltl',label:'LTL',count:counts.ltl,color:'#6d28d9'},
     {id:'ftl',label:'FTL',count:counts.ftl,color:'#1d6b8c'},
+    {id:'ltl',label:'LTL',count:counts.ltl,color:'#6d28d9'},
+    {id:'lcl',label:'LCL',count:counts.lcl,color:'#0891b2'},
     {id:'transload',label:'Transload',count:counts.transload,color:'#d97706'},
   ];
 
-  const statsBar=`<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:16px">
+  const statsBar=`<div style="display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:16px">
     ${filters.map(f=>`
       <div onclick="S.activeFilter='${f.id}';renderActive()" style="cursor:pointer;border-radius:var(--radius-lg);padding:14px 16px;
         background:${S.activeFilter===f.id?f.color:'var(--white)'};
@@ -4673,8 +4675,9 @@ function renderActive(){
   const filtered=all.filter(s=>{
     if(S.activeFilter==='all') return true;
     if(S.activeFilter==='drayage') return s.type==='drayage';
-    if(S.activeFilter==='ltl') return s.type==='freight'&&s.fqMode==='LTL';
     if(S.activeFilter==='ftl') return s.type==='freight'&&s.fqMode==='FTL';
+    if(S.activeFilter==='ltl') return s.type==='freight'&&(s.fqMode==='LTL'||(s.fqMode==='LCL'&&s.fqEquip==='LTL'));
+    if(S.activeFilter==='lcl') return s.type==='freight'&&s.fqMode==='LCL'&&s.fqEquip!=='LTL';
     if(S.activeFilter==='transload') return s.type==='transload';
     return true;
   });
