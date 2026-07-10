@@ -5781,7 +5781,7 @@ async function renderActivity(){
   }catch(e){$('page').innerHTML='<div class="alert r">Error: '+e.message+'</div>';}
 }
 async function renderAdmin(){
-  if(!_currentUser||_currentUser.role!=='admin'){
+  if(!can('view_admin')){
     $('page').innerHTML='<div class="empty"><p>Admin access only.</p></div>';return;
   }
   $('topbar-right').innerHTML='<button class="btn blue" onclick="showCreateUser()">+ Add user</button>';
