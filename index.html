@@ -379,8 +379,8 @@ hr{border:none;border-top:1px solid var(--gray-100);margin:14px 0}
       <!-- Logged-in user info -->
       <div id="user-info" style="display:none;margin-bottom:10px;padding:8px 10px;background:rgba(255,255,255,.06);border-radius:var(--radius)">
         <div style="display:flex;align-items:center;justify-content:space-between">
-          <div>
-            <div id="user-name-display" style="font-size:12px;font-weight:700;color:#fff"></div>
+          <div style="cursor:pointer" onclick="showEditMyProfile()" title="Edit your profile">
+            <div id="user-name-display" style="font-size:12px;font-weight:700;color:#fff;text-decoration:underline dotted;text-underline-offset:2px"></div>
             <div id="user-role-display" style="font-size:10px;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.05em;margin-top:1px"></div>
           </div>
           <button onclick="logout()" style="background:rgba(255,255,255,.08);border:none;color:rgba(255,255,255,.5);padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600">Sign out</button>
@@ -4935,6 +4935,41 @@ async function toggleUserActive(id,currentActive){
   if(!confirm(`${currentActive?'Deactivate':'Activate'} this user?`)) return;
   await db.from('app_users').update({active:!currentActive}).eq('id',id);
   renderAdmin();
+}
+
+function showEditMyProfile(){
+  if(!_currentUser) return;
+  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+    <div class="modal"><div class="modal-title">Edit my profile</div>
+    <div class="field"><label>Your name</label>
+      <input type="text" id="mp-name" value="${_currentUser.name}" placeholder="Your name"></div>
+    <div class="field"><label>New password <span style="font-weight:400;color:var(--gray-400)">(leave blank to keep current)</span></label>
+      <input type="password" id="mp-pw" placeholder="Enter new password"></div>
+    <div class="field"><label>Confirm new password</label>
+      <input type="password" id="mp-pw2" placeholder="Confirm new password"></div>
+    <div class="modal-foot">
+      <button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn blue" onclick="saveMyProfile()">Save</button>
+    </div></div></div>`;
+}
+
+async function saveMyProfile(){
+  const name=($('mp-name')||{}).value?.trim();
+  const pw=($('mp-pw')||{}).value;
+  const pw2=($('mp-pw2')||{}).value;
+  if(!name){alert('Name is required.');return;}
+  if(pw&&pw!==pw2){alert('Passwords do not match.');return;}
+  try{
+    const updates={name};
+    if(pw){updates.password_hash=await hashPassword(_currentUser.email,pw);}
+    const{error}=await db.from('app_users').update(updates).eq('id',_currentUser.id);
+    if(error) throw error;
+    _currentUser.name=name;
+    const session=getSession();
+    if(session) setSession({..._currentUser});
+    closeModal();updateUserUI();
+    alert('✅ Profile updated!');
+  }catch(e){alert('Error: '+e.message);}
 }
 
 async function showEditUser(id){
