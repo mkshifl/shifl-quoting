@@ -5795,12 +5795,12 @@ async function renderAdmin(){
     <td><span class="badge ${u.active?'g':'r'}">${u.active?'Active':'Inactive'}</span></td>
     <td class="muted small">${u.last_login?new Date(u.last_login).toLocaleDateString():'Never'}</td>
     <td style="white-space:nowrap">
+      <button class="btn sm" onclick="showEditUser('${u.id}')">✏️ Edit</button>
       ${u.id!==_currentUser.id?`
-        <button class="btn sm" onclick="showEditUser('${u.id}')">✏️ Edit</button>
         <button class="btn sm" onclick="showResetPassword('${u.id}','${u.name.replace(/'/g,'')}')" style="margin-left:4px">🔑 Reset PW</button>
         <button class="btn sm" onclick="toggleUserActive('${u.id}',${u.active})" style="margin-left:4px">${u.active?'Deactivate':'Activate'}</button>
         <button class="btn sm" onclick="deleteUser('${u.id}','${u.name.replace(/'/g,'')}')" style="margin-left:4px;color:#dc2626;border-color:#fca5a5">🗑️ Delete</button>
-      `:'<span class="muted small">(you)</span>'}
+      `:'<span class="muted small" style="margin-left:6px">(you)</span>'}
     </td>
   </tr>`).join('');
   const resendKey = localStorage.getItem('shifl_resend_key')||'';
