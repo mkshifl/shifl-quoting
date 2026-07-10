@@ -399,7 +399,13 @@ hr{border:none;border-top:1px solid var(--gray-100);margin:14px 0}
   <div class="main">
     <div class="topbar">
       <h1 id="view-title">Quote builder</h1>
-      <div class="topbar-right" id="topbar-right"></div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <div id="topbar-right" class="topbar-right"></div>
+        <button onclick="showNotifications()" id="notif-bell" style="position:relative;background:transparent;border:none;cursor:pointer;padding:6px;border-radius:var(--radius);color:var(--gray-500)" title="Notifications">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+          <span id="notif-badge" style="display:none;position:absolute;top:2px;right:2px;background:#ef4444;color:#fff;border-radius:99px;font-size:9px;font-weight:800;min-width:16px;height:16px;line-height:16px;text-align:center;padding:0 3px">0</span>
+        </button>
+      </div>
     </div>
     <div class="page" id="page"></div>
   </div>
@@ -873,6 +879,7 @@ async function initApp(){
   $('app').style.display='flex';
   setSyncStatus('on');
   render();
+  startNotifPolling();
 }
 
 // ═══════════════════════════════════════════════════════
@@ -1603,7 +1610,9 @@ function renderFqBuilder(){
 
       ${fq.mode==='LCL'?`
       <div class="card">
-        <div class="sec-head">📐 CBM + Weight calculator <span style="font-weight:400;font-size:11px;text-transform:none;letter-spacing:0;color:var(--gray-400)">— estimate pallets from cargo dimensions</span></div>
+        <div class="sec-head">📐 CBM + Weight calculator <span style="font-weight:400;font-size:11px;text-transform:none;letter-spacing:0;color:var(--gray-400)">— estimate pallets from cargo dimensions</span>
+          <button class="btn sm" onclick="downloadLclIntakeForm()" style="margin-left:12px;font-size:11px">📋 Download intake form</button>
+        </div>
         <div class="g2" style="margin-bottom:10px">
           <div class="field" style="margin-bottom:0"><label>Units</label>
             <div class="toggle-group" style="margin-top:4px">
@@ -2015,7 +2024,12 @@ function showFqQuoteModal(idx){
         <button class="btn" onclick="printFqQuote(${idx})">🖨️ Print</button>
         <button class="btn blue" onclick="downloadFqPDF(${idx})">📄 Download PDF</button>
       </div>
+      <div id="fq-docs-section-${q.id}"><div style="padding:10px 0;color:var(--gray-400);font-size:12px">Loading documents…</div></div>
     </div></div>`;
+  loadDocs(q.id,'freight').then(docs=>{
+    const el=$('fq-docs-section-'+q.id);
+    if(el) el.innerHTML=buildDocSection(q.id,'freight',docs);
+  });
 }
 
 function printFqQuote(idx){
@@ -3259,6 +3273,422 @@ function defaultTlState(){
 
 // Warehouses DB
 function loadTlWarehouses(){try{window._tlWarehouses=JSON.parse(localStorage.getItem('tl_warehouses')||'[]');}catch(e){window._tlWarehouses=[];}}
+async // ═══════════════════════════════════════════════════════
+// LCL INTAKE FORM PDF
+// ═══════════════════════════════════════════════════════
+async function downloadLclIntakeForm(){
+  try{
+    if(typeof window.jspdf==='undefined'){
+      await new Promise((res,rej)=>{
+        const s=document.createElement('script');
+        s.src='https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+        s.onload=res;s.onerror=()=>rej(new Error('Failed to load PDF library'));
+        document.head.appendChild(s);
+      });
+    }
+    const{jsPDF}=window.jspdf;
+    const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+    const W=210;const M=14;const IW=W-M*2;const navy=[26,46,74];
+    let y=0;
+
+    doc.setFillColor(...navy);doc.rect(0,0,W,26,'F');
+    doc.setFont('helvetica','bold');doc.setFontSize(18);doc.setTextColor(255,255,255);
+    doc.text('SHIFL',M,17);
+    doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(255,255,255,.6);
+    doc.text('LCL Freight Intake Form',M,23);
+    doc.setFontSize(8);doc.setTextColor(255,255,255,.4);
+    doc.text('mk@shifl.com  |  343 Spook Rock Road, Suffern NY 10901',W-M,23,{align:'right'});
+    y=32;
+
+    doc.setFont('helvetica','italic');doc.setFontSize(8.5);doc.setTextColor(90,100,115);
+    doc.text('Please complete this form and return it to your Shifl representative.',M,y);
+    y+=10;
+
+    function secHead(t){
+      doc.setFillColor(236,241,250);doc.rect(M,y,IW,8,'F');
+      doc.setFont('helvetica','bold');doc.setFontSize(8);doc.setTextColor(...navy);
+      doc.text(t,M+3,y+5.5);y+=11;
+    }
+    function lbl(t,x,ly){doc.setFont('helvetica','bold');doc.setFontSize(6.5);doc.setTextColor(110,120,140);doc.text(t,x,ly);}
+    function bx(x,by,w,h){doc.setDrawColor(175,185,200);doc.setLineWidth(.3);doc.rect(x,by,w,h);}
+    function r1(l,h){h=h||9;lbl(l,M,y+3.5);bx(M,y+4.5,IW,h);y+=h+8;}
+    function r2(l1,w1,l2,w2,h){h=h||9;const g=5;lbl(l1,M,y+3.5);bx(M,y+4.5,w1,h);lbl(l2,M+w1+g,y+3.5);bx(M+w1+g,y+4.5,w2,h);y+=h+8;}
+    function r3(l1,w1,l2,w2,l3,h){h=h||9;const g=5;const w3=IW-w1-w2-g*2;lbl(l1,M,y+3.5);bx(M,y+4.5,w1,h);lbl(l2,M+w1+g,y+3.5);bx(M+w1+g,y+4.5,w2,h);lbl(l3,M+w1+w2+g*2,y+3.5);bx(M+w1+w2+g*2,y+4.5,w3,h);y+=h+8;}
+    function chk(l,opts){doc.setFont('helvetica','bold');doc.setFontSize(7.5);doc.setTextColor(60,70,90);doc.text(l,M,y+4);let cx=M+38;opts.forEach(o=>{doc.setDrawColor(130,140,160);doc.setLineWidth(.3);doc.rect(cx,y+0.5,4.5,4.5);doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(50,60,80);doc.text(o,cx+6.5,y+4.5);cx+=o.length*2.2+14;});y+=10;}
+
+    secHead('1.  CONTACT INFORMATION');
+    r1('Company / Business name');
+    r2('Contact name',90,'Phone number',IW-95);
+    r1('Email address');y+=2;
+
+    secHead('2.  PICKUP DETAILS');
+    r1('CFS / Pickup facility name and address');
+    r3('City',60,'State',25,'ZIP code');
+    r1('Requested pickup date');y+=2;
+
+    secHead('3.  DELIVERY DETAILS');
+    r1('Consignee / Delivery company name');
+    r1('Street address');
+    r3('City',60,'State',25,'ZIP code');y+=2;
+
+    secHead('4.  CARGO DETAILS');
+    r1('Commodity / Description of goods');
+    r3('Pallet count',(IW-10)/3,'Total CBM',(IW-10)/3,'Total weight (lbs)');
+    r1('Dimensions per pallet — L x W x H (inches)');
+    chk('Cargo type:',['Palletized','Floor Loaded','Mixed']);y+=2;
+
+    secHead('5.  SPECIAL REQUIREMENTS');
+    chk('Liftgate required:',['Yes','No']);
+    chk('Appointment required:',['Yes','No']);
+    chk('Hazmat (attach SDS if Yes):',['Yes','No']);
+    chk('Cargo insurance required:',['Yes','No']);
+    r2('Estimated cargo value ($)',90,'PO / Reference number',IW-95);
+    r1('Special instructions / notes',14);y+=2;
+
+    secHead('6.  FREIGHT TERMS & SIGNATURE');
+    chk('Freight charge terms:',['Prepaid','Collect','3rd Party']);
+    y+=3;
+    doc.setFont('helvetica','italic');doc.setFontSize(7.5);doc.setTextColor(110,120,140);
+    doc.text('I certify that the above information is accurate and complete.',M,y);y+=7;
+    r2('Printed name',100,'Date',IW-105);
+    lbl('Signature',M,y+3.5);bx(M,y+4.5,IW,14);y+=22;
+
+    doc.setFont('helvetica','normal');doc.setFontSize(7);doc.setTextColor(165,170,180);
+    doc.text('SHIFL  |  A formal quote will be provided upon review of this form.',W/2,286,{align:'center'});
+
+    doc.save('Shifl_LCL_Intake_Form.pdf');
+  }catch(e){
+    alert('Could not generate PDF: '+e.message);
+  }
+}
+  const{jsPDF}=window.jspdf;
+  const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+  const W=210;const M=14;const IW=W-M*2;const navy=[26,46,74];
+  let y=0;
+
+  // ── Header ──────────────────────────────────────────────────────────────
+  doc.setFillColor(...navy);doc.rect(0,0,W,26,'F');
+  doc.setFont('helvetica','bold');doc.setFontSize(18);doc.setTextColor(255,255,255);
+  doc.text('SHIFL',M,17);
+  doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(255,255,255,.6);
+  doc.text('LCL Freight Intake Form',M,23);
+  doc.setFontSize(8);doc.setTextColor(255,255,255,.45);
+  doc.text('343 Spook Rock Road, Suffern NY 10901  |  mk@shifl.com',W-M,23,{align:'right'});
+  y=32;
+
+  // ── Intro note ───────────────────────────────────────────────────────────
+  doc.setFont('helvetica','italic');doc.setFontSize(8.5);doc.setTextColor(90,100,115);
+  doc.text('Please complete this form and return it to your Shifl representative so we can prepare your quote.',M,y);
+  y+=10;
+
+  // ── Helper functions ─────────────────────────────────────────────────────
+  function secHead(title){
+    doc.setFillColor(236,241,250);doc.rect(M,y,IW,8,'F');
+    doc.setFont('helvetica','bold');doc.setFontSize(8);doc.setTextColor(...navy);
+    doc.text(title,M+3,y+5.5);
+    y+=11;
+  }
+  function lbl(text,x,fieldY){
+    doc.setFont('helvetica','bold');doc.setFontSize(6.5);doc.setTextColor(110,120,140);
+    doc.text(text,x,fieldY);
+  }
+  function box(x,bY,w,h){
+    doc.setDrawColor(175,185,200);doc.setLineWidth(.3);doc.rect(x,bY,w,h);
+  }
+  function row1(labelText,h){
+    h=h||9;
+    lbl(labelText,M,y+3.5);
+    box(M,y+4.5,IW,h);
+    y+=h+8;
+  }
+  function row2(l1,w1,l2,w2,h){
+    h=h||9;const gap=5;
+    lbl(l1,M,y+3.5);box(M,y+4.5,w1,h);
+    lbl(l2,M+w1+gap,y+3.5);box(M+w1+gap,y+4.5,w2,h);
+    y+=h+8;
+  }
+  function row3(l1,w1,l2,w2,l3,w3,h){
+    h=h||9;const gap=5;
+    lbl(l1,M,y+3.5);box(M,y+4.5,w1,h);
+    lbl(l2,M+w1+gap,y+3.5);box(M+w1+gap,y+4.5,w2,h);
+    lbl(l3,M+w1+w2+gap*2,y+3.5);box(M+w1+w2+gap*2,y+4.5,w3,h);
+    y+=h+8;
+  }
+  function checkRow(labelText,options){
+    doc.setFont('helvetica','bold');doc.setFontSize(7.5);doc.setTextColor(60,70,90);
+    doc.text(labelText,M,y+4);
+    let cx=M+40;
+    options.forEach(opt=>{
+      doc.setDrawColor(130,140,160);doc.setLineWidth(.3);doc.rect(cx,y+0.5,4.5,4.5);
+      doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(50,60,80);
+      doc.text(opt,cx+6.5,y+4.5);
+      cx+=opt.length*2.2+14;
+    });
+    y+=10;
+  }
+
+  // ── 1. Contact Information ────────────────────────────────────────────────
+  secHead('1.  CONTACT INFORMATION');
+  row1('Company / Business name');
+  row2('Contact name',90,'Phone number',IW-90-5);
+  row1('Email address');
+  y+=2;
+
+  // ── 2. Pickup Details ─────────────────────────────────────────────────────
+  secHead('2.  PICKUP DETAILS');
+  row1('CFS / Pickup facility name and address');
+  row3('City',65,'State',25,'ZIP code',IW-65-25-10);
+  row1('Requested pickup date',9);
+  y+=2;
+
+  // ── 3. Delivery Details ────────────────────────────────────────────────────
+  secHead('3.  DELIVERY DETAILS');
+  row1('Consignee / Delivery company name');
+  row1('Street address');
+  row3('City',65,'State',25,'ZIP code',IW-65-25-10);
+  y+=2;
+
+  // ── 4. Cargo Details ─────────────────────────────────────────────────────
+  secHead('4.  CARGO DETAILS');
+  row1('Commodity / Description of goods');
+  row3('Pallet count',(IW-10)/3,'Total CBM (if known)',(IW-10)/3,'Total weight (lbs)',(IW-10)/3);
+  row1('Dimensions per pallet  (L x W x H in inches)');
+  checkRow('Cargo type:',['Palletized','Floor Loaded','Mixed']);
+  y+=2;
+
+  // ── 5. Special Requirements ────────────────────────────────────────────────
+  secHead('5.  SPECIAL REQUIREMENTS');
+  checkRow('Liftgate required:',['Yes','No']);
+  checkRow('Appointment required:',['Yes','No']);
+  checkRow('Hazmat (attach SDS if Yes):',['Yes','No']);
+  checkRow('Cargo insurance:',['Yes','No']);
+  row2('Estimated cargo value ($)',90,'PO / Reference number',IW-90-5);
+  row1('Special instructions / notes',14);
+  y+=2;
+
+  // ── 6. Freight Terms ───────────────────────────────────────────────────────
+  secHead('6.  FREIGHT TERMS & SIGNATURE');
+  checkRow('Freight charge terms:',['Prepaid','Collect','3rd Party']);
+  y+=3;
+  // Signature lines
+  doc.setFont('helvetica','italic');doc.setFontSize(7.5);doc.setTextColor(110,120,140);
+  doc.text('I certify that the information provided above is accurate and complete.',M,y);
+  y+=7;
+  row2('Printed name',100,'Date',IW-100-5,10);
+  lbl('Signature',M,y+3.5);
+  box(M,y+4.5,IW,14);
+  y+=22;
+
+  // ── Footer ─────────────────────────────────────────────────────────────────
+  doc.setFont('helvetica','normal');doc.setFontSize(7);doc.setTextColor(170,175,185);
+  doc.text('SHIFL Freight Quoting Platform  |  This form is for informational purposes only. A formal quote will be provided upon review.',W/2,287,{align:'center'});
+
+  doc.save('Shifl_LCL_Intake_Form.pdf');
+}
+// ═══════════════════════════════════════════════════════
+// NOTIFICATION SYSTEM
+// ═══════════════════════════════════════════════════════
+function getNotifications(){
+  const notifs=[];
+  const today=new Date();today.setHours(0,0,0,0);
+
+  // Overdue active shipments
+  getAllActiveShipments().forEach(s=>{
+    const tracking=window._activeTracking?.[s.id]||{};
+    if(tracking.expectedDate){
+      const exp=new Date(tracking.expectedDate);exp.setHours(0,0,0,0);
+      const diff=Math.floor((today-exp)/(1000*60*60*24));
+      if(diff>0) notifs.push({type:'overdue',priority:'high',
+        title:`Overdue: ${s.customer}`,
+        body:`${s.type==='drayage'?'Drayage':fqTypeLabel(s)} shipment is ${diff} day${diff!==1?'s':''} overdue`,
+        id:'overdue-'+s.id});
+    }
+    if(tracking.urgent) notifs.push({type:'urgent',priority:'high',
+      title:`Hot shipment: ${s.customer}`,
+      body:`Marked urgent — ${s.type} shipment needs attention`,
+      id:'urgent-'+s.id});
+  });
+
+  // Expiring drayage quotes (28+ days old, still Quoted)
+  const expThresh=28*24*60*60*1000;
+  (S.quotes||[]).filter(q=>q.status==='Quoted').forEach(q=>{
+    const age=today-new Date(q.date);
+    if(age>=expThresh){
+      const daysLeft=30-Math.floor(age/(1000*60*60*24));
+      notifs.push({type:'expiring',priority:daysLeft<=1?'high':'medium',
+        title:`Quote expiring: ${q.customer}`,
+        body:`Quote #${q.quoteNum} expires in ${Math.max(0,daysLeft)} day${daysLeft!==1?'s':''}`,
+        id:'exp-'+q.id});
+    }
+  });
+
+  // Expiring freight quotes
+  (window._fqHistory||[]).filter(q=>q.status==='Quoted').forEach(q=>{
+    const age=today-new Date(q.date);
+    if(age>=expThresh){
+      const daysLeft=30-Math.floor(age/(1000*60*60*24));
+      notifs.push({type:'expiring',priority:daysLeft<=1?'high':'medium',
+        title:`Freight quote expiring: ${q.customer}`,
+        body:`${fqTypeLabel(q)} quote expires in ${Math.max(0,daysLeft)} day${daysLeft!==1?'s':''}`,
+        id:'fqexp-'+q.id});
+    }
+  });
+
+  return notifs.sort((a,b)=>a.priority==='high'&&b.priority!=='high'?-1:1);
+}
+
+function updateNotifBadge(){
+  const n=getNotifications();
+  const badge=$('notif-badge');
+  if(badge){badge.textContent=n.length;badge.style.display=n.length>0?'':'none';}
+  return n;
+}
+
+function showNotifications(){
+  const notifs=updateNotifBadge();
+  const iconMap={overdue:'🚨',expiring:'⏰',urgent:'🔥'};
+  const colorMap={high:'#dc2626',medium:'#d97706'};
+  const rows=notifs.length?notifs.map(n=>`
+    <div style="padding:12px 16px;border-bottom:1px solid var(--gray-100);display:flex;gap:10px;align-items:flex-start">
+      <span style="font-size:18px;flex-shrink:0">${iconMap[n.type]||'🔔'}</span>
+      <div>
+        <div style="font-weight:700;font-size:13px;color:${colorMap[n.priority]||'var(--navy)'}">${n.title}</div>
+        <div style="font-size:12px;color:var(--gray-500);margin-top:2px">${n.body}</div>
+      </div>
+    </div>`).join('')
+    :`<div style="padding:30px;text-align:center;color:var(--gray-400)"><div style="font-size:32px;margin-bottom:8px">✅</div><div style="font-weight:600">All clear — no alerts</div></div>`;
+
+  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+    <div class="modal" style="width:480px;padding:0;overflow:hidden">
+      <div style="padding:14px 16px;background:var(--navy);display:flex;align-items:center;justify-content:space-between">
+        <div style="font-size:14px;font-weight:700;color:#fff">🔔 Notifications ${notifs.length>0?`<span style="background:#ef4444;color:#fff;border-radius:99px;font-size:11px;padding:1px 7px;margin-left:6px">${notifs.length}</span>`:''}</div>
+        <button onclick="closeModal()" style="background:transparent;border:none;color:rgba(255,255,255,.5);cursor:pointer;font-size:18px">×</button>
+      </div>
+      <div style="max-height:400px;overflow-y:auto">${rows}</div>
+      ${notifs.length>0?`<div style="padding:12px 16px;border-top:1px solid var(--gray-100);display:flex;justify-content:flex-end">
+        <button class="btn sm" onclick="requestBrowserNotifs()">Enable browser alerts</button>
+      </div>`:''}
+    </div></div>`;
+}
+
+async function requestBrowserNotifs(){
+  if('Notification' in window){
+    const perm=await Notification.requestPermission();
+    if(perm==='granted') alert('✅ Browser notifications enabled! You\'ll be alerted even when the tab is in the background.');
+    else alert('Browser notifications were blocked. You can enable them in your browser settings.');
+  }
+}
+
+function sendBrowserNotif(title,body){
+  if('Notification' in window&&Notification.permission==='granted'){
+    new Notification('Shifl — '+title,{body,icon:'https://mkshifl.github.io/shifl-quoting/favicon.ico'});
+  }
+}
+
+// Auto-check notifications every 5 minutes
+function startNotifPolling(){
+  updateNotifBadge();
+  setInterval(()=>{
+    const notifs=updateNotifBadge();
+    // Send browser notif for new high-priority items
+    notifs.filter(n=>n.priority==='high').forEach(n=>{
+      if(!sessionStorage.getItem('notif-sent-'+n.id)){
+        sendBrowserNotif(n.title,n.body);
+        sessionStorage.setItem('notif-sent-'+n.id,'1');
+      }
+    });
+  },5*60*1000);
+}
+
+// ═══════════════════════════════════════════════════════
+// DOCUMENT STORAGE
+// ═══════════════════════════════════════════════════════
+async function loadDocs(quoteId,quoteType){
+  try{
+    const{data}=await db.from('documents').select('*').eq('quote_id',quoteId).eq('quote_type',quoteType).order('uploaded_at',{ascending:false});
+    return data||[];
+  }catch(e){return[];}
+}
+
+async function uploadDoc(quoteId,quoteType,file,docType){
+  const ext=file.name.split('.').pop();
+  const path=`${quoteType}/${quoteId}/${Date.now()}_${file.name.replace(/\s+/g,'_')}`;
+  // Upload to Supabase Storage
+  const{data:upload,error:upErr}=await db.storage.from('shifl-docs').upload(path,file);
+  if(upErr) throw upErr;
+  const{data:urlData}=db.storage.from('shifl-docs').getPublicUrl(path);
+  // Save metadata to documents table
+  const{error:dbErr}=await db.from('documents').insert({
+    id:uid(),quote_id:quoteId,quote_type:quoteType,
+    file_name:file.name,file_url:urlData.publicUrl,
+    file_size:file.size,doc_type:docType||'Other',
+    uploaded_by:_currentUser?.id||null,
+    uploaded_by_name:_currentUser?.name||null,
+  });
+  if(dbErr) throw dbErr;
+}
+
+async function deleteDoc(docId,filePath){
+  if(!confirm('Delete this document?')) return;
+  await db.from('documents').delete().eq('id',docId);
+  if(filePath) await db.storage.from('shifl-docs').remove([filePath]);
+}
+
+function buildDocSection(quoteId,quoteType,docs){
+  const docTypes=['BOL','POD','Rate Confirmation','Customs','Invoice','Other'];
+  const docRows=docs.map(d=>`
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--gray-100)">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:16px">${d.file_name.match(/\.pdf$/i)?'📄':d.file_name.match(/\.(png|jpg|jpeg)$/i)?'🖼️':'📎'}</span>
+        <div>
+          <div style="font-size:12px;font-weight:600;color:var(--navy)">${d.file_name}</div>
+          <div style="font-size:10px;color:var(--gray-400)">${d.doc_type} · ${d.uploaded_by_name||'System'} · ${new Date(d.uploaded_at).toLocaleDateString()}</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:6px">
+        <a href="${d.file_url}" target="_blank" class="btn sm" style="text-decoration:none">⬇️ Download</a>
+        <button class="btn sm" onclick="deleteDoc('${d.id}')" style="color:#dc2626">🗑️</button>
+      </div>
+    </div>`).join('');
+
+  return `<div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--gray-100)">
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-500);margin-bottom:10px">📎 Documents${docs.length>0?' ('+docs.length+')':''}</div>
+    ${docRows}
+    <div style="margin-top:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      <select id="doc-type-${quoteId}" style="font-size:12px;padding:5px 8px;border:1px solid var(--gray-200);border-radius:var(--radius)">
+        ${docTypes.map(t=>`<option value="${t}">${t}</option>`).join('')}
+      </select>
+      <label class="btn sm" style="cursor:pointer">
+        📎 Attach file
+        <input type="file" style="display:none" accept=".pdf,.png,.jpg,.jpeg,.doc,.docx,.xlsx"
+          onchange="handleDocUpload(event,'${quoteId}','${quoteType}')">
+      </label>
+    </div>
+  </div>`;
+}
+
+async function handleDocUpload(event,quoteId,quoteType){
+  const file=event.target.files[0];if(!file) return;
+  const docType=($('doc-type-'+quoteId)||{}).value||'Other';
+  const btn=event.target.previousElementSibling;
+  if(btn) btn.textContent='Uploading...';
+  try{
+    await uploadDoc(quoteId,quoteType,file,docType);
+    // Refresh the modal
+    if(quoteType==='drayage') showQuoteModal(quoteId);
+    else if(quoteType==='freight'){
+      const idx=(window._fqHistory||[]).findIndex(q=>q.id===quoteId);
+      if(idx>=0) showFqQuoteModal(idx);
+    } else {
+      const idx=(window._tlHistory||[]).findIndex(q=>q.id===quoteId);
+      if(idx>=0) showTlQuoteModal(idx);
+    }
+  }catch(e){
+    alert('Upload failed: '+e.message+'\n\nNote: Make sure you created the "shifl-docs" storage bucket in Supabase.');
+    if(btn) btn.textContent='Attach file';
+  }
+}
+
 async function loadTlHistory(){
   loadTlWarehouses();
   try{
@@ -5696,7 +6126,13 @@ function showQuoteModal(id){
       ${q.status==='Booked'?`<button class="btn green" onclick="downloadCarrierRateSheet(S.quotes.find(q=>q.id==='${id}'),null)">📋 Carrier rate sheet</button>`:''}
       <button class="btn" onclick="printSavedQuote('${id}')">🖨️ Print</button>
       <button class="btn blue" onclick="downloadSavedPDF('${id}')">📄 Download PDF</button></div>
+    <div id="docs-section-${id}"><div style="padding:14px 0;color:var(--gray-400);font-size:12px">Loading documents…</div></div>
   </div></div>`;
+  // Load and inject docs async
+  loadDocs(id,'drayage').then(docs=>{
+    const el=$('docs-section-'+id);
+    if(el) el.innerHTML=buildDocSection(id,'drayage',docs);
+  });
 }
 async function downloadSelectedDrayPDFs(){
   const ids=Array.from(window._draySelected||[]);
