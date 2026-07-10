@@ -1950,7 +1950,7 @@ async function downloadFqCarrierPDF(idx){
 
 function showFqQuoteModal(idx){
   const q=(window._fqHistory||[])[idx];if(!q) return;
-  const statusColors={Quoted:'a',Booked:'g',Lost:'gr',Cancelled:'gr'};
+  const statusColors={Quoted:'a',Booked:'g',Lost:'gr',Cancelled:'gr','Container Returned':'b',Delivered:'b'};
   // Pre-compute conditionals to avoid nested template literals
   const carrierBtn=q.status==='Booked'
     ?'<button class="btn green" onclick="downloadFqCarrierPDF('+idx+')">📋 Carrier rate sheet</button>':'';
@@ -4583,7 +4583,9 @@ function setActiveTracking(id,key,val){
 }
 function getAllShipmentsByStatus(statuses){
   const items=[];
-  (S.quotes||[]).filter(q=>statuses.includes(q.status)).forEach(q=>{
+  // 'Container Returned' is legacy name for Delivered on drayage
+  const drayStatuses=statuses.map(s=>s==='Delivered'?['Delivered','Container Returned']:[s]).flat();
+  (S.quotes||[]).filter(q=>drayStatuses.includes(q.status)).forEach(q=>{
     items.push({type:'drayage',id:q.id,customer:q.customer,carrier:q.carrier,
       date:q.date,bookedDate:q.baseMarkup?.bookedDate||q.date,
       from:q.port,to:q.zip,mode:q.ld,destination:q.destination,
