@@ -626,20 +626,24 @@ async function connectSupabase(){
 }
 
 async function checkAuthAndProceed(){
-  const session=getSession();
-  if(session){
-    // Validate session is still valid in DB
-    try{
-      const{data:user}=await db.from('app_users').select('*').eq('id',session.id).single();
-      if(user&&user.active){
-        setSession({id:user.id,name:user.name,email:user.email,role:user.role});
-        await initApp();
-        return;
-      }
-    }catch(e){}
-    clearSession();
-  }
-  await showLoginScreen();
+  try{
+    const session=getSession();
+    if(session){
+      try{
+        const race=await Promise.race([
+          db.from('app_users').select('*').eq('id',session.id).single(),
+          new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')),6000))
+        ]);
+        const user=race.data;
+        if(user&&user.active){
+          setSession({id:user.id,name:user.name,email:user.email,role:user.role});
+          await initApp();return;
+        }
+      }catch(e){console.log('Session check:',e.message);}
+      clearSession();
+    }
+    await showLoginScreen();
+  }catch(e){console.log('Auth error:',e.message);showLoginScreen();}
 }
 
 function disconnectSupabase(){
@@ -5268,17 +5272,21 @@ function updateUserUI(){
 }
 
 async function showLoginScreen(){
-  // Check if any users exist yet
-  const{data}=await db.from('app_users').select('id').limit(1);
-  const noUsers=!data||data.length===0;
   $('loading-screen').style.display='none';
   $('login-screen').style.display='flex';
-  if(noUsers){
-    $('first-user-banner').style.display='';
-    $('login-name').style.display='';
-    $('login-name-label').style.display='';
-    $('login-btn').textContent='Create admin account';
-  }
+  try{
+    const race=await Promise.race([
+      db.from('app_users').select('id').limit(1),
+      new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')),6000))
+    ]);
+    const noUsers=!race.data||race.data.length===0;
+    if(noUsers){
+      $('first-user-banner').style.display='';
+      $('login-name').style.display='';
+      $('login-name-label').style.display='';
+      $('login-btn').textContent='Create admin account';
+    }
+  }catch(e){console.log('Users check:',e.message);}
 }
 
 async function doLogin(){
