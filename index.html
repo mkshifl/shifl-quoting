@@ -303,6 +303,7 @@ hr{border:none;border-top:1px solid var(--gray-100);margin:14px 0}
         <span class="ico">🟢</span>Active Shipments
         <span id="active-badge" style="margin-left:auto;background:#22c55e;color:#fff;border-radius:99px;font-size:10px;font-weight:700;padding:2px 8px;min-width:20px;text-align:center;display:none">0</span>
       </button>
+      <button class="nav-btn" onclick="setView('carriers')" id="nav-carriers"><span class="ico">🤝</span>Carrier Network</button>
       <div style="padding:10px 18px 4px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:rgba(255,255,255,.28)">Drayage</div>
       <button class="nav-btn active" onclick="setView('quote')" id="nav-quote"><span class="ico">📋</span>Quote builder</button>
       <button class="nav-btn" onclick="setView('customers')" id="nav-customers"><span class="ico">👥</span>Customers</button>
@@ -327,8 +328,25 @@ hr{border:none;border-top:1px solid var(--gray-100);margin:14px 0}
       <button class="nav-sub" id="tlnav-log"        onclick="setView('transload');setTlTab('log')"><span>📁</span>Quote log</button>
       <button class="nav-sub" id="tlnav-warehouses" onclick="setView('transload');setTlTab('warehouses')"><span>🏭</span>Warehouses</button>
       <button class="nav-sub" id="tlnav-dash"       onclick="setView('transload');setTlTab('dash')"><span>📊</span>Dashboard</button>
+      <!-- Admin panel — only visible to admins -->
+      <div id="admin-nav-section" style="display:none">
+        <div style="margin:10px 18px;border-top:1px solid rgba(255,255,255,.1)"></div>
+        <button class="nav-btn" onclick="setView('admin')" id="nav-admin" style="border-left-color:transparent">
+          <span class="ico">⚙️</span>Admin Panel
+        </button>
+      </div>
     </nav>
     <div class="sidebar-foot">
+      <!-- User info block -->
+      <div id="user-info" style="display:none;margin-bottom:10px;padding:9px 11px;background:rgba(255,255,255,.07);border-radius:var(--radius);cursor:pointer" onclick="showEditMyProfile()" title="Edit your profile">
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <div>
+            <div id="user-name-display" style="font-size:12px;font-weight:700;color:#fff"></div>
+            <div id="user-role-display" style="font-size:10px;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.05em;margin-top:1px"></div>
+          </div>
+          <button onclick="event.stopPropagation();logout()" style="background:rgba(255,255,255,.08);border:none;color:rgba(255,255,255,.5);padding:4px 9px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600">Out</button>
+        </div>
+      </div>
       <div style="display:flex;align-items:center;margin-bottom:4px">
         <span class="sync-dot" id="sync-dot"></span>
         <span class="sync-label" id="sync-label">Connected</span>
@@ -826,7 +844,7 @@ function setView(v){
   S.view=v;
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
   const navEl=$('nav-'+v);if(navEl) navEl.classList.add('active');
-  $('view-title').textContent={quote:'Quote builder',customers:'Customers',rates:'Carrier rates',log:'Quote log',dash:'Dashboard',freight:'Freight Quoting',transload:'Transload Quoting',active:'Active Shipments'}[v];
+  $('view-title').textContent={quote:'Quote builder',customers:'Customers',rates:'Carrier rates',log:'Quote log',dash:'Dashboard',freight:'Freight Quoting',transload:'Transload Quoting',active:'Active Shipments',admin:'Admin Panel'}[v];
   render();
 }
 function render(){
@@ -835,6 +853,8 @@ function render(){
   else if(S.view==='rates')      renderRates();
   else if(S.view==='log')        renderLog();
   else if(S.view==='active')     renderActive();
+  else if(S.view==='carriers')   renderCarriers();
+  else if(S.view==='admin')      renderAdmin();
   else if(S.view==='freight')    renderFreight();
   else if(S.view==='transload')  renderTransload();
   else                           renderDash();
@@ -1764,6 +1784,8 @@ function confirmFqBooking(idx, downloadSheet){
   const q=(window._fqHistory||[])[idx];if(!q) return;
   q.status='Booked';
   q.bookedDate=new Date().toISOString().slice(0,10);
+  q.booked_by=_currentUser?.id||null;
+  q.booked_by_name=_currentUser?.name||null;
   try{localStorage.setItem('fq_history',JSON.stringify(window._fqHistory));}catch(e){}
   try{dbUpdateFqStatus(q.id,'Booked');}catch(e){}
   closeModal();
@@ -2173,10 +2195,12 @@ async function saveFqQuote(){
     profit:customerRate-carrierRate,
     profitPct:customerRate>0?(customerRate-carrierRate)/customerRate:0,
     status:'Quoted',notes:fq.notes,transitTime:fq.transitTime||'',
+    created_by:_currentUser?.id||null,created_by_name:_currentUser?.name||null,
   };
   if(!window._fqHistory) window._fqHistory=[];
   window._fqHistory.unshift(entry);
   try{await dbSaveFqQuote(entry);}catch(e){console.log('Supabase fq save error:',e.message);}
+  upsertCarrier(carrierName, fq.mode);
   try{const existing=JSON.parse(localStorage.getItem('fq_history')||'[]');existing.unshift(entry);localStorage.setItem('fq_history',JSON.stringify(existing.slice(0,500)));}catch(e){}
   alert(`✅ Freight quote saved!\n\n${carrierName}: ${fmtD(carrierRate)}\nCustomer: ${fmtD(customerRate)}\nProfit: ${fmtD(entry.profit)} (${pct(entry.profitPct)})`);
   refreshFreightPreview();
@@ -2626,8 +2650,10 @@ async function saveQuote(){
       customer:qi.customer||'—',port:qi.port,zip:qi.zip,ld:qi.ld,carrier:sel.carrier,destination:sel.destination,
       carrierRates:{...CHARGES.reduce((o,c)=>{o[c]=sel[c]||0;return o;},{}),total:ct},
       customerRates:{...cuRates,total:cu},baseMarkup:{...qi.baseMarkup},flatRates:{...qi.flatRates},
-      profit,profitPct:cu>0?profit/cu:0,status:'Quoted',notes:qi.notes||'',shiflRef:qi.shiflRef||''};
+      profit,profitPct:cu>0?profit/cu:0,status:'Quoted',notes:qi.notes||'',shiflRef:qi.shiflRef||'',
+      created_by:_currentUser?.id||null,created_by_name:_currentUser?.name||null};
     await dbSaveQuote(q);
+    upsertCarrier(sel.carrier,'Drayage');
     S.quotes.unshift(q);
     alert(`Quote #${q.quoteNum} saved!\n\nCustomer total: ${fmtD(cu)}\nProfit: ${fmtD(profit)} (${pct(q.profitPct)})`);
   }catch(e){alert('Error saving quote: '+e.message);}finally{setSaving(false);}
@@ -5063,6 +5089,8 @@ async function confirmBooking(id, downloadSheet){
       await db.from('quotes').update({status:'Booked',base_markup:q.baseMarkup}).eq('id',id);
     }
     q.status='Booked';
+    q.booked_by=_currentUser?.id||null;
+    q.booked_by_name=_currentUser?.name||null;
     closeModal();
     const t=$('log-tbody');if(t) t.innerHTML=buildLogRows();
     updateActiveBadge();
@@ -5279,6 +5307,7 @@ function showQuoteModal(id){
         ${q.status==='Booked'?'Type to assign — auto-saves':'Mark as Booked to assign ref#'}
       </span>
     </div>
+    ${attrLine(q)}
     <div style="border:1px solid var(--gray-200);border-radius:var(--radius);overflow:hidden;margin-bottom:16px">
       <table style="width:100%;font-size:13px;border-collapse:collapse">
         <thead><tr style="background:var(--gray-50)"><th style="padding:8px 12px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-500)">Charge</th><th style="padding:8px 12px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-400)">Carrier cost</th><th style="padding:8px 12px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--steel)">Customer price</th><th style="padding:8px 12px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--green)">Profit</th></tr></thead>
@@ -5372,33 +5401,552 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape') closeModal();});
 // ═══════════════════════════════════════════════════════
 // BOOT — load Supabase client then check for saved config
 // ═══════════════════════════════════════════════════════
-async function boot(){
-  // Load Supabase JS
-  await new Promise((res,rej)=>{
-    const s=document.createElement('script');
-    s.src='https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
-    s.onload=res; s.onerror=rej;
-    document.head.appendChild(s);
-  });
-  const url=localStorage.getItem('sb_url');
-  const key=localStorage.getItem('sb_key');
-  if(url&&key){
-    const{createClient}=window.supabase;
-    db=createClient(url,key);
-    try{
-      const{error}=await db.from('rates').select('id').limit(1);
-      if(error) throw error;
-      await initApp();
-    }catch(e){
-      db=null;
-      $('loading-screen').style.display='none';
-      $('setup-screen').style.display='flex';
-    }
-  } else {
-    $('loading-screen').style.display='none';
-    $('setup-screen').style.display='flex';
+
+// ═══════════════════════════════════════════════════════
+// AUTH SYSTEM v2
+// Root cause of v1 failure: db was shown to be null when doLogin() ran,
+// because boot() called showLoginScreen() BEFORE confirming Supabase 
+// connection was working. Fix: always confirm db works BEFORE login screen.
+// ═══════════════════════════════════════════════════════
+let _currentUser = null;
+
+async function hashPassword(email, pw){
+  const data = email.toLowerCase().trim() + ':' + pw;
+  const encoded = new TextEncoder().encode(data);
+  const hash = await crypto.subtle.digest('SHA-256', encoded);
+  return Array.from(new Uint8Array(hash)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+
+function getSession(){
+  try{
+    const s = localStorage.getItem('shifl_session');
+    if(!s) return null;
+    const p = JSON.parse(s);
+    if(Date.now() - p.loginTime > 7*24*60*60*1000){localStorage.removeItem('shifl_session');return null;}
+    return p;
+  }catch(e){return null;}
+}
+function setSession(user){
+  _currentUser = user;
+  localStorage.setItem('shifl_session',JSON.stringify({...user,loginTime:Date.now()}));
+  updateUserUI();
+}
+function clearSession(){
+  _currentUser = null;
+  localStorage.removeItem('shifl_session');
+  updateUserUI();
+}
+function updateUserUI(){
+  const nameEl=$('user-name-display'),roleEl=$('user-role-display'),infoEl=$('user-info'),adminNav=$('admin-nav-section');
+  if(_currentUser){
+    if(nameEl) nameEl.textContent=_currentUser.name;
+    if(roleEl) roleEl.textContent=_currentUser.role==='admin'?'Admin':'Team member';
+    if(infoEl) infoEl.style.display='';
+    if(adminNav) adminNav.style.display=_currentUser.role==='admin'?'':'none';
+  }else{
+    if(infoEl) infoEl.style.display='none';
+    if(adminNav) adminNav.style.display='none';
   }
 }
+
+// KEY FIX v2: only call this AFTER db is confirmed working
+async function checkAuthAndProceed(){
+  const session = getSession();
+  if(session){
+    try{
+      const{data:user}=await db.from('app_users').select('*').eq('id',session.id).single();
+      if(user && user.active){
+        // Update last_login silently
+        db.from('app_users').update({last_login:new Date().toISOString()}).eq('id',user.id).then(()=>{});
+        setSession({id:user.id,name:user.name,email:user.email,role:user.role});
+        await initApp();
+        return;
+      }
+    }catch(e){console.log('Session check failed:',e.message);}
+    clearSession();
+  }
+  await showLoginScreen();
+}
+
+async function showLoginScreen(){
+  $('loading-screen').style.display='none';
+  $('login-screen').style.display='flex';
+  // Check if first user — do this in background, non-blocking
+  // db is confirmed working at this point so this is safe
+  try{
+    const{data}=await db.from('app_users').select('id').limit(1);
+    if(!data||!data.length){
+      $('first-user-banner').style.display='';
+      $('login-name-field').style.display='';
+      $('login-btn').textContent='Create admin account';
+    }
+  }catch(e){/* table might not exist yet */}
+  setTimeout(()=>{const el=$('login-email');if(el)el.focus();},100);
+}
+
+async function doLogin(){
+  // Safety check — this should never be null now (boot confirms db first)
+  if(!db){
+    showLoginErr('No database connection. Please refresh the page.');return;
+  }
+  const nameEl=$('login-name'),emailEl=$('login-email'),pwEl=$('login-password');
+  const email=(emailEl?.value||'').trim().toLowerCase();
+  const pw = pwEl?.value||'';
+  const name=(nameEl?.value||'').trim();
+  if(!email||!pw){showLoginErr('Please enter your email and password.');return;}
+
+  const btn=$('login-btn');
+  const origText=btn.textContent;
+  btn.textContent='Signing in...';btn.disabled=true;
+
+  try{
+    const hash = await hashPassword(email, pw);
+
+    // Check if first user
+    const{data:existing}=await db.from('app_users').select('id').limit(1);
+    if(!existing||!existing.length){
+      if(!name){showLoginErr('Please enter your name.');btn.textContent='Create admin account';btn.disabled=false;return;}
+      const id=uid();
+      const{error}=await db.from('app_users').insert({id,name,email,password_hash:hash,role:'admin',active:true});
+      if(error) throw error;
+      setSession({id,name,email,role:'admin'});
+      await finishLogin();
+      return;
+    }
+
+    // Normal login
+    const{data:user,error}=await db.from('app_users').select('*').eq('email',email).single();
+    if(error||!user){showLoginErr('No account found with that email.');btn.textContent=origText;btn.disabled=false;return;}
+    if(!user.active){showLoginErr('Your account has been deactivated. Contact your admin.');btn.textContent=origText;btn.disabled=false;return;}
+    if(user.password_hash!==hash){showLoginErr('Incorrect password. Try again.');btn.textContent=origText;btn.disabled=false;return;}
+
+    db.from('app_users').update({last_login:new Date().toISOString()}).eq('id',user.id).then(()=>{});
+    setSession({id:user.id,name:user.name,email:user.email,role:user.role});
+    await finishLogin();
+
+  }catch(e){
+    showLoginErr('Error: '+e.message);
+    btn.textContent=origText;btn.disabled=false;
+  }
+}
+function showLoginErr(msg){const el=$('login-error');if(el){el.textContent=msg;el.style.display='';}}
+async function finishLogin(){
+  $('login-screen').style.display='none';
+  $('loading-screen').style.display='flex';
+  $('loading-msg').textContent='Loading your workspace...';
+  await initApp();
+}
+function logout(){
+  if(!confirm('Sign out of Shifl?')) return;
+  clearSession();
+  $('app').style.display='none';
+  $('login-screen').style.display='flex';
+  const err=$('login-error');if(err)err.style.display='none';
+  const pw=$('login-password');if(pw)pw.value='';
+  const btn=$('login-btn');if(btn){btn.textContent='Sign in';btn.disabled=false;}
+  setTimeout(()=>{const el=$('login-email');if(el)el.focus();},100);
+}
+
+// ── Edit own profile ──────────────────────────────────────────────────────
+function showEditMyProfile(){
+  if(!_currentUser) return;
+  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+    <div class="modal"><div class="modal-title">My profile</div>
+    <div class="field"><label>Your name</label>
+      <input type="text" id="mp-name" value="${_currentUser.name}" placeholder="Your name"></div>
+    <div class="field"><label>New password <span style="font-weight:400;color:var(--gray-400)">(leave blank to keep current)</span></label>
+      <input type="password" id="mp-pw" placeholder="New password"></div>
+    <div class="field"><label>Confirm new password</label>
+      <input type="password" id="mp-pw2" placeholder="Confirm password"></div>
+    <div class="modal-foot">
+      <button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn blue" onclick="saveMyProfile()">Save changes</button>
+    </div></div></div>`;
+}
+async function saveMyProfile(){
+  const name=($('mp-name')||{}).value?.trim();
+  const pw=$('mp-pw')?.value;
+  const pw2=$('mp-pw2')?.value;
+  if(!name){alert('Name is required.');return;}
+  if(pw&&pw!==pw2){alert('Passwords do not match.');return;}
+  try{
+    const updates={name};
+    if(pw) updates.password_hash=await hashPassword(_currentUser.email,pw);
+    const{error}=await db.from('app_users').update(updates).eq('id',_currentUser.id);
+    if(error) throw error;
+    _currentUser.name=name;
+    setSession({..._currentUser});
+    closeModal();updateUserUI();
+    alert('✅ Profile updated!');
+  }catch(e){alert('Error: '+e.message);}
+}
+
+// ── Admin panel ───────────────────────────────────────────────────────────
+async function renderAdmin(){
+  if(!_currentUser||_currentUser.role!=='admin'){
+    $('page').innerHTML='<div class="empty"><p>Admin access only.</p></div>';return;
+  }
+  $('topbar-right').innerHTML='<button class="btn blue" onclick="showCreateUser()">+ Add user</button>';
+  const{data:users}=await db.from('app_users').select('*').order('created_at',{ascending:true});
+  const rows=(users||[]).map(u=>`<tr>
+    <td class="bold">${u.name}</td>
+    <td class="muted">${u.email}</td>
+    <td><span class="badge ${u.role==='admin'?'b':'gr'}">${u.role==='admin'?'Admin':'User'}</span></td>
+    <td><span class="badge ${u.active?'g':'r'}">${u.active?'Active':'Inactive'}</span></td>
+    <td class="muted small">${u.last_login?new Date(u.last_login).toLocaleDateString():'Never'}</td>
+    <td style="white-space:nowrap">
+      ${u.id!==_currentUser.id?`
+        <button class="btn sm" onclick="showEditUser('${u.id}')">✏️ Edit</button>
+        <button class="btn sm" onclick="showResetPassword('${u.id}','${u.name.replace(/'/g,'')}')" style="margin-left:4px">🔑 Reset PW</button>
+        <button class="btn sm" onclick="toggleUserActive('${u.id}',${u.active})" style="margin-left:4px">${u.active?'Deactivate':'Activate'}</button>
+        <button class="btn sm" onclick="deleteUser('${u.id}','${u.name.replace(/'/g,'')}')" style="margin-left:4px;color:#dc2626;border-color:#fca5a5">🗑️ Delete</button>
+      `:'<span class="muted small">(you)</span>'}
+    </td>
+  </tr>`).join('');
+  $('page').innerHTML=`<div class="card">
+    <div class="sec-head">Team members</div>
+    <div class="tbl-wrap" style="box-shadow:none;border:none;margin:0">
+      <table><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Last login</th><th></th></tr></thead>
+      <tbody>${rows||'<tr><td colspan="6" style="text-align:center;padding:30px;color:var(--gray-400)">No users yet</td></tr>'}</tbody>
+      </table>
+    </div>
+  </div>`;
+}
+
+function showCreateUser(){
+  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+    <div class="modal"><div class="modal-title">Add team member</div>
+    <div class="g2">
+      <div class="field"><label>Full name *</label><input type="text" id="nu-name" placeholder="e.g. Julianny Garcia"></div>
+      <div class="field"><label>Email *</label><input type="email" id="nu-email" placeholder="julianny@shifl.com"></div>
+    </div>
+    <div class="g2">
+      <div class="field"><label>Password *</label><input type="password" id="nu-pw" placeholder="Set a temporary password"></div>
+      <div class="field"><label>Role</label>
+        <select id="nu-role"><option value="user">Team member</option><option value="admin">Admin</option></select>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn blue" onclick="createUser()">Create account</button>
+    </div></div></div>`;
+}
+async function createUser(){
+  const name=($('nu-name')||{}).value?.trim();
+  const email=($('nu-email')||{}).value?.trim().toLowerCase();
+  const pw=($('nu-pw')||{}).value;
+  const role=($('nu-role')||{}).value||'user';
+  if(!name||!email||!pw){alert('Name, email and password are all required.');return;}
+  try{
+    const hash=await hashPassword(email,pw);
+    const{error}=await db.from('app_users').insert({id:uid(),name,email,password_hash:hash,role,active:true});
+    if(error) throw error;
+    closeModal();renderAdmin();
+    // Email credentials via mailto
+    const subj=encodeURIComponent('Your Shifl account is ready');
+    const body=encodeURIComponent('Hi '+name+',\n\nYour Shifl Freight Quoting account has been created.\n\nLogin: https://mkshifl.github.io/shifl-quoting/\nEmail: '+email+'\nPassword: '+pw+'\n\nPlease change your password after first login.\n\nThanks,\nShifl Team');
+    window.open('mailto:'+email+'?subject='+subj+'&body='+body);
+  }catch(e){alert('Error creating user: '+e.message);}
+}
+async function showEditUser(id){
+  const{data:u}=await db.from('app_users').select('*').eq('id',id).single();
+  if(!u) return;
+  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+    <div class="modal"><div class="modal-title">Edit user — ${u.name}</div>
+    <div class="g2">
+      <div class="field"><label>Full name</label><input type="text" id="eu-name" value="${u.name}" placeholder="Full name"></div>
+      <div class="field"><label>Email</label><input type="email" id="eu-email" value="${u.email}" placeholder="email@company.com"></div>
+    </div>
+    <div class="field"><label>Role</label>
+      <select id="eu-role">
+        <option value="user" ${u.role==='user'?'selected':''}>Team member</option>
+        <option value="admin" ${u.role==='admin'?'selected':''}>Admin</option>
+      </select>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn blue" onclick="saveEditUser('${id}')">Save changes</button>
+    </div></div></div>`;
+}
+async function saveEditUser(id){
+  const name=($('eu-name')||{}).value?.trim();
+  const email=($('eu-email')||{}).value?.trim().toLowerCase();
+  const role=($('eu-role')||{}).value||'user';
+  if(!name||!email){alert('Name and email are required.');return;}
+  try{
+    const{error}=await db.from('app_users').update({name,email,role}).eq('id',id);
+    if(error) throw error;
+    closeModal();renderAdmin();alert('✅ User updated.');
+  }catch(e){alert('Error: '+e.message);}
+}
+async function toggleUserActive(id,currentActive){
+  if(!confirm((currentActive?'Deactivate':'Activate')+' this user?')) return;
+  await db.from('app_users').update({active:!currentActive}).eq('id',id);
+  renderAdmin();
+}
+async function deleteUser(id,name){
+  if(!confirm('Permanently delete "'+name+'"? This cannot be undone.')) return;
+  if(!confirm('Are you 100% sure? '+name+'\'s access will be removed immediately.')) return;
+  try{
+    const{error}=await db.from('app_users').delete().eq('id',id);
+    if(error) throw error;
+    renderAdmin();alert('✅ User deleted.');
+  }catch(e){alert('Error: '+e.message);}
+}
+function showResetPassword(id,name){
+  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+    <div class="modal"><div class="modal-title">Reset password — ${name}</div>
+    <div class="field"><label>New password</label><input type="password" id="rp-pw" placeholder="Enter new password"></div>
+    <div class="modal-foot">
+      <button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn blue" onclick="doResetPassword('${id}')">Reset & email</button>
+    </div></div></div>`;
+}
+async function doResetPassword(id){
+  const pw=($('rp-pw')||{}).value;
+  if(!pw){alert('Enter a new password.');return;}
+  const{data:user}=await db.from('app_users').select('email,name').eq('id',id).single();
+  if(!user){alert('User not found.');return;}
+  const hash=await hashPassword(user.email,pw);
+  await db.from('app_users').update({password_hash:hash}).eq('id',id);
+  closeModal();
+  const subj=encodeURIComponent('Your Shifl password has been reset');
+  const body=encodeURIComponent('Hi '+user.name+',\n\nYour Shifl password has been reset.\n\nLogin: https://mkshifl.github.io/shifl-quoting/\nEmail: '+user.email+'\nNew password: '+pw+'\n\nThanks,\nShifl Team');
+  window.open('mailto:'+user.email+'?subject='+subj+'&body='+body);
+}
+
+// ── Quote attribution helpers ──────────────────────────────────────────────
+function attrLine(q){
+  const p=[];
+  if(q&&q.created_by_name) p.push('✍️ Created by <strong>'+q.created_by_name+'</strong>');
+  if(q&&q.booked_by_name) p.push('✅ Booked by <strong>'+q.booked_by_name+'</strong>');
+  return p.length?'<div style="font-size:11px;color:var(--gray-500);padding:6px 2px;display:flex;gap:16px;margin-bottom:8px">'+p.join(' · ')+'</div>':'';
+}
+
+async function boot(){
+  const tmout=ms=>new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')),ms));
+  // Step 1: Load Supabase CDN
+  try{
+    await Promise.race([
+      new Promise((res,rej)=>{const s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';s.onload=res;s.onerror=()=>rej(new Error('CDN failed'));document.head.appendChild(s);}),
+      tmout(12000)
+    ]);
+  }catch(e){
+    $('loading-screen').style.display='none';$('setup-screen').style.display='flex';
+    const er=$('setup-error');if(er){er.style.display='block';er.textContent='Could not load database library. Check your internet connection.';}
+    return;
+  }
+  const url=localStorage.getItem('sb_url'),key=localStorage.getItem('sb_key');
+  if(!url||!key){$('loading-screen').style.display='none';$('setup-screen').style.display='flex';return;}
+  // Step 2: Create client
+  try{const{createClient}=window.supabase;db=createClient(url,key);}catch(e){db=null;$('loading-screen').style.display='none';$('setup-screen').style.display='flex';return;}
+  // Step 3: CONFIRM connection — MUST happen before auth to prevent null db bug
+  try{
+    await Promise.race([db.from('rates').select('id').limit(1),tmout(8000)]);
+  }catch(e){
+    db=null;$('loading-screen').style.display='none';$('setup-screen').style.display='flex';
+    const er=$('setup-error');if(er){er.style.display='block';er.textContent='Could not connect to database. Check your credentials.';}
+    return;
+  }
+  // Step 4: db confirmed working — safe to authenticate
+  await checkAuthAndProceed();
+}
+
+// ═══════════════════════════════════════════════════════
+// CARRIER NETWORK
+// ═══════════════════════════════════════════════════════
+const CARRIER_MODES = ['Drayage','Box Truck','FTL','LTL','LCL'];
+let _carrierSearch='';
+let _carrierModeFilter='All';
+
+async function upsertCarrier(name, mode) {
+  if(!name||!db||name==='—') return;
+  try {
+    const{data:existing}=await db.from('carriers').select('id,modes').eq('name',name).limit(1);
+    const found=existing&&existing[0];
+    if(found){
+      const modes=found.modes||[];
+      if(!modes.includes(mode)){
+        await db.from('carriers').update({modes:[...modes,mode],updated_at:new Date().toISOString()}).eq('id',found.id);
+      }
+    } else {
+      await db.from('carriers').insert({id:uid(),name,modes:[mode],created_at:new Date().toISOString(),updated_at:new Date().toISOString()});
+    }
+  } catch(e){ console.log('Carrier upsert:',e.message); }
+}
+
+async function renderCarriers(){
+  $('topbar-right').innerHTML=`<button class="btn blue" onclick="showCarrierModal()">+ Add carrier</button>`;
+  $('page').innerHTML='<div style="text-align:center;padding:40px"><div class="loading-spin" style="margin:0 auto 12px"></div><div style="color:var(--gray-400);font-size:13px">Loading carriers...</div></div>';
+  try{
+    const{data:carriers}=await db.from('carriers').select('*').order('name');
+    const all=carriers||[];
+    let shown=all;
+    if(_carrierModeFilter!=='All') shown=shown.filter(c=>(c.modes||[]).includes(_carrierModeFilter));
+    if(_carrierSearch) shown=shown.filter(c=>c.name.toLowerCase().includes(_carrierSearch.toLowerCase())||(c.contact_name||'').toLowerCase().includes(_carrierSearch.toLowerCase()));
+    const modeTabs=['All',...CARRIER_MODES].map(m=>{const active=_carrierModeFilter===m?' blue':'';const cnt=m==='All'?' ('+all.length+')':'';return '<button class="btn'+active+' btn-sm" onclick="_carrierModeFilter=\''+m+'\';renderCarriers()">'+m+cnt+'</button>';}).join('');
+
+    if(!all.length){
+      $('page').innerHTML=`<div style="text-align:center;padding:60px 20px">
+        <div style="font-size:48px;margin-bottom:14px;opacity:.4">🤝</div>
+        <div style="font-size:16px;font-weight:700;color:var(--gray-500);margin-bottom:6px">No carriers yet</div>
+        <div style="font-size:13px;color:var(--gray-400);max-width:340px;margin:0 auto 20px;line-height:1.6">Carriers are added automatically every time you save a quote. You can also add them manually.</div>
+        <button class="btn blue" onclick="showCarrierModal()">+ Add carrier manually</button>
+      </div>`;
+      return;
+    }
+    const rows=shown.map(c=>`<tr style="cursor:pointer" onclick="showCarrierDetail('${c.id}')">
+      <td><div style="font-weight:600;color:var(--navy);font-size:13px">${c.name}</div>${c.notes?`<div style="font-size:11px;color:var(--gray-400);margin-top:2px">${c.notes.slice(0,60)}${c.notes.length>60?'…':''}</div>`:''}</td>
+      <td>${(c.modes||[]).map(m=>`<span style="display:inline-flex;padding:2px 7px;border-radius:99px;font-size:10px;font-weight:700;background:#dbeafe;color:#1e40af;margin-right:3px">${m}</span>`).join('')||'<span style="color:var(--gray-400);font-size:12px">—</span>'}</td>
+      <td style="font-size:13px">${c.contact_name||'<span style="color:var(--gray-400)">—</span>'}</td>
+      <td style="font-size:12px;color:var(--gray-500)">${c.phone||'—'}</td>
+      <td style="font-size:12px;color:var(--gray-500)">${c.email||'—'}</td>
+      <td><button class="btn btn-sm" onclick="event.stopPropagation();showCarrierModal('${c.id}')">✏️</button></td>
+    </tr>`).join('');
+
+    $('page').innerHTML=`
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap">
+        <div style="display:flex;align-items:center;gap:6px;background:#fff;border:1px solid var(--gray-200);border-radius:var(--radius);padding:6px 12px;flex:1;max-width:280px">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="8" stroke="var(--gray-400)" stroke-width="2"/><path d="m21 21-4.35-4.35" stroke="var(--gray-400)" stroke-width="2" stroke-linecap="round"/></svg>
+          <input type="text" placeholder="Search by name or contact..." value="${_carrierSearch}" oninput="_carrierSearch=this.value;renderCarriers()" style="border:none;outline:none;font-size:13px;font-family:inherit;color:var(--navy);background:none;width:100%">
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">${modeTabs}</div>
+      </div>
+      ${shown.length===0?'<div style="text-align:center;padding:40px;color:var(--gray-400)">No carriers match your filter</div>':`
+      <div class="tbl-wrap">
+        <table style="width:100%;border-collapse:collapse">
+          <thead><tr style="background:var(--gray-50);border-bottom:1px solid var(--gray-200)">
+            <th style="padding:10px 14px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-500)">Carrier</th>
+            <th style="padding:10px 14px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-500)">Modes</th>
+            <th style="padding:10px 14px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-500)">Point of Contact</th>
+            <th style="padding:10px 14px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-500)">Phone</th>
+            <th style="padding:10px 14px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-500)">Email</th>
+            <th style="padding:10px 14px"></th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`}`;
+  } catch(e) { $('page').innerHTML=`<div class="card" style="color:var(--red)">Error: ${e.message}</div>`; }
+}
+
+async function showCarrierModal(id) {
+  let c={};
+  if(id){ const{data}=await db.from('carriers').select('*').eq('id',id).single(); c=data||{}; }
+  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+    <div class="modal" style="max-width:500px">
+      <div class="modal-title">${id?'Edit carrier':'Add carrier'}</div>
+      <div class="field"><label>Carrier name *</label><input type="text" id="car-name" value="${c.name||''}" placeholder="e.g. Eagle Express Freight"></div>
+      <div class="field"><label>Modes they serve</label>
+        <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:6px">
+          ${CARRIER_MODES.map(m=>`<label style="display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer;font-weight:400">
+            <input type="checkbox" value="${m}" ${(c.modes||[]).includes(m)?'checked':''} style="width:auto"> ${m}
+          </label>`).join('')}
+        </div>
+      </div>
+      <div class="field"><label>Point of contact name</label><input type="text" id="car-poc" value="${c.contact_name||''}" placeholder="Dispatcher or sales contact"></div>
+      <div class="g2">
+        <div class="field"><label>Phone</label><input type="text" id="car-ph" value="${c.phone||''}" placeholder="(555) 123-4567"></div>
+        <div class="field"><label>Email</label><input type="email" id="car-em" value="${c.email||''}" placeholder="dispatch@carrier.com"></div>
+      </div>
+      <div class="field"><label>Notes</label><textarea id="car-notes" rows="2" style="width:100%;padding:8px;border:1px solid var(--gray-300);border-radius:var(--radius);font-size:13px;font-family:inherit;resize:vertical">${c.notes||''}</textarea></div>
+      <div class="modal-foot">
+        ${id?`<button class="btn" onclick="delCarrier('${id}','${(c.name||'').replace(/'/g,'')}')" style="margin-right:auto;color:var(--red);border-color:#fca5a5">🗑️ Delete</button>`:''}
+        <button class="btn" onclick="closeModal()">Cancel</button>
+        <button class="btn blue" onclick="saveCarrier('${id||''}')">Save carrier</button>
+      </div>
+    </div></div>`;
+}
+
+async function saveCarrier(id){
+  const name=($('car-name')||{}).value?.trim();
+  if(!name){alert('Carrier name is required.');return;}
+  const modes=Array.from($('modal-root').querySelectorAll('input[type=checkbox]:checked')).map(e=>e.value);
+  const d={name,modes,contact_name:$('car-poc')?.value?.trim()||null,phone:$('car-ph')?.value?.trim()||null,email:$('car-em')?.value?.trim().toLowerCase()||null,notes:$('car-notes')?.value?.trim()||null,updated_at:new Date().toISOString()};
+  try{
+    if(id){const{error}=await db.from('carriers').update(d).eq('id',id);if(error)throw error;}
+    else{const{error}=await db.from('carriers').insert({...d,id:uid(),created_at:new Date().toISOString()});if(error)throw error;}
+    closeModal();renderCarriers();
+  }catch(e){alert('Error: '+e.message);}
+}
+
+async function delCarrier(id,name){
+  if(!confirm(`Delete "${name}" from your carrier network?`))return;
+  await db.from('carriers').delete().eq('id',id);
+  closeModal();renderCarriers();
+}
+
+async function showCarrierDetail(id){
+  const{data:c}=await db.from('carriers').select('*').eq('id',id).single();if(!c)return;
+  const[drayR,fqR]=await Promise.all([
+    db.from('quotes').select('quoteNum,date,customer,port,zip,status,carrierRates,customerRates').eq('carrier',c.name).order('date',{ascending:false}).limit(25),
+    db.from('fq_quotes').select('date,customer,fqMode,pickupZip,deliveryZip,carrierRate,customerRate,profit,status').eq('carrier',c.name).order('date',{ascending:false}).limit(25),
+  ]);
+  const drayQ=drayR.data||[],fqQ=fqR.data||[];
+  const totalQuotes=drayQ.length+fqQ.length;
+
+  function statusPill(s){const colors={Quoted:'#fef9c3|#854d0e',Booked:'#dcfce7|#166534',Lost:'#fee2e2|#991b1b',Expired:'#f3f4f6|#6b7280'};const[bg,fg]=(colors[s]||'#f3f4f6|#6b7280').split('|');return `<span style="background:${bg};color:${fg};padding:2px 8px;border-radius:99px;font-size:11px;font-weight:700">${s||'—'}</span>`;}
+
+  const drayRows=drayQ.map(q=>`<tr>
+    <td style="font-size:12px;color:var(--gray-500);padding:9px 12px">${q.date||'—'}</td>
+    <td style="font-weight:600;font-size:13px;padding:9px 12px">${q.customer||'—'}</td>
+    <td style="padding:9px 12px"><span style="background:#dbeafe;color:#1e40af;padding:2px 7px;border-radius:99px;font-size:10px;font-weight:700">Drayage</span></td>
+    <td style="font-size:12px;color:var(--gray-500);padding:9px 12px">${q.port||'—'} → ${q.zip||'—'}</td>
+    <td style="font-weight:700;font-family:monospace;font-size:13px;color:#166534;padding:9px 12px">$${((q.customerRates?.total||0)).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+    <td style="padding:9px 12px">${statusPill(q.status)}</td>
+  </tr>`).join('');
+
+  const fqRows=fqQ.map(q=>`<tr>
+    <td style="font-size:12px;color:var(--gray-500);padding:9px 12px">${q.date||'—'}</td>
+    <td style="font-weight:600;font-size:13px;padding:9px 12px">${q.customer||'—'}</td>
+    <td style="padding:9px 12px"><span style="background:#dcfce7;color:#166534;padding:2px 7px;border-radius:99px;font-size:10px;font-weight:700">${q.fqMode||'Freight'}</span></td>
+    <td style="font-size:12px;color:var(--gray-500);padding:9px 12px">${q.pickupZip||'—'} → ${q.deliveryZip||'—'}</td>
+    <td style="font-weight:700;font-family:monospace;font-size:13px;color:#166534;padding:9px 12px">$${(q.customerRate||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+    <td style="padding:9px 12px">${statusPill(q.status)}</td>
+  </tr>`).join('');
+
+  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+    <div class="modal" style="max-width:700px;max-height:88vh;overflow-y:auto">
+      <div class="modal-title" style="display:flex;align-items:center;justify-content:space-between">
+        <span>${c.name}</span>
+        <button style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--gray-400)" onclick="closeModal()">×</button>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:18px">
+        <div style="background:var(--gray-50);border-radius:var(--radius);padding:16px">
+          <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-400);margin-bottom:10px">Contact info</div>
+          ${c.contact_name?`<div style="font-weight:600;font-size:14px;margin-bottom:6px">${c.contact_name}</div>`:''} 
+          ${c.phone?`<div style="font-size:13px;color:var(--gray-600);margin-bottom:4px">📞 ${c.phone}</div>`:''} 
+          ${c.email?`<div style="font-size:13px;color:var(--gray-600)">✉️ ${c.email}</div>`:''} 
+          ${!c.contact_name&&!c.phone&&!c.email?`<div style="font-size:12px;color:var(--gray-400);font-style:italic">No contact info yet</div>`:''}
+        </div>
+        <div style="background:var(--gray-50);border-radius:var(--radius);padding:16px">
+          <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-400);margin-bottom:10px">Modes · ${totalQuotes} quotes total</div>
+          <div>${(c.modes||[]).map(m=>`<span style="display:inline-flex;padding:3px 9px;border-radius:99px;font-size:11px;font-weight:700;background:#dbeafe;color:#1e40af;margin-right:4px;margin-bottom:4px">${m}</span>`).join('')||'<span style="color:var(--gray-400);font-size:12px">No modes set</span>'}</div>
+          ${c.notes?`<div style="font-size:12px;color:var(--gray-500);margin-top:8px">${c.notes}</div>`:''}
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <div style="font-size:13px;font-weight:700;color:var(--navy)">Quote history</div>
+        <button class="btn btn-sm" onclick="closeModal();showCarrierModal('${c.id}')">✏️ Edit carrier</button>
+      </div>
+      ${totalQuotes===0?`<div style="text-align:center;padding:30px;color:var(--gray-400);font-size:13px;background:var(--gray-50);border-radius:var(--radius)">No quotes found for this carrier yet</div>`:`
+      <div class="tbl-wrap">
+        <table style="width:100%;border-collapse:collapse">
+          <thead><tr style="background:var(--gray-50);border-bottom:1px solid var(--gray-200)">
+            <th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-500)">Date</th>
+            <th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-500)">Customer</th>
+            <th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-500)">Mode</th>
+            <th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-500)">Lane</th>
+            <th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-500)">Customer rate</th>
+            <th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-500)">Status</th>
+          </tr></thead>
+          <tbody style="background:#fff">${drayRows+fqRows}</tbody>
+        </table>
+      </div>`}
+      <div class="modal-foot"><button class="btn" onclick="closeModal()">Close</button></div>
+    </div></div>`;
+}
+
+
 boot().catch(e=>{$('loading-screen').style.display='none';$('setup-screen').style.display='flex';});
 </script>
 </body>
