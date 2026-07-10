@@ -6233,25 +6233,45 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape') closeModal();});
 // BOOT — load Supabase client then check for saved config
 // ═══════════════════════════════════════════════════════
 async function boot(){
-  await new Promise((res,rej)=>{
-    const s=document.createElement('script');
-    s.src='https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
-    s.onload=res; s.onerror=rej;
-    document.head.appendChild(s);
-  });
+  const timeout=(ms,msg)=>new Promise((_,rej)=>setTimeout(()=>rej(new Error(msg||'timeout')),ms));
+  try{
+    // Load Supabase JS with 10s timeout
+    await Promise.race([
+      new Promise((res,rej)=>{
+        const s=document.createElement('script');
+        s.src='https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
+        s.onload=res;s.onerror=rej;
+        document.head.appendChild(s);
+      }),
+      timeout(10000,'CDN timeout')
+    ]);
+  }catch(e){
+    $('loading-screen').style.display='none';
+    $('setup-screen').style.display='flex';
+    return;
+  }
   const url=localStorage.getItem('sb_url');
   const key=localStorage.getItem('sb_key');
   if(url&&key){
-    const{createClient}=window.supabase;
-    db=createClient(url,key);
     try{
-      const{error}=await db.from('rates').select('id').limit(1);
-      if(error) throw error;
+      const{createClient}=window.supabase;
+      db=createClient(url,key);
+      // Test connection with 8s timeout
+      await Promise.race([
+        db.from('rates').select('id').limit(1),
+        timeout(8000,'DB timeout')
+      ]);
       await checkAuthAndProceed();
     }catch(e){
+      console.log('Boot error:',e.message);
       db=null;
       $('loading-screen').style.display='none';
-      $('setup-screen').style.display='flex';
+      // If it was a timeout, still try to show login — don't force reconnect
+      if(e.message==='DB timeout'){
+        await showLoginScreen();
+      } else {
+        $('setup-screen').style.display='flex';
+      }
     }
   } else {
     $('loading-screen').style.display='none';
