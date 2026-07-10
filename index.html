@@ -5011,7 +5011,18 @@ async function createUser(){
     const{error}=await db.from('app_users').insert({id:uid(),name,email,password_hash:hash,role,active:true});
     if(error) throw error;
     closeModal();renderAdmin();
-    alert('✅ Account created for '+name+'. Share their email and password with them.');
+    // Open email client with credentials pre-filled
+    const subject=encodeURIComponent('Your Shifl account is ready');
+    const body=encodeURIComponent(
+      'Hi '+name+',\n\n'+
+      'Your Shifl Freight Quoting account has been created.\n\n'+
+      'Login here: https://mkshifl.github.io/shifl-quoting/\n\n'+
+      'Email: '+email+'\n'+
+      'Password: '+pw+'\n\n'+
+      'Please change your password after your first login.\n\n'+
+      'Thanks,\nShifl Team'
+    );
+    window.open('mailto:'+email+'?subject='+subject+'&body='+body);
   }catch(e){alert('Error: '+e.message);}
 }
 
@@ -5028,12 +5039,22 @@ function showResetPassword(id,name){
 async function resetPassword(id){
   const pw=($('rp-pw')||{}).value;
   if(!pw){alert('Enter a new password.');return;}
-  // Need the user's email to hash
-  const{data:user}=await db.from('app_users').select('email').eq('id',id).single();
+  const{data:user}=await db.from('app_users').select('email,name').eq('id',id).single();
   if(!user){alert('User not found.');return;}
   const hash=await hashPassword(user.email,pw);
   await db.from('app_users').update({password_hash:hash}).eq('id',id);
-  closeModal();alert('✅ Password reset successfully.');
+  closeModal();
+  // Open email with new credentials
+  const subject=encodeURIComponent('Your Shifl password has been reset');
+  const body=encodeURIComponent(
+    'Hi '+user.name+',\n\n'+
+    'Your Shifl password has been reset.\n\n'+
+    'Login here: https://mkshifl.github.io/shifl-quoting/\n\n'+
+    'Email: '+user.email+'\n'+
+    'New password: '+pw+'\n\n'+
+    'Thanks,\nShifl Team'
+  );
+  window.open('mailto:'+user.email+'?subject='+subject+'&body='+body);
 }
 
 // ── Quote attribution helpers ─────────────────────────────────────────────
