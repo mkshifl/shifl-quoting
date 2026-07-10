@@ -493,8 +493,8 @@ const US_PORTS=[
 ];
 function isApplicable(c,ld){
   if((c==='det_port'||c==='det_cust')&&ld==='Drop') return false;
-  if(c==='bobtail'&&ld==='Live') return false;
-  if(c==='genset') return false; // genset handled separately per-quote
+  if(c==='bobtail') return false; // bobtail handled per-quote like genset
+  if(c==='genset') return false;   // genset handled per-quote
   return true;
 }
 const DEFAULT_FLAT_RATES={chassis:45,prepull:175,det_port:100,det_cust:100,storage:60,ovw43:200,ovw48:350,bobtail:0,toll:30,genset:0};
@@ -781,7 +781,9 @@ function setSaving(on){
 let S={
   view:'quote',rates:[],quotes:[],customers:[],
   qi:{customer:'',customerEmail:'',customerId:null,port:'New York / Newark, NJ',zip:'',ld:'Live',
-      baseMarkup:{...DEFAULT_BASE_MARKUP},flatRates:{...DEFAULT_FLAT_RATES},notes:'',shiflRef:'',gensetEnabled:false,gensetScope:'both'},
+      baseMarkup:{...DEFAULT_BASE_MARKUP},flatRates:{...DEFAULT_FLAT_RATES},notes:'',shiflRef:'',
+      gensetEnabled:false,gensetScope:'both',gensetCarrierRate:0,gensetCustomerRate:0,
+      bobtailEnabled:false,bobtailScope:'both',bobtailCarrierRate:0,bobtailCustomerRate:0},
   selId:null,rSearch:'',logFilter:'all',dashFilter:'month',cSearch:'',
   fq:{mode:null,equipment:null,pickupZip:'',deliveryZip:'',weight:'',palletCount:'',
       pallets:[{w:'',l:'',h:''}],sameDims:true,singleW:'',singleL:'',singleH:'',
@@ -872,14 +874,24 @@ const fmt=v=>(v&&v>0)?'$'+Math.round(v).toLocaleString():'—';
 const fmtD=v=>'$'+Number(v).toFixed(2);
 const pct=v=>Math.round(v*100)+'%';
 function totAll(r){return CHARGES.reduce((s,c)=>s+(Number(r[c])||0),0);}
-function totMode(r,ld){let t=CHARGES.reduce((s,c)=>isApplicable(c,ld)?s+(Number(r[c])||0):s,0);if(S.qi?.gensetEnabled&&S.qi?.gensetScope!=='customer_only')t+=Number(r.genset)||0;return t;}
+function totMode(r,ld){
+  let t=CHARGES.reduce((s,c)=>isApplicable(c,ld)?s+(Number(r[c])||0):s,0);
+  if(S.qi?.gensetEnabled&&S.qi?.gensetScope!=='customer_only')t+=Number(S.qi.gensetCarrierRate)||0;
+  if(S.qi?.bobtailEnabled&&S.qi?.bobtailScope!=='customer_only')t+=Number(S.qi.bobtailCarrierRate)||0;
+  return t;
+}
 function cuRate(carrierVal,charge){
   const ld=S.qi.ld;
   if(!isApplicable(charge,ld)) return 0;
   if(charge==='base'){if(!carrierVal) return 0;const bm=S.qi.baseMarkup;return bm.mode==='pct'?carrierVal*(1+bm.amount/100):carrierVal+bm.amount;}
   return carrierVal>0?(S.qi.flatRates[charge]||0):0;
 }
-function cuTot(r){let t=CHARGES.reduce((s,c)=>s+cuRate(Number(r[c])||0,c),0);if(S.qi?.gensetEnabled)t+=S.qi.flatRates?.genset||0;return t;}
+function cuTot(r){
+  let t=CHARGES.reduce((s,c)=>s+cuRate(Number(r[c])||0,c),0);
+  if(S.qi?.gensetEnabled)t+=Number(S.qi.gensetCustomerRate)||0;
+  if(S.qi?.bobtailEnabled)t+=Number(S.qi.bobtailCustomerRate)||0;
+  return t;
+}
 
 // ═══════════════════════════════════════════════════════
 // NAVIGATION
@@ -977,30 +989,47 @@ function buildPricingSection(){
   <p style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-500);margin-bottom:4px">Your flat charges</p>
   <p class="cond-note" style="margin-bottom:10px;font-size:11px">Enter the full amount you charge the customer · ${ld==='Live'?'Live mode: detention shown, bobtail hidden':ld==='Drop'?'Drop mode: bobtail shown, detention hidden':'All charges shown'}</p>
   <table style="width:100%"><tbody>${extraRows}</tbody></table>
-  <div style="margin-top:14px;padding:12px 14px;background:#f8fafc;border-radius:var(--radius);border:1px solid var(--gray-200)">
-    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-500);margin-bottom:10px">⚡ Genset (non-standard — select per quote)</div>
-    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;font-weight:600">
-        <input type="checkbox" ${S.qi.gensetEnabled?'checked':''} onchange="S.qi.gensetEnabled=this.checked;refreshPreviewOnly()" style="width:16px;height:16px;cursor:pointer">
-        Apply genset
-      </label>
-      ${S.qi.gensetEnabled?`
-      <div style="display:flex;gap:6px">
-        <button onclick="S.qi.gensetScope='both';refreshPreviewOnly()"
-          style="padding:4px 12px;border-radius:var(--radius);border:1px solid var(--gray-300);background:${S.qi.gensetScope!=='customer_only'?'var(--navy)':'#fff'};color:${S.qi.gensetScope!=='customer_only'?'#fff':'var(--gray-500)'};font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">
-          Carrier + Customer
-        </button>
-        <button onclick="S.qi.gensetScope='customer_only';refreshPreviewOnly()"
-          style="padding:4px 12px;border-radius:var(--radius);border:1px solid var(--gray-300);background:${S.qi.gensetScope==='customer_only'?'var(--navy)':'#fff'};color:${S.qi.gensetScope==='customer_only'?'#fff':'var(--gray-500)'};font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">
-          Customer Only
-        </button>
+  <div style="margin-top:14px">
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-500);margin-bottom:8px">Per-quote charges</div>
+
+    <!-- GENSET -->
+    <div style="border:1px solid var(--gray-200);border-radius:var(--radius);padding:12px 14px;margin-bottom:8px;background:#fafafa">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:13px;font-weight:700;min-width:140px">
+          <input type="checkbox" ${S.qi.gensetEnabled?'checked':''} onchange="S.qi.gensetEnabled=this.checked;if(this.checked&&!S.qi.gensetCarrierRate&&sel?.genset)S.qi.gensetCarrierRate=sel.genset;refreshPreviewOnly()" style="width:16px;height:16px;cursor:pointer;accent-color:var(--navy)">
+          ⚡ Genset
+        </label>
+        ${S.qi.gensetEnabled?`
+        <div style="display:flex;gap:5px">
+          <button onclick="S.qi.gensetScope='both';refreshPreviewOnly()" style="padding:3px 10px;border-radius:var(--radius);border:1px solid var(--gray-300);background:${S.qi.gensetScope!=='customer_only'?'var(--navy)':'#fff'};color:${S.qi.gensetScope!=='customer_only'?'#fff':'var(--gray-500)'};font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">Carrier + Customer</button>
+          <button onclick="S.qi.gensetScope='customer_only';refreshPreviewOnly()" style="padding:3px 10px;border-radius:var(--radius);border:1px solid var(--gray-300);background:${S.qi.gensetScope==='customer_only'?'var(--navy)':'#fff'};color:${S.qi.gensetScope==='customer_only'?'#fff':'var(--gray-500)'};font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">Customer Only</button>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+          ${S.qi.gensetScope!=='customer_only'?`<div style="display:flex;align-items:center;gap:5px"><span style="font-size:11px;font-weight:700;color:var(--gray-400)">CARRIER $</span><input type="number" value="${S.qi.gensetCarrierRate||0}" min="0" oninput="S.qi.gensetCarrierRate=+this.value;refreshPreviewOnly()" style="width:80px;padding:4px 8px;font-size:13px;border:1px solid var(--gray-300);border-radius:var(--radius)"></div>`:''}
+          <div style="display:flex;align-items:center;gap:5px"><span style="font-size:11px;font-weight:700;color:var(--gray-400)">CUSTOMER $</span><input type="number" value="${S.qi.gensetCustomerRate||0}" min="0" oninput="S.qi.gensetCustomerRate=+this.value;refreshPreviewOnly()" style="width:80px;padding:4px 8px;font-size:13px;border:1px solid var(--gray-300);border-radius:var(--radius)"></div>
+        </div>`:''}
       </div>
-      <div style="display:flex;align-items:center;gap:5px;margin-left:4px">
-        <span style="font-size:12px;color:var(--gray-400)">Customer charge:</span>
-        <span style="color:var(--gray-400)">$</span>
-        <input type="number" value="${S.qi.flatRates.genset||0}" min="0" oninput="setFlatRate('genset',+this.value)" style="width:80px;padding:4px 8px;font-size:13px;border:1px solid var(--gray-300);border-radius:var(--radius)">
-      </div>`:''}
     </div>
+
+    <!-- BOBTAIL -->
+    <div style="border:1px solid var(--gray-200);border-radius:var(--radius);padding:12px 14px;background:#fafafa">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:13px;font-weight:700;min-width:140px">
+          <input type="checkbox" ${S.qi.bobtailEnabled?'checked':''} onchange="S.qi.bobtailEnabled=this.checked;if(this.checked&&!S.qi.bobtailCarrierRate&&sel?.bobtail)S.qi.bobtailCarrierRate=sel.bobtail;refreshPreviewOnly()" style="width:16px;height:16px;cursor:pointer;accent-color:var(--navy)">
+          🔁 Bobtail
+        </label>
+        ${S.qi.bobtailEnabled?`
+        <div style="display:flex;gap:5px">
+          <button onclick="S.qi.bobtailScope='both';refreshPreviewOnly()" style="padding:3px 10px;border-radius:var(--radius);border:1px solid var(--gray-300);background:${S.qi.bobtailScope!=='customer_only'?'var(--navy)':'#fff'};color:${S.qi.bobtailScope!=='customer_only'?'#fff':'var(--gray-500)'};font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">Carrier + Customer</button>
+          <button onclick="S.qi.bobtailScope='customer_only';refreshPreviewOnly()" style="padding:3px 10px;border-radius:var(--radius);border:1px solid var(--gray-300);background:${S.qi.bobtailScope==='customer_only'?'var(--navy)':'#fff'};color:${S.qi.bobtailScope==='customer_only'?'#fff':'var(--gray-500)'};font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">Customer Only</button>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+          ${S.qi.bobtailScope!=='customer_only'?`<div style="display:flex;align-items:center;gap:5px"><span style="font-size:11px;font-weight:700;color:var(--gray-400)">CARRIER $</span><input type="number" value="${S.qi.bobtailCarrierRate||0}" min="0" oninput="S.qi.bobtailCarrierRate=+this.value;refreshPreviewOnly()" style="width:80px;padding:4px 8px;font-size:13px;border:1px solid var(--gray-300);border-radius:var(--radius)"></div>`:''}
+          <div style="display:flex;align-items:center;gap:5px"><span style="font-size:11px;font-weight:700;color:var(--gray-400)">CUSTOMER $</span><input type="number" value="${S.qi.bobtailCustomerRate||0}" min="0" oninput="S.qi.bobtailCustomerRate=+this.value;refreshPreviewOnly()" style="width:80px;padding:4px 8px;font-size:13px;border:1px solid var(--gray-300);border-radius:var(--radius)"></div>
+        </div>`:''}
+      </div>
+    </div>
+
   </div>`;
 }
 
@@ -2712,7 +2741,8 @@ async function saveQuote(){
   if(!qi.zip||!sel){alert('Enter a zip code and select a carrier first.');return;}
   const ct=totMode(sel,qi.ld);
   const cuRates=CHARGES.reduce((o,c)=>{o[c]=cuRate(Number(sel[c])||0,c);return o;},{});
-  if(qi.gensetEnabled){cuRates.genset=qi.flatRates.genset||0;}
+  if(qi.gensetEnabled){cuRates.genset=Number(qi.gensetCustomerRate)||0;}
+  if(qi.bobtailEnabled){cuRates.bobtail=Number(qi.bobtailCustomerRate)||0;}
   const cu=Object.values(cuRates).reduce((s,v)=>s+v,0);
   const profit=cu-ct;
   setSaving(true);
@@ -2720,7 +2750,7 @@ async function saveQuote(){
     const qn=await dbGetNextQuoteNum();
     const q={id:uid(),quoteNum:qn,date:new Date().toISOString().slice(0,10),
       customer:qi.customer||'—',port:qi.port,zip:qi.zip,ld:qi.ld,carrier:sel.carrier,destination:sel.destination,
-      carrierRates:{...CHARGES.reduce((o,c)=>{o[c]=sel[c]||0;return o;},{}),genset:qi.gensetEnabled&&qi.gensetScope!=='customer_only'?(sel.genset||0):0,total:ct},
+      carrierRates:{...CHARGES.reduce((o,c)=>{o[c]=sel[c]||0;return o;},{}),genset:qi.gensetEnabled&&qi.gensetScope!=='customer_only'?(Number(qi.gensetCarrierRate)||0):0,bobtail:qi.bobtailEnabled&&qi.bobtailScope!=='customer_only'?(Number(qi.bobtailCarrierRate)||0):0,total:ct},
       customerRates:{...cuRates,total:cu},baseMarkup:{...qi.baseMarkup},flatRates:{...qi.flatRates},
       profit,profitPct:cu>0?profit/cu:0,status:'Quoted',notes:qi.notes||'',shiflRef:qi.shiflRef||'',
       created_by:_currentUser?.id||null,created_by_name:_currentUser?.name||null};
