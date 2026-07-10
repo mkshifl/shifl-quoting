@@ -771,10 +771,25 @@ async function initApp(){
       S.quotes=await dbLoadQuotes();
       if(S.view==='log') renderLog();
       if(S.view==='dash') renderDash();
+      updateActiveBadge();
     })
     .on('postgres_changes',{event:'*',schema:'public',table:'customers'},async()=>{
       S.customers=await dbLoadCustomers();
       if(S.view==='customers') renderCustomers();
+    })
+    .on('postgres_changes',{event:'*',schema:'public',table:'fq_quotes'},async()=>{
+      await loadFqHistory();
+      if(S.view==='freight'&&S.fqTab==='log') renderFqLog();
+      if(S.view==='freight'&&S.fqTab==='dash') renderFqDashboard();
+      if(S.view==='active') renderActive();
+      updateActiveBadge();
+    })
+    .on('postgres_changes',{event:'*',schema:'public',table:'tl_quotes'},async()=>{
+      await loadTlHistory();
+      if(S.view==='transload'&&S.tlTab==='log') renderTlLog();
+      if(S.view==='transload'&&S.tlTab==='dash') renderTlDashboard();
+      if(S.view==='active') renderActive();
+      updateActiveBadge();
     })
     .subscribe(status=>{
       setSyncStatus(status==='SUBSCRIBED'?'on':status==='CLOSED'?'off':'loading');
