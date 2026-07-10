@@ -1773,13 +1773,13 @@ async function downloadSelectedFqPDFs(){
   renderFqLog();
 }
 
-function updateFqStatus(idx,status){
+async function updateFqStatus(idx,status){
   if(!window._fqHistory||!window._fqHistory[idx]) return;
   if(status==='Booked'){showFqBookingModal(idx);return;}
   const q=window._fqHistory[idx];
   q.status=status;
   try{localStorage.setItem('fq_history',JSON.stringify(window._fqHistory));}catch(e){}
-  try{dbUpdateFqStatus(q.id,status);}catch(e){}
+  try{await dbUpdateFqStatus(q.id,status);}catch(e){console.warn('fq status:',e.message);}
   updateActiveBadge();
   if(S.fqTab==='log') renderFqLog();
   if(S.fqTab==='dash') renderFqDashboard();
@@ -1825,14 +1825,14 @@ function showFqBookingModal(idx){
     </div></div>`;
 }
 
-function confirmFqBooking(idx, downloadSheet){
+async function confirmFqBooking(idx, downloadSheet){
   const q=(window._fqHistory||[])[idx];if(!q) return;
   q.status='Booked';
   q.bookedDate=new Date().toISOString().slice(0,10);
   q.booked_by=_currentUser?.id||null;
   q.booked_by_name=_currentUser?.name||null;
   try{localStorage.setItem('fq_history',JSON.stringify(window._fqHistory));}catch(e){}
-  try{dbUpdateFqStatus(q.id,'Booked');}catch(e){}
+  try{await dbUpdateFqStatus(q.id,'Booked');}catch(e){console.warn('fq status save:',e.message);}
   closeModal();
   updateActiveBadge();
   if(S.fqTab==='log') renderFqLog();
@@ -4610,10 +4610,10 @@ function updateActiveBadge(){
   const badge=$('active-badge');
   if(badge){badge.textContent=count;badge.style.display=count>0?'':'none';}
 }
-function markShipmentClosed(type,id,closeStatus){
+async function markShipmentClosed(type,id,closeStatus){
   if(!confirm('Mark as "'+closeStatus+'"? This will move it to the Completed tab.')) return;
   if(type==='drayage'){const q=S.quotes.find(q=>q.id===id);if(q){q.status=closeStatus;dbSaveQuote(q).catch(()=>{});}}
-  else if(type==='freight'){const q=(window._fqHistory||[]).find(q=>q.id===id);if(q){q.status=closeStatus;try{dbUpdateFqStatus(id,closeStatus);}catch(e){}try{localStorage.setItem('fq_history',JSON.stringify(window._fqHistory));}catch(e){}}}
+  else if(type==='freight'){const q=(window._fqHistory||[]).find(q=>q.id===id);if(q){q.status=closeStatus;try{await dbUpdateFqStatus(id,closeStatus);}catch(e){}try{localStorage.setItem('fq_history',JSON.stringify(window._fqHistory));}catch(e){}}}
   else if(type==='transload'){const q=(window._tlHistory||[]).find(q=>q.id===id);if(q){q.status=closeStatus;try{dbUpdateTlStatus(id,closeStatus);}catch(e){}try{localStorage.setItem('tl_history',JSON.stringify(window._tlHistory));}catch(e){}}}
   updateActiveBadge();renderActive();
 }
