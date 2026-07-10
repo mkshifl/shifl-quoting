@@ -790,7 +790,7 @@ let S={
       lclPriceBy:'pallets', cbm:0, transitTime:'',
       calc:{l:'',w:'',h:'',pieces:'',weightLbs:'',unit:'in'}},
   fqTab:'builder',
-  activeFilter:'all',
+  activeFilter:'all',activeView:'active',
   tl:null, // initialized in boot via defaultTlState()
   tlTab:'builder',
 };
@@ -4581,45 +4581,64 @@ function setActiveTracking(id,key,val){
   saveActiveTracking();
   renderActive();
 }
-function getAllActiveShipments(){
-  const active=[];
-  (S.quotes||[]).filter(q=>q.status==='Booked').forEach(q=>{
-    active.push({type:'drayage',id:q.id,customer:q.customer,carrier:q.carrier,
+function getAllShipmentsByStatus(statuses){
+  const items=[];
+  (S.quotes||[]).filter(q=>statuses.includes(q.status)).forEach(q=>{
+    items.push({type:'drayage',id:q.id,customer:q.customer,carrier:q.carrier,
       date:q.date,bookedDate:q.baseMarkup?.bookedDate||q.date,
       from:q.port,to:q.zip,mode:q.ld,destination:q.destination,
-      total:q.customerRates?.total||0,shiflRef:q.shiflRef});
+      total:q.customerRates?.total||0,shiflRef:q.shiflRef,status:q.status});
   });
-  (window._fqHistory||[]).filter(q=>q.status==='Booked').forEach(q=>{
-    active.push({type:'freight',id:q.id,customer:q.customer,carrier:q.carrier,
+  (window._fqHistory||[]).filter(q=>statuses.includes(q.status)).forEach(q=>{
+    items.push({type:'freight',id:q.id,customer:q.customer,carrier:q.carrier,
       date:q.date,bookedDate:q.bookedDate||q.date,
       fqMode:q.fqMode,fqEquip:q.fqEquip,
       from:q.pickupZip,to:q.deliveryZip,total:q.customerRate||0,
-      weight:q.weight,palletCount:q.palletCount,transitTime:q.transitTime});
+      weight:q.weight,palletCount:q.palletCount,transitTime:q.transitTime,status:q.status});
   });
-  (window._tlHistory||[]).filter(q=>q.status==='Booked').forEach(q=>{
-    active.push({type:'transload',id:q.id,customer:q.customer,
+  (window._tlHistory||[]).filter(q=>statuses.includes(q.status)).forEach(q=>{
+    items.push({type:'transload',id:q.id,customer:q.customer,
       carrier:q.outCarrier,date:q.date,bookedDate:q.bookedDate||q.date,
       from:q.drayPort,warehouse:q.warehouseName,to:q.outDeliveryZip,
-      outMode:q.outMode,total:q.totalCustomer||0});
+      outMode:q.outMode,total:q.totalCustomer||0,status:q.status});
   });
-  return active.sort((a,b)=>(b.bookedDate||b.date).localeCompare(a.bookedDate||a.date));
+  return items.sort((a,b)=>(b.bookedDate||b.date).localeCompare(a.bookedDate||a.date));
 }
+function getAllActiveShipments(){ return getAllShipmentsByStatus(['Booked']); }
 function updateActiveBadge(){
   const count=getAllActiveShipments().length;
   const badge=$('active-badge');
   if(badge){badge.textContent=count;badge.style.display=count>0?'':'none';}
 }
 function markShipmentClosed(type,id,closeStatus){
-  if(!confirm('Mark as "'+closeStatus+'" and remove from Active?')) return;
+  if(!confirm('Mark as "'+closeStatus+'"? This will move it to the Completed tab.')) return;
   if(type==='drayage'){const q=S.quotes.find(q=>q.id===id);if(q){q.status=closeStatus;dbSaveQuote(q).catch(()=>{});}}
   else if(type==='freight'){const q=(window._fqHistory||[]).find(q=>q.id===id);if(q){q.status=closeStatus;try{dbUpdateFqStatus(id,closeStatus);}catch(e){}try{localStorage.setItem('fq_history',JSON.stringify(window._fqHistory));}catch(e){}}}
   else if(type==='transload'){const q=(window._tlHistory||[]).find(q=>q.id===id);if(q){q.status=closeStatus;try{dbUpdateTlStatus(id,closeStatus);}catch(e){}try{localStorage.setItem('tl_history',JSON.stringify(window._tlHistory));}catch(e){}}}
   updateActiveBadge();renderActive();
 }
 function renderActive(){
-  const all=getAllActiveShipments();
   if(!window._activeTracking) window._activeTracking={};
-  $('topbar-right').innerHTML=`<button class="btn" onclick="updateActiveBadge();renderActive()">⟳ Refresh</button>`;
+  // Active = Booked | Completed = Delivered
+  const isCompleted = S.activeView==='completed';
+  const statuses = isCompleted ? ['Delivered'] : ['Booked'];
+  const all = getAllShipmentsByStatus(statuses);
+  const activeCount = getAllActiveShipments().length; // always Booked only for badge
+
+  $('topbar-right').innerHTML=`
+    <div style="display:flex;gap:6px;background:var(--gray-100);padding:3px;border-radius:var(--radius)">
+      <button onclick="S.activeView='active';S.activeFilter='all';renderActive()"
+        style="padding:5px 14px;border-radius:4px;border:none;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;
+               background:${!isCompleted?'#fff':'none'};color:${!isCompleted?'var(--navy)':'var(--gray-500)'}">
+        🟢 Active (${activeCount})
+      </button>
+      <button onclick="S.activeView='completed';S.activeFilter='all';renderActive()"
+        style="padding:5px 14px;border-radius:4px;border:none;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;
+               background:${isCompleted?'#fff':'none'};color:${isCompleted?'var(--navy)':'var(--gray-500)'}">
+        ✅ Completed (${getAllShipmentsByStatus(['Delivered']).length})
+      </button>
+    </div>
+    <button class="btn" onclick="updateActiveBadge();renderActive()" style="margin-left:6px">⟳</button>`;
 
   // ── Stats bar ────────────────────────────────────────────────────────────
   const counts={all:all.length,drayage:all.filter(s=>s.type==='drayage').length,
@@ -4702,7 +4721,7 @@ function renderActive(){
     const autoUrl=getCarrierTrackUrl(s.carrier,tracking.pro);
     const trackUrl=tracking.trackingUrl||autoUrl||'';
     const needsTracking=s.type==='freight'&&(s.fqMode==='LTL'||s.fqMode==='FTL');
-    const closeLabel=s.type==='drayage'?'Container Returned':'Delivered';
+    const closeLabel='Delivered';
     const daysActive=daysAgo(s.bookedDate||s.date);
     const cd=countdown(tracking.expectedDate);
     const isUrgent=!!tracking.urgent;
@@ -4767,16 +4786,17 @@ function renderActive(){
             style="padding:7px 16px;background:transparent;color:var(--steel);border:1px solid var(--steel);border-radius:var(--radius);cursor:pointer;font-size:12px;font-weight:600">
             View quote
           </button>
-          <button onclick="markShipmentClosed('${s.type}','${s.id}','${closeLabel}')"
-            style="padding:8px 22px;background:${s.type==='drayage'?'#3b6ea5':'#22c55e'};color:#fff;border:none;border-radius:var(--radius);cursor:pointer;font-size:13px;font-weight:700">
-            ${closeLabel}
-          </button>
+          ${!isCompleted?`<button onclick="markShipmentClosed('${s.type}','${s.id}','${closeLabel}')"
+            style="padding:8px 22px;background:#22c55e;color:#fff;border:none;border-radius:var(--radius);cursor:pointer;font-size:13px;font-weight:700">
+            ✅ Mark Delivered
+          </button>`:`<span style="font-size:12px;font-weight:700;color:#22c55e;padding:8px 0">✅ Delivered</span>`}
         </div>
       </div>
     </div>`;
   }).join('');
 
-  $('page').innerHTML=statsBar+(filtered.length?cards:`<div class="empty"><div class="empty-ico">🔍</div><p>No ${S.activeFilter==='all'?'active':S.activeFilter.toUpperCase()} shipments</p></div>`);
+  const emptyMsg=isCompleted?'No completed shipments yet':'No active shipments in this category';
+  $('page').innerHTML=statsBar+(filtered.length?cards:`<div class="empty"><div class="empty-ico">${isCompleted?'✅':'🔍'}</div><p>${emptyMsg}</p></div>`);
 }const regCol={NE:'g',WC:'b',SE:'a',Central:'p'};const ldCol={Live:'b',Drop:'gr',Both:'t'};
 function buildRateRows(){
   const s=S.rSearch.toLowerCase();
@@ -5013,7 +5033,7 @@ function buildLogRows(){
       <td class="bold" style="color:var(--steel)">${fmtD(q.customerRates?.total||0)}</td>
       <td style="color:var(--green);font-weight:600">+${fmtD(q.profit||0)}</td>
       <td><span class="badge ${(q.profitPct||0)>=0.10?'g':'r'}">${pct(q.profitPct||0)}</span></td>
-      <td onclick="event.stopPropagation()"><select onchange="updateStatus('${q.id}',this.value)" style="font-size:12px;padding:4px 7px;width:120px"><option${q.status==='Quoted'?' selected':''}>Quoted</option><option${q.status==='Booked'?' selected':''}>Booked</option><option${q.status==='Lost'?' selected':''}>Lost</option><option${q.status==='Cancelled'?' selected':''}>Cancelled</option><option${q.status==='Expired'?' selected':''}>Expired</option><option${q.status==='Container Returned'?' selected':''}>Container Returned</option></select></td>
+      <td onclick="event.stopPropagation()"><select onchange="updateStatus('${q.id}',this.value)" style="font-size:12px;padding:4px 7px;width:120px"><option${q.status==='Quoted'?' selected':''}>Quoted</option><option${q.status==='Booked'?' selected':''}>Booked</option><option${q.status==='Lost'?' selected':''}>Lost</option><option${q.status==='Cancelled'?' selected':''}>Cancelled</option><option${q.status==='Expired'?' selected':''}>Expired</option><option${q.status==='Delivered'?' selected':''}>Delivered</option></select></td>
       <td onclick="event.stopPropagation()" style="white-space:nowrap">
         ${q.status==='Booked'?`<button class="btn sm ico-btn" onclick="downloadCarrierRateSheet(S.quotes.find(q=>q.id==='${q.id}'),null)" title="Carrier rate sheet" style="color:var(--green)">📋</button>`:''}
         <button class="btn sm ico-btn" onclick="downloadSavedPDF('${q.id}')" title="Customer PDF" style="margin-left:3px">📄</button>
