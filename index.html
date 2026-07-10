@@ -4693,35 +4693,36 @@ async function downloadTlCustomerPDF(idx, rawTl, existingDoc){
   const sectionColors={dray:[26,80,150],tl:[30,100,60],out:[150,80,0]};
 
   function drawSection(colorArr,title,subInfo,rows,subtotal){
-    doc.setFillColor(...colorArr);doc.rect(12,y,W-24,9,'F');
+    doc.setFillColor(...colorArr);doc.rect(12,y,W-24,10,'F');
     doc.setFont('helvetica','bold');doc.setFontSize(9);doc.setTextColor(255,255,255);
-    doc.text(title,16,y+6.5);
-    y+=11;
+    doc.text(title,16,y+7);
+    y+=13;
     if(subInfo){
       const subLines=subInfo.split('\n');
       subLines.forEach(line=>{
         if(!line.trim()) return;
-        const wrapped=doc.splitTextToSize(line.trim(),W-28);
+        const wrapped=doc.splitTextToSize(line.trim(),W-30);
         doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(100,115,130);
-        doc.text(wrapped,16,y+4);y+=wrapped.length*4+2;
+        doc.text(wrapped,16,y+5);y+=wrapped.length*5;
       });
+      y+=5;
     }
-    // Rows
     let even=true;
     rows.forEach(([label,amount])=>{
       if(amount<=0) return;
-      if(even){doc.setFillColor(248,250,252);doc.rect(12,y-3,W-24,8,'F');}
-      doc.setFont('helvetica','normal');doc.setFontSize(9.5);doc.setTextColor(55,65,80);doc.text(label,16,y);
-      doc.setFont('helvetica','bold');doc.setTextColor(...navy);doc.text(fmtD(amount),W-14,y,{align:'right'});
-      doc.setDrawColor(235,238,242);doc.setLineWidth(.2);doc.line(12,y+5,W-12,y+5);
-      y+=8;even=!even;
+      if(even){doc.setFillColor(248,250,252);doc.rect(12,y,W-24,10,'F');}
+      doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(55,65,80);
+      doc.text(label,16,y+7);
+      doc.setFont('helvetica','bold');doc.setTextColor(...navy);
+      doc.text(fmtD(amount),W-14,y+7,{align:'right'});
+      doc.setDrawColor(235,238,242);doc.setLineWidth(.2);doc.line(12,y+10,W-12,y+10);
+      y+=11;even=!even;
     });
-    // Subtotal
-    doc.setFillColor(230,235,245);doc.rect(12,y-2,W-24,10,'F');
+    doc.setFillColor(230,235,245);doc.rect(12,y,W-24,12,'F');
     doc.setFont('helvetica','bold');doc.setFontSize(9);doc.setTextColor(...navy);
-    doc.text('Section total',16,y+5);
-    doc.setFontSize(12);doc.text(fmtD(subtotal),W-14,y+5,{align:'right'});
-    y+=14;
+    doc.text('Section total',16,y+8.5);
+    doc.setFontSize(11);doc.text(fmtD(subtotal),W-14,y+8.5,{align:'right'});
+    y+=16;
   }
 
   // Drayage
@@ -4852,16 +4853,27 @@ async function downloadTlInternalPDF(idx){
   let y=56;
   const CX=95,CU=145,CP=W-14; // column x positions: carrier, customer, profit
 
+  function checkPageBreak(needed){
+    if(y+needed>272){
+      doc.addPage();
+      doc.setFillColor(...navy);doc.rect(0,0,W,10,'F');
+      doc.setFont('helvetica','bold');doc.setFontSize(7);doc.setTextColor(255,255,255);
+      doc.text('SHIFL - TRANSLOAD RATE SHEET (continued)  |  '+q.customer,12,7);
+      y=16;
+    }
+  }
+
   function sectionHeader(colorArr,title,subInfo){
+    checkPageBreak(40);
     doc.setFillColor(...colorArr);doc.rect(12,y,W-24,10,'F');
     doc.setFont('helvetica','bold');doc.setFontSize(9);doc.setTextColor(255,255,255);
     doc.text(title,16,y+7);
     y+=12;
     if(subInfo){
       doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(100,115,130);
-      doc.text(subInfo,16,y+5);y+=9;
+      const wrapped=doc.splitTextToSize(subInfo,W-30);
+      doc.text(wrapped,16,y+5);y+=wrapped.length*5+4;
     }
-    // Column header row
     doc.setFillColor(240,242,246);doc.rect(12,y,W-24,8,'F');
     doc.setFont('helvetica','bold');doc.setFontSize(7);doc.setTextColor(100,110,130);
     doc.text('SERVICE',16,y+5.5);
@@ -4872,6 +4884,7 @@ async function downloadTlInternalPDF(idx){
   }
 
   function dataRow(label,carrier,customer){
+    checkPageBreak(14);
     const profit=customer-carrier;
     doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(45,55,70);
     doc.text(label,16,y+6);
@@ -4883,6 +4896,7 @@ async function downloadTlInternalPDF(idx){
   }
 
   function sectionSubtotal(carrier,customer){
+    checkPageBreak(20);
     const profit=customer-carrier;
     doc.setFillColor(228,233,242);doc.rect(12,y,W-24,12,'F');
     doc.setFont('helvetica','bold');doc.setFontSize(9.5);doc.setTextColor(...navy);
