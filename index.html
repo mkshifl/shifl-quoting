@@ -911,6 +911,7 @@ function render(){
   else if(S.view==='active')     renderActive();
   else if(S.view==='carriers')   renderCarriers();
   else if(S.view==='admin')      renderAdmin();
+  else if(S.view==='activity')   renderActivity();
   else if(S.view==='freight')    renderFreight();
   else if(S.view==='transload')  renderTransload();
   else                           renderDash();
@@ -1737,6 +1738,7 @@ function renderFqLog(){
       <td class="bold" style="color:var(--steel)">${fmtD(q.customerRate)}</td>
       <td style="color:var(--green);font-weight:600">+${fmtD(q.profit)}</td>
       <td><span class="badge ${q.profitPct>=0.10?'g':'r'}">${pct(q.profitPct)}</span></td>
+      <td style="font-size:11px;color:var(--gray-400);white-space:nowrap">${q.created_by_name||'—'}${q.booked_by_name&&q.booked_by_name!==q.created_by_name?'<div style="color:var(--green);font-size:10px">✅ '+q.booked_by_name+'</div>':''}</td>
       <td onclick="event.stopPropagation()">
         <select onchange="updateFqStatus(${i},this.value)" style="font-size:12px;padding:4px 7px;width:120px">
           <option${q.status==='Quoted'?' selected':''}>Quoted</option>
@@ -1773,7 +1775,7 @@ function renderFqLog(){
       <thead><tr>
         <th style="width:32px"></th>
         <th>Date</th><th>Customer</th><th>Type</th><th>Lane</th><th>Carrier</th>
-        <th>Carrier rate</th><th>Customer rate</th><th>Profit</th><th>Margin</th><th>Status</th><th></th>
+        <th>Carrier rate</th><th>Customer rate</th><th>Profit</th><th>Margin</th><th>By</th><th>Status</th><th></th>
       </tr></thead>
       <tbody>${rows}</tbody>
     </table></div>`;
@@ -4033,6 +4035,7 @@ function renderTlLog(){
     <td class="bold" style="color:var(--steel)">${fmtD(q.totalCustomer)}</td>
     <td style="color:var(--green);font-weight:600">+${fmtD(q.profit)}</td>
     <td><span class="badge ${q.profitPct>=0.10?'g':'r'}">${pct(q.profitPct)}</span></td>
+    <td style="font-size:11px;color:var(--gray-400);white-space:nowrap">${q.created_by_name||'—'}</td>
     <td onclick="event.stopPropagation()">
       <select onchange="updateTlStatus(${i},this.value)" style="font-size:12px;padding:4px 7px;width:110px">
         <option${q.status==='Quoted'?' selected':''}>Quoted</option>
@@ -4047,7 +4050,7 @@ function renderTlLog(){
     </td>
   </tr>`).join('');
   $('page').innerHTML=`<div class="tbl-wrap"><table>
-    <thead><tr><th style="width:32px"></th><th>Date</th><th>Customer</th><th>Origin</th><th>Warehouse</th><th>Delivery</th><th>Pallets</th><th>Total</th><th>Profit</th><th>Margin</th><th>Status</th><th></th></tr></thead>
+    <thead><tr><th style="width:32px"></th><th>Date</th><th>Customer</th><th>Origin</th><th>Warehouse</th><th>Delivery</th><th>Pallets</th><th>Total</th><th>Profit</th><th>Margin</th><th>By</th><th>Status</th><th></th></tr></thead>
     <tbody>${rows}</tbody>
   </table></div>`;
 }
@@ -5078,7 +5081,7 @@ async function confirmImport(){
 // ═══════════════════════════════════════════════════════
 function buildLogRows(){
   const f=S.logFilter;const filtered=S.quotes.filter(q=>f==='all'||q.status===f);
-  if(!filtered.length) return `<tr><td colspan="13" style="text-align:center;padding:40px;color:var(--gray-400)">No quotes${f!=='all'?' with status "'+f+'"':''}</td></tr>`;
+  if(!filtered.length) return `<tr><td colspan="14" style="text-align:center;padding:40px;color:var(--gray-400)">No quotes${f!=='all'?' with status "'+f+'"':''}</td></tr>`;
   if(!window._draySelected) window._draySelected=new Set();
   const sel=window._draySelected;
   return filtered.map(q=>`
@@ -5095,6 +5098,7 @@ function buildLogRows(){
       <td class="bold" style="color:var(--steel)">${fmtD(q.customerRates?.total||0)}</td>
       <td style="color:var(--green);font-weight:600">+${fmtD(q.profit||0)}</td>
       <td><span class="badge ${(q.profitPct||0)>=0.10?'g':'r'}">${pct(q.profitPct||0)}</span></td>
+      <td style="font-size:11px;color:var(--gray-400);white-space:nowrap">${q.created_by_name||'—'}${q.booked_by_name&&q.booked_by_name!==q.created_by_name?'<div style="color:var(--green);font-size:10px">✅ '+q.booked_by_name+'</div>':''}</td>
       <td onclick="event.stopPropagation()"><select onchange="updateStatus('${q.id}',this.value)" style="font-size:12px;padding:4px 7px;width:120px"><option${q.status==='Quoted'?' selected':''}>Quoted</option><option${q.status==='Booked'?' selected':''}>Booked</option><option${q.status==='Lost'?' selected':''}>Lost</option><option${q.status==='Cancelled'?' selected':''}>Cancelled</option><option${q.status==='Expired'?' selected':''}>Expired</option><option${q.status==='Delivered'?' selected':''}>Delivered</option></select></td>
       <td onclick="event.stopPropagation()" style="white-space:nowrap">
         ${q.status==='Booked'?`<button class="btn sm ico-btn" onclick="downloadCarrierRateSheet(S.quotes.find(q=>q.id==='${q.id}'),null)" title="Carrier rate sheet" style="color:var(--green)">📋</button>`:''}
@@ -5139,7 +5143,7 @@ function renderLog(){
       <button class="btn" onclick="exportQuoteLog()">📥 Export CSV</button>
       <button class="btn" onclick="syncQuotesToTeam()">🔄 Sync to team</button>
     </div>`;
-  $('page').innerHTML=`<div class="tbl-wrap"><table><thead><tr><th style="width:32px"></th><th>#</th><th>Ref #</th><th>Date</th><th>Customer</th><th>Lane</th><th>Carrier</th><th>Carrier total</th><th>Customer total</th><th>Profit</th><th>Margin</th><th>Status</th><th></th></tr></thead><tbody id="log-tbody">${buildLogRows()}</tbody></table></div>`;
+  $('page').innerHTML=`<div class="tbl-wrap"><table><thead><tr><th style="width:32px"></th><th>#</th><th>Ref #</th><th>Date</th><th>Customer</th><th>Lane</th><th>Carrier</th><th>Carrier total</th><th>Customer total</th><th>Profit</th><th>Margin</th><th>By</th><th>Status</th><th></th></tr></thead><tbody id="log-tbody">${buildLogRows()}</tbody></table></div>`;
 }
 function onLogFilter(v){S.logFilter=v;const t=$('log-tbody');if(t) t.innerHTML=buildLogRows();}
 async function updateStatus(id,status){
@@ -5717,6 +5721,50 @@ async function saveMyProfile(){
 }
 
 // ── Admin panel ───────────────────────────────────────────────────────────
+async function renderActivity(){
+  if(_currentUser?.role!=='admin'){$('page').innerHTML='<div class="alert a">Admin only</div>';return;}
+  $('topbar-right').innerHTML='';
+  $('page').innerHTML='<div class="loading-page"><div class="spin" style="margin:0 auto"></div></div>';
+  try{
+    // Combine all quotes with user attribution
+    const dray=(S.quotes||[]).map(q=>({type:'Drayage',date:q.date,customer:q.customer||'—',detail:q.carrier+' → '+q.zip,amount:q.customerRates?.total||0,profit:q.profit||0,status:q.status,created_by:q.created_by_name||'—',booked_by:q.booked_by_name||null,quoteNum:q.quoteNum}));
+    const fq=(window._fqHistory||[]).map(q=>({type:q.fqMode||'Freight',date:q.date,customer:q.customer||'—',detail:q.pickupZip+' → '+q.deliveryZip,amount:q.customerRate||0,profit:q.profit||0,status:q.status,created_by:q.created_by_name||'—',booked_by:q.booked_by_name||null}));
+    const tl=(window._tlHistory||[]).map(q=>({type:'Transload',date:q.date,customer:q.customer||'—',detail:(q.drayPort||'—')+' → '+q.outDeliveryZip,amount:q.totalCustomer||0,profit:q.profit||0,status:q.status,created_by:q.created_by_name||'—',booked_by:null}));
+    const all=[...dray,...fq,...tl].sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+
+    // Group by user
+    const byUser={};all.forEach(q=>{const u=q.created_by||'Unknown';if(!byUser[u])byUser[u]={quotes:0,booked:0,revenue:0,profit:0};byUser[u].quotes++;if(q.status==='Booked'||q.status==='Delivered')byUser[u].booked++;byUser[u].revenue+=q.amount;byUser[u].profit+=q.profit;});
+
+    let h='<div class="g3" style="margin-bottom:20px">';
+    h+=Object.entries(byUser).sort((a,b)=>b[1].revenue-a[1].revenue).map(([name,s])=>`
+      <div class="card" style="padding:16px">
+        <div style="font-size:14px;font-weight:800;color:var(--navy);margin-bottom:10px">👤 ${name}</div>
+        <div style="display:flex;gap:14px;flex-wrap:wrap">
+          <div><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--gray-400)">Quotes</div><div style="font-size:22px;font-weight:800;color:var(--navy)">${s.quotes}</div></div>
+          <div><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--gray-400)">Booked</div><div style="font-size:22px;font-weight:800;color:var(--green)">${s.booked}</div></div>
+          <div><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--gray-400)">Win Rate</div><div style="font-size:22px;font-weight:800;color:var(--navy)">${s.quotes>0?(s.booked/s.quotes*100).toFixed(0)+'%':'—'}</div></div>
+          <div><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--gray-400)">Revenue</div><div style="font-size:18px;font-weight:800;color:var(--steel)">${fmtD(s.revenue)}</div></div>
+        </div>
+      </div>`).join('');
+    h+='</div>';
+
+    // Full activity table
+    h+='<div class="tbl-wrap"><table><thead><tr><th>Date</th><th>User</th><th>Type</th><th>Customer</th><th>Lane / Detail</th><th>Amount</th><th>Profit</th><th>Booked by</th><th>Status</th></tr></thead><tbody>';
+    h+=all.slice(0,100).map(q=>`<tr>
+      <td class="muted">${q.date||'—'}</td>
+      <td style="font-weight:600;font-size:12px">${q.created_by}</td>
+      <td><span class="badge bb" style="font-size:10px">${q.type}</span></td>
+      <td class="bold">${q.customer}</td>
+      <td class="muted" style="font-size:12px">${q.detail}</td>
+      <td class="money" style="color:var(--steel)">${fmtD(q.amount)}</td>
+      <td style="color:var(--green);font-weight:600">${q.profit?'+'+fmtD(q.profit):'—'}</td>
+      <td style="font-size:11px;color:var(--green)">${q.booked_by||'—'}</td>
+      <td><span class="badge ${q.status==='Booked'||q.status==='Delivered'?'g':q.status==='Lost'||q.status==='Cancelled'?'r':'a'}">${q.status}</span></td>
+    </tr>`).join('');
+    h+='</tbody></table></div>';
+    $('page').innerHTML=h;
+  }catch(e){$('page').innerHTML='<div class="alert r">Error: '+e.message+'</div>';}
+}
 async function renderAdmin(){
   if(!_currentUser||_currentUser.role!=='admin'){
     $('page').innerHTML='<div class="empty"><p>Admin access only.</p></div>';return;
