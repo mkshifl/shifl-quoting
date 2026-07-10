@@ -1834,7 +1834,8 @@ async function downloadSelectedFqPDFs(){
 }
 
 async function updateFqStatus(idx,status){
-  if(!requireCan('update_status','Only Admins can change quote status.')) return;
+  if(status==='Booked'){if(!requireCan('book_quotes','You do not have permission to book quotes.')) return;}
+  else if(!requireCan('update_status','Only Admins can change quote status.')) return;
   if(!window._fqHistory||!window._fqHistory[idx]) return;
   if(status==='Booked'){showFqBookingModal(idx);return;}
   const q=window._fqHistory[idx];
@@ -5586,11 +5587,16 @@ function clearSession(){
 }
 function updateUserUI(){
   const nameEl=$('user-name-display'),roleEl=$('user-role-display'),infoEl=$('user-info'),adminNav=$('admin-nav-section');
+  const ROLE_LABELS={super_admin:'Super Admin',admin:'Admin',team_member:'Team Member',user:'Team Member'};
   if(_currentUser){
     if(nameEl) nameEl.textContent=_currentUser.name;
-    if(roleEl) roleEl.textContent=_currentUser.role==='admin'?'Admin':'Team member';
+    if(roleEl) roleEl.textContent=ROLE_LABELS[_currentUser.role]||_currentUser.role;
     if(infoEl) infoEl.style.display='';
-    if(adminNav) adminNav.style.display=_currentUser.role==='admin'?'':'none';
+    if(adminNav) adminNav.style.display=can('view_admin')?'':'none';
+    // Show/hide dashboard nav for TM
+    const dn=$('nav-dash');if(dn) dn.style.display=can('view_dashboard')?'':'none';
+    const fdn=$('fqnav-dash');if(fdn) fdn.style.display=can('view_dashboard')?'':'none';
+    const tdn=$('tlnav-dash');if(tdn) tdn.style.display=can('view_dashboard')?'':'none';
   }else{
     if(infoEl) infoEl.style.display='none';
     if(adminNav) adminNav.style.display='none';
@@ -5731,7 +5737,7 @@ async function saveMyProfile(){
 
 // ── Admin panel ───────────────────────────────────────────────────────────
 async function renderActivity(){
-  if(_currentUser?.role!=='admin'){$('page').innerHTML='<div class="alert a">Admin only</div>';return;}
+  if(!can('view_activity')){$('page').innerHTML='<div style="padding:40px;color:var(--gray-400);text-align:center">Admin access required</div>';return;}
   $('topbar-right').innerHTML='';
   $('page').innerHTML='<div class="loading-page"><div class="spin" style="margin:0 auto"></div></div>';
   try{
