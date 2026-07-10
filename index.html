@@ -807,20 +807,22 @@ let _importRows=[];
 // ═══════════════════════════════════════════════════════
 async function initApp(){
   $('loading-msg').textContent='Loading carrier rates…';
-  S.rates=await dbLoadRates();
-  // Seed if empty
-  if(S.rates.length===0){
-    $('loading-msg').textContent='Setting up initial data…';
-    await dbBulkSaveRates(SEED);
+  try{
     S.rates=await dbLoadRates();
-  }
+    if(S.rates.length===0){
+      $('loading-msg').textContent='Setting up initial data…';
+      await dbBulkSaveRates(SEED);
+      S.rates=await dbLoadRates();
+    }
+  }catch(e){S.rates=[];console.log('rates error:',e.message);}
   $('loading-msg').textContent='Loading quotes…';
-  S.quotes=await dbLoadQuotes();
-  await autoExpireQuotes();
+  try{S.quotes=await dbLoadQuotes();}catch(e){S.quotes=[];console.log('quotes error:',e.message);}
+  try{await autoExpireQuotes();}catch(e){}
   $('loading-msg').textContent='Loading customers…';
-  S.customers=await dbLoadCustomers();
-  await loadFqHistory();
-  await loadTlHistory();
+  try{S.customers=await dbLoadCustomers();}catch(e){S.customers=[];console.log('customers table:',e.message);}
+  $('loading-msg').textContent='Loading freight history…';
+  try{await loadFqHistory();}catch(e){window._fqHistory=[];console.log('fq history:',e.message);}
+  try{await loadTlHistory();}catch(e){window._tlHistory=[];console.log('tl history:',e.message);}
   loadSpecialZips();
   loadCustomCFS();
   loadActiveTracking();
