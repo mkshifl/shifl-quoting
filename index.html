@@ -410,6 +410,15 @@ hr{border:none;border-top:1px solid var(--gray-100);margin:14px 0}
     <div class="page" id="page"></div>
   </div>
 </div>
+<script>
+// Emergency: force login screen after 8 seconds no matter what
+setTimeout(function(){
+  var ls=document.getElementById('loading-screen');
+  var lo=document.getElementById('login-screen');
+  if(ls&&ls.style.display!=='none'){ls.style.display='none';}
+  if(lo&&lo.style.display==='none'){lo.style.display='flex';}
+},8000);
+</script>
 <div id="modal-root"></div>
 
 <script>
@@ -625,16 +634,10 @@ async function connectSupabase(){
   }
 }
 
-async function checkAuthAndProceed(){
-  // Trust localStorage session immediately — no DB call on boot
+function checkAuthAndProceed(){
   const session=getSession();
-  if(session){
-    _currentUser={id:session.id,name:session.name,email:session.email,role:session.role};
-    updateUserUI();
-    await initApp();
-    return;
-  }
-  showLoginScreen();
+  if(session){_currentUser={id:session.id,name:session.name,email:session.email,role:session.role};updateUserUI();initApp();}
+  else{showLoginScreen();}
 }
 
 function disconnectSupabase(){
@@ -5265,15 +5268,6 @@ function updateUserUI(){
 function showLoginScreen(){
   $('loading-screen').style.display='none';
   $('login-screen').style.display='flex';
-  // Check if first user - done async in background, doesn't block
-  if(db) db.from('app_users').select('id').limit(1).then(({data})=>{
-    if(!data||data.length===0){
-      $('first-user-banner').style.display='';
-      $('login-name').style.display='';
-      $('login-name-label').style.display='';
-      $('login-btn').textContent='Create admin account';
-    }
-  }).catch(()=>{});
 }
 
 async function doLogin(){
@@ -6220,49 +6214,18 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape') closeModal();});
 // BOOT — load Supabase client then check for saved config
 // ═══════════════════════════════════════════════════════
 async function boot(){
-  const timeout=(ms,msg)=>new Promise((_,rej)=>setTimeout(()=>rej(new Error(msg||'timeout')),ms));
   try{
-    // Load Supabase JS with 10s timeout
     await Promise.race([
-      new Promise((res,rej)=>{
-        const s=document.createElement('script');
-        s.src='https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
-        s.onload=res;s.onerror=rej;
-        document.head.appendChild(s);
-      }),
-      timeout(10000,'CDN timeout')
+      new Promise((res,rej)=>{const s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';s.onload=res;s.onerror=rej;document.head.appendChild(s);}),
+      new Promise((_,rej)=>setTimeout(()=>rej(new Error('CDN timeout')),10000))
     ]);
-  }catch(e){
-    $('loading-screen').style.display='none';
-    $('setup-screen').style.display='flex';
-    return;
-  }
-  const url=localStorage.getItem('sb_url');
-  const key=localStorage.getItem('sb_key');
+  }catch(e){$('loading-screen').style.display='none';$('setup-screen').style.display='flex';return;}
+  const url=localStorage.getItem('sb_url');const key=localStorage.getItem('sb_key');
   if(url&&key){
-    try{
-      const{createClient}=window.supabase;
-      db=createClient(url,key);
-      // Test connection with 8s timeout
-      await Promise.race([
-        db.from('rates').select('id').limit(1),
-        timeout(8000,'DB timeout')
-      ]);
-      await checkAuthAndProceed();
-    }catch(e){
-      console.log('Boot error:',e.message);
-      db=null;
-      $('loading-screen').style.display='none';
-      // If it was a timeout, still try to show login — don't force reconnect
-      if(e.message==='DB timeout'){
-        await showLoginScreen();
-      } else {
-        $('setup-screen').style.display='flex';
-      }
-    }
-  } else {
-    $('loading-screen').style.display='none';
-    $('setup-screen').style.display='flex';
+    try{const{createClient}=window.supabase;db=createClient(url,key);}catch(e){}
+    checkAuthAndProceed();
+  }else{
+    $('loading-screen').style.display='none';$('setup-screen').style.display='flex';
   }
 }
 boot().catch(e=>{$('loading-screen').style.display='none';$('setup-screen').style.display='flex';});
