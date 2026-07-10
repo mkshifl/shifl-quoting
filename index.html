@@ -626,24 +626,15 @@ async function connectSupabase(){
 }
 
 async function checkAuthAndProceed(){
-  try{
-    const session=getSession();
-    if(session){
-      try{
-        const race=await Promise.race([
-          db.from('app_users').select('*').eq('id',session.id).single(),
-          new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')),6000))
-        ]);
-        const user=race.data;
-        if(user&&user.active){
-          setSession({id:user.id,name:user.name,email:user.email,role:user.role});
-          await initApp();return;
-        }
-      }catch(e){console.log('Session check:',e.message);}
-      clearSession();
-    }
-    await showLoginScreen();
-  }catch(e){console.log('Auth error:',e.message);showLoginScreen();}
+  // Trust localStorage session immediately — no DB call on boot
+  const session=getSession();
+  if(session){
+    _currentUser={id:session.id,name:session.name,email:session.email,role:session.role};
+    updateUserUI();
+    await initApp();
+    return;
+  }
+  showLoginScreen();
 }
 
 function disconnectSupabase(){
@@ -5271,22 +5262,18 @@ function updateUserUI(){
   }
 }
 
-async function showLoginScreen(){
+function showLoginScreen(){
   $('loading-screen').style.display='none';
   $('login-screen').style.display='flex';
-  try{
-    const race=await Promise.race([
-      db.from('app_users').select('id').limit(1),
-      new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')),6000))
-    ]);
-    const noUsers=!race.data||race.data.length===0;
-    if(noUsers){
+  // Check if first user - done async in background, doesn't block
+  if(db) db.from('app_users').select('id').limit(1).then(({data})=>{
+    if(!data||data.length===0){
       $('first-user-banner').style.display='';
       $('login-name').style.display='';
       $('login-name-label').style.display='';
       $('login-btn').textContent='Create admin account';
     }
-  }catch(e){console.log('Users check:',e.message);}
+  }).catch(()=>{});
 }
 
 async function doLogin(){
