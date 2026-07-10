@@ -271,6 +271,45 @@ hr{border:none;border-top:1px solid var(--gray-100);margin:14px 0}
   </div>
 </div>
 
+<!-- Login screen -->
+<div class="screen" id="login-screen" style="display:none">
+  <div class="setup-box" style="max-width:420px">
+    <div class="setup-logo" style="justify-content:center;margin-bottom:28px">
+      <svg width="48" height="48" viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg">
+        <rect width="60" height="60" rx="10" fill="#1a2e4a"/>
+        <polygon points="10,50 25,14 44,45" fill="white"/>
+        <polygon points="25,14 44,45 53,37" fill="rgba(255,255,255,.72)"/>
+        <polygon points="10,50 44,45 53,37 53,50" fill="rgba(255,255,255,.90)"/>
+        <line x1="25" y1="14" x2="44" y2="50" stroke="rgba(59,142,208,.5)" stroke-width="1.8"/>
+      </svg>
+      <div><h1 style="font-size:26px">SHIFL</h1><p style="font-size:12px;color:var(--gray-400)">Freight Quoting Platform</p></div>
+    </div>
+    <div id="login-error" style="display:none;background:#fff0f0;border:1px solid #fca5a5;border-radius:var(--radius);padding:10px 14px;margin-bottom:16px;font-size:13px;color:#dc2626;font-weight:600"></div>
+    <div id="first-user-banner" style="display:none;background:#fffbeb;border:1px solid #fbbf24;border-radius:var(--radius);padding:12px 14px;margin-bottom:16px;font-size:13px;color:#92400e">
+      <strong>First time setup:</strong> No users exist yet. Create the first admin account below.
+    </div>
+    <div class="field">
+      <label id="login-name-label" style="display:none">Your name</label>
+      <input type="text" id="login-name" placeholder="Your name" style="display:none;margin-bottom:10px"
+        onkeydown="if(event.key==='Enter')doLogin()">
+      <label>Email address</label>
+      <input type="email" id="login-email" placeholder="you@shifl.com" autocomplete="email"
+        onkeydown="if(event.key==='Enter')document.getElementById('login-password').focus()">
+    </div>
+    <div class="field">
+      <label>Password</label>
+      <input type="password" id="login-password" placeholder="Enter your password"
+        onkeydown="if(event.key==='Enter')doLogin()">
+    </div>
+    <button class="btn blue" id="login-btn" onclick="doLogin()" style="width:100%;justify-content:center;padding:12px;font-size:15px;margin-top:4px">
+      Sign in
+    </button>
+    <p style="font-size:11px;color:var(--gray-400);margin-top:14px;text-align:center">
+      Contact your admin if you need access
+    </p>
+  </div>
+</div>
+
 <!-- Loading screen -->
 <div class="screen" id="loading-screen">
   <div style="text-align:center">
@@ -327,8 +366,26 @@ hr{border:none;border-top:1px solid var(--gray-100);margin:14px 0}
       <button class="nav-sub" id="tlnav-log"        onclick="setView('transload');setTlTab('log')"><span>📁</span>Quote log</button>
       <button class="nav-sub" id="tlnav-warehouses" onclick="setView('transload');setTlTab('warehouses')"><span>🏭</span>Warehouses</button>
       <button class="nav-sub" id="tlnav-dash"       onclick="setView('transload');setTlTab('dash')"><span>📊</span>Dashboard</button>
+
+      <!-- Admin panel — only shown to admins -->
+      <div id="admin-nav-section" style="display:none">
+        <div style="margin:10px 18px;border-top:1px solid rgba(255,255,255,.1)"></div>
+        <button class="nav-btn" onclick="setView('admin')" id="nav-admin" style="border-left-color:transparent">
+          <span class="ico">⚙️</span>Admin Panel
+        </button>
+      </div>
     </nav>
     <div class="sidebar-foot">
+      <!-- Logged-in user info -->
+      <div id="user-info" style="display:none;margin-bottom:10px;padding:8px 10px;background:rgba(255,255,255,.06);border-radius:var(--radius)">
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <div>
+            <div id="user-name-display" style="font-size:12px;font-weight:700;color:#fff"></div>
+            <div id="user-role-display" style="font-size:10px;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.05em;margin-top:1px"></div>
+          </div>
+          <button onclick="logout()" style="background:rgba(255,255,255,.08);border:none;color:rgba(255,255,255,.5);padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600">Sign out</button>
+        </div>
+      </div>
       <div style="display:flex;align-items:center;margin-bottom:4px">
         <span class="sync-dot" id="sync-dot"></span>
         <span class="sync-label" id="sync-label">Connected</span>
@@ -551,7 +608,8 @@ async function connectSupabase(){
     if(error) throw error;
     localStorage.setItem('sb_url',url);
     localStorage.setItem('sb_key',key);
-    await initApp();
+    // Check session then show login or app
+    await checkAuthAndProceed();
   }catch(e){
     db=null;
     $('loading-screen').style.display='none';
@@ -559,6 +617,23 @@ async function connectSupabase(){
     const errEl=$('setup-error');
     if(errEl){errEl.style.display='block';errEl.textContent='Connection failed: '+(e.message||'Check your URL and key, and make sure you ran the setup SQL.');}
   }
+}
+
+async function checkAuthAndProceed(){
+  const session=getSession();
+  if(session){
+    // Validate session is still valid in DB
+    try{
+      const{data:user}=await db.from('app_users').select('*').eq('id',session.id).single();
+      if(user&&user.active){
+        setSession({id:user.id,name:user.name,email:user.email,role:user.role});
+        await initApp();
+        return;
+      }
+    }catch(e){}
+    clearSession();
+  }
+  await showLoginScreen();
 }
 
 function disconnectSupabase(){
@@ -826,7 +901,7 @@ function setView(v){
   S.view=v;
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
   const navEl=$('nav-'+v);if(navEl) navEl.classList.add('active');
-  $('view-title').textContent={quote:'Quote builder',customers:'Customers',rates:'Carrier rates',log:'Quote log',dash:'Dashboard',freight:'Freight Quoting',transload:'Transload Quoting',active:'Active Shipments'}[v];
+  $('view-title').textContent={quote:'Quote builder',customers:'Customers',rates:'Carrier rates',log:'Quote log',dash:'Dashboard',freight:'Freight Quoting',transload:'Transload Quoting',active:'Active Shipments',admin:'Admin Panel'}[v];
   render();
 }
 function render(){
@@ -835,6 +910,7 @@ function render(){
   else if(S.view==='rates')      renderRates();
   else if(S.view==='log')        renderLog();
   else if(S.view==='active')     renderActive();
+  else if(S.view==='admin')      renderAdmin();
   else if(S.view==='freight')    renderFreight();
   else if(S.view==='transload')  renderTransload();
   else                           renderDash();
@@ -1764,6 +1840,8 @@ function confirmFqBooking(idx, downloadSheet){
   const q=(window._fqHistory||[])[idx];if(!q) return;
   q.status='Booked';
   q.bookedDate=new Date().toISOString().slice(0,10);
+  q.booked_by=_currentUser?.id||null;
+  q.booked_by_name=_currentUser?.name||null;
   try{localStorage.setItem('fq_history',JSON.stringify(window._fqHistory));}catch(e){}
   try{dbUpdateFqStatus(q.id,'Booked');}catch(e){}
   closeModal();
@@ -2173,6 +2251,7 @@ async function saveFqQuote(){
     profit:customerRate-carrierRate,
     profitPct:customerRate>0?(customerRate-carrierRate)/customerRate:0,
     status:'Quoted',notes:fq.notes,transitTime:fq.transitTime||'',
+    created_by:_currentUser?.id||null,created_by_name:_currentUser?.name||null,
   };
   if(!window._fqHistory) window._fqHistory=[];
   window._fqHistory.unshift(entry);
@@ -2626,7 +2705,8 @@ async function saveQuote(){
       customer:qi.customer||'—',port:qi.port,zip:qi.zip,ld:qi.ld,carrier:sel.carrier,destination:sel.destination,
       carrierRates:{...CHARGES.reduce((o,c)=>{o[c]=sel[c]||0;return o;},{}),total:ct},
       customerRates:{...cuRates,total:cu},baseMarkup:{...qi.baseMarkup},flatRates:{...qi.flatRates},
-      profit,profitPct:cu>0?profit/cu:0,status:'Quoted',notes:qi.notes||'',shiflRef:qi.shiflRef||''};
+      profit,profitPct:cu>0?profit/cu:0,status:'Quoted',notes:qi.notes||'',shiflRef:qi.shiflRef||'',
+      created_by:_currentUser?.id||null,created_by_name:_currentUser?.name||null};
     await dbSaveQuote(q);
     S.quotes.unshift(q);
     alert(`Quote #${q.quoteNum} saved!\n\nCustomer total: ${fmtD(cu)}\nProfit: ${fmtD(profit)} (${pct(q.profitPct)})`);
@@ -4130,6 +4210,7 @@ async function saveTlQuote(){
     totalCarrier:t.totalCarrier,totalCustomer:t.totalCustomer,
     profit:t.totalProfit,profitPct:t.margin,
     notes:tl.notes,status:'Quoted',
+    created_by:_currentUser?.id||null,created_by_name:_currentUser?.name||null,
     rawTl:JSON.parse(JSON.stringify(tl))
   };
   if(!window._tlHistory) window._tlHistory=[];
@@ -4701,7 +4782,224 @@ function renderActive(){
   }).join('');
 
   $('page').innerHTML=statsBar+(filtered.length?cards:`<div class="empty"><div class="empty-ico">🔍</div><p>No ${S.activeFilter==='all'?'active':S.activeFilter.toUpperCase()} shipments</p></div>`);
-}const regCol={NE:'g',WC:'b',SE:'a',Central:'p'};const ldCol={Live:'b',Drop:'gr',Both:'t'};
+}// ═══════════════════════════════════════════════════════
+// AUTH SYSTEM
+// ═══════════════════════════════════════════════════════
+let _currentUser = null;
+
+async function hashPassword(email, password){
+  const data = email.toLowerCase().trim() + ':' + password;
+  const encoded = new TextEncoder().encode(data);
+  const hash = await crypto.subtle.digest('SHA-256', encoded);
+  return Array.from(new Uint8Array(hash)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+
+function getSession(){
+  try{
+    const s = localStorage.getItem('shifl_session');
+    if(!s) return null;
+    const parsed = JSON.parse(s);
+    // Expire after 7 days
+    if(Date.now() - parsed.loginTime > 7*24*60*60*1000){localStorage.removeItem('shifl_session');return null;}
+    return parsed;
+  }catch(e){return null;}
+}
+function setSession(user){
+  _currentUser = user;
+  localStorage.setItem('shifl_session',JSON.stringify({...user,loginTime:Date.now()}));
+  updateUserUI();
+}
+function clearSession(){
+  _currentUser = null;
+  localStorage.removeItem('shifl_session');
+  updateUserUI();
+}
+function updateUserUI(){
+  const nameEl=$('user-name-display');const roleEl=$('user-role-display');const infoEl=$('user-info');
+  const adminNav=$('admin-nav-section');
+  if(_currentUser){
+    if(nameEl) nameEl.textContent=_currentUser.name;
+    if(roleEl) roleEl.textContent=_currentUser.role==='admin'?'Admin':'Team member';
+    if(infoEl) infoEl.style.display='';
+    if(adminNav) adminNav.style.display=_currentUser.role==='admin'?'':'none';
+  } else {
+    if(infoEl) infoEl.style.display='none';
+    if(adminNav) adminNav.style.display='none';
+  }
+}
+
+async function showLoginScreen(){
+  // Check if any users exist yet
+  const{data}=await db.from('app_users').select('id').limit(1);
+  const noUsers=!data||data.length===0;
+  $('loading-screen').style.display='none';
+  $('login-screen').style.display='flex';
+  if(noUsers){
+    $('first-user-banner').style.display='';
+    $('login-name').style.display='';
+    $('login-name-label').style.display='';
+    $('login-btn').textContent='Create admin account';
+  }
+}
+
+async function doLogin(){
+  const nameEl=$('login-name');const emailEl=$('login-email');const pwEl=$('login-password');const errEl=$('login-error');
+  const email=(emailEl?.value||'').trim().toLowerCase();
+  const password=pwEl?.value||'';
+  const name=(nameEl?.value||'').trim();
+  if(!email||!password){showLoginErr('Please enter your email and password.');return;}
+
+  const btn=$('login-btn');btn.textContent='Signing in...';btn.disabled=true;
+  try{
+    const hash=await hashPassword(email,password);
+    // Check if first user (create admin)
+    const{data:existing}=await db.from('app_users').select('id').limit(1);
+    if(!existing||existing.length===0){
+      if(!name){showLoginErr('Please enter your name.');btn.textContent='Create admin account';btn.disabled=false;return;}
+      // Create first admin
+      const id=uid();
+      const{error}=await db.from('app_users').insert({id,name,email,password_hash:hash,role:'admin',active:true});
+      if(error) throw error;
+      setSession({id,name,email,role:'admin'});
+      await finishLogin();
+    } else {
+      // Normal login
+      const{data:user,error}=await db.from('app_users').select('*').eq('email',email).single();
+      if(error||!user){showLoginErr('No account found with that email.');btn.textContent='Sign in';btn.disabled=false;return;}
+      if(!user.active){showLoginErr('Your account has been deactivated. Contact your admin.');btn.textContent='Sign in';btn.disabled=false;return;}
+      if(user.password_hash!==hash){showLoginErr('Incorrect password.');btn.textContent='Sign in';btn.disabled=false;return;}
+      // Update last login
+      await db.from('app_users').update({last_login:new Date().toISOString()}).eq('id',user.id);
+      setSession({id:user.id,name:user.name,email:user.email,role:user.role});
+      await finishLogin();
+    }
+  }catch(e){
+    showLoginErr('Error: '+e.message);
+    btn.textContent=($('first-user-banner').style.display==='')?'Create admin account':'Sign in';
+    btn.disabled=false;
+  }
+}
+function showLoginErr(msg){const el=$('login-error');if(el){el.textContent=msg;el.style.display='';}}
+
+async function finishLogin(){
+  $('login-screen').style.display='none';
+  $('loading-screen').style.display='flex';
+  $('loading-msg').textContent='Loading your workspace...';
+  await initApp();
+}
+
+function logout(){
+  if(!confirm('Sign out of Shifl?')) return;
+  clearSession();
+  $('app').style.display='none';
+  $('login-screen').style.display='flex';
+  $('login-error').style.display='none';
+  $('login-password').value='';
+  $('login-btn').textContent='Sign in';
+  $('login-btn').disabled=false;
+}
+
+// ── Admin Panel ───────────────────────────────────────────────────────────
+async function renderAdmin(){
+  if(!_currentUser||_currentUser.role!=='admin'){$('page').innerHTML=`<div class="empty"><p>Admin access only.</p></div>`;return;}
+  $('topbar-right').innerHTML=`<button class="btn blue" onclick="showCreateUser()">+ Add user</button>`;
+
+  const{data:users}=await db.from('app_users').select('*').order('created_at',{ascending:true});
+  const rows=(users||[]).map(u=>`<tr>
+    <td class="bold">${u.name}</td>
+    <td class="muted">${u.email}</td>
+    <td><span class="badge ${u.role==='admin'?'b':'gr'}">${u.role==='admin'?'Admin':'User'}</span></td>
+    <td><span class="badge ${u.active?'g':'r'}">${u.active?'Active':'Inactive'}</span></td>
+    <td class="muted small">${u.last_login?new Date(u.last_login).toLocaleDateString():'Never'}</td>
+    <td style="white-space:nowrap">
+      ${u.id!==_currentUser.id?`
+        <button class="btn sm" onclick="toggleUserActive('${u.id}',${u.active})">${u.active?'Deactivate':'Activate'}</button>
+        <button class="btn sm" onclick="showResetPassword('${u.id}','${u.name}')" style="margin-left:4px">Reset PW</button>
+      `:'<span class="muted small">(you)</span>'}
+    </td>
+  </tr>`).join('');
+
+  $('page').innerHTML=`
+    <div class="card" style="margin-bottom:16px">
+      <div class="sec-head">Team members</div>
+      <div class="tbl-wrap" style="box-shadow:none;border:none;margin:0">
+        <table><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Last login</th><th></th></tr></thead>
+        <tbody>${rows||'<tr><td colspan="6" style="text-align:center;padding:30px;color:var(--gray-400)">No users yet</td></tr>'}</tbody></table>
+      </div>
+    </div>`;
+}
+
+async function toggleUserActive(id,currentActive){
+  if(!confirm(`${currentActive?'Deactivate':'Activate'} this user?`)) return;
+  await db.from('app_users').update({active:!currentActive}).eq('id',id);
+  renderAdmin();
+}
+
+function showCreateUser(){
+  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+    <div class="modal"><div class="modal-title">Add team member</div>
+    <div class="g2">
+      <div class="field"><label>Full name *</label><input type="text" id="nu-name" placeholder="e.g. Julianny"></div>
+      <div class="field"><label>Email *</label><input type="email" id="nu-email" placeholder="julianny@shifl.com"></div>
+    </div>
+    <div class="g2">
+      <div class="field"><label>Password *</label><input type="password" id="nu-pw" placeholder="Set a password"></div>
+      <div class="field"><label>Role</label>
+        <select id="nu-role"><option value="user">Team member</option><option value="admin">Admin</option></select></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn blue" onclick="createUser()">Create account</button>
+    </div></div></div>`;
+}
+
+async function createUser(){
+  const name=($('nu-name')||{}).value?.trim();
+  const email=($('nu-email')||{}).value?.trim().toLowerCase();
+  const pw=($('nu-pw')||{}).value;
+  const role=($('nu-role')||{}).value||'user';
+  if(!name||!email||!pw){alert('Name, email and password are required.');return;}
+  try{
+    const hash=await hashPassword(email,pw);
+    const{error}=await db.from('app_users').insert({id:uid(),name,email,password_hash:hash,role,active:true});
+    if(error) throw error;
+    closeModal();renderAdmin();
+    alert('✅ Account created for '+name+'. Share their email and password with them.');
+  }catch(e){alert('Error: '+e.message);}
+}
+
+function showResetPassword(id,name){
+  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+    <div class="modal"><div class="modal-title">Reset password — ${name}</div>
+    <div class="field"><label>New password</label><input type="password" id="rp-pw" placeholder="Enter new password"></div>
+    <div class="modal-foot">
+      <button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn blue" onclick="resetPassword('${id}')">Set password</button>
+    </div></div></div>`;
+}
+
+async function resetPassword(id){
+  const pw=($('rp-pw')||{}).value;
+  if(!pw){alert('Enter a new password.');return;}
+  // Need the user's email to hash
+  const{data:user}=await db.from('app_users').select('email').eq('id',id).single();
+  if(!user){alert('User not found.');return;}
+  const hash=await hashPassword(user.email,pw);
+  await db.from('app_users').update({password_hash:hash}).eq('id',id);
+  closeModal();alert('✅ Password reset successfully.');
+}
+
+// ── Quote attribution helpers ─────────────────────────────────────────────
+function createdByMe(){return _currentUser?{created_by:_currentUser.id,created_by_name:_currentUser.name}:{};}
+function bookedByMe(){return _currentUser?{booked_by:_currentUser.id,booked_by_name:_currentUser.name}:{};}
+function attrLine(q){
+  const parts=[];
+  if(q.created_by_name) parts.push('Created by <strong>'+q.created_by_name+'</strong>');
+  if(q.booked_by_name) parts.push('Booked by <strong>'+q.booked_by_name+'</strong>');
+  return parts.length?'<div style="font-size:11px;color:var(--gray-500);margin-top:6px">'+parts.join(' · ')+'</div>':'';
+}
+
+const regCol={NE:'g',WC:'b',SE:'a',Central:'p'};const ldCol={Live:'b',Drop:'gr',Both:'t'};
 function buildRateRows(){
   const s=S.rSearch.toLowerCase();
   const filtered=S.rates
@@ -5063,6 +5361,8 @@ async function confirmBooking(id, downloadSheet){
       await db.from('quotes').update({status:'Booked',base_markup:q.baseMarkup}).eq('id',id);
     }
     q.status='Booked';
+    q.booked_by=_currentUser?.id||null;
+    q.booked_by_name=_currentUser?.name||null;
     closeModal();
     const t=$('log-tbody');if(t) t.innerHTML=buildLogRows();
     updateActiveBadge();
@@ -5279,6 +5579,10 @@ function showQuoteModal(id){
         ${q.status==='Booked'?'Type to assign — auto-saves':'Mark as Booked to assign ref#'}
       </span>
     </div>
+    ${(q.created_by_name||q.booked_by_name)?`<div style="font-size:11px;color:var(--gray-500);padding:6px 2px;display:flex;gap:16px;margin-bottom:10px">
+      ${q.created_by_name?`<span>✍️ Created by <strong>${q.created_by_name}</strong></span>`:''}
+      ${q.booked_by_name?`<span>✅ Booked by <strong>${q.booked_by_name}</strong></span>`:''}
+    </div>`:''}
     <div style="border:1px solid var(--gray-200);border-radius:var(--radius);overflow:hidden;margin-bottom:16px">
       <table style="width:100%;font-size:13px;border-collapse:collapse">
         <thead><tr style="background:var(--gray-50)"><th style="padding:8px 12px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-500)">Charge</th><th style="padding:8px 12px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-400)">Carrier cost</th><th style="padding:8px 12px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--steel)">Customer price</th><th style="padding:8px 12px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--green)">Profit</th></tr></thead>
@@ -5373,7 +5677,6 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape') closeModal();});
 // BOOT — load Supabase client then check for saved config
 // ═══════════════════════════════════════════════════════
 async function boot(){
-  // Load Supabase JS
   await new Promise((res,rej)=>{
     const s=document.createElement('script');
     s.src='https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
@@ -5388,7 +5691,7 @@ async function boot(){
     try{
       const{error}=await db.from('rates').select('id').limit(1);
       if(error) throw error;
-      await initApp();
+      await checkAuthAndProceed();
     }catch(e){
       db=null;
       $('loading-screen').style.display='none';
