@@ -271,45 +271,6 @@ hr{border:none;border-top:1px solid var(--gray-100);margin:14px 0}
   </div>
 </div>
 
-<!-- Login screen -->
-<div class="screen" id="login-screen" style="display:none">
-  <div class="setup-box" style="max-width:420px">
-    <div class="setup-logo" style="justify-content:center;margin-bottom:28px">
-      <svg width="48" height="48" viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg">
-        <rect width="60" height="60" rx="10" fill="#1a2e4a"/>
-        <polygon points="10,50 25,14 44,45" fill="white"/>
-        <polygon points="25,14 44,45 53,37" fill="rgba(255,255,255,.72)"/>
-        <polygon points="10,50 44,45 53,37 53,50" fill="rgba(255,255,255,.90)"/>
-        <line x1="25" y1="14" x2="44" y2="50" stroke="rgba(59,142,208,.5)" stroke-width="1.8"/>
-      </svg>
-      <div><h1 style="font-size:26px">SHIFL</h1><p style="font-size:12px;color:var(--gray-400)">Freight Quoting Platform</p></div>
-    </div>
-    <div id="login-error" style="display:none;background:#fff0f0;border:1px solid #fca5a5;border-radius:var(--radius);padding:10px 14px;margin-bottom:16px;font-size:13px;color:#dc2626;font-weight:600"></div>
-    <div id="first-user-banner" style="display:none;background:#fffbeb;border:1px solid #fbbf24;border-radius:var(--radius);padding:12px 14px;margin-bottom:16px;font-size:13px;color:#92400e">
-      <strong>First time setup:</strong> No users exist yet. Create the first admin account below.
-    </div>
-    <div class="field">
-      <label id="login-name-label" style="display:none">Your name</label>
-      <input type="text" id="login-name" placeholder="Your name" style="display:none;margin-bottom:10px"
-        onkeydown="if(event.key==='Enter')doLogin()">
-      <label>Email address</label>
-      <input type="email" id="login-email" placeholder="you@shifl.com" autocomplete="email"
-        onkeydown="if(event.key==='Enter')document.getElementById('login-password').focus()">
-    </div>
-    <div class="field">
-      <label>Password</label>
-      <input type="password" id="login-password" placeholder="Enter your password"
-        onkeydown="if(event.key==='Enter')doLogin()">
-    </div>
-    <button class="btn blue" id="login-btn" onclick="doLogin()" style="width:100%;justify-content:center;padding:12px;font-size:15px;margin-top:4px">
-      Sign in
-    </button>
-    <p style="font-size:11px;color:var(--gray-400);margin-top:14px;text-align:center">
-      Contact your admin if you need access
-    </p>
-  </div>
-</div>
-
 <!-- Loading screen -->
 <div class="screen" id="loading-screen">
   <div style="text-align:center">
@@ -366,26 +327,8 @@ hr{border:none;border-top:1px solid var(--gray-100);margin:14px 0}
       <button class="nav-sub" id="tlnav-log"        onclick="setView('transload');setTlTab('log')"><span>📁</span>Quote log</button>
       <button class="nav-sub" id="tlnav-warehouses" onclick="setView('transload');setTlTab('warehouses')"><span>🏭</span>Warehouses</button>
       <button class="nav-sub" id="tlnav-dash"       onclick="setView('transload');setTlTab('dash')"><span>📊</span>Dashboard</button>
-
-      <!-- Admin panel — only shown to admins -->
-      <div id="admin-nav-section" style="display:none">
-        <div style="margin:10px 18px;border-top:1px solid rgba(255,255,255,.1)"></div>
-        <button class="nav-btn" onclick="setView('admin')" id="nav-admin" style="border-left-color:transparent">
-          <span class="ico">⚙️</span>Admin Panel
-        </button>
-      </div>
     </nav>
     <div class="sidebar-foot">
-      <!-- Logged-in user info -->
-      <div id="user-info" style="display:none;margin-bottom:10px;padding:8px 10px;background:rgba(255,255,255,.06);border-radius:var(--radius)">
-        <div style="display:flex;align-items:center;justify-content:space-between">
-          <div style="cursor:pointer" onclick="showEditMyProfile()" title="Edit your profile">
-            <div id="user-name-display" style="font-size:12px;font-weight:700;color:#fff;text-decoration:underline dotted;text-underline-offset:2px"></div>
-            <div id="user-role-display" style="font-size:10px;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.05em;margin-top:1px"></div>
-          </div>
-          <button onclick="logout()" style="background:rgba(255,255,255,.08);border:none;color:rgba(255,255,255,.5);padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600">Sign out</button>
-        </div>
-      </div>
       <div style="display:flex;align-items:center;margin-bottom:4px">
         <span class="sync-dot" id="sync-dot"></span>
         <span class="sync-label" id="sync-label">Connected</span>
@@ -399,26 +342,11 @@ hr{border:none;border-top:1px solid var(--gray-100);margin:14px 0}
   <div class="main">
     <div class="topbar">
       <h1 id="view-title">Quote builder</h1>
-      <div style="display:flex;align-items:center;gap:10px">
-        <div id="topbar-right" class="topbar-right"></div>
-        <button onclick="showNotifications()" id="notif-bell" style="position:relative;background:transparent;border:none;cursor:pointer;padding:6px;border-radius:var(--radius);color:var(--gray-500)" title="Notifications">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-          <span id="notif-badge" style="display:none;position:absolute;top:2px;right:2px;background:#ef4444;color:#fff;border-radius:99px;font-size:9px;font-weight:800;min-width:16px;height:16px;line-height:16px;text-align:center;padding:0 3px">0</span>
-        </button>
-      </div>
+      <div class="topbar-right" id="topbar-right"></div>
     </div>
     <div class="page" id="page"></div>
   </div>
 </div>
-<script>
-// Emergency: force login screen after 8 seconds no matter what
-setTimeout(function(){
-  var ls=document.getElementById('loading-screen');
-  var lo=document.getElementById('login-screen');
-  if(ls&&ls.style.display!=='none'){ls.style.display='none';}
-  if(lo&&lo.style.display==='none'){lo.style.display='flex';}
-},8000);
-</script>
 <div id="modal-root"></div>
 
 <script>
@@ -623,8 +551,7 @@ async function connectSupabase(){
     if(error) throw error;
     localStorage.setItem('sb_url',url);
     localStorage.setItem('sb_key',key);
-    // Check session then show login or app
-    await checkAuthAndProceed();
+    await initApp();
   }catch(e){
     db=null;
     $('loading-screen').style.display='none';
@@ -632,12 +559,6 @@ async function connectSupabase(){
     const errEl=$('setup-error');
     if(errEl){errEl.style.display='block';errEl.textContent='Connection failed: '+(e.message||'Check your URL and key, and make sure you ran the setup SQL.');}
   }
-}
-
-function checkAuthAndProceed(){
-  const session=getSession();
-  if(session){_currentUser={id:session.id,name:session.name,email:session.email,role:session.role};updateUserUI();initApp();}
-  else{showLoginScreen();}
 }
 
 function disconnectSupabase(){
@@ -877,7 +798,6 @@ async function initApp(){
   $('app').style.display='flex';
   setSyncStatus('on');
   render();
-  startNotifPolling();
 }
 
 // ═══════════════════════════════════════════════════════
@@ -906,7 +826,7 @@ function setView(v){
   S.view=v;
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
   const navEl=$('nav-'+v);if(navEl) navEl.classList.add('active');
-  $('view-title').textContent={quote:'Quote builder',customers:'Customers',rates:'Carrier rates',log:'Quote log',dash:'Dashboard',freight:'Freight Quoting',transload:'Transload Quoting',active:'Active Shipments',admin:'Admin Panel'}[v];
+  $('view-title').textContent={quote:'Quote builder',customers:'Customers',rates:'Carrier rates',log:'Quote log',dash:'Dashboard',freight:'Freight Quoting',transload:'Transload Quoting',active:'Active Shipments'}[v];
   render();
 }
 function render(){
@@ -915,7 +835,6 @@ function render(){
   else if(S.view==='rates')      renderRates();
   else if(S.view==='log')        renderLog();
   else if(S.view==='active')     renderActive();
-  else if(S.view==='admin')      renderAdmin();
   else if(S.view==='freight')    renderFreight();
   else if(S.view==='transload')  renderTransload();
   else                           renderDash();
@@ -1608,9 +1527,7 @@ function renderFqBuilder(){
 
       ${fq.mode==='LCL'?`
       <div class="card">
-        <div class="sec-head">📐 CBM + Weight calculator <span style="font-weight:400;font-size:11px;text-transform:none;letter-spacing:0;color:var(--gray-400)">— estimate pallets from cargo dimensions</span>
-          <button class="btn sm" onclick="downloadLclIntakeForm()" style="margin-left:12px;font-size:11px">📋 Download intake form</button>
-        </div>
+        <div class="sec-head">📐 CBM + Weight calculator <span style="font-weight:400;font-size:11px;text-transform:none;letter-spacing:0;color:var(--gray-400)">— estimate pallets from cargo dimensions</span></div>
         <div class="g2" style="margin-bottom:10px">
           <div class="field" style="margin-bottom:0"><label>Units</label>
             <div class="toggle-group" style="margin-top:4px">
@@ -1847,8 +1764,6 @@ function confirmFqBooking(idx, downloadSheet){
   const q=(window._fqHistory||[])[idx];if(!q) return;
   q.status='Booked';
   q.bookedDate=new Date().toISOString().slice(0,10);
-  q.booked_by=_currentUser?.id||null;
-  q.booked_by_name=_currentUser?.name||null;
   try{localStorage.setItem('fq_history',JSON.stringify(window._fqHistory));}catch(e){}
   try{dbUpdateFqStatus(q.id,'Booked');}catch(e){}
   closeModal();
@@ -2022,12 +1937,7 @@ function showFqQuoteModal(idx){
         <button class="btn" onclick="printFqQuote(${idx})">🖨️ Print</button>
         <button class="btn blue" onclick="downloadFqPDF(${idx})">📄 Download PDF</button>
       </div>
-      <div id="fq-docs-section-${q.id}"><div style="padding:10px 0;color:var(--gray-400);font-size:12px">Loading documents…</div></div>
     </div></div>`;
-  loadDocs(q.id,'freight').then(docs=>{
-    const el=$('fq-docs-section-'+q.id);
-    if(el) el.innerHTML=buildDocSection(q.id,'freight',docs);
-  });
 }
 
 function printFqQuote(idx){
@@ -2263,7 +2173,6 @@ async function saveFqQuote(){
     profit:customerRate-carrierRate,
     profitPct:customerRate>0?(customerRate-carrierRate)/customerRate:0,
     status:'Quoted',notes:fq.notes,transitTime:fq.transitTime||'',
-    created_by:_currentUser?.id||null,created_by_name:_currentUser?.name||null,
   };
   if(!window._fqHistory) window._fqHistory=[];
   window._fqHistory.unshift(entry);
@@ -2717,8 +2626,7 @@ async function saveQuote(){
       customer:qi.customer||'—',port:qi.port,zip:qi.zip,ld:qi.ld,carrier:sel.carrier,destination:sel.destination,
       carrierRates:{...CHARGES.reduce((o,c)=>{o[c]=sel[c]||0;return o;},{}),total:ct},
       customerRates:{...cuRates,total:cu},baseMarkup:{...qi.baseMarkup},flatRates:{...qi.flatRates},
-      profit,profitPct:cu>0?profit/cu:0,status:'Quoted',notes:qi.notes||'',shiflRef:qi.shiflRef||'',
-      created_by:_currentUser?.id||null,created_by_name:_currentUser?.name||null};
+      profit,profitPct:cu>0?profit/cu:0,status:'Quoted',notes:qi.notes||'',shiflRef:qi.shiflRef||''};
     await dbSaveQuote(q);
     S.quotes.unshift(q);
     alert(`Quote #${q.quoteNum} saved!\n\nCustomer total: ${fmtD(cu)}\nProfit: ${fmtD(profit)} (${pct(q.profitPct)})`);
@@ -3271,417 +3179,6 @@ function defaultTlState(){
 
 // Warehouses DB
 function loadTlWarehouses(){try{window._tlWarehouses=JSON.parse(localStorage.getItem('tl_warehouses')||'[]');}catch(e){window._tlWarehouses=[];}}
-// ═══════════════════════════════════════════════════════
-// LCL INTAKE FORM PDF
-// ═══════════════════════════════════════════════════════
-async function downloadLclIntakeForm(){
-  try{
-    if(typeof window.jspdf==='undefined'){
-      await new Promise((res,rej)=>{
-        const s=document.createElement('script');
-        s.src='https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
-        s.onload=res;s.onerror=()=>rej(new Error('Failed to load PDF library'));
-        document.head.appendChild(s);
-      });
-    }
-    const{jsPDF}=window.jspdf;
-    const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
-    const W=210;const M=14;const IW=W-M*2;const navy=[26,46,74];
-    let y=0;
-
-    doc.setFillColor(...navy);doc.rect(0,0,W,26,'F');
-    doc.setFont('helvetica','bold');doc.setFontSize(18);doc.setTextColor(255,255,255);
-    doc.text('SHIFL',M,17);
-    doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(255,255,255,.6);
-    doc.text('LCL Freight Intake Form',M,23);
-    doc.setFontSize(8);doc.setTextColor(255,255,255,.4);
-    doc.text('mk@shifl.com  |  343 Spook Rock Road, Suffern NY 10901',W-M,23,{align:'right'});
-    y=32;
-
-    doc.setFont('helvetica','italic');doc.setFontSize(8.5);doc.setTextColor(90,100,115);
-    doc.text('Please complete this form and return it to your Shifl representative.',M,y);
-    y+=10;
-
-    function secHead(t){
-      doc.setFillColor(236,241,250);doc.rect(M,y,IW,8,'F');
-      doc.setFont('helvetica','bold');doc.setFontSize(8);doc.setTextColor(...navy);
-      doc.text(t,M+3,y+5.5);y+=11;
-    }
-    function lbl(t,x,ly){doc.setFont('helvetica','bold');doc.setFontSize(6.5);doc.setTextColor(110,120,140);doc.text(t,x,ly);}
-    function bx(x,by,w,h){doc.setDrawColor(175,185,200);doc.setLineWidth(.3);doc.rect(x,by,w,h);}
-    function r1(l,h){h=h||9;lbl(l,M,y+3.5);bx(M,y+4.5,IW,h);y+=h+8;}
-    function r2(l1,w1,l2,w2,h){h=h||9;const g=5;lbl(l1,M,y+3.5);bx(M,y+4.5,w1,h);lbl(l2,M+w1+g,y+3.5);bx(M+w1+g,y+4.5,w2,h);y+=h+8;}
-    function r3(l1,w1,l2,w2,l3,h){h=h||9;const g=5;const w3=IW-w1-w2-g*2;lbl(l1,M,y+3.5);bx(M,y+4.5,w1,h);lbl(l2,M+w1+g,y+3.5);bx(M+w1+g,y+4.5,w2,h);lbl(l3,M+w1+w2+g*2,y+3.5);bx(M+w1+w2+g*2,y+4.5,w3,h);y+=h+8;}
-    function chk(l,opts){doc.setFont('helvetica','bold');doc.setFontSize(7.5);doc.setTextColor(60,70,90);doc.text(l,M,y+4);let cx=M+38;opts.forEach(o=>{doc.setDrawColor(130,140,160);doc.setLineWidth(.3);doc.rect(cx,y+0.5,4.5,4.5);doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(50,60,80);doc.text(o,cx+6.5,y+4.5);cx+=o.length*2.2+14;});y+=10;}
-
-    secHead('1.  CONTACT INFORMATION');
-    r1('Company / Business name');
-    r2('Contact name',90,'Phone number',IW-95);
-    r1('Email address');y+=2;
-
-    secHead('2.  PICKUP DETAILS');
-    r1('CFS / Pickup facility name and address');
-    r3('City',60,'State',25,'ZIP code');
-    r1('Requested pickup date');y+=2;
-
-    secHead('3.  DELIVERY DETAILS');
-    r1('Consignee / Delivery company name');
-    r1('Street address');
-    r3('City',60,'State',25,'ZIP code');y+=2;
-
-    secHead('4.  CARGO DETAILS');
-    r1('Commodity / Description of goods');
-    r3('Pallet count',(IW-10)/3,'Total CBM',(IW-10)/3,'Total weight (lbs)');
-    r1('Dimensions per pallet — L x W x H (inches)');
-    chk('Cargo type:',['Palletized','Floor Loaded','Mixed']);y+=2;
-
-    secHead('5.  SPECIAL REQUIREMENTS');
-    chk('Liftgate required:',['Yes','No']);
-    chk('Appointment required:',['Yes','No']);
-    chk('Hazmat (attach SDS if Yes):',['Yes','No']);
-    chk('Cargo insurance required:',['Yes','No']);
-    r2('Estimated cargo value ($)',90,'PO / Reference number',IW-95);
-    r1('Special instructions / notes',14);y+=2;
-
-    secHead('6.  FREIGHT TERMS & SIGNATURE');
-    chk('Freight charge terms:',['Prepaid','Collect','3rd Party']);
-    y+=3;
-    doc.setFont('helvetica','italic');doc.setFontSize(7.5);doc.setTextColor(110,120,140);
-    doc.text('I certify that the above information is accurate and complete.',M,y);y+=7;
-    r2('Printed name',100,'Date',IW-105);
-    lbl('Signature',M,y+3.5);bx(M,y+4.5,IW,14);y+=22;
-
-    doc.setFont('helvetica','normal');doc.setFontSize(7);doc.setTextColor(165,170,180);
-    doc.text('SHIFL  |  A formal quote will be provided upon review of this form.',W/2,286,{align:'center'});
-
-    doc.save('Shifl_LCL_Intake_Form.pdf');
-  }catch(e){
-    alert('Could not generate PDF: '+e.message);
-  }
-}
-  const{jsPDF}=window.jspdf;
-  const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
-  const W=210;const M=14;const IW=W-M*2;const navy=[26,46,74];
-  let y=0;
-
-  // ── Header ──────────────────────────────────────────────────────────────
-  doc.setFillColor(...navy);doc.rect(0,0,W,26,'F');
-  doc.setFont('helvetica','bold');doc.setFontSize(18);doc.setTextColor(255,255,255);
-  doc.text('SHIFL',M,17);
-  doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(255,255,255,.6);
-  doc.text('LCL Freight Intake Form',M,23);
-  doc.setFontSize(8);doc.setTextColor(255,255,255,.45);
-  doc.text('343 Spook Rock Road, Suffern NY 10901  |  mk@shifl.com',W-M,23,{align:'right'});
-  y=32;
-
-  // ── Intro note ───────────────────────────────────────────────────────────
-  doc.setFont('helvetica','italic');doc.setFontSize(8.5);doc.setTextColor(90,100,115);
-  doc.text('Please complete this form and return it to your Shifl representative so we can prepare your quote.',M,y);
-  y+=10;
-
-  // ── Helper functions ─────────────────────────────────────────────────────
-  function secHead(title){
-    doc.setFillColor(236,241,250);doc.rect(M,y,IW,8,'F');
-    doc.setFont('helvetica','bold');doc.setFontSize(8);doc.setTextColor(...navy);
-    doc.text(title,M+3,y+5.5);
-    y+=11;
-  }
-  function lbl(text,x,fieldY){
-    doc.setFont('helvetica','bold');doc.setFontSize(6.5);doc.setTextColor(110,120,140);
-    doc.text(text,x,fieldY);
-  }
-  function box(x,bY,w,h){
-    doc.setDrawColor(175,185,200);doc.setLineWidth(.3);doc.rect(x,bY,w,h);
-  }
-  function row1(labelText,h){
-    h=h||9;
-    lbl(labelText,M,y+3.5);
-    box(M,y+4.5,IW,h);
-    y+=h+8;
-  }
-  function row2(l1,w1,l2,w2,h){
-    h=h||9;const gap=5;
-    lbl(l1,M,y+3.5);box(M,y+4.5,w1,h);
-    lbl(l2,M+w1+gap,y+3.5);box(M+w1+gap,y+4.5,w2,h);
-    y+=h+8;
-  }
-  function row3(l1,w1,l2,w2,l3,w3,h){
-    h=h||9;const gap=5;
-    lbl(l1,M,y+3.5);box(M,y+4.5,w1,h);
-    lbl(l2,M+w1+gap,y+3.5);box(M+w1+gap,y+4.5,w2,h);
-    lbl(l3,M+w1+w2+gap*2,y+3.5);box(M+w1+w2+gap*2,y+4.5,w3,h);
-    y+=h+8;
-  }
-  function checkRow(labelText,options){
-    doc.setFont('helvetica','bold');doc.setFontSize(7.5);doc.setTextColor(60,70,90);
-    doc.text(labelText,M,y+4);
-    let cx=M+40;
-    options.forEach(opt=>{
-      doc.setDrawColor(130,140,160);doc.setLineWidth(.3);doc.rect(cx,y+0.5,4.5,4.5);
-      doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(50,60,80);
-      doc.text(opt,cx+6.5,y+4.5);
-      cx+=opt.length*2.2+14;
-    });
-    y+=10;
-  }
-
-  // ── 1. Contact Information ────────────────────────────────────────────────
-  secHead('1.  CONTACT INFORMATION');
-  row1('Company / Business name');
-  row2('Contact name',90,'Phone number',IW-90-5);
-  row1('Email address');
-  y+=2;
-
-  // ── 2. Pickup Details ─────────────────────────────────────────────────────
-  secHead('2.  PICKUP DETAILS');
-  row1('CFS / Pickup facility name and address');
-  row3('City',65,'State',25,'ZIP code',IW-65-25-10);
-  row1('Requested pickup date',9);
-  y+=2;
-
-  // ── 3. Delivery Details ────────────────────────────────────────────────────
-  secHead('3.  DELIVERY DETAILS');
-  row1('Consignee / Delivery company name');
-  row1('Street address');
-  row3('City',65,'State',25,'ZIP code',IW-65-25-10);
-  y+=2;
-
-  // ── 4. Cargo Details ─────────────────────────────────────────────────────
-  secHead('4.  CARGO DETAILS');
-  row1('Commodity / Description of goods');
-  row3('Pallet count',(IW-10)/3,'Total CBM (if known)',(IW-10)/3,'Total weight (lbs)',(IW-10)/3);
-  row1('Dimensions per pallet  (L x W x H in inches)');
-  checkRow('Cargo type:',['Palletized','Floor Loaded','Mixed']);
-  y+=2;
-
-  // ── 5. Special Requirements ────────────────────────────────────────────────
-  secHead('5.  SPECIAL REQUIREMENTS');
-  checkRow('Liftgate required:',['Yes','No']);
-  checkRow('Appointment required:',['Yes','No']);
-  checkRow('Hazmat (attach SDS if Yes):',['Yes','No']);
-  checkRow('Cargo insurance:',['Yes','No']);
-  row2('Estimated cargo value ($)',90,'PO / Reference number',IW-90-5);
-  row1('Special instructions / notes',14);
-  y+=2;
-
-  // ── 6. Freight Terms ───────────────────────────────────────────────────────
-  secHead('6.  FREIGHT TERMS & SIGNATURE');
-  checkRow('Freight charge terms:',['Prepaid','Collect','3rd Party']);
-  y+=3;
-  // Signature lines
-  doc.setFont('helvetica','italic');doc.setFontSize(7.5);doc.setTextColor(110,120,140);
-  doc.text('I certify that the information provided above is accurate and complete.',M,y);
-  y+=7;
-  row2('Printed name',100,'Date',IW-100-5,10);
-  lbl('Signature',M,y+3.5);
-  box(M,y+4.5,IW,14);
-  y+=22;
-
-  // ── Footer ─────────────────────────────────────────────────────────────────
-// ═══════════════════════════════════════════════════════
-// NOTIFICATION SYSTEM
-// ═══════════════════════════════════════════════════════
-function getNotifications(){
-  const notifs=[];
-  const today=new Date();today.setHours(0,0,0,0);
-
-  // Overdue active shipments
-  getAllActiveShipments().forEach(s=>{
-    const tracking=window._activeTracking?.[s.id]||{};
-    if(tracking.expectedDate){
-      const exp=new Date(tracking.expectedDate);exp.setHours(0,0,0,0);
-      const diff=Math.floor((today-exp)/(1000*60*60*24));
-      if(diff>0) notifs.push({type:'overdue',priority:'high',
-        title:`Overdue: ${s.customer}`,
-        body:`${s.type==='drayage'?'Drayage':fqTypeLabel(s)} shipment is ${diff} day${diff!==1?'s':''} overdue`,
-        id:'overdue-'+s.id});
-    }
-    if(tracking.urgent) notifs.push({type:'urgent',priority:'high',
-      title:`Hot shipment: ${s.customer}`,
-      body:`Marked urgent — ${s.type} shipment needs attention`,
-      id:'urgent-'+s.id});
-  });
-
-  // Expiring drayage quotes (28+ days old, still Quoted)
-  const expThresh=28*24*60*60*1000;
-  (S.quotes||[]).filter(q=>q.status==='Quoted').forEach(q=>{
-    const age=today-new Date(q.date);
-    if(age>=expThresh){
-      const daysLeft=30-Math.floor(age/(1000*60*60*24));
-      notifs.push({type:'expiring',priority:daysLeft<=1?'high':'medium',
-        title:`Quote expiring: ${q.customer}`,
-        body:`Quote #${q.quoteNum} expires in ${Math.max(0,daysLeft)} day${daysLeft!==1?'s':''}`,
-        id:'exp-'+q.id});
-    }
-  });
-
-  // Expiring freight quotes
-  (window._fqHistory||[]).filter(q=>q.status==='Quoted').forEach(q=>{
-    const age=today-new Date(q.date);
-    if(age>=expThresh){
-      const daysLeft=30-Math.floor(age/(1000*60*60*24));
-      notifs.push({type:'expiring',priority:daysLeft<=1?'high':'medium',
-        title:`Freight quote expiring: ${q.customer}`,
-        body:`${fqTypeLabel(q)} quote expires in ${Math.max(0,daysLeft)} day${daysLeft!==1?'s':''}`,
-        id:'fqexp-'+q.id});
-    }
-  });
-
-  return notifs.sort((a,b)=>a.priority==='high'&&b.priority!=='high'?-1:1);
-}
-
-function updateNotifBadge(){
-  const n=getNotifications();
-  const badge=$('notif-badge');
-  if(badge){badge.textContent=n.length;badge.style.display=n.length>0?'':'none';}
-  return n;
-}
-
-function showNotifications(){
-  const notifs=updateNotifBadge();
-  const iconMap={overdue:'🚨',expiring:'⏰',urgent:'🔥'};
-  const colorMap={high:'#dc2626',medium:'#d97706'};
-  const rows=notifs.length?notifs.map(n=>`
-    <div style="padding:12px 16px;border-bottom:1px solid var(--gray-100);display:flex;gap:10px;align-items:flex-start">
-      <span style="font-size:18px;flex-shrink:0">${iconMap[n.type]||'🔔'}</span>
-      <div>
-        <div style="font-weight:700;font-size:13px;color:${colorMap[n.priority]||'var(--navy)'}">${n.title}</div>
-        <div style="font-size:12px;color:var(--gray-500);margin-top:2px">${n.body}</div>
-      </div>
-    </div>`).join('')
-    :`<div style="padding:30px;text-align:center;color:var(--gray-400)"><div style="font-size:32px;margin-bottom:8px">✅</div><div style="font-weight:600">All clear — no alerts</div></div>`;
-
-  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
-    <div class="modal" style="width:480px;padding:0;overflow:hidden">
-      <div style="padding:14px 16px;background:var(--navy);display:flex;align-items:center;justify-content:space-between">
-        <div style="font-size:14px;font-weight:700;color:#fff">🔔 Notifications ${notifs.length>0?`<span style="background:#ef4444;color:#fff;border-radius:99px;font-size:11px;padding:1px 7px;margin-left:6px">${notifs.length}</span>`:''}</div>
-        <button onclick="closeModal()" style="background:transparent;border:none;color:rgba(255,255,255,.5);cursor:pointer;font-size:18px">×</button>
-      </div>
-      <div style="max-height:400px;overflow-y:auto">${rows}</div>
-      ${notifs.length>0?`<div style="padding:12px 16px;border-top:1px solid var(--gray-100);display:flex;justify-content:flex-end">
-        <button class="btn sm" onclick="requestBrowserNotifs()">Enable browser alerts</button>
-      </div>`:''}
-    </div></div>`;
-}
-
-async function requestBrowserNotifs(){
-  if('Notification' in window){
-    const perm=await Notification.requestPermission();
-    if(perm==='granted') alert('✅ Browser notifications enabled! You\'ll be alerted even when the tab is in the background.');
-    else alert('Browser notifications were blocked. You can enable them in your browser settings.');
-  }
-}
-
-function sendBrowserNotif(title,body){
-  if('Notification' in window&&Notification.permission==='granted'){
-    new Notification('Shifl — '+title,{body,icon:'https://mkshifl.github.io/shifl-quoting/favicon.ico'});
-  }
-}
-
-// Auto-check notifications every 5 minutes
-function startNotifPolling(){
-  updateNotifBadge();
-  setInterval(()=>{
-    const notifs=updateNotifBadge();
-    // Send browser notif for new high-priority items
-    notifs.filter(n=>n.priority==='high').forEach(n=>{
-      if(!sessionStorage.getItem('notif-sent-'+n.id)){
-        sendBrowserNotif(n.title,n.body);
-        sessionStorage.setItem('notif-sent-'+n.id,'1');
-      }
-    });
-  },5*60*1000);
-}
-
-// ═══════════════════════════════════════════════════════
-// DOCUMENT STORAGE
-// ═══════════════════════════════════════════════════════
-async function loadDocs(quoteId,quoteType){
-  try{
-    const{data}=await db.from('documents').select('*').eq('quote_id',quoteId).eq('quote_type',quoteType).order('uploaded_at',{ascending:false});
-    return data||[];
-  }catch(e){return[];}
-}
-
-async function uploadDoc(quoteId,quoteType,file,docType){
-  const ext=file.name.split('.').pop();
-  const path=`${quoteType}/${quoteId}/${Date.now()}_${file.name.replace(/\s+/g,'_')}`;
-  // Upload to Supabase Storage
-  const{data:upload,error:upErr}=await db.storage.from('shifl-docs').upload(path,file);
-  if(upErr) throw upErr;
-  const{data:urlData}=db.storage.from('shifl-docs').getPublicUrl(path);
-  // Save metadata to documents table
-  const{error:dbErr}=await db.from('documents').insert({
-    id:uid(),quote_id:quoteId,quote_type:quoteType,
-    file_name:file.name,file_url:urlData.publicUrl,
-    file_size:file.size,doc_type:docType||'Other',
-    uploaded_by:_currentUser?.id||null,
-    uploaded_by_name:_currentUser?.name||null,
-  });
-  if(dbErr) throw dbErr;
-}
-
-async function deleteDoc(docId,filePath){
-  if(!confirm('Delete this document?')) return;
-  await db.from('documents').delete().eq('id',docId);
-  if(filePath) await db.storage.from('shifl-docs').remove([filePath]);
-}
-
-function buildDocSection(quoteId,quoteType,docs){
-  const docTypes=['BOL','POD','Rate Confirmation','Customs','Invoice','Other'];
-  const docRows=docs.map(d=>`
-    <div style="display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--gray-100)">
-      <div style="display:flex;align-items:center;gap:8px">
-        <span style="font-size:16px">${d.file_name.match(/\.pdf$/i)?'📄':d.file_name.match(/\.(png|jpg|jpeg)$/i)?'🖼️':'📎'}</span>
-        <div>
-          <div style="font-size:12px;font-weight:600;color:var(--navy)">${d.file_name}</div>
-          <div style="font-size:10px;color:var(--gray-400)">${d.doc_type} · ${d.uploaded_by_name||'System'} · ${new Date(d.uploaded_at).toLocaleDateString()}</div>
-        </div>
-      </div>
-      <div style="display:flex;gap:6px">
-        <a href="${d.file_url}" target="_blank" class="btn sm" style="text-decoration:none">⬇️ Download</a>
-        <button class="btn sm" onclick="deleteDoc('${d.id}')" style="color:#dc2626">🗑️</button>
-      </div>
-    </div>`).join('');
-
-  return `<div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--gray-100)">
-    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-500);margin-bottom:10px">📎 Documents${docs.length>0?' ('+docs.length+')':''}</div>
-    ${docRows}
-    <div style="margin-top:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-      <select id="doc-type-${quoteId}" style="font-size:12px;padding:5px 8px;border:1px solid var(--gray-200);border-radius:var(--radius)">
-        ${docTypes.map(t=>`<option value="${t}">${t}</option>`).join('')}
-      </select>
-      <label class="btn sm" style="cursor:pointer">
-        📎 Attach file
-        <input type="file" style="display:none" accept=".pdf,.png,.jpg,.jpeg,.doc,.docx,.xlsx"
-          onchange="handleDocUpload(event,'${quoteId}','${quoteType}')">
-      </label>
-    </div>
-  </div>`;
-}
-
-async function handleDocUpload(event,quoteId,quoteType){
-  const file=event.target.files[0];if(!file) return;
-  const docType=($('doc-type-'+quoteId)||{}).value||'Other';
-  const btn=event.target.previousElementSibling;
-  if(btn) btn.textContent='Uploading...';
-  try{
-    await uploadDoc(quoteId,quoteType,file,docType);
-    // Refresh the modal
-    if(quoteType==='drayage') showQuoteModal(quoteId);
-    else if(quoteType==='freight'){
-      const idx=(window._fqHistory||[]).findIndex(q=>q.id===quoteId);
-      if(idx>=0) showFqQuoteModal(idx);
-    } else {
-      const idx=(window._tlHistory||[]).findIndex(q=>q.id===quoteId);
-      if(idx>=0) showTlQuoteModal(idx);
-    }
-  }catch(e){
-    alert('Upload failed: '+e.message+'\n\nNote: Make sure you created the "shifl-docs" storage bucket in Supabase.');
-    if(btn) btn.textContent='Attach file';
-  }
-}
-
 async function loadTlHistory(){
   loadTlWarehouses();
   try{
@@ -4633,7 +4130,6 @@ async function saveTlQuote(){
     totalCarrier:t.totalCarrier,totalCustomer:t.totalCustomer,
     profit:t.totalProfit,profitPct:t.margin,
     notes:tl.notes,status:'Quoted',
-    created_by:_currentUser?.id||null,created_by_name:_currentUser?.name||null,
     rawTl:JSON.parse(JSON.stringify(tl))
   };
   if(!window._tlHistory) window._tlHistory=[];
@@ -4691,36 +4187,35 @@ async function downloadTlCustomerPDF(idx, rawTl, existingDoc){
   const sectionColors={dray:[26,80,150],tl:[30,100,60],out:[150,80,0]};
 
   function drawSection(colorArr,title,subInfo,rows,subtotal){
-    doc.setFillColor(...colorArr);doc.rect(12,y,W-24,10,'F');
+    doc.setFillColor(...colorArr);doc.rect(12,y,W-24,9,'F');
     doc.setFont('helvetica','bold');doc.setFontSize(9);doc.setTextColor(255,255,255);
-    doc.text(title,16,y+7);
-    y+=13;
+    doc.text(title,16,y+6.5);
+    y+=11;
     if(subInfo){
       const subLines=subInfo.split('\n');
       subLines.forEach(line=>{
         if(!line.trim()) return;
-        const wrapped=doc.splitTextToSize(line.trim(),W-30);
+        const wrapped=doc.splitTextToSize(line.trim(),W-28);
         doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(100,115,130);
-        doc.text(wrapped,16,y+5);y+=wrapped.length*5;
+        doc.text(wrapped,16,y+4);y+=wrapped.length*4+2;
       });
-      y+=5;
     }
+    // Rows
     let even=true;
     rows.forEach(([label,amount])=>{
       if(amount<=0) return;
-      if(even){doc.setFillColor(248,250,252);doc.rect(12,y,W-24,10,'F');}
-      doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(55,65,80);
-      doc.text(label,16,y+7);
-      doc.setFont('helvetica','bold');doc.setTextColor(...navy);
-      doc.text(fmtD(amount),W-14,y+7,{align:'right'});
-      doc.setDrawColor(235,238,242);doc.setLineWidth(.2);doc.line(12,y+10,W-12,y+10);
-      y+=11;even=!even;
+      if(even){doc.setFillColor(248,250,252);doc.rect(12,y-3,W-24,8,'F');}
+      doc.setFont('helvetica','normal');doc.setFontSize(9.5);doc.setTextColor(55,65,80);doc.text(label,16,y);
+      doc.setFont('helvetica','bold');doc.setTextColor(...navy);doc.text(fmtD(amount),W-14,y,{align:'right'});
+      doc.setDrawColor(235,238,242);doc.setLineWidth(.2);doc.line(12,y+5,W-12,y+5);
+      y+=8;even=!even;
     });
-    doc.setFillColor(230,235,245);doc.rect(12,y,W-24,12,'F');
+    // Subtotal
+    doc.setFillColor(230,235,245);doc.rect(12,y-2,W-24,10,'F');
     doc.setFont('helvetica','bold');doc.setFontSize(9);doc.setTextColor(...navy);
-    doc.text('Section total',16,y+8.5);
-    doc.setFontSize(11);doc.text(fmtD(subtotal),W-14,y+8.5,{align:'right'});
-    y+=16;
+    doc.text('Section total',16,y+5);
+    doc.setFontSize(12);doc.text(fmtD(subtotal),W-14,y+5,{align:'right'});
+    y+=14;
   }
 
   // Drayage
@@ -4851,27 +4346,16 @@ async function downloadTlInternalPDF(idx){
   let y=56;
   const CX=95,CU=145,CP=W-14; // column x positions: carrier, customer, profit
 
-  function checkPageBreak(needed){
-    if(y+needed>272){
-      doc.addPage();
-      doc.setFillColor(...navy);doc.rect(0,0,W,10,'F');
-      doc.setFont('helvetica','bold');doc.setFontSize(7);doc.setTextColor(255,255,255);
-      doc.text('SHIFL - TRANSLOAD RATE SHEET (continued)  |  '+q.customer,12,7);
-      y=16;
-    }
-  }
-
   function sectionHeader(colorArr,title,subInfo){
-    checkPageBreak(40);
     doc.setFillColor(...colorArr);doc.rect(12,y,W-24,10,'F');
     doc.setFont('helvetica','bold');doc.setFontSize(9);doc.setTextColor(255,255,255);
     doc.text(title,16,y+7);
     y+=12;
     if(subInfo){
       doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(100,115,130);
-      const wrapped=doc.splitTextToSize(subInfo,W-30);
-      doc.text(wrapped,16,y+5);y+=wrapped.length*5+4;
+      doc.text(subInfo,16,y+5);y+=9;
     }
+    // Column header row
     doc.setFillColor(240,242,246);doc.rect(12,y,W-24,8,'F');
     doc.setFont('helvetica','bold');doc.setFontSize(7);doc.setTextColor(100,110,130);
     doc.text('SERVICE',16,y+5.5);
@@ -4882,7 +4366,6 @@ async function downloadTlInternalPDF(idx){
   }
 
   function dataRow(label,carrier,customer){
-    checkPageBreak(14);
     const profit=customer-carrier;
     doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(45,55,70);
     doc.text(label,16,y+6);
@@ -4894,7 +4377,6 @@ async function downloadTlInternalPDF(idx){
   }
 
   function sectionSubtotal(carrier,customer){
-    checkPageBreak(20);
     const profit=customer-carrier;
     doc.setFillColor(228,233,242);doc.rect(12,y,W-24,12,'F');
     doc.setFont('helvetica','bold');doc.setFontSize(9.5);doc.setTextColor(...navy);
@@ -5219,318 +4701,7 @@ function renderActive(){
   }).join('');
 
   $('page').innerHTML=statsBar+(filtered.length?cards:`<div class="empty"><div class="empty-ico">🔍</div><p>No ${S.activeFilter==='all'?'active':S.activeFilter.toUpperCase()} shipments</p></div>`);
-}// ═══════════════════════════════════════════════════════
-// AUTH SYSTEM
-// ═══════════════════════════════════════════════════════
-let _currentUser = null;
-
-async function hashPassword(email, password){
-  const data = email.toLowerCase().trim() + ':' + password;
-  const encoded = new TextEncoder().encode(data);
-  const hash = await crypto.subtle.digest('SHA-256', encoded);
-  return Array.from(new Uint8Array(hash)).map(b=>b.toString(16).padStart(2,'0')).join('');
-}
-
-function getSession(){
-  try{
-    const s = localStorage.getItem('shifl_session');
-    if(!s) return null;
-    const parsed = JSON.parse(s);
-    // Expire after 7 days
-    if(Date.now() - parsed.loginTime > 7*24*60*60*1000){localStorage.removeItem('shifl_session');return null;}
-    return parsed;
-  }catch(e){return null;}
-}
-function setSession(user){
-  _currentUser = user;
-  localStorage.setItem('shifl_session',JSON.stringify({...user,loginTime:Date.now()}));
-  updateUserUI();
-}
-function clearSession(){
-  _currentUser = null;
-  localStorage.removeItem('shifl_session');
-  updateUserUI();
-}
-function updateUserUI(){
-  const nameEl=$('user-name-display');const roleEl=$('user-role-display');const infoEl=$('user-info');
-  const adminNav=$('admin-nav-section');
-  if(_currentUser){
-    if(nameEl) nameEl.textContent=_currentUser.name;
-    if(roleEl) roleEl.textContent=_currentUser.role==='admin'?'Admin':'Team member';
-    if(infoEl) infoEl.style.display='';
-    if(adminNav) adminNav.style.display=_currentUser.role==='admin'?'':'none';
-  } else {
-    if(infoEl) infoEl.style.display='none';
-    if(adminNav) adminNav.style.display='none';
-  }
-}
-
-function showLoginScreen(){
-  $('loading-screen').style.display='none';
-  $('login-screen').style.display='flex';
-}
-
-async function doLogin(){
-  const nameEl=$('login-name');const emailEl=$('login-email');const pwEl=$('login-password');const errEl=$('login-error');
-  const email=(emailEl?.value||'').trim().toLowerCase();
-  const password=pwEl?.value||'';
-  const name=(nameEl?.value||'').trim();
-  if(!email||!password){showLoginErr('Please enter your email and password.');return;}
-
-  const btn=$('login-btn');btn.textContent='Signing in...';btn.disabled=true;
-  try{
-    const hash=await hashPassword(email,password);
-    // Check if first user (create admin)
-    const{data:existing}=await db.from('app_users').select('id').limit(1);
-    if(!existing||existing.length===0){
-      if(!name){showLoginErr('Please enter your name.');btn.textContent='Create admin account';btn.disabled=false;return;}
-      // Create first admin
-      const id=uid();
-      const{error}=await db.from('app_users').insert({id,name,email,password_hash:hash,role:'admin',active:true});
-      if(error) throw error;
-      setSession({id,name,email,role:'admin'});
-      await finishLogin();
-    } else {
-      // Normal login
-      const{data:user,error}=await db.from('app_users').select('*').eq('email',email).single();
-      if(error||!user){showLoginErr('No account found with that email.');btn.textContent='Sign in';btn.disabled=false;return;}
-      if(!user.active){showLoginErr('Your account has been deactivated. Contact your admin.');btn.textContent='Sign in';btn.disabled=false;return;}
-      if(user.password_hash!==hash){showLoginErr('Incorrect password.');btn.textContent='Sign in';btn.disabled=false;return;}
-      // Update last login
-      await db.from('app_users').update({last_login:new Date().toISOString()}).eq('id',user.id);
-      setSession({id:user.id,name:user.name,email:user.email,role:user.role});
-      await finishLogin();
-    }
-  }catch(e){
-    showLoginErr('Error: '+e.message);
-    btn.textContent=($('first-user-banner').style.display==='')?'Create admin account':'Sign in';
-    btn.disabled=false;
-  }
-}
-function showLoginErr(msg){const el=$('login-error');if(el){el.textContent=msg;el.style.display='';}}
-
-async function finishLogin(){
-  $('login-screen').style.display='none';
-  $('loading-screen').style.display='flex';
-  $('loading-msg').textContent='Loading your workspace...';
-  await initApp();
-}
-
-function logout(){
-  if(!confirm('Sign out of Shifl?')) return;
-  clearSession();
-  $('app').style.display='none';
-  $('login-screen').style.display='flex';
-  $('login-error').style.display='none';
-  $('login-password').value='';
-  $('login-btn').textContent='Sign in';
-  $('login-btn').disabled=false;
-}
-
-// ── Admin Panel ───────────────────────────────────────────────────────────
-async function renderAdmin(){
-  if(!_currentUser||_currentUser.role!=='admin'){$('page').innerHTML=`<div class="empty"><p>Admin access only.</p></div>`;return;}
-  $('topbar-right').innerHTML=`<button class="btn blue" onclick="showCreateUser()">+ Add user</button>`;
-
-  const{data:users}=await db.from('app_users').select('*').order('created_at',{ascending:true});
-  const rows=(users||[]).map(u=>`<tr>
-    <td class="bold">${u.name}</td>
-    <td class="muted">${u.email}</td>
-    <td><span class="badge ${u.role==='admin'?'b':'gr'}">${u.role==='admin'?'Admin':'User'}</span></td>
-    <td><span class="badge ${u.active?'g':'r'}">${u.active?'Active':'Inactive'}</span></td>
-    <td class="muted small">${u.last_login?new Date(u.last_login).toLocaleDateString():'Never'}</td>
-    <td style="white-space:nowrap">
-      ${u.id!==_currentUser.id?`
-        <button class="btn sm" onclick="showEditUser('${u.id}')">✏️ Edit</button>
-        <button class="btn sm" onclick="showResetPassword('${u.id}','${u.name}')" style="margin-left:4px">🔑 Reset PW</button>
-        <button class="btn sm" onclick="toggleUserActive('${u.id}',${u.active})" style="margin-left:4px">${u.active?'Deactivate':'Activate'}</button>
-        <button class="btn sm" onclick="deleteUser('${u.id}','${u.name}')" style="margin-left:4px;color:#dc2626;border-color:#fca5a5">🗑️</button>
-      `:'<span class="muted small">(you)</span>'}
-    </td>
-  </tr>`).join('');
-
-  $('page').innerHTML=`
-    <div class="card" style="margin-bottom:16px">
-      <div class="sec-head">Team members</div>
-      <div class="tbl-wrap" style="box-shadow:none;border:none;margin:0">
-        <table><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Last login</th><th></th></tr></thead>
-        <tbody>${rows||'<tr><td colspan="6" style="text-align:center;padding:30px;color:var(--gray-400)">No users yet</td></tr>'}</tbody></table>
-      </div>
-    </div>`;
-}
-
-async function toggleUserActive(id,currentActive){
-  if(!confirm(`${currentActive?'Deactivate':'Activate'} this user?`)) return;
-  await db.from('app_users').update({active:!currentActive}).eq('id',id);
-  renderAdmin();
-}
-
-function showEditMyProfile(){
-  if(!_currentUser) return;
-  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
-    <div class="modal"><div class="modal-title">Edit my profile</div>
-    <div class="field"><label>Your name</label>
-      <input type="text" id="mp-name" value="${_currentUser.name}" placeholder="Your name"></div>
-    <div class="field"><label>New password <span style="font-weight:400;color:var(--gray-400)">(leave blank to keep current)</span></label>
-      <input type="password" id="mp-pw" placeholder="Enter new password"></div>
-    <div class="field"><label>Confirm new password</label>
-      <input type="password" id="mp-pw2" placeholder="Confirm new password"></div>
-    <div class="modal-foot">
-      <button class="btn" onclick="closeModal()">Cancel</button>
-      <button class="btn blue" onclick="saveMyProfile()">Save</button>
-    </div></div></div>`;
-}
-
-async function saveMyProfile(){
-  const name=($('mp-name')||{}).value?.trim();
-  const pw=($('mp-pw')||{}).value;
-  const pw2=($('mp-pw2')||{}).value;
-  if(!name){alert('Name is required.');return;}
-  if(pw&&pw!==pw2){alert('Passwords do not match.');return;}
-  try{
-    const updates={name};
-    if(pw){updates.password_hash=await hashPassword(_currentUser.email,pw);}
-    const{error}=await db.from('app_users').update(updates).eq('id',_currentUser.id);
-    if(error) throw error;
-    _currentUser.name=name;
-    const session=getSession();
-    if(session) setSession({..._currentUser});
-    closeModal();updateUserUI();
-    alert('✅ Profile updated!');
-  }catch(e){alert('Error: '+e.message);}
-}
-
-async function showEditUser(id){
-  const{data:u}=await db.from('app_users').select('*').eq('id',id).single();
-  if(!u) return;
-  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
-    <div class="modal"><div class="modal-title">Edit user — ${u.name}</div>
-    <div class="g2">
-      <div class="field"><label>Full name</label><input type="text" id="eu-name" value="${u.name}" placeholder="Full name"></div>
-      <div class="field"><label>Email</label><input type="email" id="eu-email" value="${u.email}" placeholder="email@shifl.com"></div>
-    </div>
-    <div class="field"><label>Role</label>
-      <select id="eu-role">
-        <option value="user" ${u.role==='user'?'selected':''}>Team member</option>
-        <option value="admin" ${u.role==='admin'?'selected':''}>Admin</option>
-      </select>
-    </div>
-    <div class="modal-foot">
-      <button class="btn" onclick="closeModal()">Cancel</button>
-      <button class="btn blue" onclick="saveEditUser('${id}')">Save changes</button>
-    </div></div></div>`;
-}
-
-async function saveEditUser(id){
-  const name=($('eu-name')||{}).value?.trim();
-  const email=($('eu-email')||{}).value?.trim().toLowerCase();
-  const role=($('eu-role')||{}).value||'user';
-  if(!name||!email){alert('Name and email are required.');return;}
-  try{
-    const{error}=await db.from('app_users').update({name,email,role}).eq('id',id);
-    if(error) throw error;
-    closeModal();renderAdmin();
-    alert('✅ User updated.');
-  }catch(e){alert('Error: '+e.message);}
-}
-
-async function deleteUser(id,name){
-  if(!confirm(`Permanently delete "${name}"? This cannot be undone.`)) return;
-  if(!confirm(`Are you sure? All of ${name}'s access will be removed immediately.`)) return;
-  try{
-    const{error}=await db.from('app_users').delete().eq('id',id);
-    if(error) throw error;
-    renderAdmin();
-    alert('✅ User deleted.');
-  }catch(e){alert('Error: '+e.message);}
-}
-
-function showCreateUser(){
-  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
-    <div class="modal"><div class="modal-title">Add team member</div>
-    <div class="g2">
-      <div class="field"><label>Full name *</label><input type="text" id="nu-name" placeholder="e.g. Julianny"></div>
-      <div class="field"><label>Email *</label><input type="email" id="nu-email" placeholder="julianny@shifl.com"></div>
-    </div>
-    <div class="g2">
-      <div class="field"><label>Password *</label><input type="password" id="nu-pw" placeholder="Set a password"></div>
-      <div class="field"><label>Role</label>
-        <select id="nu-role"><option value="user">Team member</option><option value="admin">Admin</option></select></div>
-    </div>
-    <div class="modal-foot">
-      <button class="btn" onclick="closeModal()">Cancel</button>
-      <button class="btn blue" onclick="createUser()">Create account</button>
-    </div></div></div>`;
-}
-
-async function createUser(){
-  const name=($('nu-name')||{}).value?.trim();
-  const email=($('nu-email')||{}).value?.trim().toLowerCase();
-  const pw=($('nu-pw')||{}).value;
-  const role=($('nu-role')||{}).value||'user';
-  if(!name||!email||!pw){alert('Name, email and password are required.');return;}
-  try{
-    const hash=await hashPassword(email,pw);
-    const{error}=await db.from('app_users').insert({id:uid(),name,email,password_hash:hash,role,active:true});
-    if(error) throw error;
-    closeModal();renderAdmin();
-    // Open email client with credentials pre-filled
-    const subject=encodeURIComponent('Your Shifl account is ready');
-    const body=encodeURIComponent(
-      'Hi '+name+',\n\n'+
-      'Your Shifl Freight Quoting account has been created.\n\n'+
-      'Login here: https://mkshifl.github.io/shifl-quoting/\n\n'+
-      'Email: '+email+'\n'+
-      'Password: '+pw+'\n\n'+
-      'Please change your password after your first login.\n\n'+
-      'Thanks,\nShifl Team'
-    );
-    window.open('mailto:'+email+'?subject='+subject+'&body='+body);
-  }catch(e){alert('Error: '+e.message);}
-}
-
-function showResetPassword(id,name){
-  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
-    <div class="modal"><div class="modal-title">Reset password — ${name}</div>
-    <div class="field"><label>New password</label><input type="password" id="rp-pw" placeholder="Enter new password"></div>
-    <div class="modal-foot">
-      <button class="btn" onclick="closeModal()">Cancel</button>
-      <button class="btn blue" onclick="resetPassword('${id}')">Set password</button>
-    </div></div></div>`;
-}
-
-async function resetPassword(id){
-  const pw=($('rp-pw')||{}).value;
-  if(!pw){alert('Enter a new password.');return;}
-  const{data:user}=await db.from('app_users').select('email,name').eq('id',id).single();
-  if(!user){alert('User not found.');return;}
-  const hash=await hashPassword(user.email,pw);
-  await db.from('app_users').update({password_hash:hash}).eq('id',id);
-  closeModal();
-  // Open email with new credentials
-  const subject=encodeURIComponent('Your Shifl password has been reset');
-  const body=encodeURIComponent(
-    'Hi '+user.name+',\n\n'+
-    'Your Shifl password has been reset.\n\n'+
-    'Login here: https://mkshifl.github.io/shifl-quoting/\n\n'+
-    'Email: '+user.email+'\n'+
-    'New password: '+pw+'\n\n'+
-    'Thanks,\nShifl Team'
-  );
-  window.open('mailto:'+user.email+'?subject='+subject+'&body='+body);
-}
-
-// ── Quote attribution helpers ─────────────────────────────────────────────
-function createdByMe(){return _currentUser?{created_by:_currentUser.id,created_by_name:_currentUser.name}:{};}
-function bookedByMe(){return _currentUser?{booked_by:_currentUser.id,booked_by_name:_currentUser.name}:{};}
-function attrLine(q){
-  const parts=[];
-  if(q.created_by_name) parts.push('Created by <strong>'+q.created_by_name+'</strong>');
-  if(q.booked_by_name) parts.push('Booked by <strong>'+q.booked_by_name+'</strong>');
-  return parts.length?'<div style="font-size:11px;color:var(--gray-500);margin-top:6px">'+parts.join(' · ')+'</div>':'';
-}
-
-const regCol={NE:'g',WC:'b',SE:'a',Central:'p'};const ldCol={Live:'b',Drop:'gr',Both:'t'};
+}const regCol={NE:'g',WC:'b',SE:'a',Central:'p'};const ldCol={Live:'b',Drop:'gr',Both:'t'};
 function buildRateRows(){
   const s=S.rSearch.toLowerCase();
   const filtered=S.rates
@@ -5892,8 +5063,6 @@ async function confirmBooking(id, downloadSheet){
       await db.from('quotes').update({status:'Booked',base_markup:q.baseMarkup}).eq('id',id);
     }
     q.status='Booked';
-    q.booked_by=_currentUser?.id||null;
-    q.booked_by_name=_currentUser?.name||null;
     closeModal();
     const t=$('log-tbody');if(t) t.innerHTML=buildLogRows();
     updateActiveBadge();
@@ -6110,10 +5279,6 @@ function showQuoteModal(id){
         ${q.status==='Booked'?'Type to assign — auto-saves':'Mark as Booked to assign ref#'}
       </span>
     </div>
-    ${(q.created_by_name||q.booked_by_name)?`<div style="font-size:11px;color:var(--gray-500);padding:6px 2px;display:flex;gap:16px;margin-bottom:10px">
-      ${q.created_by_name?`<span>✍️ Created by <strong>${q.created_by_name}</strong></span>`:''}
-      ${q.booked_by_name?`<span>✅ Booked by <strong>${q.booked_by_name}</strong></span>`:''}
-    </div>`:''}
     <div style="border:1px solid var(--gray-200);border-radius:var(--radius);overflow:hidden;margin-bottom:16px">
       <table style="width:100%;font-size:13px;border-collapse:collapse">
         <thead><tr style="background:var(--gray-50)"><th style="padding:8px 12px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-500)">Charge</th><th style="padding:8px 12px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-400)">Carrier cost</th><th style="padding:8px 12px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--steel)">Customer price</th><th style="padding:8px 12px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--green)">Profit</th></tr></thead>
@@ -6124,13 +5289,7 @@ function showQuoteModal(id){
       ${q.status==='Booked'?`<button class="btn green" onclick="downloadCarrierRateSheet(S.quotes.find(q=>q.id==='${id}'),null)">📋 Carrier rate sheet</button>`:''}
       <button class="btn" onclick="printSavedQuote('${id}')">🖨️ Print</button>
       <button class="btn blue" onclick="downloadSavedPDF('${id}')">📄 Download PDF</button></div>
-    <div id="docs-section-${id}"><div style="padding:14px 0;color:var(--gray-400);font-size:12px">Loading documents…</div></div>
   </div></div>`;
-  // Load and inject docs async
-  loadDocs(id,'drayage').then(docs=>{
-    const el=$('docs-section-'+id);
-    if(el) el.innerHTML=buildDocSection(id,'drayage',docs);
-  });
 }
 async function downloadSelectedDrayPDFs(){
   const ids=Array.from(window._draySelected||[]);
@@ -6214,18 +5373,30 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape') closeModal();});
 // BOOT — load Supabase client then check for saved config
 // ═══════════════════════════════════════════════════════
 async function boot(){
-  try{
-    await Promise.race([
-      new Promise((res,rej)=>{const s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';s.onload=res;s.onerror=rej;document.head.appendChild(s);}),
-      new Promise((_,rej)=>setTimeout(()=>rej(new Error('CDN timeout')),10000))
-    ]);
-  }catch(e){$('loading-screen').style.display='none';$('setup-screen').style.display='flex';return;}
-  const url=localStorage.getItem('sb_url');const key=localStorage.getItem('sb_key');
+  // Load Supabase JS
+  await new Promise((res,rej)=>{
+    const s=document.createElement('script');
+    s.src='https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
+    s.onload=res; s.onerror=rej;
+    document.head.appendChild(s);
+  });
+  const url=localStorage.getItem('sb_url');
+  const key=localStorage.getItem('sb_key');
   if(url&&key){
-    try{const{createClient}=window.supabase;db=createClient(url,key);}catch(e){}
-    checkAuthAndProceed();
-  }else{
-    $('loading-screen').style.display='none';$('setup-screen').style.display='flex';
+    const{createClient}=window.supabase;
+    db=createClient(url,key);
+    try{
+      const{error}=await db.from('rates').select('id').limit(1);
+      if(error) throw error;
+      await initApp();
+    }catch(e){
+      db=null;
+      $('loading-screen').style.display='none';
+      $('setup-screen').style.display='flex';
+    }
+  } else {
+    $('loading-screen').style.display='none';
+    $('setup-screen').style.display='flex';
   }
 }
 boot().catch(e=>{$('loading-screen').style.display='none';$('setup-screen').style.display='flex';});
