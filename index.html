@@ -414,8 +414,8 @@ hr{border:none;border-top:1px solid var(--gray-100);margin:14px 0}
 // ═══════════════════════════════════════════════════════
 // CHARGES
 // ═══════════════════════════════════════════════════════
-const CHARGES=['base','chassis','prepull','det_port','det_cust','storage','ovw43','ovw48','bobtail','toll'];
-const LABELS={base:'Base',chassis:'Chassis',prepull:'Pre-pull',det_port:'Detention – Port',det_cust:'Detention – Customer',storage:'Storage',ovw43:'OVW (Over 43k lb)',ovw48:'OVW (Over 48k lb)',bobtail:'Bobtail',toll:'Toll'};
+const CHARGES=['base','chassis','prepull','det_port','det_cust','storage','ovw43','ovw48','bobtail','toll','genset'];
+const LABELS={base:'Base',chassis:'Chassis',prepull:'Pre-pull',det_port:'Detention – Port',det_cust:'Detention – Customer',storage:'Storage',ovw43:'OVW (Over 43k lb)',ovw48:'OVW (Over 48k lb)',bobtail:'Bobtail',toll:'Toll',genset:'Genset'};
 const US_PORTS=[
   // ── East Coast Seaports ─────────────────────────────────────
   'New York / Newark, NJ','Port Newark Container Terminal, NJ','APM Terminals Elizabeth, NJ',
@@ -496,7 +496,7 @@ function isApplicable(c,ld){
   if(c==='bobtail'&&ld==='Live') return false;
   return true;
 }
-const DEFAULT_FLAT_RATES={chassis:45,prepull:175,det_port:100,det_cust:100,storage:60,ovw43:200,ovw48:350,bobtail:0,toll:30};
+const DEFAULT_FLAT_RATES={chassis:45,prepull:175,det_port:100,det_cust:100,storage:60,ovw43:200,ovw48:350,bobtail:0,toll:30,genset:0};
 const DEFAULT_BASE_MARKUP={amount:150,mode:'flat'};
 const US_CFS=[
   // ── Los Angeles / Long Beach, CA ──────────────────────────
@@ -784,7 +784,7 @@ let S={
   selId:null,rSearch:'',logFilter:'all',dashFilter:'month',cSearch:'',
   fq:{mode:null,equipment:null,pickupZip:'',deliveryZip:'',weight:'',palletCount:'',
       pallets:[{w:'',l:'',h:''}],sameDims:true,singleW:'',singleL:'',singleH:'',
-      notes:'',customer:'',customerEmail:'',customerId:null,
+      notes:'',customer:'',customerEmail:'',customerId:null,shiflRef:'',
       carriers:[{name:'',rate:''}], markupMode:'flat', markupAmount:150, selCarrierIdx:0,
       selFqRateId:null, lclDetentionHours:0, lclPalletExchange:0,
       lclPriceBy:'pallets', cbm:0, transitTime:'',
@@ -1583,6 +1583,8 @@ function renderFqBuilder(){
         `:''}
         <div class="field"><label>Special instructions (optional)</label>
           <input type="text" value="${fq.notes}" oninput="fqField('notes',this.value)" placeholder="e.g. liftgate, appointment, hazmat"></div>
+        <div class="field"><label>Shifl Ref #</label>
+          <input type="text" value="${fq.shiflRef||''}" oninput="fqField('shiflRef',this.value)" placeholder="Assigned after booking"></div>
         ${fq.mode==='LTL'||(fq.mode==='LCL'&&fq.equipment==='LTL')||fq.mode==='FTL'?`
         <div class="field"><label>Estimated transit time</label>
           <input type="text" value="${fq.transitTime||''}" oninput="fqField('transitTime',this.value)" placeholder="e.g. 3-5 business days"></div>`:''}
@@ -2237,7 +2239,7 @@ async function saveFqQuote(){
     markupMode:fq.markupMode,markupAmount:fq.markupAmount,
     profit:customerRate-carrierRate,
     profitPct:customerRate>0?(customerRate-carrierRate)/customerRate:0,
-    status:'Quoted',notes:fq.notes,transitTime:fq.transitTime||'',
+    status:'Quoted',notes:fq.notes,transitTime:fq.transitTime||'',shiflRef:fq.shiflRef||'',
     created_by:_currentUser?.id||null,created_by_name:_currentUser?.name||null,
   };
   if(!window._fqHistory) window._fqHistory=[];
@@ -3243,7 +3245,7 @@ function defaultTlState(){
     selFtlId:null,outManualCarrier:'',outManualRate:'',outManualCustomer:'',
     outMarkupMode:'flat',outMarkupAmount:200,
     outMultiStop:false,outStops:[{zip:'',address:'',carrier:'',carrierRate:'',customerRate:''}],
-    notes:''};
+    notes:'',shiflRef:''};
 }
 
 // Warehouses DB
@@ -3910,6 +3912,11 @@ function buildTlStep4(tl){
       <textarea rows="3" oninput="S.tl.notes=this.value" placeholder="Add any conditions or instructions…"
         style="width:100%;padding:8px 10px;font-size:12px;border:1px solid var(--gray-200);border-radius:var(--radius);resize:vertical;font-family:inherit">${tl.notes}</textarea>
     </div>
+    <div class="field" style="margin-top:12px">
+      <label>Shifl Ref #</label>
+      <input type="text" value="${tl.shiflRef||''}" oninput="S.tl.shiflRef=this.value" placeholder="Assigned after booking"
+        style="width:100%;padding:8px 10px;font-size:13px;border:1px solid var(--gray-200);border-radius:var(--radius);font-family:inherit">
+    </div>
   </div>
   <div style="display:flex;justify-content:space-between;margin-top:16px;gap:10px">
     <button class="btn" onclick="S.tl.step=3;renderTlBuilder()">← Back</button>
@@ -4198,7 +4205,7 @@ async function saveTlQuote(){
     outCarrierCost:t.outCarrier,outCustomerPrice:t.outCustomer,
     totalCarrier:t.totalCarrier,totalCustomer:t.totalCustomer,
     profit:t.totalProfit,profitPct:t.margin,
-    notes:tl.notes,status:'Quoted',
+    notes:tl.notes,shiflRef:tl.shiflRef||'',status:'Quoted',
     rawTl:JSON.parse(JSON.stringify(tl))
   };
   if(!window._tlHistory) window._tlHistory=[];
@@ -4928,7 +4935,7 @@ function rateFields(r){
   <div class="charge-group-label">Drop moves</div>
   <div class="g2">${fld('bobtail','Bobtail',null,'Drop moves only')}</div>
   <div class="charge-group-label">Toll <span class="cond-note">(enter only if applicable — e.g. PLBNY, bridge)</span></div>
-  <div class="g2">${fld('toll','Toll',null,'leave $0 if no toll on this lane')}</div>
+  <div class="g2">${fld('toll','Toll',null,'leave $0 if no toll on this lane')}${fld('genset','Genset',null,'reefer/temp-controlled only')}</div>
   <div class="field" style="margin-top:8px"><label>Notes (optional)</label><input type="text" id="f-notes" value="${r?r.notes:''}" placeholder="e.g. customer name"></div>`;
 }
 const _modalXBtn='<button onclick="closeRateModal()" style="position:absolute;top:12px;right:14px;background:none;border:none;font-size:22px;cursor:pointer;color:var(--gray-400);line-height:1" title="Close">×</button>';
