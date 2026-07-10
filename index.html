@@ -299,6 +299,10 @@ hr{border:none;border-top:1px solid var(--gray-100);margin:14px 0}
       </div>
     </div>
     <nav class="nav">
+      <button class="nav-btn" onclick="setView('active')" id="nav-active" style="border-left-color:transparent;position:relative">
+        <span class="ico">🟢</span>Active Shipments
+        <span id="active-badge" style="margin-left:auto;background:#22c55e;color:#fff;border-radius:99px;font-size:10px;font-weight:700;padding:2px 8px;min-width:20px;text-align:center;display:none">0</span>
+      </button>
       <div style="padding:10px 18px 4px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:rgba(255,255,255,.28)">Drayage</div>
       <button class="nav-btn active" onclick="setView('quote')" id="nav-quote"><span class="ico">📋</span>Quote builder</button>
       <button class="nav-btn" onclick="setView('customers')" id="nav-customers"><span class="ico">👥</span>Customers</button>
@@ -725,6 +729,7 @@ let S={
       lclPriceBy:'pallets', cbm:0, transitTime:'',
       calc:{l:'',w:'',h:'',pieces:'',weightLbs:'',unit:'in'}},
   fqTab:'builder',
+  activeFilter:'all',
   tl:null, // initialized in boot via defaultTlState()
   tlTab:'builder',
 };
@@ -751,8 +756,9 @@ async function initApp(){
   await loadTlHistory();
   loadSpecialZips();
   loadCustomCFS();
-  // One-time migration: push any localStorage quotes to Supabase
+  loadActiveTracking();
   migrateLocalStorageToSupabase().catch(e=>console.log('Migration:',e.message));
+  updateActiveBadge();
   S.tl=defaultTlState();
   // Real-time subscriptions
   realtimeChannel=db.channel('app-changes')
@@ -805,17 +811,18 @@ function setView(v){
   S.view=v;
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
   const navEl=$('nav-'+v);if(navEl) navEl.classList.add('active');
-  $('view-title').textContent={quote:'Quote builder',customers:'Customers',rates:'Carrier rates',log:'Quote log',dash:'Dashboard',freight:'Freight Quoting',transload:'Transload Quoting'}[v];
+  $('view-title').textContent={quote:'Quote builder',customers:'Customers',rates:'Carrier rates',log:'Quote log',dash:'Dashboard',freight:'Freight Quoting',transload:'Transload Quoting',active:'Active Shipments'}[v];
   render();
 }
 function render(){
-  if(S.view==='quote') renderQuote();
-  else if(S.view==='customers') renderCustomers();
-  else if(S.view==='rates') renderRates();
-  else if(S.view==='log') renderLog();
-  else if(S.view==='freight') renderFreight();
-  else if(S.view==='transload') renderTransload();
-  else renderDash();
+  if(S.view==='quote')      renderQuote();
+  else if(S.view==='customers')  renderCustomers();
+  else if(S.view==='rates')      renderRates();
+  else if(S.view==='log')        renderLog();
+  else if(S.view==='active')     renderActive();
+  else if(S.view==='freight')    renderFreight();
+  else if(S.view==='transload')  renderTransload();
+  else                           renderDash();
 }
 
 // ═══════════════════════════════════════════════════════
@@ -1601,6 +1608,7 @@ function renderFqLog(){
           <option${q.status==='Booked'?' selected':''}>Booked</option>
           <option${q.status==='Lost'?' selected':''}>Lost</option>
           <option${q.status==='Cancelled'?' selected':''}>Cancelled</option>
+          <option${q.status==='Delivered'?' selected':''}>Delivered</option>
         </select>
       </td>
       <td onclick="event.stopPropagation()" style="white-space:nowrap">
@@ -1692,6 +1700,7 @@ function updateFqStatus(idx,status){
   q.status=status;
   try{localStorage.setItem('fq_history',JSON.stringify(window._fqHistory));}catch(e){}
   try{dbUpdateFqStatus(q.id,status);}catch(e){}
+  updateActiveBadge();
   if(S.fqTab==='log') renderFqLog();
   if(S.fqTab==='dash') renderFqDashboard();
 }
@@ -1741,7 +1750,9 @@ function confirmFqBooking(idx, downloadSheet){
   q.status='Booked';
   q.bookedDate=new Date().toISOString().slice(0,10);
   try{localStorage.setItem('fq_history',JSON.stringify(window._fqHistory));}catch(e){}
+  try{dbUpdateFqStatus(q.id,'Booked');}catch(e){}
   closeModal();
+  updateActiveBadge();
   if(S.fqTab==='log') renderFqLog();
   if(S.fqTab==='dash') renderFqDashboard();
   if(downloadSheet) downloadFqCarrierPDF(idx);
@@ -3917,6 +3928,7 @@ function updateTlStatus(idx,status){
   const q=window._tlHistory[idx];q.status=status;
   try{localStorage.setItem('tl_history',JSON.stringify(window._tlHistory));}catch(e){}
   try{dbUpdateTlStatus(q.id,status);}catch(e){}
+  updateActiveBadge();
 }
 function deleteTlQuote(idx){
   if(!confirm('Delete this quote?')) return;
@@ -4440,7 +4452,241 @@ async function downloadTlInternalPDF(idx){
 }
 
 // ═══════════════════════════════════════════════════════
-const regCol={NE:'g',WC:'b',SE:'a',Central:'p'};const ldCol={Live:'b',Drop:'gr',Both:'t'};
+// ═══════════════════════════════════════════════════════
+// ACTIVE SHIPMENTS
+// ═══════════════════════════════════════════════════════
+const CARRIER_TRACK_URLS={
+  'xpo':           'https://www.xpo.com/en-us/tracking?trackingNumber={pro}',
+  'fedex':         'https://www.fedex.com/fedextrack/?tracknumbers={pro}',
+  'fedex freight': 'https://www.fedex.com/fedextrack/?tracknumbers={pro}',
+  'old dominion':  'https://www.odfl.com/us/en/tools/tracking.html?proNumber={pro}',
+  'odfl':          'https://www.odfl.com/us/en/tools/tracking.html?proNumber={pro}',
+  'estes':         'https://www.estes-express.com/myestes/shipment-tracking/?search={pro}',
+  'abf':           'https://arcb.com/tools/tracking.html?pro={pro}',
+  'saia':          'https://www.saia.com/track/details?pro={pro}',
+  'r+l':           'https://www.rlcarriers.com/freight/shipping/r-l-carriers-tracking/?pro={pro}',
+  'r&l':           'https://www.rlcarriers.com/freight/shipping/r-l-carriers-tracking/?pro={pro}',
+  'averitt':       'https://www.averittexpress.com/tools/track-a-shipment.jsf?trackValues={pro}',
+  'southeastern':  'https://www.sefl.com/freight-tracking/?proNumber={pro}',
+  'sefl':          'https://www.sefl.com/freight-tracking/?proNumber={pro}',
+  'ups':           'https://www.ups.com/track?tracknum={pro}',
+  'forward air':   'https://www.forwardair.com/en/tracing/pro-trace?proNumber={pro}',
+  'pilot':         'https://www.pilotdelivers.com/track/?tracknumber={pro}',
+};
+function getCarrierTrackUrl(carrier,pro){
+  if(!carrier||!pro) return null;
+  const key=carrier.toLowerCase().trim();
+  for(const[name,url]of Object.entries(CARRIER_TRACK_URLS)){
+    if(key.includes(name)) return url.replace('{pro}',encodeURIComponent(pro));
+  }
+  return null;
+}
+function loadActiveTracking(){try{window._activeTracking=JSON.parse(localStorage.getItem('active_tracking')||'{}');}catch(e){window._activeTracking={};}}
+function saveActiveTracking(){try{localStorage.setItem('active_tracking',JSON.stringify(window._activeTracking));}catch(e){}}
+function setActiveTracking(id,key,val){
+  if(!window._activeTracking) window._activeTracking={};
+  if(!window._activeTracking[id]) window._activeTracking[id]={};
+  window._activeTracking[id][key]=val;
+  saveActiveTracking();
+  renderActive();
+}
+function getAllActiveShipments(){
+  const active=[];
+  (S.quotes||[]).filter(q=>q.status==='Booked').forEach(q=>{
+    active.push({type:'drayage',id:q.id,customer:q.customer,carrier:q.carrier,
+      date:q.date,bookedDate:q.baseMarkup?.bookedDate||q.date,
+      from:q.port,to:q.zip,mode:q.ld,destination:q.destination,
+      total:q.customerRates?.total||0,shiflRef:q.shiflRef});
+  });
+  (window._fqHistory||[]).filter(q=>q.status==='Booked').forEach(q=>{
+    active.push({type:'freight',id:q.id,customer:q.customer,carrier:q.carrier,
+      date:q.date,bookedDate:q.bookedDate||q.date,
+      fqMode:q.fqMode,fqEquip:q.fqEquip,
+      from:q.pickupZip,to:q.deliveryZip,total:q.customerRate||0,
+      weight:q.weight,palletCount:q.palletCount,transitTime:q.transitTime});
+  });
+  (window._tlHistory||[]).filter(q=>q.status==='Booked').forEach(q=>{
+    active.push({type:'transload',id:q.id,customer:q.customer,
+      carrier:q.outCarrier,date:q.date,bookedDate:q.bookedDate||q.date,
+      from:q.drayPort,warehouse:q.warehouseName,to:q.outDeliveryZip,
+      outMode:q.outMode,total:q.totalCustomer||0});
+  });
+  return active.sort((a,b)=>(b.bookedDate||b.date).localeCompare(a.bookedDate||a.date));
+}
+function updateActiveBadge(){
+  const count=getAllActiveShipments().length;
+  const badge=$('active-badge');
+  if(badge){badge.textContent=count;badge.style.display=count>0?'':'none';}
+}
+function markShipmentClosed(type,id,closeStatus){
+  if(!confirm('Mark as "'+closeStatus+'" and remove from Active?')) return;
+  if(type==='drayage'){const q=S.quotes.find(q=>q.id===id);if(q){q.status=closeStatus;dbSaveQuote(q).catch(()=>{});}}
+  else if(type==='freight'){const q=(window._fqHistory||[]).find(q=>q.id===id);if(q){q.status=closeStatus;try{dbUpdateFqStatus(id,closeStatus);}catch(e){}try{localStorage.setItem('fq_history',JSON.stringify(window._fqHistory));}catch(e){}}}
+  else if(type==='transload'){const q=(window._tlHistory||[]).find(q=>q.id===id);if(q){q.status=closeStatus;try{dbUpdateTlStatus(id,closeStatus);}catch(e){}try{localStorage.setItem('tl_history',JSON.stringify(window._tlHistory));}catch(e){}}}
+  updateActiveBadge();renderActive();
+}
+function renderActive(){
+  const all=getAllActiveShipments();
+  if(!window._activeTracking) window._activeTracking={};
+  $('topbar-right').innerHTML=`<button class="btn" onclick="updateActiveBadge();renderActive()">⟳ Refresh</button>`;
+
+  // ── Stats bar ────────────────────────────────────────────────────────────
+  const counts={all:all.length,drayage:all.filter(s=>s.type==='drayage').length,
+    ltl:all.filter(s=>s.type==='freight'&&s.fqMode==='LTL').length,
+    ftl:all.filter(s=>s.type==='freight'&&s.fqMode==='FTL').length,
+    transload:all.filter(s=>s.type==='transload').length};
+  const urgent=all.filter(s=>window._activeTracking[s.id]?.urgent).length;
+  const filters=[
+    {id:'all',label:'All',count:counts.all,color:'var(--navy)'},
+    {id:'drayage',label:'Drayage',count:counts.drayage,color:'#3b6ea5'},
+    {id:'ltl',label:'LTL',count:counts.ltl,color:'#6d28d9'},
+    {id:'ftl',label:'FTL',count:counts.ftl,color:'#1d6b8c'},
+    {id:'transload',label:'Transload',count:counts.transload,color:'#d97706'},
+  ];
+
+  const statsBar=`<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:16px">
+    ${filters.map(f=>`
+      <div onclick="S.activeFilter='${f.id}';renderActive()" style="cursor:pointer;border-radius:var(--radius-lg);padding:14px 16px;
+        background:${S.activeFilter===f.id?f.color:'var(--white)'};
+        border:2px solid ${S.activeFilter===f.id?f.color:'var(--gray-200)'};
+        box-shadow:${S.activeFilter===f.id?'0 4px 12px '+f.color+'44':'var(--shadow-sm)'};
+        transition:all .15s;text-align:center">
+        <div style="font-size:28px;font-weight:800;color:${S.activeFilter===f.id?'#fff':f.color}">${f.count}</div>
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:${S.activeFilter===f.id?'rgba(255,255,255,.8)':'var(--gray-400)'};margin-top:2px">${f.label}</div>
+      </div>`).join('')}
+  </div>
+  ${urgent>0?`<div style="background:#fff0f0;border:1px solid #fca5a5;border-radius:var(--radius);padding:8px 14px;margin-bottom:14px;display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:#dc2626">
+    🔥 ${urgent} shipment${urgent!==1?'s':''} marked hot
+  </div>`:''}`;
+
+  // ── Filter + empty state ──────────────────────────────────────────────────
+  const filtered=all.filter(s=>{
+    if(S.activeFilter==='all') return true;
+    if(S.activeFilter==='drayage') return s.type==='drayage';
+    if(S.activeFilter==='ltl') return s.type==='freight'&&s.fqMode==='LTL';
+    if(S.activeFilter==='ftl') return s.type==='freight'&&s.fqMode==='FTL';
+    if(S.activeFilter==='transload') return s.type==='transload';
+    return true;
+  });
+  // Sort: urgent first, then by booked date
+  filtered.sort((a,b)=>{
+    const au=window._activeTracking[a.id]?.urgent?1:0;
+    const bu=window._activeTracking[b.id]?.urgent?1:0;
+    if(bu!==au) return bu-au;
+    return (b.bookedDate||b.date).localeCompare(a.bookedDate||a.date);
+  });
+
+  if(!all.length){
+    $('page').innerHTML=`${statsBar}<div class="empty">
+      <div style="font-size:48px;margin-bottom:12px">🟢</div>
+      <p style="font-size:16px;font-weight:600;color:var(--navy)">No active shipments</p>
+      <small style="color:var(--gray-400)">Mark any quote as Booked and it will appear here</small>
+    </div>`;return;
+  }
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
+  function daysAgo(dateStr){
+    const d=new Date(dateStr);const now=new Date();
+    return Math.floor((now-d)/(1000*60*60*24));
+  }
+  function countdown(expectedStr){
+    if(!expectedStr) return null;
+    const exp=new Date(expectedStr);const now=new Date();
+    now.setHours(0,0,0,0);exp.setHours(0,0,0,0);
+    const diff=Math.floor((exp-now)/(1000*60*60*24));
+    if(diff>1)  return{label:`Due in ${diff} days`,color:'#22c55e',bg:'#f0fdf4'};
+    if(diff===1)return{label:'Due tomorrow',color:'#f59e0b',bg:'#fffbeb'};
+    if(diff===0)return{label:'Due TODAY',color:'#ef4444',bg:'#fff0f0',pulse:true};
+    return{label:`OVERDUE ${Math.abs(diff)} day${Math.abs(diff)!==1?'s':''}`,color:'#dc2626',bg:'#fff0f0',pulse:true};
+  }
+
+  const typeColors={
+    drayage:{color:'#3b6ea5',bg:'#eff6ff',icon:'🚢',label:'Drayage'},
+    freight:{color:'#6d28d9',bg:'#f5f3ff',icon:'🚛',label:'Freight'},
+    transload:{color:'#d97706',bg:'#fffbeb',icon:'🔄',label:'Transload'}};
+
+  const cards=filtered.map(s=>{
+    const tc=typeColors[s.type]||typeColors.freight;
+    const tracking=window._activeTracking[s.id]||{};
+    const autoUrl=getCarrierTrackUrl(s.carrier,tracking.pro);
+    const trackUrl=tracking.trackingUrl||autoUrl||'';
+    const needsTracking=s.type==='freight'&&(s.fqMode==='LTL'||s.fqMode==='FTL');
+    const closeLabel=s.type==='drayage'?'Container Returned':'Delivered';
+    const daysActive=daysAgo(s.bookedDate||s.date);
+    const cd=countdown(tracking.expectedDate);
+    const isUrgent=!!tracking.urgent;
+    const borderColor=isUrgent?'#ef4444':tc.color+'33';
+    return `<div style="border:2px solid ${borderColor};border-radius:12px;overflow:hidden;box-shadow:${isUrgent?'0 0 0 3px #fecaca':'0 2px 8px rgba(0,0,0,.06)'};margin-bottom:14px">
+      <div style="background:${isUrgent?'#fff0f0':tc.bg};border-bottom:1px solid ${borderColor};padding:12px 18px;display:flex;align-items:center;justify-content:space-between">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="font-size:22px">${isUrgent?'🔥':tc.icon}</span>
+          <div>
+            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:${isUrgent?'#dc2626':tc.color}">
+              ${tc.label}${s.fqMode?' - '+fqTypeLabel(s):''}${s.outMode?' - '+s.outMode:''}
+              ${isUrgent?'<span style="background:#ef4444;color:#fff;border-radius:4px;padding:1px 6px;font-size:9px;margin-left:6px">URGENT</span>':''}
+            </div>
+            <div style="font-size:17px;font-weight:800;color:var(--navy)">${s.customer}</div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px">
+          <button onclick="setActiveTracking('${s.id}','urgent',${!isUrgent})"
+            style="background:${isUrgent?'#ef4444':'transparent'};border:1px solid ${isUrgent?'#ef4444':'var(--gray-300)'};border-radius:var(--radius);padding:5px 10px;cursor:pointer;font-size:12px;font-weight:600;color:${isUrgent?'#fff':'var(--gray-400)'}">
+            🔥 ${isUrgent?'Urgent':'Flag'}
+          </button>
+          <div style="text-align:right">
+            <div style="font-size:17px;font-weight:800;color:var(--steel)">${fmtD(s.total)}</div>
+            <div style="font-size:11px;color:var(--gray-400)">Day ${daysActive} - Booked ${s.bookedDate||s.date}</div>
+          </div>
+        </div>
+      </div>
+      <div style="padding:14px 18px">
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin-bottom:12px">
+          <div><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--gray-400);margin-bottom:2px">Carrier</div><div style="font-weight:600;color:var(--navy)">${s.carrier||'—'}</div></div>
+          <div><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--gray-400);margin-bottom:2px">From</div><div style="font-weight:500">${s.from?s.from.split(',')[0]:'—'}</div></div>
+          <div><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--gray-400);margin-bottom:2px">${s.type==='transload'?'Warehouse':'Delivery'}</div><div style="font-weight:500">${s.type==='transload'?(s.warehouse||'—'):(s.to||'—')}</div></div>
+          ${s.shiflRef?`<div><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--gray-400);margin-bottom:2px">Ref#</div><div style="font-weight:600;color:var(--steel)">${s.shiflRef}</div></div>`:''}
+          ${s.mode?`<div><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--gray-400);margin-bottom:2px">Mode</div><div style="font-weight:500">${s.mode}</div></div>`:''}
+          <div><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--gray-400);margin-bottom:2px">Expected delivery</div>
+            <input type="date" value="${tracking.expectedDate||''}" onchange="setActiveTracking('${s.id}','expectedDate',this.value)"
+              style="font-size:12px;padding:3px 6px;border:1px solid var(--gray-200);border-radius:var(--radius);color:var(--navy);width:100%"></div>
+        </div>
+        ${cd?`<div style="background:${cd.bg};border:1px solid ${cd.color}44;border-radius:var(--radius);padding:8px 14px;margin-bottom:12px;display:flex;align-items:center;gap:8px">
+          <span style="font-size:14px">${cd.color==='#22c55e'?'checkmark':cd.color==='#f59e0b'?'warning':'alert'}</span>
+          <span style="font-weight:700;color:${cd.color};font-size:13px">${cd.label}</span>
+          ${s.transitTime?`<span style="color:var(--gray-400);font-size:12px;margin-left:4px">- Est. ${s.transitTime}</span>`:''}
+        </div>`:(s.transitTime?`<div style="background:var(--gray-50);border-radius:var(--radius);padding:6px 12px;margin-bottom:12px;font-size:12px;color:var(--gray-500)">Est. transit: ${s.transitTime} - set expected date above</div>`:'')}
+        ${needsTracking?`<div style="background:var(--gray-50);border:1px solid var(--gray-200);border-radius:var(--radius);padding:12px 14px;margin-bottom:12px">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-500);margin-bottom:8px">Tracking</div>
+          <div style="display:flex;align-items:flex-end;gap:8px;flex-wrap:wrap">
+            <div><div style="font-size:10px;color:var(--gray-400);margin-bottom:3px">PRO / Tracking #</div>
+              <input type="text" value="${tracking.pro||''}" placeholder="Enter PRO #" onchange="setActiveTracking('${s.id}','pro',this.value)"
+                style="width:150px;padding:6px 10px;font-size:13px;font-weight:600;border:1px solid var(--gray-300);border-radius:var(--radius)"></div>
+            <div style="flex:1;min-width:180px"><div style="font-size:10px;color:var(--gray-400);margin-bottom:3px">Tracking link${autoUrl?' (auto-detected)':''}</div>
+              <input type="text" value="${trackUrl}" placeholder="Paste URL or enter PRO# above" onchange="setActiveTracking('${s.id}','trackingUrl',this.value)"
+                style="width:100%;padding:6px 10px;font-size:12px;border:1px solid var(--gray-300);border-radius:var(--radius)"></div>
+            <button onclick="${trackUrl?`window.open('${trackUrl}','_blank')`:'alert(\'Enter PRO# or tracking URL first\')'}"
+              style="padding:6px 18px;background:${trackUrl?'var(--steel)':'var(--gray-200)'};color:${trackUrl?'#fff':'var(--gray-400)'};border:none;border-radius:var(--radius);cursor:pointer;font-size:13px;font-weight:700">
+              Track
+            </button>
+          </div>
+          ${autoUrl&&!tracking.trackingUrl?`<div style="font-size:11px;color:#22c55e;margin-top:6px;font-weight:600">${s.carrier} tracking detected - enter PRO# to activate</div>`:''}
+        </div>`:''}
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <button onclick="${s.type==='drayage'?`setView('log');render();setTimeout(()=>showQuoteModal('${s.id}'),100)`:s.type==='freight'?`setView('freight');setFqTab('log');setTimeout(()=>{const idx=(window._fqHistory||[]).findIndex(q=>q.id==='${s.id}');if(idx>=0)showFqQuoteModal(idx);},100)`:`setView('transload');setTlTab('log');setTimeout(()=>{const idx=(window._tlHistory||[]).findIndex(q=>q.id==='${s.id}');if(idx>=0)showTlQuoteModal(idx);},100)`}"
+            style="padding:7px 16px;background:transparent;color:var(--steel);border:1px solid var(--steel);border-radius:var(--radius);cursor:pointer;font-size:12px;font-weight:600">
+            View quote
+          </button>
+          <button onclick="markShipmentClosed('${s.type}','${s.id}','${closeLabel}')"
+            style="padding:8px 22px;background:${s.type==='drayage'?'#3b6ea5':'#22c55e'};color:#fff;border:none;border-radius:var(--radius);cursor:pointer;font-size:13px;font-weight:700">
+            ${closeLabel}
+          </button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+
+  $('page').innerHTML=statsBar+(filtered.length?cards:`<div class="empty"><div class="empty-ico">🔍</div><p>No ${S.activeFilter==='all'?'active':S.activeFilter.toUpperCase()} shipments</p></div>`);
+}const regCol={NE:'g',WC:'b',SE:'a',Central:'p'};const ldCol={Live:'b',Drop:'gr',Both:'t'};
 function buildRateRows(){
   const s=S.rSearch.toLowerCase();
   const filtered=S.rates
@@ -4675,7 +4921,7 @@ function buildLogRows(){
       <td class="bold" style="color:var(--steel)">${fmtD(q.customerRates?.total||0)}</td>
       <td style="color:var(--green);font-weight:600">+${fmtD(q.profit||0)}</td>
       <td><span class="badge ${(q.profitPct||0)>=0.10?'g':'r'}">${pct(q.profitPct||0)}</span></td>
-      <td onclick="event.stopPropagation()"><select onchange="updateStatus('${q.id}',this.value)" style="font-size:12px;padding:4px 7px;width:120px"><option${q.status==='Quoted'?' selected':''}>Quoted</option><option${q.status==='Booked'?' selected':''}>Booked</option><option${q.status==='Lost'?' selected':''}>Lost</option><option${q.status==='Cancelled'?' selected':''}>Cancelled</option><option${q.status==='Expired'?' selected':''}>Expired</option></select></td>
+      <td onclick="event.stopPropagation()"><select onchange="updateStatus('${q.id}',this.value)" style="font-size:12px;padding:4px 7px;width:120px"><option${q.status==='Quoted'?' selected':''}>Quoted</option><option${q.status==='Booked'?' selected':''}>Booked</option><option${q.status==='Lost'?' selected':''}>Lost</option><option${q.status==='Cancelled'?' selected':''}>Cancelled</option><option${q.status==='Expired'?' selected':''}>Expired</option><option${q.status==='Container Returned'?' selected':''}>Container Returned</option></select></td>
       <td onclick="event.stopPropagation()" style="white-space:nowrap">
         ${q.status==='Booked'?`<button class="btn sm ico-btn" onclick="downloadCarrierRateSheet(S.quotes.find(q=>q.id==='${q.id}'),null)" title="Carrier rate sheet" style="color:var(--green)">📋</button>`:''}
         <button class="btn sm ico-btn" onclick="downloadSavedPDF('${q.id}')" title="Customer PDF" style="margin-left:3px">📄</button>
@@ -4722,12 +4968,9 @@ function renderLog(){
 }
 function onLogFilter(v){S.logFilter=v;const t=$('log-tbody');if(t) t.innerHTML=buildLogRows();}
 async function updateStatus(id,status){
-  setSaving(true);try{await dbUpdateQuoteStatus(id,status);const q=S.quotes.find(q=>q.id===id);if(q) q.status=status;const t=$('log-tbody');if(t) t.innerHTML=buildLogRows();}catch(e){alert('Error: '+e.message);}finally{setSaving(false);}
-}
-async function updateStatus(id,status){
   // Intercept Booked — show carrier confirmation modal first
   if(status==='Booked'){showBookingModal(id);return;}
-  setSaving(true);try{await dbUpdateQuoteStatus(id,status);const q=S.quotes.find(q=>q.id===id);if(q) q.status=status;const t=$('log-tbody');if(t) t.innerHTML=buildLogRows();}catch(e){alert('Error: '+e.message);}finally{setSaving(false);}
+  setSaving(true);try{await dbUpdateQuoteStatus(id,status);const q=S.quotes.find(q=>q.id===id);if(q) q.status=status;const t=$('log-tbody');if(t) t.innerHTML=buildLogRows();updateActiveBadge();}catch(e){alert('Error: '+e.message);}finally{setSaving(false);}
 }
 
 // ── Booking confirmation modal ─────────────────────────────────────────────
@@ -4807,6 +5050,7 @@ async function confirmBooking(id, downloadSheet){
     q.status='Booked';
     closeModal();
     const t=$('log-tbody');if(t) t.innerHTML=buildLogRows();
+    updateActiveBadge();
     if(downloadSheet) await downloadCarrierRateSheet(q,selRate);
   }catch(e){alert('Error: '+e.message);}finally{setSaving(false);}
 }
