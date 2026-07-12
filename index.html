@@ -422,8 +422,8 @@ hr{border:none;border-top:1px solid var(--gray-100);margin:14px 0}
 // ═══════════════════════════════════════════════════════
 // CHARGES
 // ═══════════════════════════════════════════════════════
-const CHARGES=['base','chassis','prepull','det_port','det_cust','storage','ovw43','ovw48','bobtail','toll','genset'];
-const LABELS={base:'Base',chassis:'Chassis',prepull:'Pre-pull',det_port:'Detention – Port',det_cust:'Detention – Customer',storage:'Storage',ovw43:'OVW (Over 43k lb)',ovw48:'OVW (Over 48k lb)',bobtail:'Bobtail',toll:'Toll',genset:'Genset'};
+const CHARGES=['base','chassis','prepull','det_port','det_cust','storage','ovw43','ovw48','bobtail','toll','genset','triaxle'];
+const LABELS={base:'Base',chassis:'Chassis',prepull:'Pre-pull',det_port:'Detention – Port',det_cust:'Detention – Customer',storage:'Storage',ovw43:'OVW (Over 43k lb)',ovw48:'OVW (Over 48k lb)',bobtail:'Bobtail',toll:'Toll',genset:'Genset',triaxle:'Triaxle'};
 const US_PORTS=[
   // ── East Coast Seaports ─────────────────────────────────────
   'New York / Newark, NJ','Port Newark Container Terminal, NJ','APM Terminals Elizabeth, NJ',
@@ -503,9 +503,10 @@ function isApplicable(c,ld){
   if((c==='det_port'||c==='det_cust')&&ld==='Drop') return false;
   if(c==='bobtail') return false; // bobtail handled per-quote like genset
   if(c==='genset') return false;   // genset handled per-quote
+  if(c==='triaxle') return false;  // triaxle handled per-quote
   return true;
 }
-const DEFAULT_FLAT_RATES={chassis:45,prepull:175,det_port:100,det_cust:100,storage:60,ovw43:200,ovw48:350,bobtail:0,toll:30,genset:0};
+const DEFAULT_FLAT_RATES={chassis:45,prepull:175,det_port:100,det_cust:100,storage:60,ovw43:200,ovw48:350,bobtail:0,toll:30,genset:0,triaxle:0};
 const DEFAULT_BASE_MARKUP={amount:150,mode:'flat'};
 const US_CFS=[
   // ── Los Angeles / Long Beach, CA ──────────────────────────
@@ -791,7 +792,8 @@ let S={
   qi:{customer:'',customerEmail:'',customerId:null,port:'New York / Newark, NJ',zip:'',ld:'Live',
       baseMarkup:{...DEFAULT_BASE_MARKUP},flatRates:{...DEFAULT_FLAT_RATES},notes:'',shiflRef:'',
       gensetEnabled:false,gensetScope:'both',gensetCarrierRate:0,gensetCustomerRate:0,
-      bobtailEnabled:false,bobtailScope:'both',bobtailCarrierRate:0,bobtailCustomerRate:0},
+      bobtailEnabled:false,bobtailScope:'both',bobtailCarrierRate:0,bobtailCustomerRate:0,
+      triaxleEnabled:false,triaxleScope:'both',triaxleCarrierRate:0,triaxleCustomerRate:0},
   selId:null,rSearch:'',logFilter:'all',dashFilter:'month',cSearch:'',
   fq:{mode:null,equipment:null,pickupZip:'',deliveryZip:'',weight:'',palletCount:'',
       pallets:[{w:'',l:'',h:''}],sameDims:true,singleW:'',singleL:'',singleH:'',
@@ -888,6 +890,7 @@ function totMode(r,ld){
   let t=CHARGES.reduce((s,c)=>isApplicable(c,ld)?s+(Number(r[c])||0):s,0);
   if(S.qi?.gensetEnabled&&S.qi?.gensetScope!=='customer_only')t+=Number(S.qi.gensetCarrierRate)||0;
   if(S.qi?.bobtailEnabled&&S.qi?.bobtailScope!=='customer_only')t+=Number(S.qi.bobtailCarrierRate)||0;
+  if(S.qi?.triaxleEnabled&&S.qi?.triaxleScope!=='customer_only')t+=Number(S.qi.triaxleCarrierRate)||0;
   return t;
 }
 function cuRate(carrierVal,charge){
@@ -900,6 +903,7 @@ function cuTot(r){
   let t=CHARGES.reduce((s,c)=>s+cuRate(Number(r[c])||0,c),0);
   if(S.qi?.gensetEnabled)t+=Number(S.qi.gensetCustomerRate)||0;
   if(S.qi?.bobtailEnabled)t+=Number(S.qi.bobtailCustomerRate)||0;
+  if(S.qi?.triaxleEnabled)t+=Number(S.qi.triaxleCustomerRate)||0;
   return t;
 }
 
@@ -933,8 +937,14 @@ function render(){
 // QUOTE BUILDER
 // ═══════════════════════════════════════════════════════
 function getMatches(){
-  return S.rates.filter(r=>r.active&&r.zip===S.qi.zip&&(r.ld===S.qi.ld||r.ld==='Both'))
-               .sort((a,b)=>totMode(a,S.qi.ld)-totMode(b,S.qi.ld));
+  const qi=S.qi;
+  return S.rates.filter(r=>{
+    if(!r.active||r.zip!==qi.zip) return false;
+    if(!(r.ld===qi.ld||r.ld==='Both')) return false;
+    // Port filter: if both qi.port and r.port are set, they must match
+    if(qi.port&&r.port&&!r.port.toLowerCase().includes(qi.port.toLowerCase().slice(0,8))&&!qi.port.toLowerCase().includes(r.port.toLowerCase().slice(0,8))) return false;
+    return true;
+  }).sort((a,b)=>totMode(a,qi.ld)-totMode(b,qi.ld));
 }
 function buildCarrierComparison(matches){
   const qi=S.qi;
@@ -945,12 +955,14 @@ function buildCarrierComparison(matches){
     <tr class="carrier-row${r.id===S.selId?' sel':''}" data-cid="${r.id}" onclick="selCarrier('${r.id}')">
       <td style="text-align:center;font-weight:700;color:${r.id===S.selId?'var(--steel)':'var(--gray-300)'}">${i+1}</td>
       <td><span class="bold">${r.carrier}</span>${i===0?' <span class="badge best">Best</span>':''}${r.ld==='Both'?' <span class="badge t" style="margin-left:3px">Both</span>':''}${r.notes?`<div class="subtext">${r.notes}</div>`:''}</td>
+      ${multiPort?`<td class="muted small" style="color:var(--amber);font-size:11px">${r.port||'—'}</td>`:''}
       <td class="muted small">${r.destination}</td>
       <td class="bold">${fmt(r.base)}</td>
       ${vis.map(c=>`<td>${fmt(r[c])}</td>`).join('')}
       <td class="bold">${fmt(totMode(r,qi.ld))}</td>
     </tr>`).join('');
-  return `<div class="tbl-wrap"><table><thead><tr><th>#</th><th>Carrier</th><th>Destination</th><th>Base</th>${vis.map(c=>`<th>${LABELS[c]}</th>`).join('')}<th>Total (${qi.ld})</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  const multiPort=[...new Set(matches.map(r=>r.port).filter(Boolean))].length>1;
+  return `<div class="tbl-wrap"><table><thead><tr><th>#</th><th>Carrier</th><th>Destination</th>${multiPort?'<th style="color:var(--amber)">Port</th>':''}<th>Base</th>${vis.map(c=>`<th>${LABELS[c]}</th>`).join('')}<th>Total (${qi.ld})</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 function buildPreviewHTML(sel){
   if(!sel) return `<div class="empty" style="padding:30px"><p>Select a carrier above</p></div>`;
@@ -978,6 +990,26 @@ function buildPreviewHTML(sel){
     <button class="btn blue" onclick="saveQuote()" style="flex:1;justify-content:center">💾 Save</button>
     <button class="btn" onclick="printQuote()">🖨️</button>
     <button class="btn" onclick="downloadPDF()">📄 PDF</button>
+
+    <!-- TRIAXLE -->
+    <div style="border:1px solid var(--gray-200);border-radius:var(--radius);padding:12px 14px;background:#fafafa">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:13px;font-weight:700;min-width:140px">
+          <input type="checkbox" ${S.qi.triaxleEnabled?'checked':''} onchange="S.qi.triaxleEnabled=this.checked;if(this.checked&&!S.qi.triaxleCarrierRate&&sel?.triaxle)S.qi.triaxleCarrierRate=sel.triaxle;refreshPreviewOnly()" style="width:16px;height:16px;cursor:pointer;accent-color:var(--navy)">
+          🔺 Triaxle
+        </label>
+        ${S.qi.triaxleEnabled?`
+        <div style="display:flex;gap:5px">
+          <button onclick="S.qi.triaxleScope='both';refreshPreviewOnly()" style="padding:3px 10px;border-radius:var(--radius);border:1px solid var(--gray-300);background:${S.qi.triaxleScope!=='customer_only'?'var(--navy)':'#fff'};color:${S.qi.triaxleScope!=='customer_only'?'#fff':'var(--gray-500)'};font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">Carrier + Customer</button>
+          <button onclick="S.qi.triaxleScope='customer_only';refreshPreviewOnly()" style="padding:3px 10px;border-radius:var(--radius);border:1px solid var(--gray-300);background:${S.qi.triaxleScope==='customer_only'?'var(--navy)':'#fff'};color:${S.qi.triaxleScope==='customer_only'?'#fff':'var(--gray-500)'};font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">Customer Only</button>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+          ${S.qi.triaxleScope!=='customer_only'?`<div style="display:flex;align-items:center;gap:5px"><span style="font-size:11px;font-weight:700;color:var(--gray-400)">CARRIER $</span><input type="number" value="${S.qi.triaxleCarrierRate||0}" min="0" oninput="S.qi.triaxleCarrierRate=+this.value;refreshPreviewOnly()" style="width:80px;padding:4px 8px;font-size:13px;border:1px solid var(--gray-300);border-radius:var(--radius)"></div>`:''}
+          <div style="display:flex;align-items:center;gap:5px"><span style="font-size:11px;font-weight:700;color:var(--gray-400)">CUSTOMER $</span><input type="number" value="${S.qi.triaxleCustomerRate||0}" min="0" oninput="S.qi.triaxleCustomerRate=+this.value;refreshPreviewOnly()" style="width:80px;padding:4px 8px;font-size:13px;border:1px solid var(--gray-300);border-radius:var(--radius)"></div>
+        </div>`:''}
+      </div>
+    </div>
+
   </div>`;
 }
 function buildPricingSection(){
@@ -2768,6 +2800,7 @@ async function saveQuote(){
   const cuRates=CHARGES.reduce((o,c)=>{o[c]=cuRate(Number(sel[c])||0,c);return o;},{});
   if(qi.gensetEnabled){cuRates.genset=Number(qi.gensetCustomerRate)||0;}
   if(qi.bobtailEnabled){cuRates.bobtail=Number(qi.bobtailCustomerRate)||0;}
+  if(qi.triaxleEnabled){cuRates.triaxle=Number(qi.triaxleCustomerRate)||0;}
   const cu=Object.values(cuRates).reduce((s,v)=>s+v,0);
   const profit=cu-ct;
   setSaving(true);
@@ -2775,7 +2808,7 @@ async function saveQuote(){
     const qn=await dbGetNextQuoteNum();
     const q={id:uid(),quoteNum:qn,date:new Date().toISOString().slice(0,10),
       customer:qi.customer||'—',port:qi.port,zip:qi.zip,ld:qi.ld,carrier:sel.carrier,destination:sel.destination,
-      carrierRates:{...CHARGES.reduce((o,c)=>{o[c]=sel[c]||0;return o;},{}),genset:qi.gensetEnabled&&qi.gensetScope!=='customer_only'?(Number(qi.gensetCarrierRate)||0):0,bobtail:qi.bobtailEnabled&&qi.bobtailScope!=='customer_only'?(Number(qi.bobtailCarrierRate)||0):0,total:ct},
+      carrierRates:{...CHARGES.reduce((o,c)=>{o[c]=sel[c]||0;return o;},{}),genset:qi.gensetEnabled&&qi.gensetScope!=='customer_only'?(Number(qi.gensetCarrierRate)||0):0,bobtail:qi.bobtailEnabled&&qi.bobtailScope!=='customer_only'?(Number(qi.bobtailCarrierRate)||0):0,triaxle:qi.triaxleEnabled&&qi.triaxleScope!=='customer_only'?(Number(qi.triaxleCarrierRate)||0):0,total:ct},
       customerRates:{...cuRates,total:cu},baseMarkup:{...qi.baseMarkup},flatRates:{...qi.flatRates},
       profit,profitPct:cu>0?profit/cu:0,status:'Quoted',notes:qi.notes||'',shiflRef:qi.shiflRef||'',
       created_by:_currentUser?.id||null,created_by_name:_currentUser?.name||null};
@@ -6272,7 +6305,7 @@ async function doSendCarrierEmail(quoteId){
   // Build itemized charges HTML
   const LABEL_MAP={base:'Base Rate',det_port:'Port Detention',det_cust:'Customer Detention',
     chassis:'Chassis','chassis_split':'Chassis Split',prepull:'Pre-Pull',bobtail:'Bobtail',
-    ovw:'Overweight',yard:'Yard Storage',plny:'PLNY Toll',exam:'Exam/ISF',flexi:'Flexitank',oog:'OOG Fee'};
+    ovw:'Overweight',yard:'Yard Storage',plny:'PLNY Toll',exam:'Exam/ISF',flexi:'Flexitank',oog:'OOG Fee',genset:'Genset',triaxle:'Triaxle'};
   const chargesHtml = Object.entries(q.carrierRates||{})
     .filter(([k,v])=>k!=='total'&&Number(v)>0)
     .map(([k,v])=>`<tr><td style="padding:5px 12px;color:#374151">${LABEL_MAP[k]||k}</td><td style="padding:5px 12px;text-align:right;font-weight:700;color:#1a2e4a">$${Number(v).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</td></tr>`)
