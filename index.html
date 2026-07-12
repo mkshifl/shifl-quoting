@@ -380,6 +380,9 @@ hr{border:none;border-top:1px solid var(--gray-100);margin:14px 0}
         <button class="nav-btn" onclick="setView('activity')" id="nav-activity" style="border-left-color:transparent">
           <span class="ico">📊</span>Activity Log
         </button>
+        <button class="nav-btn" onclick="setView('auditlog')" id="nav-auditlog" style="border-left-color:transparent">
+          <span class="ico">📋</span>Audit Log
+        </button>
       </div>
     </nav>
     <div class="sidebar-foot">
@@ -917,6 +920,7 @@ function render(){
   else if(S.view==='carriers')   renderCarriers();
   else if(S.view==='admin')      renderAdmin();
   else if(S.view==='activity')   renderActivity();
+  else if(S.view==='auditlog')   renderAuditLog();
   else if(S.view==='freight')    renderFreight();
   else if(S.view==='transload')  renderTransload();
   else                           renderDash();
@@ -2308,8 +2312,10 @@ async function saveFqQuote(){
   };
   if(!window._fqHistory) window._fqHistory=[];
   window._fqHistory.unshift(entry);
+  if(!checkMargin(entry.customerRate, entry.carrierRate, `${fq.mode} — ${fq.customer}`)) return;
   try{await dbSaveFqQuote(entry);}catch(e){console.log('Supabase fq save error:',e.message);}
   upsertCarrier(carrierName, fq.mode);
+  logAction('quote_created',`${fq.mode||'Freight'} — ${fq.customer||'—'} | ${fq.pickupZip||'—'} → ${fq.deliveryZip||'—'} | $${(entry.customerRate||0).toFixed(2)}`,'fq_quote',entry.id);
   try{const existing=JSON.parse(localStorage.getItem('fq_history')||'[]');existing.unshift(entry);localStorage.setItem('fq_history',JSON.stringify(existing.slice(0,500)));}catch(e){}
   alert(`✅ Freight quote saved!\n\n${carrierName}: ${fmtD(carrierRate)}\nCustomer: ${fmtD(customerRate)}\nProfit: ${fmtD(entry.profit)} (${pct(entry.profitPct)})`);
   refreshFreightPreview();
@@ -4280,6 +4286,7 @@ async function saveTlQuote(){
   if(!window._tlHistory) window._tlHistory=[];
   window._tlHistory.unshift(entry);
   try{await dbSaveTlQuote(entry);}catch(e){console.log('Supabase tl save error:',e.message);}
+  logAction('quote_created',`Transload — ${tl.customer||'—'} | $${(entry.totalCustomer||0).toFixed(2)}`,'tl_quote',entry.id);
   try{localStorage.setItem('tl_history',JSON.stringify(window._tlHistory.slice(0,500)));}catch(e){}
   alert(`✅ Transload quote saved!\n\nCustomer total: ${fmtD(t.totalCustomer)}\nProfit: ${fmtD(t.totalProfit)} (${pct(t.margin)})`);
   S.tl=defaultTlState();
@@ -5002,6 +5009,7 @@ async function toggleActive(id,currentActive){
 async function delRate(id){
   if(!requireCan('delete_rates','Only Admins can delete carrier rates.')) return;
   if(!confirm('Delete this rate? This cannot be undone.')) return;
+  const _dr=S.rates.find(r=>r.id===id);logAction('rate_deleted',`${_dr?.carrier||'—'} | ${_dr?.port||'—'} → ${_dr?.zip||'—'}`,'rate',id);
   setSaving(true);try{await dbDeleteRate(id);S.rates=S.rates.filter(r=>r.id!==id);const t=$('rates-tbody');if(t) t.innerHTML=buildRateRows();}catch(e){alert('Error: '+e.message);}finally{setSaving(false);}
 }
 async function duplicateRate(id){
@@ -5042,7 +5050,7 @@ async function submitAdd(){
   const carrier=$v('carrier');if(!carrier){alert('Carrier name required.');return;}
   const nr={id:uid(),region:$v('region'),carrier,port:$v('port'),destination:$v('destination'),zip:$v('zip'),ld:$v('ld'),active:true,notes:$v('notes'),base:parseFloat($v('base'))||0};
   CHARGES.filter(c=>c!=='base').forEach(c=>{nr[c]=parseFloat($v(c))||0;});
-  setSaving(true);try{await dbSaveRate(nr);S.rates.push(nr);closeModal();renderRates();}catch(e){alert('Error: '+e.message);}finally{setSaving(false);}
+  setSaving(true);try{await dbSaveRate(nr);S.rates.push(nr);logAction('rate_added',`${nr.carrier||'—'} | ${nr.port||'—'} → ${nr.zip||'—'}`,'rate',nr.id);closeModal();renderRates();}catch(e){alert('Error: '+e.message);}finally{setSaving(false);}
 }
 function editRate(id){
   if(!requireCan('edit_rates','Only Admins can edit carrier rates.')) return;const r=S.rates.find(r=>r.id===id);if(!r) return;
@@ -5053,7 +5061,7 @@ async function submitEdit(id){
   const r=S.rates.find(r=>r.id===id);if(!r) return;const carrier=$v('carrier');if(!carrier){alert('Carrier name required.');return;}
   Object.assign(r,{region:$v('region'),carrier,port:$v('port'),destination:$v('destination'),zip:$v('zip'),ld:$v('ld'),notes:$v('notes'),base:parseFloat($v('base'))||0});
   CHARGES.filter(c=>c!=='base').forEach(c=>{r[c]=parseFloat($v(c))||0;});
-  setSaving(true);try{await dbSaveRate(r);closeModal();renderRates();}catch(e){alert('Error: '+e.message);}finally{setSaving(false);}
+  setSaving(true);try{await dbSaveRate(r);logAction('rate_edited',`${r.carrier||'—'} | ${r.port||'—'} → ${r.zip||'—'}`,'rate',r.id);closeModal();renderRates();}catch(e){alert('Error: '+e.message);}finally{setSaving(false);}
 }
 
 // CSV import/export
@@ -6369,6 +6377,131 @@ function can(perm){
 function requireCan(perm,msg='You do not have permission to do that.'){
   if(!can(perm)){alert(msg);return false;}
   return true;
+}
+
+
+// ═══════════════════════════════════════════════════════
+// AUDIT LOG + MARGIN GUARDRAILS
+// ═══════════════════════════════════════════════════════
+
+// ── Audit Log ─────────────────────────────────────────
+const ACTION_LABELS={
+  login:'🔑 Logged in',logout:'🚪 Logged out',
+  quote_created:'📝 Quote created',quote_deleted:'🗑️ Quote deleted',quote_booked:'✅ Quote booked',
+  status_changed:'🔄 Status changed',
+  rate_added:'➕ Rate added',rate_edited:'✏️ Rate edited',rate_deleted:'🗑️ Rate deleted',
+  carrier_added:'🤝 Carrier added',carrier_edited:'✏️ Carrier edited',carrier_deleted:'🗑️ Carrier deleted',
+  user_added:'👤 User added',user_edited:'✏️ User edited',user_deleted:'🗑️ User deleted',
+  email_sent:'📧 Email sent to carrier',
+  margin_override:'⚠️ Low margin override',
+};
+
+async function logAction(action, details='', entityType='', entityId=''){
+  if(!db||!_currentUser) return;
+  try{
+    await db.from('audit_log').insert({
+      id:uid(), user_id:_currentUser.id, user_name:_currentUser.name,
+      action, details, entity_type:entityType, entity_id:entityId,
+      created_at:new Date().toISOString()
+    });
+  }catch(e){ console.log('Audit log:',e.message); } // silent fail
+}
+
+async function renderAuditLog(){
+  if(!can('view_admin')){$('page').innerHTML='<div style="padding:40px;text-align:center;color:var(--gray-400)">Admin access required</div>';return;}
+  $('page').innerHTML='<div class="loading-page"><div class="spin" style="margin:0 auto 12px"></div><div style="color:var(--gray-400);font-size:13px">Loading audit log...</div></div>';
+  try{
+    const{data:logs}=await db.from('audit_log').select('*').order('created_at',{ascending:false}).limit(500);
+    const all=logs||[];
+    if(!all.length){
+      $('page').innerHTML='<div class="empty"><div class="empty-ico">📋</div><div style="font-size:16px;font-weight:700;color:var(--gray-500)">No activity yet</div><div style="font-size:13px;color:var(--gray-400);margin-top:6px">Actions will appear here as users interact with the system</div></div>';
+      return;
+    }
+    // Stats
+    const users=[...new Set(all.map(l=>l.user_name).filter(Boolean))];
+    const today=new Date().toISOString().slice(0,10);
+    const todayCount=all.filter(l=>l.created_at?.startsWith(today)).length;
+
+    // Filters
+    const filterUser=S._auditUser||'all';
+    const filterAction=S._auditAction||'all';
+    const shown=all.filter(l=>{
+      if(filterUser!=='all'&&l.user_name!==filterUser) return false;
+      if(filterAction!=='all'&&l.action!==filterAction) return false;
+      return true;
+    });
+
+    const userOpts=users.map(u=>`<option value="${u}"${filterUser===u?' selected':''}>${u}</option>`).join('');
+    const actionOpts=[...new Set(all.map(l=>l.action))].map(a=>`<option value="${a}"${filterAction===a?' selected':''}>${ACTION_LABELS[a]||a}</option>`).join('');
+
+    let h=`<div class="g3" style="margin-bottom:18px">
+      <div class="kpi"><div class="kpi-l">Total actions</div><div class="kpi-v">${all.length}</div></div>
+      <div class="kpi"><div class="kpi-l">Today</div><div class="kpi-v">${todayCount}</div></div>
+      <div class="kpi"><div class="kpi-l">Active users</div><div class="kpi-v">${users.length}</div></div>
+    </div>`;
+
+    h+=`<div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center">
+      <select onchange="S._auditUser=this.value;renderAuditLog()" style="padding:7px 10px;border:1px solid var(--gray-200);border-radius:var(--radius);font-size:13px;font-family:inherit">
+        <option value="all">All users</option>${userOpts}
+      </select>
+      <select onchange="S._auditAction=this.value;renderAuditLog()" style="padding:7px 10px;border:1px solid var(--gray-200);border-radius:var(--radius);font-size:13px;font-family:inherit">
+        <option value="all">All actions</option>${actionOpts}
+      </select>
+      <span style="font-size:12px;color:var(--gray-400);margin-left:4px">${shown.length} entries</span>
+      <button class="btn btn-sm" onclick="exportAuditLog()" style="margin-left:auto">📥 Export CSV</button>
+    </div>`;
+
+    h+=`<div class="tbl-wrap"><table><thead><tr>
+      <th>Time</th><th>User</th><th>Action</th><th>Details</th>
+    </tr></thead><tbody>`;
+    h+=shown.slice(0,200).map(l=>{
+      const dt=new Date(l.created_at);
+      const timeStr=dt.toLocaleDateString('en-US',{month:'short',day:'numeric'})+' '+dt.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+      const isErr=l.action?.includes('delete')||l.action?.includes('margin');
+      return `<tr>
+        <td style="font-size:11px;color:var(--gray-400);white-space:nowrap">${timeStr}</td>
+        <td style="font-weight:600;font-size:13px">${l.user_name||'System'}</td>
+        <td style="white-space:nowrap"><span style="font-size:12px;background:${isErr?'#fee2e2':'#f1f5f9'};color:${isErr?'#b91c1c':'var(--gray-600)'};padding:3px 8px;border-radius:4px;font-weight:600">${ACTION_LABELS[l.action]||l.action}</span></td>
+        <td style="font-size:12px;color:var(--gray-500)">${l.details||'—'}</td>
+      </tr>`;
+    }).join('');
+    h+='</tbody></table></div>';
+    $('page').innerHTML=h;
+  }catch(e){
+    $('page').innerHTML=`<div style="padding:20px;color:var(--red)">Error loading audit log: ${e.message}</div>
+    <div style="padding:0 20px;font-size:13px;color:var(--gray-500);margin-top:8px">Make sure you've run the audit_log setup SQL in Supabase.</div>`;
+  }
+}
+
+function exportAuditLog(){
+  db.from('audit_log').select('*').order('created_at',{ascending:false}).then(({data})=>{
+    if(!data?.length){alert('No audit log data.');return;}
+    const rows=[['Time','User','Action','Details','Entity Type','Entity ID'],...data.map(l=>[l.created_at,l.user_name,l.action,l.details,l.entity_type,l.entity_id])];
+    const csv=rows.map(r=>r.map(c=>`"${(c||'').toString().replace(/"/g,'""')}"`).join(',')).join('\n');
+    const a=document.createElement('a');a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);a.download='shifl_audit_log_'+new Date().toISOString().slice(0,10)+'.csv';a.click();
+  });
+}
+
+// ── Margin Guardrails ──────────────────────────────────
+function getMinMargin(){ return parseFloat(localStorage.getItem('shifl_min_margin'))||0; }
+function setMinMargin(v){ localStorage.setItem('shifl_min_margin',String(parseFloat(v)||0)); }
+
+function checkMargin(customerRate, carrierRate, quoteName){
+  const min=getMinMargin();
+  if(!min||!customerRate) return true;
+  const margin=customerRate>0?((customerRate-carrierRate)/customerRate)*100:0;
+  if(margin>=min) return true;
+  const role=_currentUser?.role;
+  const msg=`⚠️ Low Margin Warning\n\nThis quote has a ${margin.toFixed(1)}% margin, which is below the minimum of ${min}%.\n\n${role==='team_member'||role==='user'?'You do not have permission to save below-minimum quotes. Ask an Admin to approve.':'As an Admin you can override — continue anyway?'}`;
+  if(role==='team_member'||role==='user'){
+    alert(msg);
+    return false;
+  }
+  if(confirm(msg)){
+    logAction('margin_override',`${quoteName} — ${margin.toFixed(1)}% margin (min: ${min}%)`);
+    return true;
+  }
+  return false;
 }
 
 
