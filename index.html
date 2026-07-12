@@ -365,6 +365,13 @@ hr{border:none;border-top:1px solid var(--gray-100);margin:14px 0}
       <button class="nav-sub" id="fqnav-dash" onclick="setView('freight');setFqTab('dash')"><span>📊</span>Dashboard</button>
       <button class="nav-sub" id="fqnav-invoicing" onclick="setView('freight');setFqTab('invoicing')" style="position:relative"><span>🧾</span>Invoicing<span id="fq-inv-badge" style="display:none;position:absolute;top:4px;right:8px;background:var(--red);color:#fff;border-radius:99px;font-size:9px;font-weight:800;min-width:16px;height:16px;line-height:16px;text-align:center;padding:0 3px">0</span></button>
       <div style="margin:10px 18px;border-top:1px solid rgba(255,255,255,.1)"></div>
+      <div style="padding:4px 18px 6px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:rgba(255,255,255,.28)">Air Freight</div>
+      <button class="nav-btn" onclick="setView('air');setAqTab('builder')" id="nav-air" style="border-left-color:transparent">
+        <span class="ico">✈️</span>Air Freight
+      </button>
+      <button class="nav-sub" id="aqnav-builder" onclick="setView('air');setAqTab('builder')"><span>🏗️</span>Quote builder</button>
+      <button class="nav-sub" id="aqnav-log" onclick="setView('air');setAqTab('log')"><span>📁</span>Quote log</button>
+      <div style="margin:10px 18px;border-top:1px solid rgba(255,255,255,.1)"></div>
       <div style="padding:4px 18px 6px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:rgba(255,255,255,.28)">Transload</div>
       <button class="nav-btn" onclick="setView('transload');setTlTab('builder')" id="nav-transload" style="border-left-color:transparent">
         <span class="ico">🔄</span>Transload Quoting
