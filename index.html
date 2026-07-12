@@ -4402,159 +4402,156 @@ async function downloadTlCustomerPDF(idx, rawTl, existingDoc){
   if(!tl&&!q){alert('No quote data.');return;}
   const{jsPDF}=window.jspdf;
   const doc=existingDoc||new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
-  const W=210;const navy=[26,46,74];
+  const W=210,M=14,CW=W-M*2;
+  const navy=[26,46,74],steel=[46,92,150],green=[30,110,60];
   const date=q?q.date:new Date().toISOString().slice(0,10);
-  const customer=q?q.customer:tl?.customer||'—';
+  const customer=q?q.customer:(tl?.customer||'—');
+  let y=0;
 
   // Header
-  doc.setFillColor(...navy);doc.rect(0,0,W,32,'F');
-  doc.setFillColor(59,142,208);doc.roundedRect(10,5,22,22,3,3,'F');
-  const bx=10,by=5,sc=v=>v/60*22;
+  doc.setFillColor(...navy);doc.rect(0,0,W,36,'F');
+  const bx=12,by=7,sc=v=>v/60*20;
+  doc.setFillColor(59,142,208);doc.roundedRect(bx,by,20,20,2,2,'F');
   doc.setFillColor(255,255,255);doc.triangle(bx+sc(10),by+sc(50),bx+sc(25),by+sc(14),bx+sc(44),by+sc(45),'F');
   doc.setFillColor(220,235,255);doc.triangle(bx+sc(25),by+sc(14),bx+sc(44),by+sc(45),bx+sc(53),by+sc(37),'F');
   doc.setFillColor(255,255,255);doc.triangle(bx+sc(10),by+sc(50),bx+sc(44),by+sc(45),bx+sc(53),by+sc(50),'F');
-  doc.setDrawColor(59,142,208);doc.setLineWidth(.3);doc.line(bx+sc(25),by+sc(14),bx+sc(44),by+sc(50));
-  doc.setTextColor(255,255,255);doc.setFont('helvetica','bold');doc.setFontSize(18);doc.text('SHIFL',36,19);
-  doc.setFontSize(9);doc.setFont('helvetica','normal');doc.setTextColor(255,255,255,.65);doc.text('Transload Service Quote',36,26);
-  doc.setFontSize(9);doc.setTextColor(255,255,255);doc.text(date,W-12,20,{align:'right'});
+  doc.setTextColor(255,255,255);doc.setFont('helvetica','bold');doc.setFontSize(20);doc.text('SHIFL',36,20);
+  doc.setFontSize(9);doc.setFont('helvetica','normal');doc.setTextColor(180,200,230);doc.text('Transload Service Quote',36,28);
+  doc.setFontSize(9);doc.setTextColor(255,255,255);doc.text(date,W-M,22,{align:'right'});
 
-  // Meta
-  doc.setFillColor(240,244,248);doc.rect(0,32,W,14,'F');
-  doc.setFont('helvetica','bold');doc.setFontSize(9);doc.setTextColor(...navy);
-  doc.text('Customer: '+customer,12,41);
-  if(tl||q){
-    const cargo=(q?q.cargoType:tl?.cargoType)==='floorLoaded'?'Floor Loaded':'Palletized';
-    const pallets=q?q.palletCount:tl?.palletCount;
-    doc.setFont('helvetica','normal');doc.setTextColor(100,115,130);
-    if(pallets) doc.text(pallets+' pallets  |  '+cargo,110,41);
+  // Meta bar
+  doc.setFillColor(240,244,250);doc.rect(0,36,W,20,'F');
+  doc.setFont('helvetica','bold');doc.setFontSize(10);doc.setTextColor(...navy);
+  doc.text('Customer: '+customer,M,47);
+  if(q?.palletCount){
+    const cargo=(q.cargoType==='floorLoaded'?'Floor Loaded':'Palletized');
+    doc.setFont('helvetica','normal');doc.setFontSize(8.5);doc.setTextColor(90,110,135);
+    doc.text(q.palletCount+' pallets  ·  '+cargo,M,54);
   }
+  doc.setFont('helvetica','bold');doc.setFontSize(9);doc.setTextColor(...steel);
+  doc.text('QUOTE',W-M,47,{align:'right'});
+  y=64;
 
-  let y=56;
-  const sectionColors={dray:[26,80,150],tl:[30,100,60],out:[150,80,0]};
-
-  function drawSection(colorArr,title,subInfo,rows,subtotal){
-    doc.setFillColor(...colorArr);doc.rect(12,y,W-24,9,'F');
-    doc.setFont('helvetica','bold');doc.setFontSize(9);doc.setTextColor(255,255,255);
-    doc.text(title,16,y+6.5);
-    y+=11;
-    if(subInfo){
-      const subLines=subInfo.split('\n');
-      subLines.forEach(line=>{
-        if(!line.trim()) return;
-        const wrapped=doc.splitTextToSize(line.trim(),W-28);
-        doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(100,115,130);
-        doc.text(wrapped,16,y+4);y+=wrapped.length*4+2;
-      });
-    }
+  function section(colorArr,title,subLines,rows,subtotal){
+    doc.setFillColor(...colorArr);doc.roundedRect(M,y,CW,10,1,1,'F');
+    doc.setFont('helvetica','bold');doc.setFontSize(9.5);doc.setTextColor(255,255,255);
+    doc.text(doc.splitTextToSize(title,CW-8)[0],M+4,y+7.5);
+    y+=13;
+    subLines.filter(l=>l&&l.trim()).forEach(line=>{
+      const wrapped=doc.splitTextToSize(line.trim(),CW-8);
+      doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(90,110,135);
+      wrapped.slice(0,2).forEach(wl=>{doc.text(wl,M+4,y);y+=5;});
+    });
+    if(subLines.some(l=>l&&l.trim())) y+=2;
+    // Column headers
+    doc.setFillColor(243,246,251);doc.rect(M,y,CW,7,'F');
+    doc.setFont('helvetica','bold');doc.setFontSize(7);doc.setTextColor(130,140,160);
+    doc.text('SERVICE',M+4,y+5);doc.text('AMOUNT',W-M-2,y+5,{align:'right'});
+    y+=9;
     // Rows
-    let even=true;
-    rows.forEach(([label,amount])=>{
+    rows.forEach(([label,amount],ri)=>{
       if(amount<=0) return;
-      if(even){doc.setFillColor(248,250,252);doc.rect(12,y-3,W-24,8,'F');}
-      doc.setFont('helvetica','normal');doc.setFontSize(9.5);doc.setTextColor(55,65,80);doc.text(label,16,y);
-      doc.setFont('helvetica','bold');doc.setTextColor(...navy);doc.text(fmtD(amount),W-14,y,{align:'right'});
-      doc.setDrawColor(235,238,242);doc.setLineWidth(.2);doc.line(12,y+5,W-12,y+5);
-      y+=8;even=!even;
+      if(ri%2===0){doc.setFillColor(250,252,255);doc.rect(M,y,CW,10,'F');}
+      doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(45,58,78);
+      doc.text(doc.splitTextToSize(label,CW-55)[0],M+4,y+7);
+      doc.setFont('helvetica','bold');doc.setTextColor(...navy);
+      doc.text(fmtD(amount),W-M-2,y+7,{align:'right'});
+      doc.setDrawColor(230,234,242);doc.setLineWidth(0.2);doc.line(M,y+10,W-M,y+10);
+      y+=10;
     });
     // Subtotal
-    doc.setFillColor(230,235,245);doc.rect(12,y-2,W-24,10,'F');
+    y+=2;
+    doc.setFillColor(230,237,250);doc.roundedRect(M,y,CW,11,1,1,'F');
     doc.setFont('helvetica','bold');doc.setFontSize(9);doc.setTextColor(...navy);
-    doc.text('Section total',16,y+5);
-    doc.setFontSize(12);doc.text(fmtD(subtotal),W-14,y+5,{align:'right'});
-    y+=14;
+    doc.text('Section total',M+4,y+8);
+    doc.setFontSize(11);doc.text(fmtD(subtotal),W-M-2,y+8,{align:'right'});
+    y+=16;
   }
 
   // Drayage
-  const drayRows=[];let drayTotal=0;
   const sel=tl?S.rates.find(r=>r.id===tl.selDrayId):null;
+  let drayRows=[],drayTotal=0;
   if(sel&&tl){
     CHARGES.filter(c=>isApplicable(c,tl.drayLd)).forEach(c=>{
       const cuv=tlCuRate(Number(sel[c])||0,c,tl);
       if(cuv>0){drayRows.push([LABELS[c],cuv]);drayTotal+=cuv;}
     });
-  } else if(q&&q.drayCustomerPrice>0){
+  } else if(q?.drayCustomerPrice>0){
     drayRows.push(['Drayage',q.drayCustomerPrice]);drayTotal=q.drayCustomerPrice;
   }
   if(drayTotal>0){
-    const ld=q?q.drayLd:tl?.drayLd||'Live';
-    const port=q?q.drayPort:tl?.drayPort||'—';
-    const zip=q?q.drayZip:tl?.drayZip||'—';
-    drawSection(sectionColors.dray,'INBOUND DRAYAGE',
-      'Carrier: Shifl  |  '+port+' to '+zip+' ('+ld+')',drayRows,drayTotal);
+    section([26,80,150],'INBOUND DRAYAGE',
+      ['Origin: '+(q?q.drayPort:tl?.drayPort||'—')+' → '+(q?q.drayZip:tl?.drayZip||'—')+' ('+(q?q.drayLd:tl?.drayLd||'Live')+')'],
+      drayRows,drayTotal);
   }
 
   // Transload
-  const tlRows=[];let tlTotal=0;
-  const pCount=parseInt(q?q.palletCount:tl?.palletCount)||1;
-  const chargeMode=q?q.chargeMode:tl?.chargeMode;
+  let tlRows=[],tlTotal=0;
+  const pCount=parseInt(q?.palletCount||tl?.palletCount)||1;
+  const chargeMode=q?.chargeMode||tl?.chargeMode;
   if(chargeMode==='flat'){
-    const cuv=parseFloat(q?q.tlFlatCustomer:tl?.tlFlatCustomer)||0;
+    const cuv=parseFloat(q?.tlFlatCustomer||tl?.tlFlatCustomer)||0;
     if(cuv>0){tlRows.push(['Full transload service',cuv]);tlTotal=cuv;}
   } else {
-    const items=q?q.tlItems:tl?.tlItems;
+    const items=q?.tlItems||tl?.tlItems;
     if(items) Object.entries(items).forEach(([k,item])=>{
       if(!item.included) return;const def=TL_ITEMS_DEF[k];if(!def) return;
       let qty=def.unit==='perPallet'?pCount:def.unit==='perPalletPerDay'?pCount*(parseInt(item.days)||0):1;
       const cuv=(parseFloat(item.customerPrice)||0)*qty;
-      if(cuv>0){tlRows.push([def.label+(qty>1?' x '+qty:''),cuv]);tlTotal+=cuv;}
+      if(cuv>0){tlRows.push([def.label+(qty>1?' × '+qty:''),cuv]);tlTotal+=cuv;}
     });
   }
   if(tlTotal>0){
-    drawSection(sectionColors.tl,'TRANSLOAD SERVICES','Facility: Shifl',tlRows,tlTotal);
+    section([30,110,65],'TRANSLOAD SERVICES',
+      ['Facility: '+(q?.warehouseName||'Shifl facility'),q?.warehouseAddress||''],
+      tlRows,tlTotal);
   }
 
   // Outbound
-  const outMode=q?q.outMode:tl?.outMode||'FTL';
-  const outEquip=q?q.outEquipment:tl?.outEquipment||'Dry Van';
-  const outZip=q?q.outDeliveryZip:tl?.outDeliveryZip||'—';
-  const multiStop=q?q.outMultiStop:tl?.outMultiStop;
-  const stops=q?q.outStops:tl?.outStops;
-  let outTotal=0;
+  const outMode=q?.outMode||tl?.outMode||'FTL';
+  let outTotal=0,outRows=[];
   if(q){outTotal=q.outCustomerPrice||0;}
   else if(tl){
-    const outCarrierAmt=parseFloat(tl.outManualRate)||0;
-    outTotal=tl.outMarkupMode==='pct'?outCarrierAmt*(1+(tl.outMarkupAmount||0)/100):outCarrierAmt+(Number(tl.outMarkupAmount)||0);
+    const b=parseFloat(tl.outManualRate)||0;
+    outTotal=tl.outMarkupMode==='pct'?b*(1+(tl.outMarkupAmount||0)/100):b+(Number(tl.outMarkupAmount)||0);
   }
   if(outTotal>0){
-    let outRows=[];
-    const isLtlMulti=(multiStop&&stops?.length&&(q?q.outMode:tl?.outMode)==='LTL');
-    if(isLtlMulti){
-      stops.filter(s=>s.customerRate>0||s.zip).forEach((s,i)=>{
-        const lbl=s.carrier
-          ?`LTL Stop ${i+1} - ${s.carrier} -> ${s.zip||'-'}${s.address?' ('+s.address+')':''}`
-          :`LTL Stop ${i+1} -> ${s.zip||'-'}${s.address?' ('+s.address+')':''}`;
-        outRows.push([lbl,parseFloat(s.customerRate)||0]);
-      });
-    } else {
-      outRows=[['Freight rate',outTotal]];
-    }
-    const outSubInfo=`Carrier: Shifl  |  ${outMode}${outEquip&&outMode==='FTL'?' — '+outEquip:''}`;
-    const deliveryInfo=isLtlMulti?'':multiStop&&stops?.length?'Deliveries: '+stops.map((s,i)=>`Stop ${i+1}: ${s.zip}`).join('  ·  '):'Delivery: '+outZip;
-    drawSection(sectionColors.out,'OUTBOUND '+outMode,outSubInfo+(deliveryInfo?'\n'+deliveryInfo:''),outRows,outTotal);
+    const multiStop=q?.outMultiStop||tl?.outMultiStop;
+    const stops=q?.outStops||tl?.outStops;
+    const outZip=q?.outDeliveryZip||tl?.outDeliveryZip||'—';
+    const outEquip=q?.outEquipment||tl?.outEquipment||'';
+    if(multiStop&&stops?.length&&outMode==='LTL'){
+      stops.filter(s=>s.zip).forEach((s,i)=>outRows.push(['LTL Stop '+(i+1)+' → '+s.zip+(s.carrier?' ('+s.carrier+')':''),parseFloat(s.customerRate)||0]));
+    } else {outRows=[['Freight rate',outTotal]];}
+    const delivLine=(multiStop&&stops?.length)?stops.filter(s=>s.zip).map((s,i)=>'Stop '+(i+1)+': '+s.zip).join('  ·  '):'Delivery ZIP: '+outZip;
+    section([160,90,10],'OUTBOUND '+outMode,[outEquip||'',delivLine],outRows,outTotal);
   }
 
   // Grand total
   const grandTotal=drayTotal+tlTotal+outTotal;
-  y+=4;
-  doc.setFillColor(...navy);doc.rect(12,y,W-24,16,'F');
+  y+=2;
+  doc.setFillColor(...navy);doc.roundedRect(M,y,CW,18,2,2,'F');
   doc.setFont('helvetica','bold');doc.setFontSize(12);doc.setTextColor(255,255,255);
-  doc.text('GRAND TOTAL',16,y+10);
-  doc.setFontSize(18);doc.text(fmtD(grandTotal),W-14,y+11,{align:'right'});
-  y+=22;
+  doc.text('GRAND TOTAL',M+6,y+12);
+  doc.setFontSize(20);doc.text(fmtD(grandTotal),W-M-4,y+13,{align:'right'});
+  y+=24;
 
   // Notes
-  const notes=q?q.notes:tl?.notes;
+  const notes=q?.notes||tl?.notes;
   if(notes&&notes.trim()){
-    const noteLines=doc.splitTextToSize(notes.trim(),W-32);
-    const boxH=noteLines.length*5+14;
-    doc.setFillColor(240,246,255);doc.roundedRect(12,y,W-24,boxH,3,3,'F');
-    doc.setDrawColor(180,210,240);doc.setLineWidth(.3);doc.roundedRect(12,y,W-24,boxH,3,3,'S');
-    doc.setFont('helvetica','bold');doc.setFontSize(7.5);doc.setTextColor(46,117,182);doc.text('NOTES & CONDITIONS',16,y+7);
+    const nl=doc.splitTextToSize(notes.trim(),CW-12);
+    const bh=nl.length*5+16;
+    if(y+bh>272){doc.addPage();y=16;}
+    doc.setFillColor(240,247,255);doc.roundedRect(M,y,CW,bh,2,2,'F');
+    doc.setDrawColor(180,210,240);doc.setLineWidth(0.3);doc.roundedRect(M,y,CW,bh,2,2,'S');
+    doc.setFont('helvetica','bold');doc.setFontSize(7.5);doc.setTextColor(...steel);
+    doc.text('NOTES & CONDITIONS',M+5,y+9);
     doc.setFont('helvetica','normal');doc.setFontSize(8.5);doc.setTextColor(55,70,90);
-    noteLines.forEach((line,i)=>doc.text(line,16,y+13+(i*5)));
+    nl.forEach((l,i)=>doc.text(l,M+5,y+16+(i*5)));
   }
-  doc.setFontSize(8);doc.setFont('helvetica','italic');doc.setTextColor(190,195,200);
-  doc.text('Quote valid 30 days  |  Rates subject to change  |  mk@shifl.com',12,278);
+
+  doc.setFontSize(7.5);doc.setFont('helvetica','italic');doc.setTextColor(180,188,200);
+  doc.text('Quote valid 30 days  |  Rates subject to change  |  mk@shifl.com',M,285);
   if(!existingDoc) doc.save('Shifl_Transload_'+customer.replace(/\s+/g,'_')+'_'+date+'.pdf');
 }
 
@@ -4563,48 +4560,53 @@ async function downloadTlInternalPDF(idx){
   const q=(window._tlHistory||[])[idx];if(!q) return;
   const{jsPDF}=window.jspdf;
   const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
-  const W=210;const navy=[26,46,74];const green=[45,125,70];
+  const W=210,M=14,CW=W-M*2;
+  const navy=[26,46,74],green=[30,110,60],steel=[46,92,150];
+  const LMAX=85,CX=M+LMAX+5,CU=162,CP=W-M;
+  let y=0;
 
   // Header
-  doc.setFillColor(...navy);doc.rect(0,0,W,32,'F');
-  doc.setFillColor(59,142,208);doc.roundedRect(10,5,22,22,3,3,'F');
-  const bx=10,by=5,sc=v=>v/60*22;
+  doc.setFillColor(...navy);doc.rect(0,0,W,36,'F');
+  const bx=12,by=7,sc=v=>v/60*20;
+  doc.setFillColor(59,142,208);doc.roundedRect(bx,by,20,20,2,2,'F');
   doc.setFillColor(255,255,255);doc.triangle(bx+sc(10),by+sc(50),bx+sc(25),by+sc(14),bx+sc(44),by+sc(45),'F');
   doc.setFillColor(220,235,255);doc.triangle(bx+sc(25),by+sc(14),bx+sc(44),by+sc(45),bx+sc(53),by+sc(37),'F');
   doc.setFillColor(255,255,255);doc.triangle(bx+sc(10),by+sc(50),bx+sc(44),by+sc(45),bx+sc(53),by+sc(50),'F');
-  doc.setDrawColor(59,142,208);doc.setLineWidth(.3);doc.line(bx+sc(25),by+sc(14),bx+sc(44),by+sc(50));
-  doc.setTextColor(255,255,255);doc.setFont('helvetica','bold');doc.setFontSize(18);doc.text('SHIFL',36,19);
-  doc.setFontSize(9);doc.setFont('helvetica','normal');doc.setTextColor(255,255,255,.65);doc.text('Transload Rate Sheet',36,26);
-  const badgeW=54;doc.setFillColor(200,40,40);doc.roundedRect((W-badgeW)/2,9,badgeW,13,3,3,'F');
+  doc.setTextColor(255,255,255);doc.setFont('helvetica','bold');doc.setFontSize(20);doc.text('SHIFL',36,20);
+  doc.setFontSize(9);doc.setFont('helvetica','normal');doc.setTextColor(180,200,230);doc.text('Transload Rate Sheet',36,28);
+  doc.setFillColor(200,35,35);doc.roundedRect(W-62,9,47,13,2,2,'F');
   doc.setFont('helvetica','bold');doc.setFontSize(8);doc.setTextColor(255,255,255);
-  doc.text('INTERNAL USE ONLY',W/2,17,{align:'center'});
+  doc.text('INTERNAL USE ONLY',W-38.5,17.5,{align:'center'});
 
-  // Meta bar
-  const bookedDate=q.bookedDate||'';
-  doc.setFillColor(240,244,248);doc.rect(0,32,W,14,'F');
+  // Meta bar (taller — 24mm)
+  doc.setFillColor(240,244,250);doc.rect(0,36,W,24,'F');
+  doc.setFont('helvetica','bold');doc.setFontSize(10);doc.setTextColor(...navy);
+  doc.text('Customer: '+q.customer,M,47);
+  doc.setFont('helvetica','normal');doc.setFontSize(8.5);doc.setTextColor(90,110,135);
+  doc.text('Date: '+q.date,M,55);
   doc.setFont('helvetica','bold');doc.setFontSize(9);doc.setTextColor(...navy);
-  doc.text('Customer: '+q.customer,12,41);
-  doc.setFont('helvetica','normal');doc.setTextColor(100,115,130);
-  doc.text('Date: '+q.date,12,47);
-  doc.text('Status: '+q.status,110,41);
-  if(bookedDate){doc.setTextColor(...green);doc.text('Booked: '+bookedDate,150,41);}
+  doc.text('Status: '+q.status,W/2,47,{align:'center'});
+  if(q.bookedDate){doc.setTextColor(...green);doc.text('Booked: '+q.bookedDate,W/2,55,{align:'center'});}
+  if(q.palletCount){
+    doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(90,110,135);
+    doc.text(q.palletCount+' pallets',W-M,47,{align:'right'});
+  }
+  y=68;
 
-  let y=56;
-  const CX=95,CU=145,CP=W-14; // column x positions: carrier, customer, profit
-
-  function sectionHeader(colorArr,title,subInfo){
-    doc.setFillColor(...colorArr);doc.rect(12,y,W-24,10,'F');
-    doc.setFont('helvetica','bold');doc.setFontSize(9);doc.setTextColor(255,255,255);
-    doc.text(title,16,y+7);
-    y+=12;
-    if(subInfo){
-      doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(100,115,130);
-      doc.text(subInfo,16,y+5);y+=9;
+  function secHeader(colorArr,title,subInfo){
+    doc.setFillColor(...colorArr);doc.roundedRect(M,y,CW,10,1,1,'F');
+    doc.setFont('helvetica','bold');doc.setFontSize(9.5);doc.setTextColor(255,255,255);
+    doc.text(doc.splitTextToSize(title,CW-8)[0],M+4,y+7.5);
+    y+=13;
+    if(subInfo&&subInfo.trim()){
+      const wrapped=doc.splitTextToSize(subInfo.trim(),CW-8);
+      doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(90,110,135);
+      wrapped.slice(0,2).forEach(l=>{doc.text(l,M+4,y);y+=5;});
+      y+=2;
     }
-    // Column header row
-    doc.setFillColor(240,242,246);doc.rect(12,y,W-24,8,'F');
-    doc.setFont('helvetica','bold');doc.setFontSize(7);doc.setTextColor(100,110,130);
-    doc.text('SERVICE',16,y+5.5);
+    doc.setFillColor(240,243,249);doc.rect(M,y,CW,8,'F');
+    doc.setFont('helvetica','bold');doc.setFontSize(7);doc.setTextColor(120,130,150);
+    doc.text('SERVICE',M+4,y+5.5);
     doc.text('CARRIER COST',CX,y+5.5,{align:'right'});
     doc.text('CUSTOMER PRICE',CU,y+5.5,{align:'right'});
     doc.text('PROFIT',CP,y+5.5,{align:'right'});
@@ -4613,107 +4615,105 @@ async function downloadTlInternalPDF(idx){
 
   function dataRow(label,carrier,customer){
     const profit=customer-carrier;
-    doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(45,55,70);
-    doc.text(label,16,y+6);
-    doc.setTextColor(110,120,140);doc.text(carrier>0?fmtD(carrier):'-',CX,y+6,{align:'right'});
-    doc.setFont('helvetica','bold');doc.setTextColor(...navy);doc.text(customer>0?fmtD(customer):'-',CU,y+6,{align:'right'});
-    doc.setTextColor(...green);doc.text(profit>0?'+'+fmtD(profit):'-',CP,y+6,{align:'right'});
-    doc.setDrawColor(228,232,240);doc.setLineWidth(.2);doc.line(12,y+10,W-12,y+10);
+    doc.setFillColor(250,252,255);doc.rect(M,y,CW,11,'F');
+    doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(45,58,78);
+    doc.text(doc.splitTextToSize(String(label),LMAX)[0],M+4,y+8);
+    doc.setTextColor(100,115,135);doc.text(carrier>0?fmtD(carrier):'—',CX,y+8,{align:'right'});
+    doc.setFont('helvetica','bold');doc.setTextColor(...navy);doc.text(customer>0?fmtD(customer):'—',CU,y+8,{align:'right'});
+    const pc=profit>0?green:[180,40,40];
+    doc.setTextColor(...pc);doc.text(profit!==0?(profit>0?'+':'')+fmtD(profit):'—',CP,y+8,{align:'right'});
+    doc.setDrawColor(228,234,244);doc.setLineWidth(0.2);doc.line(M,y+11,W-M,y+11);
     y+=11;
   }
 
-  function sectionSubtotal(carrier,customer){
+  function secTotal(carrier,customer){
     const profit=customer-carrier;
-    doc.setFillColor(228,233,242);doc.rect(12,y,W-24,12,'F');
-    doc.setFont('helvetica','bold');doc.setFontSize(9.5);doc.setTextColor(...navy);
-    doc.text('Section total',16,y+8);
-    doc.setFontSize(9);doc.setTextColor(70,80,100);doc.text(fmtD(carrier),CX,y+8,{align:'right'});
-    doc.setTextColor(...navy);doc.text(fmtD(customer),CU,y+8,{align:'right'});
-    doc.setTextColor(...green);doc.text('+'+fmtD(profit),CP,y+8,{align:'right'});
-    y+=16;
+    y+=2;
+    doc.setFillColor(228,235,248);doc.roundedRect(M,y,CW,12,1,1,'F');
+    doc.setFont('helvetica','bold');doc.setFontSize(9);doc.setTextColor(...navy);
+    doc.text('Section total',M+4,y+9);
+    doc.setTextColor(80,95,120);doc.text(fmtD(carrier),CX,y+9,{align:'right'});
+    doc.setTextColor(...navy);doc.text(fmtD(customer),CU,y+9,{align:'right'});
+    doc.setTextColor(...green);doc.text((profit>=0?'+':'')+fmtD(profit),CP,y+9,{align:'right'});
+    y+=18;
   }
 
-  // ── Drayage ──────────────────────────────────────────────────────────────
-  sectionHeader([26,80,150],'INBOUND DRAYAGE  |  Carrier: '+q.drayCarrier,
-    'Origin: '+q.drayPort+'  to  '+q.drayZip+' ('+q.drayLd+')');
+  // Drayage
+  secHeader([26,80,150],
+    'INBOUND DRAYAGE  |  Carrier: '+(q.drayCarrier||'—'),
+    'Origin: '+q.drayPort+'  →  '+q.drayZip+' ('+q.drayLd+')');
   const tl=q.rawTl;const sel=tl?S.rates.find(r=>r.id===tl.selDrayId):null;
   if(sel&&tl){
     CHARGES.filter(c=>isApplicable(c,tl.drayLd)).forEach(c=>{
       const cv=Number(sel[c])||0;const cuv=tlCuRate(cv,c,tl);
       if(!cuv&&!cv) return;dataRow(LABELS[c],cv,cuv);
     });
-  } else {dataRow('Drayage',q.drayCarrierCost,q.drayCustomerPrice);}
-  sectionSubtotal(q.drayCarrierCost,q.drayCustomerPrice);
+  } else {dataRow('Drayage',q.drayCarrierCost||0,q.drayCustomerPrice||0);}
+  secTotal(q.drayCarrierCost||0,q.drayCustomerPrice||0);
 
-  // ── Transload ─────────────────────────────────────────────────────────────
-  sectionHeader([30,100,60],'TRANSLOAD SERVICES  |  Warehouse: '+q.warehouseName,
+  // Transload
+  secHeader([30,100,60],
+    'TRANSLOAD SERVICES  |  Warehouse: '+(q.warehouseName||'—'),
     q.warehouseAddress||'');
   const pCount=parseInt(q.palletCount)||1;
   if(q.chargeMode==='byItem'&&q.tlItems){
     Object.entries(q.tlItems).forEach(([k,item])=>{
       if(!item.included) return;const def=TL_ITEMS_DEF[k];if(!def) return;
       let qty=def.unit==='perPallet'?pCount:def.unit==='perPalletPerDay'?pCount*(parseInt(item.days)||0):1;
-      dataRow(def.label+(qty>1?' x '+qty:''),
-        (parseFloat(item.carrierCost)||0)*qty,(parseFloat(item.customerPrice)||0)*qty);
+      dataRow(def.label+(qty>1?' × '+qty:''),(parseFloat(item.carrierCost)||0)*qty,(parseFloat(item.customerPrice)||0)*qty);
     });
   } else {dataRow('Full transload service',parseFloat(q.tlFlatCarrier)||0,parseFloat(q.tlFlatCustomer)||0);}
-  sectionSubtotal(q.tlCarrierCost,q.tlCustomerPrice);
+  secTotal(q.tlCarrierCost||0,q.tlCustomerPrice||0);
 
-  // ── Outbound ──────────────────────────────────────────────────────────────
-  const outModeLabel=q.outMode||'FTL';
-  let outDeliveryLabel=q.outDeliveryZip||'—';
+  // Outbound
+  const outMode=q.outMode||'FTL';
+  const outCarrierLabel=(q.outMultiStop&&q.outMode==='LTL')?'Multiple LTL':'Carrier: '+(q.outCarrier||'—');
+  let outDeliv=(q.outEquipment&&outMode==='FTL'?q.outEquipment+' | ':'');
   if(q.outMultiStop&&q.outStops?.length){
-    outDeliveryLabel=q.outStops.filter(s=>s.zip).map((s,i)=>`Stop ${i+1}: ${s.zip}${s.address?' ('+s.address+')':''}`).join(' · ');
-  }
-  sectionHeader([150,80,0],'OUTBOUND '+outModeLabel+'  |  '+(q.outMultiStop&&q.outMode==='LTL'?'Multiple LTL Carriers':'Carrier: '+q.outCarrier),
-    (q.outEquipment&&outModeLabel==='FTL'?q.outEquipment+' | ':'')+outDeliveryLabel);
+    outDeliv+=q.outStops.filter(s=>s.zip).map((s,i)=>'Stop '+(i+1)+': '+s.zip).join('  ·  ');
+  } else {outDeliv+='Delivery: '+(q.outDeliveryZip||'—');}
+  secHeader([155,85,10],'OUTBOUND '+outMode+'  |  '+outCarrierLabel,outDeliv);
   if(q.outMultiStop&&q.outMode==='LTL'&&q.outStops?.length){
-    q.outStops.forEach((s,i)=>{
-      const stopLabel=s.carrier
-        ?`LTL Stop ${i+1} - ${s.carrier} -> ${s.zip||'-'}${s.address?' ('+s.address+')':''}`
-        :`LTL Stop ${i+1} -> ${s.zip||'-'}${s.address?' ('+s.address+')':''}`;
-      dataRow(stopLabel,parseFloat(s.carrierRate)||0,parseFloat(s.customerRate)||0);
-    });
-  } else {
-    dataRow('Freight rate',q.outCarrierCost,q.outCustomerPrice);
-  }
-  sectionSubtotal(q.outCarrierCost,q.outCustomerPrice);
+    q.outStops.forEach((s,i)=>dataRow('Stop '+(i+1)+': '+(s.carrier||'—')+' → '+(s.zip||'—'),parseFloat(s.carrierRate)||0,parseFloat(s.customerRate)||0));
+  } else {dataRow('Freight rate',q.outCarrierCost||0,q.outCustomerPrice||0);}
+  secTotal(q.outCarrierCost||0,q.outCustomerPrice||0);
 
-  // ── Grand total ───────────────────────────────────────────────────────────
-  y+=2;
-  doc.setFillColor(...navy);doc.rect(12,y,W-24,15,'F');
-  doc.setFont('helvetica','bold');doc.setFontSize(11);doc.setTextColor(255,255,255);
-  doc.text('GRAND TOTAL',16,y+9.5);
-  doc.setFontSize(8.5);doc.setTextColor(255,255,255,.65);
-  doc.text(fmtD(q.totalCarrier),CX,y+9.5,{align:'right'});
-  doc.setFontSize(15);doc.setTextColor(255,255,255);
-  doc.text(fmtD(q.totalCustomer),CU,y+9.5,{align:'right'});
-  doc.setFontSize(10);doc.setTextColor(100,255,150);
-  doc.text('+'+fmtD(q.profit),CP,y+9.5,{align:'right'});
-  y+=20;
+  // Grand total
+  doc.setFillColor(...navy);doc.roundedRect(M,y,CW,18,2,2,'F');
+  doc.setFont('helvetica','bold');doc.setFontSize(12);doc.setTextColor(255,255,255);
+  doc.text('GRAND TOTAL',M+6,y+12);
+  doc.setFontSize(8.5);doc.setTextColor(200,210,230);
+  doc.text(fmtD(q.totalCarrier||0),CX,y+12,{align:'right'});
+  doc.setFontSize(18);doc.setTextColor(255,255,255);
+  doc.text(fmtD(q.totalCustomer||0),CU,y+12,{align:'right'});
+  doc.setFontSize(10);doc.setTextColor(120,255,160);
+  doc.text('+'+(fmtD(q.profit||0)),CP,y+12,{align:'right'});
+  y+=24;
 
-  // ── Billing summary ───────────────────────────────────────────────────────
-  doc.setDrawColor(200,210,220);doc.setLineWidth(.3);doc.line(12,y,W-12,y);y+=8;
-  doc.setFont('helvetica','bold');doc.setFontSize(8);doc.setTextColor(100,115,130);
-  doc.text('BILLING SUMMARY',12,y);y+=8;
-  [['Customer Invoice Total',fmtD(q.totalCustomer),[0,100,160]],
-   ['Carrier Cost',fmtD(q.totalCarrier),[80,90,105]],
-   ['Profit',fmtD(q.profit),[...green]],
-   ['Margin',pct(q.profitPct),[...green]]
+  // Billing summary
+  if(y>255){doc.addPage();y=16;}
+  doc.setDrawColor(210,220,235);doc.setLineWidth(0.4);doc.line(M,y,W-M,y);y+=8;
+  doc.setFont('helvetica','bold');doc.setFontSize(8);doc.setTextColor(120,135,155);
+  doc.text('BILLING SUMMARY',M,y);y+=9;
+  [['Customer Invoice Total',fmtD(q.totalCustomer||0),[0,90,160]],
+   ['Carrier Cost',fmtD(q.totalCarrier||0),[90,100,120]],
+   ['Profit',fmtD(q.profit||0),[...green]],
+   ['Margin',pct(q.profitPct||0),[...green]]
   ].forEach(([l,v,col])=>{
-    doc.setFont('helvetica','normal');doc.setFontSize(10);doc.setTextColor(80,90,105);doc.text(l,16,y);
-    doc.setFont('helvetica','bold');doc.setTextColor(...col);doc.text(v,W-14,y,{align:'right'});
-    doc.setDrawColor(235,238,242);doc.setLineWidth(.2);doc.line(12,y+3,W-12,y+3);y+=9;
+    doc.setFont('helvetica','normal');doc.setFontSize(9.5);doc.setTextColor(70,85,105);
+    doc.text(l,M+4,y);
+    doc.setFont('helvetica','bold');doc.setTextColor(...col);
+    doc.text(v,W-M,y,{align:'right'});
+    doc.setDrawColor(230,236,245);doc.setLineWidth(0.2);doc.line(M,y+4,W-M,y+4);
+    y+=11;
   });
 
-  doc.setFontSize(8);doc.setFont('helvetica','italic');doc.setTextColor(180,185,195);
-  doc.text('Confidential - do not share with carriers or customers.',12,275);
-  doc.text('Generated by Shifl Trucking Quoting  |  '+new Date().toISOString().slice(0,10),12,280);
+  doc.setFontSize(7.5);doc.setFont('helvetica','italic');doc.setTextColor(175,182,195);
+  doc.text('Confidential — do not share with carriers or customers.',M,282);
+  doc.text('Generated by Shifl Logistics  |  '+new Date().toISOString().slice(0,10),M,287);
   doc.save('Shifl_TL_RateSheet_'+q.customer.replace(/\s+/g,'_')+'_'+q.date+'.pdf');
 }
 
-// ═══════════════════════════════════════════════════════
-// ═══════════════════════════════════════════════════════
 // ACTIVE SHIPMENTS
 // ═══════════════════════════════════════════════════════
 const CARRIER_TRACK_URLS={
