@@ -363,6 +363,7 @@ hr{border:none;border-top:1px solid var(--gray-100);margin:14px 0}
       <button class="nav-sub" id="fqnav-log" onclick="setView('freight');setFqTab('log')"><span>📁</span>Quote log</button>
       <button class="nav-sub" id="fqnav-carriers" onclick="setView('freight');setFqTab('carriers')"><span>📋</span>Carrier rates</button>
       <button class="nav-sub" id="fqnav-dash" onclick="setView('freight');setFqTab('dash')"><span>📊</span>Dashboard</button>
+      <button class="nav-sub" id="fqnav-invoicing" onclick="setView('freight');setFqTab('invoicing')" style="position:relative"><span>🧾</span>Invoicing<span id="fq-inv-badge" style="display:none;position:absolute;top:4px;right:8px;background:var(--red);color:#fff;border-radius:99px;font-size:9px;font-weight:800;min-width:16px;height:16px;line-height:16px;text-align:center;padding:0 3px">0</span></button>
       <div style="margin:10px 18px;border-top:1px solid rgba(255,255,255,.1)"></div>
       <div style="padding:4px 18px 6px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:rgba(255,255,255,.28)">Transload</div>
       <button class="nav-btn" onclick="setView('transload');setTlTab('builder')" id="nav-transload" style="border-left-color:transparent">
@@ -800,7 +801,7 @@ let S={
       lclPriceBy:'pallets', cbm:0, transitTime:'',
       calc:{l:'',w:'',h:'',pieces:'',weightLbs:'',unit:'in'}},
   fqTab:'builder',
-  activeFilter:'all',activeView:'active',reportTab:'lanes',
+  activeFilter:'all',activeView:'active',reportTab:'lanes',fqInvTab:'pending',
   tl:null, // initialized in boot via defaultTlState()
   tlTab:'builder',
 };
@@ -1459,9 +1460,10 @@ function needsPalletCount(fq){
 function renderFreight(){
   const tab=S.fqTab||'builder';
   $('topbar-right').innerHTML=tab==='carriers'?`<button class="btn blue" onclick="showAddFqRate()">+ Add rate</button>`:'';
-  if(tab==='log')      return renderFqLog();
-  if(tab==='carriers') return renderFqCarriers();
-  if(tab==='dash')     return renderFqDashboard();
+  if(tab==='log')        return renderFqLog();
+  if(tab==='carriers')   return renderFqCarriers();
+  if(tab==='dash')       return renderFqDashboard();
+  if(tab==='invoicing')  return renderFqInvoicing();
   renderFqBuilder();
 }
 
@@ -1727,7 +1729,9 @@ function renderFqBuilder(){
 }
 
 // ── Freight Quote Log ──────────────────────────────────────────────────────
+function updateFqInvBadge(){const pending=(window._fqHistory||[]).filter(q=>q.status==='Delivered').length;const b=$('fq-inv-badge');if(b){b.textContent=pending;b.style.display=pending?'':'none';}}
 function renderFqLog(){
+  updateFqInvBadge();
   const history=window._fqHistory||[];
   if(!history.length){
     $('page').innerHTML=`<div class="empty"><div class="empty-ico">📁</div><p>No freight quotes saved yet</p><small>Build a quote on the Quote builder tab and save it</small></div>`;
@@ -1757,10 +1761,13 @@ function renderFqLog(){
           <option${q.status==='Lost'?' selected':''}>Lost</option>
           <option${q.status==='Cancelled'?' selected':''}>Cancelled</option>
           <option${q.status==='Delivered'?' selected':''}>Delivered</option>
+          <option${q.status==='Invoiced'?' selected':''}>Invoiced</option>
+          <option${q.status==='Paid'?' selected':''}>Paid</option>
         </select>
       </td>
       <td onclick="event.stopPropagation()" style="white-space:nowrap">
         ${q.status==='Booked'?`<button class="btn sm ico-btn" onclick="downloadFqCarrierPDF(${i})" title="Carrier rate sheet" style="color:var(--green)">📋</button>`:''}
+        ${q.status==='Delivered'?`<button class="btn sm ico-btn" onclick="fqSendInvoice(${i})" title="Send Invoice" style="color:var(--amber)">🧾</button>`:''}
         <button class="btn sm ico-btn" onclick="showFqQuoteModal(${i})" title="View" style="margin-left:3px">📄</button>
         <button class="btn sm ico-btn" onclick="deleteFqQuote(${i})" title="Delete" style="margin-left:3px">🗑️</button>
       </td>
@@ -6405,6 +6412,8 @@ const ACTION_LABELS={
   carrier_added:'🤝 Carrier added',carrier_edited:'✏️ Carrier edited',carrier_deleted:'🗑️ Carrier deleted',
   user_added:'👤 User added',user_edited:'✏️ User edited',user_deleted:'🗑️ User deleted',
   email_sent:'📧 Email sent to carrier',
+  invoice_sent:'🧾 Invoice sent',
+  payment_received:'💰 Payment received',
   margin_override:'⚠️ Low margin override',
 };
 
@@ -6771,6 +6780,191 @@ function exportPL(){
   const rows=Object.keys(byMonth).sort().reverse().map(m=>{const d=byMonth[m];return[m,d.cnt,d.baseRev.toFixed(2),d.baseProf.toFixed(2),d.baseRev>0?(d.baseProf/d.baseRev*100).toFixed(1)+'%':'0%',d.accRev.toFixed(2),d.accProf.toFixed(2),d.totCarrier.toFixed(2),d.totRev.toFixed(2),d.totProf.toFixed(2)];});
   const csv=[hdrs,...rows].map(r=>r.join(',')).join('\n');
   const a=document.createElement('a');a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);a.download='shifl_pl_'+new Date().toISOString().slice(0,10)+'.csv';a.click();
+}
+
+
+// ═══════════════════════════════════════════════════════
+// FREIGHT INVOICING MODULE
+// ═══════════════════════════════════════════════════════
+
+function renderFqInvoicing(){
+  updateFqInvBadge();
+  const subtab=S.fqInvTab||'pending';
+  const all=window._fqHistory||[];
+  const pending=all.filter(q=>q.status==='Delivered');
+  const invoiced=all.filter(q=>q.status==='Invoiced');
+  const paid=all.filter(q=>q.status==='Paid');
+
+  $('topbar-right').innerHTML='';
+
+  const tabBar=`<div style="display:flex;gap:4px;background:var(--gray-100);padding:3px;border-radius:var(--radius);width:fit-content;margin-bottom:18px">
+    ${[
+      {id:'pending',label:`⏳ Pending Invoice (${pending.length})`},
+      {id:'invoiced',label:`📤 Invoiced (${invoiced.length})`},
+      {id:'paid',label:`✅ Paid (${paid.length})`}
+    ].map(t=>`<button onclick="S.fqInvTab='${t.id}';renderFqInvoicing()" style="padding:6px 14px;border-radius:5px;border:none;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;background:${subtab===t.id?'#fff':'none'};color:${subtab===t.id?'var(--navy)':'var(--gray-500)'};box-shadow:${subtab===t.id?'0 1px 3px rgba(0,0,0,.08)':'none'}">${t.label}</button>`).join('')}
+  </div>`;
+
+  if(subtab==='pending'){
+    if(!pending.length){
+      $('page').innerHTML=tabBar+`<div class="empty"><div class="empty-ico">✅</div><div style="font-size:16px;font-weight:700;color:var(--gray-500)">No pending invoices</div><div style="font-size:13px;color:var(--gray-400);margin-top:6px">Mark a freight shipment as Delivered to start the invoicing process</div></div>`;
+      return;
+    }
+    const rows=pending.map((q,i)=>{
+      const idx=all.indexOf(q);
+      const days=q.deliveredDate?Math.floor((Date.now()-new Date(q.deliveredDate+'T12:00:00'))/864e5):null;
+      const urg=days!==null&&days>=3;
+      return`<tr style="${urg?'background:#fffbeb':''}">
+        <td><div class="bold">${q.customer||'—'}</div><div class="muted">${q.fqMode||'Freight'} · ${q.pickupZip||'—'} → ${q.deliveryZip||'—'}</div></td>
+        <td class="muted">${q.carrier||'—'}</td>
+        <td class="money" style="color:var(--steel)">${fmtD(q.customerRate||0)}</td>
+        <td class="muted">${q.bookedDate||q.date||'—'}</td>
+        <td style="color:${urg?'var(--amber)':'var(--gray-500)'};font-weight:${urg?'700':'400'}">${days!==null?days+'d ago':'—'}</td>
+        <td style="white-space:nowrap">
+          <button class="btn sm blue" onclick="fqSendInvoice(${idx})">🧾 Send Invoice</button>
+        </td>
+      </tr>`;
+    }).join('');
+    $('page').innerHTML=tabBar+`<div class="tbl-wrap"><table><thead><tr>
+      <th>Customer / Lane</th><th>Carrier</th><th>Invoice Amount</th><th>Delivery Date</th><th>Waiting Since</th><th></th>
+    </tr></thead><tbody>${rows}</tbody></table></div>`;
+  }
+
+  else if(subtab==='invoiced'){
+    if(!invoiced.length){
+      $('page').innerHTML=tabBar+`<div class="empty"><div class="empty-ico">📤</div><div style="font-size:16px;font-weight:700;color:var(--gray-500)">No invoices sent yet</div></div>`;
+      return;
+    }
+    const totalOut=invoiced.reduce((s,q)=>s+(q.customerRate||0),0);
+    const overdue=invoiced.filter(q=>q.invoiceDueDate&&new Date(q.invoiceDueDate+'T12:00:00')<new Date());
+    const kpis=`<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px">
+      <div class="kpi"><div class="kpi-lbl">Outstanding</div><div class="kpi-val" style="color:var(--steel)">${fmtD(totalOut)}</div></div>
+      <div class="kpi"><div class="kpi-lbl">Invoices sent</div><div class="kpi-val">${invoiced.length}</div></div>
+      <div class="kpi"><div class="kpi-lbl">Overdue</div><div class="kpi-val" style="color:var(--red)">${overdue.length}</div>${overdue.length?`<div style="font-size:11px;color:var(--red);margin-top:4px">${fmtD(overdue.reduce((s,q)=>s+(q.customerRate||0),0))}</div>`:''}</div>
+    </div>`;
+    const rows=invoiced.map((q,i)=>{
+      const idx=all.indexOf(q);
+      const dueDate=q.invoiceDueDate;
+      const daysOut=dueDate?Math.floor((Date.now()-new Date(dueDate+'T12:00:00'))/864e5):null;
+      const isOverdue=daysOut!==null&&daysOut>0;
+      const daysSent=q.invoiceDate?Math.floor((Date.now()-new Date(q.invoiceDate+'T12:00:00'))/864e5):null;
+      return`<tr style="${isOverdue?'background:#fff5f5':''}">
+        <td><div class="bold">${q.customer||'—'}</div><div class="muted">${q.fqMode||'Freight'} · ${q.pickupZip||'—'} → ${q.deliveryZip||'—'}</div></td>
+        <td><div class="bold" style="font-family:monospace;font-size:13px">${q.invoiceNum||'—'}</div><div class="muted">${q.invoiceDate||'—'}</div></td>
+        <td class="money" style="color:var(--steel)">${fmtD(q.customerRate||0)}</td>
+        <td style="color:${isOverdue?'var(--red)':'var(--gray-500)'};font-weight:${isOverdue?'700':'400'}">
+          ${dueDate?(isOverdue?`⚠ ${daysOut}d overdue`:daysOut===0?'Due today':`${Math.abs(daysOut)}d left`):'No due date'}
+        </td>
+        <td class="muted">${daysSent!==null?daysSent+'d ago':'—'}</td>
+        <td style="white-space:nowrap">
+          <button class="btn sm" onclick="fqMarkPaid(${idx})" style="color:var(--green);border-color:#86efac">✅ Mark Paid</button>
+        </td>
+      </tr>`;
+    }).sort((a,b)=>a.localeCompare?0:0).join('');
+    $('page').innerHTML=tabBar+kpis+`<div class="tbl-wrap"><table><thead><tr>
+      <th>Customer / Lane</th><th>Invoice #</th><th>Amount</th><th>Due Date</th><th>Days Since Sent</th><th></th>
+    </tr></thead><tbody>${rows}</tbody></table></div>`;
+  }
+
+  else if(subtab==='paid'){
+    if(!paid.length){
+      $('page').innerHTML=tabBar+`<div class="empty"><div class="empty-ico">💰</div><div style="font-size:16px;font-weight:700;color:var(--gray-500)">No payments recorded yet</div></div>`;
+      return;
+    }
+    const totalCollected=paid.reduce((s,q)=>s+(q.customerRate||0),0);
+    const avgDays=paid.filter(q=>q.invoiceDate&&q.paidDate).reduce((s,q)=>s+Math.floor((new Date(q.paidDate+'T12:00:00')-new Date(q.invoiceDate+'T12:00:00'))/864e5),0)/(paid.filter(q=>q.invoiceDate&&q.paidDate).length||1);
+    const kpis=`<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:16px">
+      <div class="kpi"><div class="kpi-lbl">Total Collected</div><div class="kpi-val" style="color:var(--green)">${fmtD(totalCollected)}</div></div>
+      <div class="kpi"><div class="kpi-lbl">Avg Days to Pay</div><div class="kpi-val">${avgDays.toFixed(0)}d</div></div>
+    </div>`;
+    const rows=paid.map(q=>{
+      const daysToPay=q.invoiceDate&&q.paidDate?Math.floor((new Date(q.paidDate+'T12:00:00')-new Date(q.invoiceDate+'T12:00:00'))/864e5):null;
+      return`<tr>
+        <td><div class="bold">${q.customer||'—'}</div><div class="muted">${q.fqMode||'Freight'} · ${q.pickupZip||'—'} → ${q.deliveryZip||'—'}</div></td>
+        <td style="font-family:monospace;font-size:13px;font-weight:600">${q.invoiceNum||'—'}</td>
+        <td class="money" style="color:var(--green);font-weight:700">${fmtD(q.customerRate||0)}</td>
+        <td class="muted">${q.invoiceDate||'—'}</td>
+        <td class="muted">${q.paidDate||'—'}</td>
+        <td class="muted" style="text-align:center">${daysToPay!==null?daysToPay+'d':'—'}</td>
+      </tr>`;
+    }).join('');
+    $('page').innerHTML=tabBar+kpis+`<div class="tbl-wrap"><table><thead><tr>
+      <th>Customer / Lane</th><th>Invoice #</th><th>Amount</th><th>Invoice Date</th><th>Paid Date</th><th style="text-align:center">Days to Pay</th>
+    </tr></thead><tbody>${rows}</tbody></table></div>`;
+  }
+}
+
+function fqSendInvoice(idx){
+  const q=(window._fqHistory||[])[idx];if(!q) return;
+  const suggestedInv='INV-FQ-'+Date.now().toString().slice(-5);
+  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:460px">
+    <div class="modal-title">🧾 Send Invoice — ${q.customer||'—'}</div>
+    <div style="background:var(--gray-50);border-radius:var(--radius);padding:12px 14px;margin-bottom:16px">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div style="font-size:13px;color:var(--gray-600)">${q.fqMode||'Freight'} · ${q.pickupZip||'—'} → ${q.deliveryZip||'—'}</div>
+        <div class="money" style="color:var(--steel);font-size:18px">${fmtD(q.customerRate||0)}</div>
+      </div>
+    </div>
+    <div class="field"><label>Invoice number *</label><input type="text" id="inv-num" value="${suggestedInv}" placeholder="INV-FQ-12345"></div>
+    <div class="g2">
+      <div class="field"><label>Invoice date</label><input type="date" id="inv-date" value="${new Date().toISOString().slice(0,10)}"></div>
+      <div class="field"><label>Due date</label><input type="date" id="inv-due" value="${new Date(Date.now()+30*864e5).toISOString().slice(0,10)}"></div>
+    </div>
+    <div class="field"><label>Notes</label><input type="text" id="inv-notes" placeholder="e.g. Net 30, factoring, etc."></div>
+    <div class="modal-foot">
+      <button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn blue" onclick="fqConfirmInvoice(${idx})">✅ Mark as Invoiced</button>
+    </div>
+  </div></div>`;
+}
+
+async function fqConfirmInvoice(idx){
+  const q=(window._fqHistory||[])[idx];if(!q) return;
+  const num=($('inv-num')||{}).value?.trim();
+  if(!num){alert('Invoice number required.');return;}
+  q.invoiceNum=num;
+  q.invoiceDate=($('inv-date')||{}).value||new Date().toISOString().slice(0,10);
+  q.invoiceDueDate=($('inv-due')||{}).value||'';
+  q.invoiceNotes=($('inv-notes')||{}).value?.trim()||'';
+  q.status='Invoiced';
+  try{localStorage.setItem('fq_history',JSON.stringify(window._fqHistory));}catch(e){}
+  try{await dbUpdateFqStatus(q.id,'Invoiced');}catch(e){}
+  logAction('invoice_sent',`${q.customer||'—'} · ${fmtD(q.customerRate||0)} · ${num}`,'fq_quote',q.id);
+  closeModal();
+  S.fqInvTab='invoiced';
+  renderFqInvoicing();
+  updateFqInvBadge();
+}
+
+function fqMarkPaid(idx){
+  const q=(window._fqHistory||[])[idx];if(!q) return;
+  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:400px">
+    <div class="modal-title">✅ Mark as Paid — ${q.customer||'—'}</div>
+    <div style="background:var(--gray-50);border-radius:var(--radius);padding:12px 14px;margin-bottom:16px;display:flex;justify-content:space-between">
+      <div><div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--gray-400)">Invoice ${q.invoiceNum||'—'}</div><div style="font-size:13px;color:var(--gray-600)">${q.customer}</div></div>
+      <div class="money" style="color:var(--steel);font-size:20px">${fmtD(q.customerRate||0)}</div>
+    </div>
+    <div class="field"><label>Date payment received</label><input type="date" id="paid-date" value="${new Date().toISOString().slice(0,10)}"></div>
+    <div class="field"><label>Payment notes</label><input type="text" id="paid-notes" placeholder="e.g. ACH, check #1234, factored"></div>
+    <div class="modal-foot">
+      <button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn" style="background:var(--green);color:#fff;border-color:var(--green)" onclick="fqConfirmPaid(${idx})">✅ Confirm Payment</button>
+    </div>
+  </div></div>`;
+}
+
+async function fqConfirmPaid(idx){
+  const q=(window._fqHistory||[])[idx];if(!q) return;
+  q.paidDate=($('paid-date')||{}).value||new Date().toISOString().slice(0,10);
+  q.paidNotes=($('paid-notes')||{}).value?.trim()||'';
+  q.status='Paid';
+  try{localStorage.setItem('fq_history',JSON.stringify(window._fqHistory));}catch(e){}
+  try{await dbUpdateFqStatus(q.id,'Paid');}catch(e){}
+  logAction('payment_received',`${q.customer||'—'} · ${fmtD(q.customerRate||0)} · ${q.invoiceNum||'—'}`,'fq_quote',q.id);
+  closeModal();
+  S.fqInvTab='paid';
+  renderFqInvoicing();
+  updateFqInvBadge();
 }
 
 
