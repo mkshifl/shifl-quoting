@@ -803,7 +803,7 @@ let S={
       lclPriceBy:'pallets', cbm:0, transitTime:'',
       calc:{l:'',w:'',h:'',pieces:'',weightLbs:'',unit:'in'}},
   fqTab:'builder',
-  activeFilter:'all',activeView:'active',reportTab:'lanes',reportMode:'All',fqInvTab:'pending',
+  activeFilter:'all',activeView:'active',reportTab:'lanes',reportMode:'All',fqInvTab:'pending',aqTab:'builder',aqFilter:'all',
   tl:null, // initialized in boot via defaultTlState()
   tlTab:'builder',
 };
@@ -829,6 +829,7 @@ async function initApp(){
   try{S.customers=await dbLoadCustomers();}catch(e){S.customers=[];console.log('customers table:',e.message);}
   $('loading-msg').textContent='Loading freight history…';
   try{await loadFqHistory();}catch(e){window._fqHistory=[];console.log('fq history:',e.message);}
+  try{window._aqHistory=await dbLoadAqQuotes();}catch(e){window._aqHistory=JSON.parse(localStorage.getItem('aq_history')||'[]');}
   try{await loadTlHistory();}catch(e){window._tlHistory=[];console.log('tl history:',e.message);}
   loadSpecialZips();
   loadCustomCFS();
@@ -926,6 +927,7 @@ function render(){
   else if(S.view==='carriers')   renderCarriers();
   else if(S.view==='admin')      renderAdmin();
   else if(S.view==='activity')   renderActivity();
+  else if(S.view==='air')         renderAirFreight();
   else if(S.view==='reports')    renderReports();
   else if(S.view==='auditlog')   renderAuditLog();
   else if(S.view==='freight')    renderFreight();
@@ -7049,6 +7051,408 @@ async function fqConfirmPaid(idx){
   S.fqInvTab='paid';
   renderFqInvoicing();
   updateFqInvBadge();
+}
+
+
+// ═══════════════════════════════════════════════════════
+// AIR FREIGHT QUOTING
+// ═══════════════════════════════════════════════════════
+
+const US_AIRPORTS=[
+  {code:'JFK',name:'John F. Kennedy International',city:'New York',state:'NY',zip:'11430'},
+  {code:'EWR',name:'Newark Liberty International',city:'Newark',state:'NJ',zip:'07114'},
+  {code:'LAX',name:'Los Angeles International',city:'Los Angeles',state:'CA',zip:'90045'},
+  {code:'ORD',name:"O'Hare International",city:'Chicago',state:'IL',zip:'60666'},
+  {code:'ATL',name:'Hartsfield-Jackson Atlanta International',city:'Atlanta',state:'GA',zip:'30320'},
+  {code:'DFW',name:'Dallas/Fort Worth International',city:'Dallas',state:'TX',zip:'75261'},
+  {code:'MIA',name:'Miami International',city:'Miami',state:'FL',zip:'33126'},
+  {code:'SFO',name:'San Francisco International',city:'San Francisco',state:'CA',zip:'94128'},
+  {code:'BOS',name:'Logan International',city:'Boston',state:'MA',zip:'02128'},
+  {code:'IAH',name:'George Bush Intercontinental',city:'Houston',state:'TX',zip:'77032'},
+  {code:'SEA',name:'Seattle-Tacoma International',city:'Seattle',state:'WA',zip:'98188'},
+  {code:'PHX',name:'Phoenix Sky Harbor International',city:'Phoenix',state:'AZ',zip:'85034'},
+  {code:'DEN',name:'Denver International',city:'Denver',state:'CO',zip:'80249'},
+  {code:'DTW',name:'Detroit Metropolitan Wayne County',city:'Detroit',state:'MI',zip:'48242'},
+  {code:'MSP',name:'Minneapolis-Saint Paul International',city:'Minneapolis',state:'MN',zip:'55111'},
+  {code:'PHL',name:'Philadelphia International',city:'Philadelphia',state:'PA',zip:'19153'},
+  {code:'CLT',name:'Charlotte Douglas International',city:'Charlotte',state:'NC',zip:'28208'},
+  {code:'LAS',name:'Harry Reid International (Las Vegas)',city:'Las Vegas',state:'NV',zip:'89119'},
+  {code:'MCO',name:'Orlando International',city:'Orlando',state:'FL',zip:'32827'},
+  {code:'SAN',name:'San Diego International',city:'San Diego',state:'CA',zip:'92101'},
+  {code:'BWI',name:'Baltimore/Washington International',city:'Baltimore',state:'MD',zip:'21240'},
+  {code:'IAD',name:'Washington Dulles International',city:'Dulles',state:'VA',zip:'20166'},
+  {code:'DCA',name:'Ronald Reagan Washington National',city:'Arlington',state:'VA',zip:'22202'},
+  {code:'MEM',name:'Memphis International',city:'Memphis',state:'TN',zip:'38118'},
+  {code:'CVG',name:'Cincinnati/Northern Kentucky International',city:'Hebron',state:'KY',zip:'41018'},
+  {code:'SDF',name:'Louisville Muhammad Ali International',city:'Louisville',state:'KY',zip:'40213'},
+  {code:'OAK',name:'Oakland International',city:'Oakland',state:'CA',zip:'94621'},
+  {code:'LGB',name:'Long Beach Airport',city:'Long Beach',state:'CA',zip:'90810'},
+  {code:'ONT',name:'Ontario International',city:'Ontario',state:'CA',zip:'91761'},
+  {code:'MDW',name:'Chicago Midway International',city:'Chicago',state:'IL',zip:'60638'},
+  {code:'TPA',name:'Tampa International',city:'Tampa',state:'FL',zip:'33607'},
+  {code:'FLL',name:'Fort Lauderdale-Hollywood International',city:'Fort Lauderdale',state:'FL',zip:'33315'},
+  {code:'MSY',name:'Louis Armstrong New Orleans International',city:'New Orleans',state:'LA',zip:'70032'},
+  {code:'STL',name:'St. Louis Lambert International',city:'St. Louis',state:'MO',zip:'63145'},
+  {code:'CMH',name:'John Glenn Columbus International',city:'Columbus',state:'OH',zip:'43219'},
+  {code:'CLE',name:'Cleveland Hopkins International',city:'Cleveland',state:'OH',zip:'44135'},
+  {code:'PIT',name:'Pittsburgh International',city:'Pittsburgh',state:'PA',zip:'15231'},
+  {code:'BDL',name:'Bradley International',city:'Windsor Locks',state:'CT',zip:'06096'},
+  {code:'RDU',name:'Raleigh-Durham International',city:'Raleigh',state:'NC',zip:'27623'},
+  {code:'TUS',name:'Tucson International',city:'Tucson',state:'AZ',zip:'85706'},
+  {code:'ABQ',name:'Albuquerque International Sunport',city:'Albuquerque',state:'NM',zip:'87106'},
+  {code:'SLC',name:'Salt Lake City International',city:'Salt Lake City',state:'UT',zip:'84116'},
+  {code:'PDX',name:'Portland International',city:'Portland',state:'OR',zip:'97218'},
+  {code:'BNA',name:'Nashville International',city:'Nashville',state:'TN',zip:'37217'},
+  {code:'IND',name:'Indianapolis International',city:'Indianapolis',state:'IN',zip:'46241'},
+  {code:'MKE',name:'Milwaukee Mitchell International',city:'Milwaukee',state:'WI',zip:'53207'},
+  {code:'MCI',name:'Kansas City International',city:'Kansas City',state:'MO',zip:'64153'},
+  {code:'AUS',name:'Austin-Bergstrom International',city:'Austin',state:'TX',zip:'78719'},
+  {code:'SAT',name:'San Antonio International',city:'San Antonio',state:'TX',zip:'78216'},
+  {code:'HOU',name:'William P. Hobby Airport',city:'Houston',state:'TX',zip:'77061'},
+  {code:'DAL',name:'Dallas Love Field',city:'Dallas',state:'TX',zip:'75235'},
+  {code:'BUR',name:'Hollywood Burbank Airport',city:'Burbank',state:'CA',zip:'91505'},
+  {code:'SNA',name:'John Wayne Airport (Orange County)',city:'Santa Ana',state:'CA',zip:'92707'},
+  {code:'SMF',name:'Sacramento International',city:'Sacramento',state:'CA',zip:'95837'},
+  {code:'SJC',name:'Norman Y. Mineta San Jose International',city:'San Jose',state:'CA',zip:'95110'},
+  {code:'HNL',name:'Daniel K. Inouye International (Honolulu)',city:'Honolulu',state:'HI',zip:'96819'},
+  {code:'ANC',name:'Ted Stevens Anchorage International',city:'Anchorage',state:'AK',zip:'99502'},
+];
+
+// Default air quote state
+function defaultAqState(){
+  return{
+    customer:'',customerEmail:'',customerId:null,
+    originAirportCode:'',deliveryZip:'',
+    pieces:'',weightLbs:'',cbm:'',
+    awbNumber:'',airFreightCost:'',
+    groundMode:'LTL',
+    groundCarrierName:'',groundRate:'',groundSelId:null,
+    markupMode:'flat',markupAmount:200,
+    customerRate:'',
+    notes:'',shiflRef:'',
+    created_by:null,created_by_name:null
+  };
+}
+
+if(!S.aq) S.aq=defaultAqState();
+if(!window._aqHistory) window._aqHistory=[];
+
+// Load/save air quotes
+async function dbLoadAqQuotes(){
+  try{
+    const{data,error}=await db.from('fq_quotes').select('*')
+      .order('created_at',{ascending:false});
+    if(error) throw error;
+    const all=(data||[]).map(r=>typeof r.data==='object'?r.data:JSON.parse(r.data||'{}'));
+    return all.filter(q=>q.fqMode==='Air');
+  }catch(e){
+    return JSON.parse(localStorage.getItem('aq_history')||'[]');
+  }
+}
+async function dbSaveAqQuote(q){
+  const{error}=await db.from('fq_quotes').upsert({id:q.id,date:q.date,customer:q.customer||'',data:q});
+  if(error) throw error;
+}
+
+function renderAirFreight(){
+  const tab=S.aqTab||'builder';
+  if(tab==='log') return renderAqLog();
+  renderAqBuilder();
+}
+
+function setAqTab(t){
+  S.aqTab=t;
+  document.querySelectorAll('.nav-sub').forEach(b=>b.classList.remove('active'));
+  const el=$('aqnav-'+t);if(el) el.classList.add('active');
+  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
+  const nf=$('nav-air');if(nf) nf.classList.add('active');
+  renderAirFreight();
+}
+
+function renderAqBuilder(){
+  const aq=S.aq;
+  const airport=US_AIRPORTS.find(a=>a.code===aq.originAirportCode);
+  const airCost=parseFloat(aq.airFreightCost)||0;
+  const groundRate=parseFloat(aq.groundRate)||0;
+  const totalCost=airCost+groundRate;
+  const custRate=parseFloat(aq.customerRate)||0;
+  const profit=custRate-totalCost;
+  const margin=custRate>0?profit/custRate:0;
+
+  // Ground leg — find matching carrier rates
+  const airZip=airport?.zip||'';
+  const groundMatches=airZip&&aq.deliveryZip?
+    S.fqRates.filter(r=>r.active&&
+      (r.pickupZip===airZip||r.pickupZip===airZip.slice(0,3)+'00')&&
+      r.deliveryZip===aq.deliveryZip&&
+      (aq.groundMode==='LTL'?r.mode==='LTL'||r.equipment==='Box Truck':(r.equipment==='Box Truck'||r.mode==='FTL'))
+    ):[];
+
+  // Build carrier options for ground leg
+  const carrierOptions=groundMatches.length?`
+    <div style="margin-bottom:12px">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-500);margin-bottom:8px">Available carriers — ${airZip} → ${aq.deliveryZip}</div>
+      ${groundMatches.map(r=>`
+        <div onclick="S.aq.groundCarrierName='${r.carrier.replace(/'/g,"\\'")}';S.aq.groundRate='${r.rate||r.base||0}';S.aq.groundSelId='${r.id}';renderAqBuilder()"
+          style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;margin-bottom:6px;border-radius:var(--radius);border:1px solid ${aq.groundSelId===r.id?'var(--steel)':'var(--gray-200)'};background:${aq.groundSelId===r.id?'var(--blue-bg)':'#fff'};cursor:pointer">
+          <div><span class="bold">${r.carrier}</span> <span class="badge ${aq.groundSelId===r.id?'b':'gr'}" style="margin-left:6px">${r.mode||r.equipment||'LTL'}</span></div>
+          <span class="money" style="color:var(--steel)">${fmtD(r.rate||r.base||0)}</span>
+        </div>`).join('')}
+    </div>`:'';
+
+  $('topbar-right').innerHTML=`<button class="btn blue" onclick="saveAqQuote()">💾 Save quote</button>`;
+  $('page').innerHTML=`<div style="display:grid;grid-template-columns:1fr 380px;gap:16px;align-items:start">
+  <div>
+
+    <!-- Customer -->
+    <div class="card">
+      <div class="sec-head">Customer</div>
+      <div class="g2">
+        <div class="field"><label>Customer name *</label>
+          <input type="text" value="${aq.customer}" oninput="S.aq.customer=this.value" placeholder="Customer name"
+            list="cust-list-aq">
+          <datalist id="cust-list-aq">${(S.customers||[]).map(c=>`<option value="${c.company}">`).join('')}</datalist>
+        </div>
+        <div class="field"><label>Customer email</label>
+          <input type="email" value="${aq.customerEmail}" oninput="S.aq.customerEmail=this.value" placeholder="customer@email.com"></div>
+      </div>
+    </div>
+
+    <!-- Air Leg -->
+    <div class="card">
+      <div class="sec-head">✈️ Air leg — origin airport</div>
+      <div class="g2">
+        <div class="field"><label>Arrival airport *</label>
+          <select onchange="S.aq.originAirportCode=this.value;S.aq.groundSelId=null;S.aq.groundCarrierName='';S.aq.groundRate='';renderAqBuilder()" style="font-size:13px">
+            <option value="">Select airport...</option>
+            ${US_AIRPORTS.map(a=>`<option value="${a.code}"${aq.originAirportCode===a.code?' selected':''}>
+              ${a.code} — ${a.name} (${a.city}, ${a.state})
+            </option>`).join('')}
+          </select>
+          ${airport?`<div style="font-size:11px;color:var(--gray-400);margin-top:4px">📍 Airport ZIP for ground pickup: <strong>${airport.zip}</strong></div>`:''}
+        </div>
+        <div class="field"><label>Air waybill (AWB#)</label>
+          <input type="text" value="${aq.awbNumber}" oninput="S.aq.awbNumber=this.value" placeholder="123-12345678"></div>
+      </div>
+      <div class="field"><label>Air freight cost ($) * <span style="font-weight:400;color:var(--gray-400)">— what you paid the airline / forwarder</span></label>
+        <input type="number" value="${aq.airFreightCost}" oninput="S.aq.airFreightCost=this.value;renderAqBuilder()"
+          placeholder="0.00" step="0.01" min="0" style="max-width:220px;font-size:15px;font-weight:700">
+      </div>
+    </div>
+
+    <!-- Cargo -->
+    <div class="card">
+      <div class="sec-head">📦 Cargo details</div>
+      <div class="g3">
+        <div class="field"><label>Pieces</label>
+          <input type="number" value="${aq.pieces}" oninput="S.aq.pieces=this.value" placeholder="e.g. 10" min="0"></div>
+        <div class="field"><label>Weight (lbs)</label>
+          <input type="number" value="${aq.weightLbs}" oninput="S.aq.weightLbs=this.value" placeholder="e.g. 500" min="0"></div>
+        <div class="field"><label>CBM</label>
+          <input type="number" value="${aq.cbm}" oninput="S.aq.cbm=this.value" placeholder="e.g. 2.5" min="0" step="0.01"></div>
+      </div>
+    </div>
+
+    <!-- Ground Leg -->
+    <div class="card">
+      <div class="sec-head">🚛 Ground leg — airport → delivery</div>
+      <div class="g2" style="margin-bottom:12px">
+        <div class="field"><label>Delivery ZIP *</label>
+          <input type="text" value="${aq.deliveryZip}" oninput="S.aq.deliveryZip=this.value;S.aq.groundSelId=null;renderAqBuilder()"
+            placeholder="e.g. 07728" maxlength="10"></div>
+        <div class="field"><label>Ground transit method</label>
+          <div class="toggle-group" style="margin-top:4px">
+            <button class="tgl${aq.groundMode==='LTL'?' on':''}" onclick="S.aq.groundMode='LTL';S.aq.groundSelId=null;renderAqBuilder()">LTL</button>
+            <button class="tgl${aq.groundMode==='Box Truck'?' on':''}" onclick="S.aq.groundMode='Box Truck';S.aq.groundSelId=null;renderAqBuilder()">Box Truck</button>
+          </div>
+        </div>
+      </div>
+      ${carrierOptions}
+      <div class="g2">
+        <div class="field"><label>Ground carrier</label>
+          <input type="text" value="${aq.groundCarrierName}" oninput="S.aq.groundCarrierName=this.value"
+            placeholder="${groundMatches.length?'Or type manually':'e.g. XPO, UPS Freight'}"></div>
+        <div class="field"><label>Ground rate ($)</label>
+          <input type="number" value="${aq.groundRate}" oninput="S.aq.groundRate=this.value;renderAqBuilder()"
+            placeholder="0.00" step="0.01" min="0"></div>
+      </div>
+    </div>
+
+    <!-- Notes -->
+    <div class="card">
+      <div class="sec-head">Notes</div>
+      <textarea rows="2" oninput="S.aq.notes=this.value" placeholder="Special instructions, commodity, incoterms…"
+        style="width:100%;padding:8px;font-size:13px;border:1px solid var(--gray-200);border-radius:var(--radius);resize:vertical;font-family:inherit">${aq.notes}</textarea>
+    </div>
+
+  </div>
+
+  <!-- Right panel — pricing -->
+  <div style="position:sticky;top:16px">
+    <div class="card">
+      <div class="sec-head">💰 Pricing</div>
+
+      ${airport?`
+      <div style="background:var(--blue-bg);border-radius:var(--radius);padding:12px 14px;margin-bottom:14px;font-size:12px;color:var(--steel)">
+        <div class="bold" style="margin-bottom:4px">✈️ ${airport.code} — ${airport.city}, ${airport.state}</div>
+        <div>${airport.name}</div>
+        <div style="margin-top:4px;color:var(--gray-400)">Ground pickup ZIP: ${airport.zip}</div>
+      </div>`:''}
+
+      <!-- Cost breakdown -->
+      <div style="border:1px solid var(--gray-200);border-radius:var(--radius);overflow:hidden;margin-bottom:14px">
+        <div style="padding:10px 14px;display:flex;justify-content:space-between;border-bottom:1px solid var(--gray-100)">
+          <span style="font-size:13px;color:var(--gray-600)">✈️ Air freight cost</span>
+          <span class="money am">${fmtD(airCost)}</span>
+        </div>
+        <div style="padding:10px 14px;display:flex;justify-content:space-between;border-bottom:1px solid var(--gray-100)">
+          <span style="font-size:13px;color:var(--gray-600)">🚛 Ground delivery (${aq.groundMode||'LTL'})</span>
+          <span class="money am">${fmtD(groundRate)}</span>
+        </div>
+        <div style="padding:10px 14px;display:flex;justify-content:space-between;background:var(--gray-50)">
+          <span style="font-size:13px;font-weight:700">Total cost</span>
+          <span class="money rd">${fmtD(totalCost)}</span>
+        </div>
+      </div>
+
+      <div class="field"><label>Customer rate ($) *</label>
+        <input type="number" value="${aq.customerRate}" oninput="S.aq.customerRate=this.value;renderAqBuilder()"
+          placeholder="0.00" step="0.01" min="0" style="font-size:18px;font-weight:700;border-color:var(--steel)"></div>
+
+      ${custRate>0&&totalCost>0?`
+      <div style="background:${profit>=0?'#f0fdf4':'#fff5f5'};border-radius:var(--radius);padding:14px;text-align:center;margin-top:4px">
+        <div style="display:flex;justify-content:space-around">
+          <div><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--gray-400)">Profit</div>
+            <div style="font-size:22px;font-weight:800;color:${profit>=0?'var(--green)':'var(--red)'}">+${fmtD(profit)}</div></div>
+          <div><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--gray-400)">Margin</div>
+            <div style="font-size:22px;font-weight:800;color:${margin>=0.10?'var(--green)':margin>=0?'var(--amber)':'var(--red)'}">${pct(margin)}</div></div>
+        </div>
+      </div>`:''}
+
+      <div class="field" style="margin-top:14px"><label>Shifl Ref #</label>
+        <input type="text" value="${aq.shiflRef||''}" oninput="S.aq.shiflRef=this.value" placeholder="Assigned after booking"></div>
+
+      <button class="btn blue" onclick="saveAqQuote()" style="width:100%;justify-content:center;padding:11px;margin-top:4px;font-size:14px">
+        💾 Save Air Freight Quote
+      </button>
+    </div>
+  </div>
+</div>`;
+}
+
+async function saveAqQuote(){
+  const aq=S.aq;
+  if(!aq.customer){alert('Enter customer name.');return;}
+  if(!aq.originAirportCode){alert('Select the arrival airport.');return;}
+  if(!aq.deliveryZip){alert('Enter delivery ZIP.');return;}
+  if(!aq.airFreightCost){alert('Enter the air freight cost.');return;}
+  if(!aq.customerRate){alert('Enter the customer rate.');return;}
+  const airport=US_AIRPORTS.find(a=>a.code===aq.originAirportCode);
+  const airCost=parseFloat(aq.airFreightCost)||0;
+  const groundRate=parseFloat(aq.groundRate)||0;
+  const custRate=parseFloat(aq.customerRate)||0;
+  const totalCost=airCost+groundRate;
+  const entry={
+    id:uid(),date:new Date().toISOString().slice(0,10),
+    fqMode:'Air',
+    customer:aq.customer,customerEmail:aq.customerEmail||'',
+    originAirportCode:aq.originAirportCode,
+    originAirport:airport?`${airport.code} — ${airport.name}`:'',
+    originCity:airport?`${airport.city}, ${airport.state}`:'',
+    airportZip:airport?.zip||'',
+    deliveryZip:aq.deliveryZip,
+    awbNumber:aq.awbNumber||'',
+    pieces:parseFloat(aq.pieces)||null,
+    weight:parseFloat(aq.weightLbs)||null,
+    cbm:parseFloat(aq.cbm)||null,
+    airFreightCost:airCost,
+    groundMode:aq.groundMode||'LTL',
+    carrier:aq.groundCarrierName||'—',
+    groundRate,
+    carrierRate:totalCost,
+    customerRate:custRate,
+    profit:custRate-totalCost,
+    profitPct:custRate>0?(custRate-totalCost)/custRate:0,
+    shiflRef:aq.shiflRef||'',
+    notes:aq.notes||'',
+    status:'Quoted',
+    created_by:_currentUser?.id||null,
+    created_by_name:_currentUser?.name||null,
+  };
+  if(!window._aqHistory) window._aqHistory=[];
+  window._aqHistory.unshift(entry);
+  try{localStorage.setItem('aq_history',JSON.stringify(window._aqHistory));}catch(e){}
+  try{await dbSaveAqQuote(entry);}catch(e){console.log('Air quote save:',e.message);}
+  logAction('quote_created',`Air — ${aq.customer} | ${aq.originAirportCode} → ${aq.deliveryZip} | ${fmtD(custRate)}`,'air_quote',entry.id);
+  S.aq=defaultAqState();
+  alert(`✅ Air freight quote saved!\n\nTotal cost: ${fmtD(totalCost)}\nCustomer rate: ${fmtD(custRate)}\nProfit: ${fmtD(custRate-totalCost)} (${pct(custRate>0?(custRate-totalCost)/custRate:0)})`);
+  S.aqTab='log';
+  renderAirFreight();
+}
+
+function renderAqLog(){
+  $('topbar-right').innerHTML=`<button class="btn blue" onclick="S.aqTab='builder';renderAirFreight()">+ New quote</button>`;
+  const all=window._aqHistory||[];
+  if(!all.length){
+    $('page').innerHTML=`<div class="empty"><div class="empty-ico">✈️</div><div style="font-size:16px;font-weight:700;color:var(--gray-500)">No air freight quotes yet</div><div style="font-size:13px;color:var(--gray-400);margin-top:6px">Build your first air freight quote to get started</div></div>`;
+    return;
+  }
+  const filt=S.aqFilter||'all';
+  const shown=filt==='all'?all:all.filter(q=>q.status===filt);
+  const totRev=all.filter(q=>q.status==='Booked').reduce((s,q)=>s+(q.customerRate||0),0);
+  const kpis=`<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px">
+    <div class="kpi"><div class="kpi-lbl">Total quotes</div><div class="kpi-val">${all.length}</div></div>
+    <div class="kpi"><div class="kpi-lbl">Booked</div><div class="kpi-val b">${all.filter(q=>q.status==='Booked').length}</div></div>
+    <div class="kpi"><div class="kpi-lbl">Win rate</div><div class="kpi-val">${all.length>0?pct(all.filter(q=>q.status==='Booked').length/all.filter(q=>['Booked','Lost','Expired'].includes(q.status)).length||0):'—'}</div></div>
+    <div class="kpi"><div class="kpi-lbl">Booked revenue</div><div class="kpi-val g">${fmtD(totRev)}</div></div>
+  </div>`;
+  const tabs=['all','Quoted','Booked','Lost','Cancelled'].map(s=>`<button class="btn btn-sm${filt===s?' blue':''}" onclick="S.aqFilter='${s}';renderAqLog()">${s==='all'?'All ('+all.length+')':s}</button>`).join('');
+  const rows=shown.map((q,i)=>`<tr>
+    <td class="muted small">${q.date}</td>
+    <td class="bold">${q.customer||'—'}</td>
+    <td><span style="font-size:11px;font-weight:700;background:#dbeafe;color:#1e40af;padding:2px 8px;border-radius:99px">✈️ ${q.originAirportCode||'—'}</span></td>
+    <td class="muted">${q.originCity||'—'} → ${q.deliveryZip||'—'}</td>
+    <td class="muted">${q.awbNumber||'—'}</td>
+    <td class="money am">${fmtD(q.airFreightCost||0)}</td>
+    <td class="muted">${q.carrier||'—'} <span style="font-size:10px;background:#f3f4f6;color:var(--gray-500);padding:1px 5px;border-radius:3px">${q.groundMode||'LTL'}</span></td>
+    <td class="money am">${fmtD(q.groundRate||0)}</td>
+    <td class="bold money" style="color:var(--steel)">${fmtD(q.customerRate||0)}</td>
+    <td style="color:var(--green);font-weight:600">+${fmtD(q.profit||0)}</td>
+    <td><span class="badge ${q.status==='Booked'?'g':q.status==='Lost'?'r':'a'}">${q.status||'Quoted'}</span></td>
+    <td onclick="event.stopPropagation()">
+      <select onchange="updateAqStatus(${i},this.value)" style="font-size:12px;padding:3px 6px;width:110px">
+        ${['Quoted','Booked','Lost','Cancelled','Expired'].map(s=>`<option${q.status===s?' selected':''}>${s}</option>`).join('')}
+      </select>
+    </td>
+    <td onclick="event.stopPropagation()">
+      ${can('delete_quotes')?`<button class="btn sm ico-btn" onclick="delAqQuote(${i})" title="Delete">🗑️</button>`:''}
+    </td>
+  </tr>`).join('');
+  $('page').innerHTML=kpis+`<div style="display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap">${tabs}</div>
+  <div class="tbl-wrap"><table><thead><tr>
+    <th>Date</th><th>Customer</th><th>Airport</th><th>Lane</th><th>AWB#</th>
+    <th>Air Cost</th><th>Ground Carrier</th><th>Ground Rate</th><th>Cust. Rate</th><th>Profit</th><th>Status</th><th></th><th></th>
+  </tr></thead><tbody>${rows||'<tr><td colspan="13" style="text-align:center;padding:30px;color:var(--gray-400)">No quotes match filter</td></tr>'}</tbody></table></div>`;
+}
+
+async function updateAqStatus(idx,status){
+  if(status==='Booked'){if(!requireCan('book_quotes','You cannot book quotes.')) return;}
+  else if(!requireCan('update_status','Only Admins can change status.')) return;
+  const q=(window._aqHistory||[])[idx];if(!q) return;
+  q.status=status;
+  try{localStorage.setItem('aq_history',JSON.stringify(window._aqHistory));}catch(e){}
+  try{await db.from('fq_quotes').update({data:q}).eq('id',q.id);}catch(e){}
+  renderAqLog();
+}
+
+async function delAqQuote(idx){
+  if(!requireCan('delete_quotes','Only Admins can delete quotes.')) return;
+  if(!confirm('Delete this air freight quote?')) return;
+  const q=(window._aqHistory||[])[idx];
+  window._aqHistory.splice(idx,1);
+  try{localStorage.setItem('aq_history',JSON.stringify(window._aqHistory));}catch(e){}
+  try{await db.from('fq_quotes').delete().eq('id',q.id);}catch(e){}
+  renderAqLog();
 }
 
 
