@@ -352,6 +352,7 @@ hr{border:none;border-top:1px solid var(--gray-100);margin:14px 0}
       <button class="nav-btn" onclick="setView('customers')" id="nav-customers"><span class="ico">👥</span>Customers</button>
       <button class="nav-btn" onclick="setView('rates')" id="nav-rates"><span class="ico">🚢</span>Carrier rates</button>
       <button class="nav-btn" onclick="setView('log')" id="nav-log"><span class="ico">📁</span>Quote log</button>
+      <button class="nav-btn" onclick="setView('reports')" id="nav-reports"><span class="ico">📈</span>Reports</button>
       <button class="nav-btn" onclick="setView('dash')" id="nav-dash"><span class="ico">📊</span>Dashboard</button>
       <div style="margin:10px 18px;border-top:1px solid rgba(255,255,255,.1)"></div>
       <div style="padding:4px 18px 6px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:rgba(255,255,255,.28)">Freight</div>
@@ -799,7 +800,7 @@ let S={
       lclPriceBy:'pallets', cbm:0, transitTime:'',
       calc:{l:'',w:'',h:'',pieces:'',weightLbs:'',unit:'in'}},
   fqTab:'builder',
-  activeFilter:'all',activeView:'active',
+  activeFilter:'all',activeView:'active',reportTab:'lanes',
   tl:null, // initialized in boot via defaultTlState()
   tlTab:'builder',
 };
@@ -920,6 +921,7 @@ function render(){
   else if(S.view==='carriers')   renderCarriers();
   else if(S.view==='admin')      renderAdmin();
   else if(S.view==='activity')   renderActivity();
+  else if(S.view==='reports')    renderReports();
   else if(S.view==='auditlog')   renderAuditLog();
   else if(S.view==='freight')    renderFreight();
   else if(S.view==='transload')  renderTransload();
@@ -6523,6 +6525,255 @@ function baseSplit(q){
   const accC=ctTot-cb,accCu=cuTot-cu,accP=accCu-accC;
   return{baseP,baseM,accC,accCu,accP};
 }
+// ═══════════════════════════════════════════════════════
+// REPORTS MODULE — 8 report types
+// ═══════════════════════════════════════════════════════
+
+function allQ(){
+  const dray=(S.quotes||[]).map(q=>({
+    type:'Drayage',date:q.date||'',customer:q.customer||'—',carrier:q.carrier||'—',
+    lane:`${q.port||'—'} → ${q.zip||'—'}`,
+    customerRate:q.customerRates?.total||0,carrierRate:q.carrierRates?.total||0,
+    baseCustomer:q.customerRates?.base||0,baseCarrier:q.carrierRates?.base||0,
+    accCustomer:(q.customerRates?.total||0)-(q.customerRates?.base||0),
+    accCarrier:(q.carrierRates?.total||0)-(q.carrierRates?.base||0),
+    accBreakdown:q.carrierRates||{},
+    profit:q.profit||0,profitPct:q.profitPct||0,status:q.status||'',
+    quoteNum:q.quoteNum||'',createdAt:q.created_at||q.date||''
+  }));
+  const fq=(window._fqHistory||[]).map(q=>({
+    type:q.fqMode||'Freight',date:q.date||'',customer:q.customer||'—',carrier:q.carrier||'—',
+    lane:`${q.pickupZip||'—'} → ${q.deliveryZip||'—'}`,
+    customerRate:q.customerRate||0,carrierRate:q.carrierRate||0,
+    baseCustomer:q.customerRate||0,baseCarrier:q.carrierRate||0,
+    accCustomer:0,accCarrier:0,accBreakdown:{},
+    profit:q.profit||0,profitPct:q.profitPct||0,status:q.status||'',
+    quoteNum:'',createdAt:q.date||''
+  }));
+  const tl=(window._tlHistory||[]).map(q=>({
+    type:'Transload',date:q.date||'',customer:q.customer||'—',carrier:q.outCarrier||'—',
+    lane:`${q.drayPort||'—'} → ${q.outDeliveryZip||'—'}`,
+    customerRate:q.totalCustomer||0,carrierRate:q.totalCarrier||0,
+    baseCustomer:q.totalCustomer||0,baseCarrier:q.totalCarrier||0,
+    accCustomer:0,accCarrier:0,accBreakdown:{},
+    profit:q.profit||0,profitPct:q.profitPct||0,status:q.status||'',
+    quoteNum:'',createdAt:q.date||''
+  }));
+  return[...dray,...fq,...tl].sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+}
+
+function daysSince(dateStr){
+  if(!dateStr)return null;
+  try{const d=new Date(dateStr+'T12:00:00');return Math.floor((Date.now()-d)/864e5);}catch(e){return null;}
+}
+
+function group(arr,key){
+  const m={};arr.forEach(r=>{const k=typeof key==='function'?key(r):r[key];if(!m[k])m[k]=[];m[k].push(r);});return m;
+}
+
+function svgLineChart(data,color='#2e75b6'){
+  if(!data.length)return '';
+  const w=420,h=80,pad=28,maxV=Math.max(...data.map(d=>d.v),0.001);
+  const pts=data.map((d,i)=>{const x=pad+i*(w-pad)/(data.length-1||1);const y=h-pad-(d.v/maxV)*(h-pad-4);return`${x},${y}`;}).join(' ');
+  const labels=data.map((d,i)=>{const x=pad+i*(w-pad)/(data.length-1||1);return`<text x="${x}" y="${h-2}" text-anchor="middle" font-size="8" fill="#9ca3af">${d.label}</text>`;}).join('');
+  const dots=data.map((d,i)=>{const x=pad+i*(w-pad)/(data.length-1||1);const y=h-pad-(d.v/maxV)*(h-pad-4);return`<circle cx="${x}" cy="${y}" r="3" fill="${color}"><title>${d.label}: ${d.pct?d.v.toFixed(1)+'%':fmtD(d.v)}</title></circle>`;}).join('');
+  return`<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
+    <polyline points="${pts}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round"/>
+    ${dots}${labels}
+    <line x1="${pad}" y1="0" x2="${pad}" y2="${h-pad}" stroke="#e5e7eb" stroke-width="1"/>
+    <line x1="${pad}" y1="${h-pad}" x2="${w}" y2="${h-pad}" stroke="#e5e7eb" stroke-width="1"/>
+  </svg>`;
+}
+
+function renderReports(){
+  if(!can('view_dashboard')){$('page').innerHTML='<div style="padding:40px;text-align:center;color:var(--gray-400)">Admin access required</div>';return;}
+  const tab=S.reportTab||'lanes';
+  const tabs=[
+    {id:'lanes',label:'🛣️ Lanes'},
+    {id:'customers',label:'🏢 Customers'},
+    {id:'carriers',label:'🚛 Carriers'},
+    {id:'winloss',label:'📊 Win / Loss'},
+    {id:'margin',label:'📈 Margin Trend'},
+    {id:'pipeline',label:'⏳ Pipeline'},
+    {id:'accessorials',label:'➕ Accessorials'},
+    {id:'pl',label:'📥 P&L Export'},
+  ];
+  const tabBar=`<div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:18px;background:var(--gray-100);padding:4px;border-radius:var(--radius);width:fit-content">
+    ${tabs.map(t=>`<button onclick="S.reportTab='${t.id}';renderReports()" style="padding:6px 12px;border-radius:5px;border:none;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;background:${tab===t.id?'#fff':'none'};color:${tab===t.id?'var(--navy)':'var(--gray-500)'};box-shadow:${tab===t.id?'0 1px 3px rgba(0,0,0,.08)':'none'}">${t.label}</button>`).join('')}
+  </div>`;
+  const qs=allQ();
+  if(!qs.length){$('page').innerHTML=tabBar+'<div class="empty"><div class="empty-ico">📈</div><div style="font-size:16px;font-weight:700;color:var(--gray-500)">No quote data yet</div><div style="font-size:13px;color:var(--gray-400);margin-top:6px">Save some quotes to see reports</div></div>';return;}
+  let content='';
+
+  if(tab==='lanes'){
+    const grp=group(qs.filter(q=>q.type==='Drayage'&&q.status==='Booked'),'lane');
+    const rows=Object.entries(grp).sort((a,b)=>b[1].length-a[1].length).map(([lane,arr])=>{
+      const rev=arr.reduce((s,q)=>s+q.customerRate,0);
+      const baseProf=arr.reduce((s,q)=>s+(q.baseCustomer-q.baseCarrier),0);
+      const baseRev=arr.reduce((s,q)=>s+q.baseCustomer,0);
+      const margin=baseRev>0?baseProf/baseRev:0;
+      const avgRate=rev/arr.length;
+      return`<tr><td class="bold">${lane}</td><td class="muted" style="text-align:center">${arr.length}</td><td class="money" style="color:var(--steel)">${fmtD(avgRate)}</td><td class="money" style="color:var(--green)">${fmtD(baseProf)}</td><td><span class="badge ${margin>=0.15?'g':margin>=0.08?'a':'r'}">${pct(margin)}</span></td><td class="money" style="color:var(--steel)">${fmtD(rev)}</td></tr>`;
+    }).join('');
+    content=`<div style="font-size:13px;color:var(--gray-400);margin-bottom:12px">Booked drayage quotes only · ${Object.keys(grp).length} lanes</div>
+    <div class="tbl-wrap"><table><thead><tr><th>Lane</th><th style="text-align:center">Loads</th><th>Avg Cust. Rate</th><th>Base Profit</th><th>Base Margin</th><th>Total Revenue</th></tr></thead><tbody>${rows||'<tr><td colspan="6" style="text-align:center;padding:30px;color:var(--gray-400)">No booked drayage quotes yet</td></tr>'}</tbody></table></div>`;
+  }
+
+  else if(tab==='customers'){
+    const grp=group(qs,'customer');
+    const rows=Object.entries(grp).sort((a,b)=>b[1].reduce((s,q)=>s+q.customerRate,0)-a[1].reduce((s,q)=>s+q.customerRate,0)).map(([cust,arr])=>{
+      const booked=arr.filter(q=>q.status==='Booked');
+      const decided=arr.filter(q=>['Booked','Lost','Expired','Cancelled'].includes(q.status));
+      const winRate=decided.length>0?booked.length/decided.length:null;
+      const rev=booked.reduce((s,q)=>s+q.customerRate,0);
+      const baseProf=booked.reduce((s,q)=>s+(q.baseCustomer-q.baseCarrier),0);
+      const baseRev=booked.reduce((s,q)=>s+q.baseCustomer,0);
+      const margin=baseRev>0?baseProf/baseRev:0;
+      return`<tr><td class="bold">${cust}</td><td class="muted" style="text-align:center">${arr.length}</td><td class="muted" style="text-align:center">${booked.length}</td><td>${winRate!==null?`<span class="badge ${winRate>=0.5?'g':'a'}">${pct(winRate)}</span>`:'—'}</td><td class="money" style="color:var(--steel)">${rev>0?fmtD(rev):'—'}</td><td class="money" style="color:var(--green)">${baseProf>0?'+'+fmtD(baseProf):'—'}</td><td><span class="badge ${margin>=0.15?'g':margin>=0.08?'a':'r'}">${baseRev>0?pct(margin):'—'}</span></td></tr>`;
+    }).join('');
+    content=`<div style="font-size:13px;color:var(--gray-400);margin-bottom:12px">${Object.keys(grp).length} customers · all quote types</div>
+    <div class="tbl-wrap"><table><thead><tr><th>Customer</th><th style="text-align:center">Quotes</th><th style="text-align:center">Booked</th><th>Win Rate</th><th>Booked Revenue</th><th>Base Profit</th><th>Base Margin</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  }
+
+  else if(tab==='carriers'){
+    const grp=group(qs.filter(q=>q.carrier&&q.carrier!=='—'),'carrier');
+    const rows=Object.entries(grp).sort((a,b)=>b[1].length-a[1].length).map(([carrier,arr])=>{
+      const booked=arr.filter(q=>q.status==='Booked');
+      const decided=arr.filter(q=>['Booked','Lost','Expired','Cancelled'].includes(q.status));
+      const winRate=decided.length>0?booked.length/decided.length:null;
+      const totalCarrierCost=booked.reduce((s,q)=>s+q.carrierRate,0);
+      const totalCustRev=booked.reduce((s,q)=>s+q.customerRate,0);
+      const baseProf=booked.reduce((s,q)=>s+(q.baseCustomer-q.baseCarrier),0);
+      const baseRev=booked.reduce((s,q)=>s+q.baseCustomer,0);
+      const margin=baseRev>0?baseProf/baseRev:0;
+      return`<tr><td class="bold">${carrier}</td><td class="muted" style="text-align:center">${arr.length}</td><td class="muted" style="text-align:center">${booked.length}</td><td>${winRate!==null?`<span class="badge ${winRate>=0.5?'g':'a'}">${pct(winRate)}</span>`:'—'}</td><td class="money am">${totalCarrierCost>0?fmtD(totalCarrierCost):'—'}</td><td class="money" style="color:var(--steel)">${totalCustRev>0?fmtD(totalCustRev):'—'}</td><td><span class="badge ${margin>=0.15?'g':margin>=0.08?'a':'r'}">${baseRev>0?pct(margin):'—'}</span></td></tr>`;
+    }).join('');
+    content=`<div style="font-size:13px;color:var(--gray-400);margin-bottom:12px">${Object.keys(grp).length} carriers · all quote types</div>
+    <div class="tbl-wrap"><table><thead><tr><th>Carrier</th><th style="text-align:center">Quoted</th><th style="text-align:center">Booked</th><th>Book Rate</th><th>Total Cost Paid</th><th>Revenue Generated</th><th>Base Margin</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  }
+
+  else if(tab==='winloss'){
+    const lost=qs.filter(q=>['Lost','Cancelled','Expired'].includes(q.status));
+    const booked=qs.filter(q=>q.status==='Booked');
+    const total=qs.length;
+    const kpis=`<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:18px">
+      <div class="kpi"><div class="kpi-lbl">Total Quotes</div><div class="kpi-val">${total}</div></div>
+      <div class="kpi"><div class="kpi-lbl">Booked</div><div class="kpi-val b">${booked.length}</div><div style="font-size:11px;color:var(--green);margin-top:4px">${pct(total>0?booked.length/total:0)}</div></div>
+      <div class="kpi"><div class="kpi-lbl">Lost / Expired</div><div class="kpi-val r">${lost.length}</div><div style="font-size:11px;color:var(--red);margin-top:4px">${pct(total>0?lost.length/total:0)}</div></div>
+      <div class="kpi"><div class="kpi-lbl">Still Open</div><div class="kpi-val a">${qs.filter(q=>q.status==='Quoted').length}</div></div>
+    </div>`;
+    // Lost by carrier
+    const byCarrier=group(lost.filter(q=>q.carrier&&q.carrier!=='—'),'carrier');
+    const carrierRows=Object.entries(byCarrier).sort((a,b)=>b[1].length-a[1].length).slice(0,8).map(([c,arr])=>`<tr><td class="bold">${c}</td><td class="muted" style="text-align:center">${arr.length}</td><td class="money">${fmtD(arr.reduce((s,q)=>s+q.customerRate,0)/arr.length)}</td></tr>`).join('');
+    // Lost by customer
+    const byCustomer=group(lost,'customer');
+    const custRows=Object.entries(byCustomer).sort((a,b)=>b[1].length-a[1].length).slice(0,8).map(([c,arr])=>`<tr><td class="bold">${c}</td><td class="muted" style="text-align:center">${arr.length}</td></tr>`).join('');
+    content=kpis+`<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+      <div><div class="sec-head" style="margin-bottom:10px">Lost by carrier</div><div class="tbl-wrap"><table><thead><tr><th>Carrier</th><th style="text-align:center">Lost quotes</th><th>Avg rate quoted</th></tr></thead><tbody>${carrierRows||'<tr><td colspan="3" style="text-align:center;padding:20px;color:var(--gray-400)">No data</td></tr>'}</tbody></table></div></div>
+      <div><div class="sec-head" style="margin-bottom:10px">Lost by customer</div><div class="tbl-wrap"><table><thead><tr><th>Customer</th><th style="text-align:center">Lost quotes</th></tr></thead><tbody>${custRows||'<tr><td colspan="2" style="text-align:center;padding:20px;color:var(--gray-400)">No data</td></tr>'}</tbody></table></div></div>
+    </div>`;
+  }
+
+  else if(tab==='margin'){
+    const booked=qs.filter(q=>q.status==='Booked'&&q.date);
+    const now=new Date();
+    const months=Array.from({length:12},(_,i)=>{
+      const d=new Date(now.getFullYear(),now.getMonth()-11+i,1);
+      const next=new Date(now.getFullYear(),now.getMonth()-11+i+1,1);
+      const inM=booked.filter(q=>{try{const qd=new Date(q.date+'T12:00:00');return qd>=d&&qd<next;}catch(e){return false;}});
+      const baseRev=inM.reduce((s,q)=>s+q.baseCustomer,0);
+      const baseProf=inM.reduce((s,q)=>s+(q.baseCustomer-q.baseCarrier),0);
+      const totRev=inM.reduce((s,q)=>s+q.customerRate,0);
+      const totProf=inM.reduce((s,q)=>s+q.profit,0);
+      const margin=baseRev>0?baseProf/baseRev*100:0;
+      const totMargin=totRev>0?totProf/totRev*100:0;
+      return{label:d.toLocaleString('default',{month:'short'}),v:parseFloat(margin.toFixed(1)),totV:parseFloat(totMargin.toFixed(1)),baseRev,baseProf,totRev,totProf,cnt:inM.length};
+    });
+    const rows=months.map(m=>`<tr><td class="bold">${m.label}</td><td class="muted" style="text-align:center">${m.cnt}</td><td class="money" style="color:var(--steel)">${m.baseRev>0?fmtD(m.baseRev):'—'}</td><td class="money" style="color:var(--green)">${m.baseProf>0?'+'+fmtD(m.baseProf):'—'}</td><td><span class="badge ${m.v>=15?'g':m.v>=8?'a':'r'}">${m.baseRev>0?m.v.toFixed(1)+'%':'—'}</span></td><td class="money" style="color:var(--steel)">${m.totRev>0?fmtD(m.totRev):'—'}</td><td class="money" style="color:var(--green)">${m.totProf>0?'+'+fmtD(m.totProf):'—'}</td></tr>`).join('');
+    const chartData=months.map(m=>({...m,pct:true}));
+    content=`<div style="margin-bottom:18px;padding:16px;background:#fff;border:1px solid var(--gray-200);border-radius:var(--radius)">
+      <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-500);margin-bottom:10px">Base margin % — last 12 months</div>
+      ${svgLineChart(chartData,'#2d7d46')}
+    </div>
+    <div class="tbl-wrap"><table><thead><tr><th>Month</th><th style="text-align:center">Loads</th><th>Base Revenue</th><th>Base Profit</th><th>Base Margin %</th><th>Total Revenue</th><th>Total Profit</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  }
+
+  else if(tab==='pipeline'){
+    const open=qs.filter(q=>q.status==='Quoted').sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+    const aged7=open.filter(q=>(daysSince(q.date)||0)>=7);
+    const aged14=open.filter(q=>(daysSince(q.date)||0)>=14);
+    const kpis=`<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:18px">
+      <div class="kpi"><div class="kpi-lbl">Open quotes</div><div class="kpi-val">${open.length}</div></div>
+      <div class="kpi"><div class="kpi-lbl">7+ days old</div><div class="kpi-val a">${aged7.length}</div><div style="font-size:11px;color:var(--amber);margin-top:4px">need follow-up</div></div>
+      <div class="kpi"><div class="kpi-lbl">14+ days old</div><div class="kpi-val r">${aged14.length}</div><div style="font-size:11px;color:var(--red);margin-top:4px">stale pipeline</div></div>
+    </div>`;
+    if(!open.length){content=kpis+'<div class="empty"><div class="empty-ico">✅</div><div style="font-size:15px;font-weight:700;color:var(--gray-500)">No open quotes</div></div>';return $('page').innerHTML=tabBar+content;}
+    const rows=open.map(q=>{const days=daysSince(q.date)||0;const urg=days>=14?'rd':days>=7?'am':'';return`<tr style="${urg==='rd'?'background:#fff5f5':urg==='am'?'background:#fffbeb':''}"><td class="bold">${q.type}</td><td class="bold">${q.customer}</td><td class="muted">${q.lane}</td><td class="muted">${q.carrier}</td><td class="money" style="color:var(--steel)">${fmtD(q.customerRate)}</td><td class="${urg}" style="font-weight:700;text-align:center">${days}d ago</td><td style="font-size:11px;color:var(--gray-400)">${q.quoteNum||'—'}</td></tr>`;}).join('');
+    content=kpis+`<div class="tbl-wrap"><table><thead><tr><th>Type</th><th>Customer</th><th>Lane</th><th>Carrier</th><th>Rate</th><th style="text-align:center">Age</th><th>Ref</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  }
+
+  else if(tab==='accessorials'){
+    const drayBooked=(S.quotes||[]).filter(q=>q.status==='Booked');
+    if(!drayBooked.length){content='<div class="empty"><div class="empty-ico">➕</div><div style="font-size:15px;font-weight:700;color:var(--gray-500)">No booked drayage quotes yet</div></div>';return $('page').innerHTML=tabBar+content;}
+    const ACC_KEYS=CHARGES.filter(c=>c!=='base');
+    const totals=ACC_KEYS.map(c=>({
+      name:LABELS[c]||c,
+      carrierCost:drayBooked.reduce((s,q)=>s+(q.carrierRates?.[c]||0),0),
+      custRev:drayBooked.reduce((s,q)=>s+(q.customerRates?.[c]||0),0),
+      cnt:drayBooked.filter(q=>(q.carrierRates?.[c]||0)>0).length
+    })).filter(r=>r.custRev>0||r.carrierCost>0).sort((a,b)=>b.custRev-a.custRev);
+    const maxRev=Math.max(...totals.map(t=>t.custRev),1);
+    const bars=totals.map(t=>`<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+      <div style="width:120px;font-size:12px;font-weight:600;color:var(--navy);text-align:right;flex-shrink:0">${t.name}</div>
+      <div style="flex:1;height:22px;background:var(--gray-100);border-radius:3px;overflow:hidden">
+        <div style="width:${(t.custRev/maxRev*100).toFixed(1)}%;height:100%;background:#2e75b6;display:flex;align-items:center;padding-left:8px">
+          ${t.custRev>maxRev*0.2?`<span style="font-size:10px;color:#fff;font-weight:700">${fmtD(t.custRev)}</span>`:''}
+        </div>
+      </div>
+      <div style="width:80px;font-size:12px;text-align:right;color:var(--gray-500);flex-shrink:0">${fmtD(t.custRev)}</div>
+    </div>`).join('');
+    const rows=totals.map(t=>`<tr><td class="bold">${t.name}</td><td class="muted" style="text-align:center">${t.cnt}</td><td class="money am">${fmtD(t.carrierCost)}</td><td class="money" style="color:var(--steel)">${fmtD(t.custRev)}</td><td class="money" style="color:var(--green)">${fmtD(t.custRev-t.carrierCost)}</td><td><span class="badge ${(t.custRev-t.carrierCost)/t.custRev>=0.15?'g':(t.custRev-t.carrierCost)/t.custRev>=0.05?'a':'r'}">${t.custRev>0?pct((t.custRev-t.carrierCost)/t.custRev):'—'}</span></td></tr>`).join('');
+    content=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:18px">
+      <div><div class="sec-head" style="margin-bottom:14px">Customer revenue by type</div>${bars}</div>
+      <div><div class="sec-head" style="margin-bottom:10px">Detailed breakdown</div><div class="tbl-wrap"><table><thead><tr><th>Accessorial</th><th style="text-align:center">Loads</th><th>Carrier Cost</th><th>Customer Rev.</th><th>Profit</th><th>Margin</th></tr></thead><tbody>${rows}</tbody></table></div></div>
+    </div>`;
+  }
+
+  else if(tab==='pl'){
+    const booked=qs.filter(q=>q.status==='Booked'&&q.date);
+    const byMonth={};booked.forEach(q=>{const m=(q.date||'').slice(0,7);if(!m)return;if(!byMonth[m])byMonth[m]={baseRev:0,baseProf:0,accRev:0,accProf:0,totRev:0,totCarrier:0,totProf:0,cnt:0};byMonth[m].baseRev+=q.baseCustomer;byMonth[m].baseProf+=(q.baseCustomer-q.baseCarrier);byMonth[m].accRev+=q.accCustomer;byMonth[m].accProf+=(q.accCustomer-q.accCarrier);byMonth[m].totRev+=q.customerRate;byMonth[m].totCarrier+=q.carrierRate;byMonth[m].totProf+=q.profit;byMonth[m].cnt++;});
+    const months=Object.keys(byMonth).sort().reverse();
+    const rows=months.map(m=>{const d=byMonth[m];return`<tr><td class="bold">${m}</td><td class="muted" style="text-align:center">${d.cnt}</td><td class="money" style="color:var(--steel)">${fmtD(d.baseRev)}</td><td class="money" style="color:var(--green)">${fmtD(d.baseProf)}</td><td><span class="badge ${d.baseRev>0&&d.baseProf/d.baseRev>=0.15?'g':d.baseRev>0&&d.baseProf/d.baseRev>=0.08?'a':'r'}">${d.baseRev>0?pct(d.baseProf/d.baseRev):'—'}</span></td><td class="money" style="color:var(--steel)">${fmtD(d.accRev)}</td><td class="money" style="color:var(--green)">${fmtD(d.accProf)}</td><td class="money am">${fmtD(d.totCarrier)}</td><td class="money" style="color:var(--steel)">${fmtD(d.totRev)}</td><td class="money" style="color:var(--green);font-weight:700">+${fmtD(d.totProf)}</td></tr>`;}).join('');
+    content=`<div style="margin-bottom:14px"><button class="btn blue" onclick="exportPL()">📥 Export P&L CSV</button></div>
+    <div class="tbl-wrap"><table><thead>
+      <tr style="background:var(--gray-50)">
+        <th rowspan="2">Month</th><th rowspan="2" style="text-align:center">Loads</th>
+        <th colspan="3" style="text-align:center;border-bottom:1px solid var(--gray-200);color:var(--green)">Base</th>
+        <th colspan="2" style="text-align:center;border-bottom:1px solid var(--gray-200);color:var(--steel)">Accessorials</th>
+        <th colspan="3" style="text-align:center;border-bottom:1px solid var(--gray-200)">Total</th>
+      </tr>
+      <tr style="background:var(--gray-50)">
+        <th>Revenue</th><th>Profit</th><th>Margin</th>
+        <th>Revenue</th><th>Profit</th>
+        <th>Carrier Cost</th><th>Revenue</th><th>Profit</th>
+      </tr>
+    </thead><tbody>${rows||'<tr><td colspan="10" style="text-align:center;padding:30px;color:var(--gray-400)">No booked quotes yet</td></tr>'}</tbody></table></div>`;
+  }
+
+  $('page').innerHTML=tabBar+content;
+}
+
+function exportPL(){
+  const qs2=allQ();
+  const booked=qs2.filter(q=>q.status==='Booked'&&q.date);
+  const byMonth={};booked.forEach(q=>{const m=(q.date||'').slice(0,7);if(!m)return;if(!byMonth[m])byMonth[m]={baseRev:0,baseProf:0,accRev:0,accProf:0,totRev:0,totCarrier:0,totProf:0,cnt:0};byMonth[m].baseRev+=q.baseCustomer;byMonth[m].baseProf+=(q.baseCustomer-q.baseCarrier);byMonth[m].accRev+=q.accCustomer;byMonth[m].accProf+=(q.accCustomer-q.accCarrier);byMonth[m].totRev+=q.customerRate;byMonth[m].totCarrier+=q.carrierRate;byMonth[m].totProf+=q.profit;byMonth[m].cnt++;});
+  const hdrs=['Month','Loads','Base Revenue','Base Profit','Base Margin %','Accessorial Revenue','Accessorial Profit','Total Carrier Cost','Total Revenue','Total Profit'];
+  const rows=Object.keys(byMonth).sort().reverse().map(m=>{const d=byMonth[m];return[m,d.cnt,d.baseRev.toFixed(2),d.baseProf.toFixed(2),d.baseRev>0?(d.baseProf/d.baseRev*100).toFixed(1)+'%':'0%',d.accRev.toFixed(2),d.accProf.toFixed(2),d.totCarrier.toFixed(2),d.totRev.toFixed(2),d.totProf.toFixed(2)];});
+  const csv=[hdrs,...rows].map(r=>r.join(',')).join('\n');
+  const a=document.createElement('a');a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);a.download='shifl_pl_'+new Date().toISOString().slice(0,10)+'.csv';a.click();
+}
+
+
 boot().catch(e=>{$('loading-screen').style.display='none';$('setup-screen').style.display='flex';});
 </script>
 </body>
