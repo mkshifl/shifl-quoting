@@ -1784,7 +1784,7 @@ function renderFqLog(){
       <thead><tr>
         <th style="width:32px"></th>
         <th>Date</th><th>Customer</th><th>Type</th><th>Lane</th><th>Carrier</th>
-        <th>Carrier rate</th><th>Customer rate</th><th>Profit</th><th>Margin</th><th>By</th><th>Status</th><th></th>
+        <th>Carrier rate</th><th>Customer rate</th><th>Base Profit</th><th>By</th><th>Status</th><th></th>
       </tr></thead>
       <tbody>${rows}</tbody>
     </table></div>`;
@@ -4064,7 +4064,7 @@ function renderTlLog(){
     </td>
   </tr>`).join('');
   $('page').innerHTML=`<div class="tbl-wrap"><table>
-    <thead><tr><th style="width:32px"></th><th>Date</th><th>Customer</th><th>Origin</th><th>Warehouse</th><th>Delivery</th><th>Pallets</th><th>Total</th><th>Profit</th><th>Margin</th><th>By</th><th>Status</th><th></th></tr></thead>
+    <thead><tr><th style="width:32px"></th><th>Date</th><th>Customer</th><th>Origin</th><th>Warehouse</th><th>Delivery</th><th>Pallets</th><th>Total</th><th>Base Profit</th><th>By</th><th>Status</th><th></th></tr></thead>
     <tbody>${rows}</tbody>
   </table></div>`;
 }
@@ -5100,7 +5100,7 @@ async function confirmImport(){
 // ═══════════════════════════════════════════════════════
 function buildLogRows(){
   const f=S.logFilter;const filtered=S.quotes.filter(q=>f==='all'||q.status===f);
-  if(!filtered.length) return `<tr><td colspan="14" style="text-align:center;padding:40px;color:var(--gray-400)">No quotes${f!=='all'?' with status "'+f+'"':''}</td></tr>`;
+  if(!filtered.length) return `<tr><td colspan="13" style="text-align:center;padding:40px;color:var(--gray-400)">No quotes${f!=='all'?' with status "'+f+'"':''}</td></tr>`;
   if(!window._draySelected) window._draySelected=new Set();
   const sel=window._draySelected;
   return filtered.map(q=>`
@@ -5115,8 +5115,9 @@ function buildLogRows(){
       <td>${q.carrier}</td>
       <td class="muted">${fmtD(q.carrierRates?.total||0)}</td>
       <td class="bold" style="color:var(--steel)">${fmtD(q.customerRates?.total||0)}</td>
-      <td style="color:var(--green);font-weight:600">+${fmtD(q.profit||0)}</td>
-      <td><span class="badge ${(q.profitPct||0)>=0.10?'g':'r'}">${pct(q.profitPct||0)}</span></td>
+      <td style="line-height:1.4">
+        ${(()=>{const{baseP,baseM,accP}=baseSplit(q);return `<div style="color:var(--green);font-weight:700">+${fmtD(baseP)}</div><div style="font-size:10px;color:var(--green)">${pct(baseM)} base</div>${accP>0?`<div style="font-size:10px;color:var(--gray-400)">+${fmtD(accP)} access.</div>`:''}`})()}
+      </td>
       <td style="font-size:11px;color:var(--gray-400);white-space:nowrap">${q.created_by_name||'—'}${q.booked_by_name&&q.booked_by_name!==q.created_by_name?'<div style="color:var(--green);font-size:10px">✅ '+q.booked_by_name+'</div>':''}</td>
       <td onclick="event.stopPropagation()">${can('update_status')?`<select onchange="updateStatus('${q.id}',this.value)" style="font-size:12px;padding:4px 7px;width:120px"><option${q.status==='Quoted'?' selected':''}>Quoted</option><option${q.status==='Booked'?' selected':''}>Booked</option><option${q.status==='Lost'?' selected':''}>Lost</option><option${q.status==='Cancelled'?' selected':''}>Cancelled</option><option${q.status==='Expired'?' selected':''}>Expired</option><option${q.status==='Delivered'?' selected':''}>Delivered</option></select>`:`<span class="badge a">${q.status}</span>`}</td>
       <td onclick="event.stopPropagation()" style="white-space:nowrap">
@@ -5162,7 +5163,7 @@ function renderLog(){
       <button class="btn" onclick="exportQuoteLog()">📥 Export CSV</button>
       <button class="btn" onclick="syncQuotesToTeam()">🔄 Sync to team</button>
     </div>`;
-  $('page').innerHTML=`<div class="tbl-wrap"><table><thead><tr><th style="width:32px"></th><th>#</th><th>Ref #</th><th>Date</th><th>Customer</th><th>Lane</th><th>Carrier</th><th>Carrier total</th><th>Customer total</th><th>Profit</th><th>Margin</th><th>By</th><th>Status</th><th></th></tr></thead><tbody id="log-tbody">${buildLogRows()}</tbody></table></div>`;
+  $('page').innerHTML=`<div class="tbl-wrap"><table><thead><tr><th style="width:32px"></th><th>#</th><th>Ref #</th><th>Date</th><th>Customer</th><th>Lane</th><th>Carrier</th><th>Carrier total</th><th>Customer total</th><th>Base Profit</th><th>By</th><th>Status</th><th></th></tr></thead><tbody id="log-tbody">${buildLogRows()}</tbody></table></div>`;
 }
 function onLogFilter(v){S.logFilter=v;const t=$('log-tbody');if(t) t.innerHTML=buildLogRows();}
 async function updateStatus(id,status){
@@ -5470,7 +5471,8 @@ function showQuoteModal(id){
     <div style="border:1px solid var(--gray-200);border-radius:var(--radius);overflow:hidden;margin-bottom:16px">
       <table style="width:100%;font-size:13px;border-collapse:collapse">
         <thead><tr style="background:var(--gray-50)"><th style="padding:8px 12px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-500)">Charge</th><th style="padding:8px 12px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-400)">Carrier cost</th><th style="padding:8px 12px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--steel)">Customer price</th><th style="padding:8px 12px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--green)">Profit</th></tr></thead>
-        <tbody>${chargeRows}<tr style="background:var(--navy)"><td style="padding:10px 12px;font-weight:700;color:#fff;font-size:14px">Total</td><td style="padding:10px 12px;text-align:right;color:rgba(255,255,255,.6);font-size:13px">${fmtD(cvTotal)}</td><td style="padding:10px 12px;text-align:right;font-weight:800;color:#fff;font-size:18px">${fmtD(cuTotal)}</td><td style="padding:10px 12px;text-align:right"><div style="color:#4ade80;font-weight:700">+${fmtD(profit)}</div><span class="badge ${margin>=0.10?'g':'r'}" style="margin-top:3px">${pct(margin)}</span></td></tr></tbody>
+        <tbody>${chargeRows}<tr style="background:#f0fdf4;border-top:1px solid #86efac"><td style="padding:8px 12px;font-weight:600;color:#166534">Base rate</td><td style="padding:8px 12px;text-align:right;color:#166534">${fmtD(q.carrierRates?.base||0)}</td><td style="padding:8px 12px;text-align:right;font-weight:600;color:#166534">${fmtD(q.customerRates?.base||0)}</td><td style="padding:8px 12px;text-align:right"><span style="color:#166534;font-weight:700">+${fmtD((q.customerRates?.base||0)-(q.carrierRates?.base||0))}</span> <span style="font-size:10px;background:#dcfce7;color:#166534;padding:2px 6px;border-radius:4px">${pct((q.customerRates?.base||0)>0?((q.customerRates?.base||0)-(q.carrierRates?.base||0))/(q.customerRates?.base||1):0)}</span></td></tr>
+<tr style="background:var(--navy)"><td style="padding:10px 12px;font-weight:700;color:#fff;font-size:14px">Total</td><td style="padding:10px 12px;text-align:right;color:rgba(255,255,255,.6);font-size:13px">${fmtD(cvTotal)}</td><td style="padding:10px 12px;text-align:right;font-weight:800;color:#fff;font-size:18px">${fmtD(cuTotal)}</td><td style="padding:10px 12px;text-align:right"><div style="color:#4ade80;font-weight:700">+${fmtD(profit)}</div><span class="badge ${margin>=0.10?'g':'r'}" style="margin-top:3px">${pct(margin)}</span></td></tr></tbody>
       </table>
     </div>
     <div class="modal-foot"><button class="btn" onclick="closeModal()">Close</button>
@@ -5516,7 +5518,9 @@ function filterByRange(quotes,range){const now=new Date();const m=now.getMonth()
 function buildBarChart(months){if(!months.length) return '';const w=280,h=100,pad=28,bw=Math.floor((w-pad)/months.length)-6;const maxV=Math.max(...months.map(m=>m.total),1);const bars=months.map((m,i)=>{const x=pad+i*Math.floor((w-pad)/months.length)+2;const bh=Math.max((m.booked/maxV)*(h-pad),0);const th=Math.max((m.total/maxV)*(h-pad),0);return `<rect x="${x}" y="${h-pad-th}" width="${bw}" height="${th}" fill="#dbeafe" rx="2"/><rect x="${x}" y="${h-pad-bh}" width="${bw}" height="${bh}" fill="#2e75b6" rx="2"/><text x="${x+bw/2}" y="${h-4}" text-anchor="middle" font-size="8" fill="#9ca3af">${m.label}</text>`;}).join('');const yLines=[0,.5,1].map(v=>{const y=h-pad-(v*(h-pad));return `<line x1="${pad}" y1="${y}" x2="${w}" y2="${y}" stroke="#f3f4f6" stroke-width="1"/><text x="${pad-2}" y="${y+3}" text-anchor="end" font-size="7" fill="#d1d5db">${Math.round(v*maxV)}</text>`;}).join('');return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">${yLines}${bars}<line x1="${pad}" y1="0" x2="${pad}" y2="${h-pad}" stroke="#e5e7eb" stroke-width="1"/><line x1="${pad}" y1="${h-pad}" x2="${w}" y2="${h-pad}" stroke="#e5e7eb" stroke-width="1"/></svg><div style="display:flex;gap:12px;margin-top:6px;font-size:11px;color:var(--gray-500)"><span><span style="display:inline-block;width:10px;height:10px;background:#2e75b6;border-radius:2px;margin-right:4px;vertical-align:middle"></span>Booked</span><span><span style="display:inline-block;width:10px;height:10px;background:#dbeafe;border-radius:2px;margin-right:4px;vertical-align:middle"></span>All quotes</span></div>`;}
 function buildDonut(slices){const cx=54,cy=54,r=40,ir=26;const total=slices.reduce((s,d)=>s+d.v,0);if(!total) return `<div style="text-align:center;padding:20px;color:var(--gray-400);font-size:13px">No data yet</div>`;let angle=-Math.PI/2;const paths=slices.filter(d=>d.v>0).map(d=>{const pct=d.v/total;const sweep=pct*2*Math.PI;const x1=cx+r*Math.cos(angle),y1=cy+r*Math.sin(angle);angle+=sweep;const x2=cx+r*Math.cos(angle),y2=cy+r*Math.sin(angle);const lg=pct>0.5?1:0;return `<path d="M${cx},${cy} L${x1},${y1} A${r},${r} 0 ${lg},1 ${x2},${y2} Z" fill="${d.color}"/>`;}).join('');return `<svg width="108" height="108" viewBox="0 0 108 108">${paths}<circle cx="${cx}" cy="${cy}" r="${ir}" fill="white"/><text x="${cx}" y="${cy+4}" text-anchor="middle" font-size="14" font-weight="700" fill="#1a2e4a">${total}</text><text x="${cx}" y="${cy+14}" text-anchor="middle" font-size="8" fill="#9ca3af">quotes</text></svg>`;}
 function renderDash(){
-  $('topbar-right').innerHTML='';const range=S.dashFilter||'month';const all=S.quotes;const filtered=filterByRange(all,range);const booked=filtered.filter(q=>q.status==='Booked');const allBooked=all.filter(q=>q.status==='Booked');const rev=booked.reduce((s,q)=>s+(q.customerRates?.total||0),0);const prof=booked.reduce((s,q)=>s+(q.profit||0),0);const now=new Date();const months=Array.from({length:6},(_,i)=>{const d=new Date(now.getFullYear(),now.getMonth()-5+i,1);const next=new Date(now.getFullYear(),now.getMonth()-5+i+1,1);const inM=all.filter(q=>{const qd=new Date(q.date);return qd>=d&&qd<next;});return{label:d.toLocaleString('default',{month:'short'}),total:inM.length,booked:inM.filter(q=>q.status==='Booked').length};});
+  $('topbar-right').innerHTML='';const range=S.dashFilter||'month';const all=S.quotes;const filtered=filterByRange(all,range);const booked=filtered.filter(q=>q.status==='Booked');const allBooked=all.filter(q=>q.status==='Booked');const rev=booked.reduce((s,q)=>s+(q.customerRates?.total||0),0);const prof=booked.reduce((s,q)=>s+(q.profit||0),0);
+  const baseRev=booked.reduce((s,q)=>s+(q.customerRates?.base||0),0);const baseProf=booked.reduce((s,q)=>s+((q.customerRates?.base||0)-(q.carrierRates?.base||0)),0);const baseMarginAvg=baseRev>0?baseProf/baseRev:0;
+  const accRev=rev-baseRev;const accProf=prof-baseProf;const now=new Date();const months=Array.from({length:6},(_,i)=>{const d=new Date(now.getFullYear(),now.getMonth()-5+i,1);const next=new Date(now.getFullYear(),now.getMonth()-5+i+1,1);const inM=all.filter(q=>{const qd=new Date(q.date);return qd>=d&&qd<next;});return{label:d.toLocaleString('default',{month:'short'}),total:inM.length,booked:inM.filter(q=>q.status==='Booked').length};});
   const donutData=[
     {v:filtered.filter(q=>q.status==='Quoted').length,color:'#fbbf24',lbl:'Quoted'},
     {v:booked.length,color:'#2d7d46',lbl:'Booked'},
@@ -5536,8 +5540,14 @@ function renderDash(){
     <div class="kpi-grid">
       <div class="kpi" style="cursor:pointer" onclick="setView('log');S.logFilter='all';render()"><div class="kpi-lbl">Quotes built</div><div class="kpi-val">${filtered.length}</div><div style="font-size:11px;color:var(--gray-400);margin-top:4px">click to view →</div></div>
       <div class="kpi" style="cursor:pointer" onclick="setView('log');S.logFilter='Booked';render()"><div class="kpi-lbl">Booked</div><div class="kpi-val b">${booked.length}</div><div style="font-size:11px;color:var(--steel);margin-top:4px">${pct(winRate)} win rate</div></div>
-      <div class="kpi"><div class="kpi-lbl">Revenue</div><div class="kpi-val g">${rev>0?fmtD(rev):'—'}</div><div style="font-size:11px;color:var(--gray-400);margin-top:4px">booked only</div></div>
-      <div class="kpi"><div class="kpi-lbl">Profit</div><div class="kpi-val g">${prof>0?fmtD(prof):'—'}</div><div style="font-size:11px;color:${prof>0?'var(--green)':'var(--gray-400)'};margin-top:4px">${booked.length>0?'avg '+pct(booked.reduce((s,q)=>s+(q.profitPct||0),0)/booked.length)+' margin':'—'}</div></div>
+      <div class="kpi"><div class="kpi-lbl">Total Revenue</div><div class="kpi-val g">${rev>0?fmtD(rev):'—'}</div><div style="font-size:11px;color:var(--gray-400);margin-top:4px">booked only</div></div>
+      <div class="kpi"><div class="kpi-lbl">Total Profit</div><div class="kpi-val g">${prof>0?fmtD(prof):'—'}</div><div style="font-size:11px;color:${prof>0?'var(--green)':'var(--gray-400)'};margin-top:4px">${booked.length>0?'avg '+pct(booked.reduce((s,q)=>s+(q.profitPct||0),0)/booked.length)+' margin':'—'}</div></div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px">
+      <div class="kpi" style="border-left:3px solid var(--green)"><div class="kpi-lbl">Base Revenue</div><div class="kpi-val g" style="font-size:18px">${baseRev>0?fmtD(baseRev):'—'}</div><div style="font-size:11px;color:var(--gray-400);margin-top:4px">core freight only</div></div>
+      <div class="kpi" style="border-left:3px solid var(--green)"><div class="kpi-lbl">Base Profit</div><div class="kpi-val g" style="font-size:18px">${baseProf>0?fmtD(baseProf):'—'}</div><div style="font-size:11px;color:var(--green);margin-top:4px">${baseRev>0?pct(baseMarginAvg)+' avg margin':'—'}</div></div>
+      <div class="kpi" style="border-left:3px solid var(--steel)"><div class="kpi-lbl">Accessorial Revenue</div><div class="kpi-val" style="font-size:18px;color:var(--steel)">${accRev>0?fmtD(accRev):'—'}</div><div style="font-size:11px;color:var(--gray-400);margin-top:4px">chassis · detention · tolls</div></div>
+      <div class="kpi" style="border-left:3px solid var(--steel)"><div class="kpi-lbl">Accessorial Profit</div><div class="kpi-val" style="font-size:18px;color:var(--steel)">${accProf>0?fmtD(accProf):'—'}</div><div style="font-size:11px;color:var(--gray-400);margin-top:4px">markup on pass-throughs</div></div>
     </div>
     <div style="display:grid;grid-template-columns:1fr auto 1fr;gap:14px;margin-bottom:14px">
       <div class="card" style="margin-bottom:0"><div class="sec-head">Activity — last 6 months</div>${buildBarChart(months)}</div>
@@ -6505,6 +6515,14 @@ function checkMargin(customerRate, carrierRate, quoteName){
 }
 
 
+
+function baseSplit(q){
+  const cb=q.carrierRates?.base||0,cu=q.customerRates?.base||0;
+  const ctTot=q.carrierRates?.total||0,cuTot=q.customerRates?.total||0;
+  const baseP=cu-cb,baseM=cu>0?baseP/cu:0;
+  const accC=ctTot-cb,accCu=cuTot-cu,accP=accCu-accC;
+  return{baseP,baseM,accC,accCu,accP};
+}
 boot().catch(e=>{$('loading-screen').style.display='none';$('setup-screen').style.display='flex';});
 </script>
 </body>
