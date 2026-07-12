@@ -506,7 +506,7 @@ function isApplicable(c,ld){
   if(c==='triaxle') return false;  // triaxle handled per-quote
   return true;
 }
-const DEFAULT_FLAT_RATES={chassis:45,prepull:175,det_port:100,det_cust:100,storage:60,ovw43:200,ovw48:350,bobtail:0,toll:30,genset:0,triaxle:0};
+const DEFAULT_FLAT_RATES={chassis:45,prepull:175,det_port:100,det_cust:100,storage:60,ovw43:200,ovw48:350,bobtail:0,toll:220,genset:0,triaxle:0};
 const DEFAULT_BASE_MARKUP={amount:150,mode:'flat'};
 const US_CFS=[
   // ── Los Angeles / Long Beach, CA ──────────────────────────
@@ -803,7 +803,7 @@ let S={
       lclPriceBy:'pallets', cbm:0, transitTime:'',
       calc:{l:'',w:'',h:'',pieces:'',weightLbs:'',unit:'in'}},
   fqTab:'builder',
-  activeFilter:'all',activeView:'active',reportTab:'lanes',fqInvTab:'pending',
+  activeFilter:'all',activeView:'active',reportTab:'lanes',reportMode:'All',fqInvTab:'pending',
   tl:null, // initialized in boot via defaultTlState()
   tlTab:'builder',
 };
@@ -1597,14 +1597,20 @@ function renderFqBuilder(){
           </div>
           ${isSelected?`
             <div style="border-top:1px solid var(--blue-mid);padding-top:10px;display:grid;grid-template-columns:1fr 1fr;gap:10px">
-              ${r.detentionRate?`<div class="field" style="margin-bottom:0"><label>Detention hours</label>
-                <input type="number" value="${fq.lclDetentionHours||0}" min="0"
+              <div class="field" style="margin-bottom:0">
+                <label>Waiting time (hours)</label>
+                <input type="number" value="${fq.lclDetentionHours||0}" min="0" step="0.5"
                   oninput="S.fq.lclDetentionHours=+this.value;refreshFreightPreview()" onclick="event.stopPropagation()"
-                  style="padding:5px 8px;font-size:13px"></div>`:''}
-              ${r.palletExchangeRate?`<div class="field" style="margin-bottom:0"><label>Pallets exchanged</label>
+                  placeholder="0" style="padding:5px 8px;font-size:13px">
+                ${r.detentionRate?`<div style="font-size:10px;color:var(--gray-400);margin-top:3px">Rate: ${fmtD(r.detentionRate)}/hr → ${fmtD((fq.lclDetentionHours||0)*(r.detentionRate||0))} total</div>`:'<div style="font-size:10px;color:var(--gray-400);margin-top:3px">Set rate on carrier card to auto-calculate</div>'}
+              </div>
+              <div class="field" style="margin-bottom:0">
+                <label>Pallets exchanged</label>
                 <input type="number" value="${fq.lclPalletExchange||0}" min="0"
                   oninput="S.fq.lclPalletExchange=+this.value;refreshFreightPreview()" onclick="event.stopPropagation()"
-                  style="padding:5px 8px;font-size:13px"></div>`:''}
+                  placeholder="0" style="padding:5px 8px;font-size:13px">
+                ${r.palletExchangeRate?`<div style="font-size:10px;color:var(--gray-400);margin-top:3px">Rate: ${fmtD(r.palletExchangeRate)}/pallet → ${fmtD((fq.lclPalletExchange||0)*(r.palletExchangeRate||0))} total</div>`:'<div style="font-size:10px;color:var(--gray-400);margin-top:3px">Set rate on carrier card to auto-calculate</div>'}
+              </div>
             </div>`:''}
         </div>`;
       }).join('')}
@@ -6640,25 +6646,33 @@ function renderReports(){
     {id:'accessorials',label:'➕ Accessorials'},
     {id:'pl',label:'📥 P&L Export'},
   ];
-  const tabBar=`<div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:18px;background:var(--gray-100);padding:4px;border-radius:var(--radius);width:fit-content">
+  const modeFilter=S.reportMode||'All';
+  const modeFilters=['All','Drayage','FTL','LTL','LCL','Transload'];
+  const tabBar=`<div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:10px;background:var(--gray-100);padding:4px;border-radius:var(--radius);width:fit-content">
     ${tabs.map(t=>`<button onclick="S.reportTab='${t.id}';renderReports()" style="padding:6px 12px;border-radius:5px;border:none;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;background:${tab===t.id?'#fff':'none'};color:${tab===t.id?'var(--navy)':'var(--gray-500)'};box-shadow:${tab===t.id?'0 1px 3px rgba(0,0,0,.08)':'none'}">${t.label}</button>`).join('')}
+  </div>
+  <div style="display:flex;gap:5px;margin-bottom:18px;align-items:center">
+    <span style="font-size:11px;font-weight:700;color:var(--gray-400);text-transform:uppercase;letter-spacing:.05em;margin-right:4px">Mode:</span>
+    ${modeFilters.map(m=>`<button onclick="S.reportMode='${m}';renderReports()" style="padding:4px 10px;border-radius:var(--radius);border:1px solid ${modeFilter===m?'var(--navy)':'var(--gray-200)'};background:${modeFilter===m?'var(--navy)':'#fff'};color:${modeFilter===m?'#fff':'var(--gray-500)'};font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">${m}</button>`).join('')}
   </div>`;
-  const qs=allQ();
+  const allQs=allQ();
+  const qs=modeFilter==='All'?allQs:allQs.filter(q=>q.type===modeFilter);
   if(!qs.length){$('page').innerHTML=tabBar+'<div class="empty"><div class="empty-ico">📈</div><div style="font-size:16px;font-weight:700;color:var(--gray-500)">No quote data yet</div><div style="font-size:13px;color:var(--gray-400);margin-top:6px">Save some quotes to see reports</div></div>';return;}
   let content='';
 
   if(tab==='lanes'){
-    const grp=group(qs.filter(q=>q.type==='Drayage'&&q.status==='Booked'),'lane');
+    const grp=group(qs.filter(q=>q.status==='Booked'),'lane');
     const rows=Object.entries(grp).sort((a,b)=>b[1].length-a[1].length).map(([lane,arr])=>{
       const rev=arr.reduce((s,q)=>s+q.customerRate,0);
       const baseProf=arr.reduce((s,q)=>s+(q.baseCustomer-q.baseCarrier),0);
       const baseRev=arr.reduce((s,q)=>s+q.baseCustomer,0);
       const margin=baseRev>0?baseProf/baseRev:0;
       const avgRate=rev/arr.length;
-      return`<tr><td class="bold">${lane}</td><td class="muted" style="text-align:center">${arr.length}</td><td class="money" style="color:var(--steel)">${fmtD(avgRate)}</td><td class="money" style="color:var(--green)">${fmtD(baseProf)}</td><td><span class="badge ${margin>=0.15?'g':margin>=0.08?'a':'r'}">${pct(margin)}</span></td><td class="money" style="color:var(--steel)">${fmtD(rev)}</td></tr>`;
+      const types=[...new Set(arr.map(q=>q.type))].join(', ');
+      return`<tr><td class="bold">${lane}</td><td style="font-size:11px;color:var(--gray-400)">${types}</td><td class="muted" style="text-align:center">${arr.length}</td><td class="money" style="color:var(--steel)">${fmtD(avgRate)}</td><td class="money" style="color:var(--green)">${fmtD(baseProf)}</td><td><span class="badge ${margin>=0.15?'g':margin>=0.08?'a':'r'}">${pct(margin)}</span></td><td class="money" style="color:var(--steel)">${fmtD(rev)}</td></tr>`;
     }).join('');
-    content=`<div style="font-size:13px;color:var(--gray-400);margin-bottom:12px">Booked drayage quotes only · ${Object.keys(grp).length} lanes</div>
-    <div class="tbl-wrap"><table><thead><tr><th>Lane</th><th style="text-align:center">Loads</th><th>Avg Cust. Rate</th><th>Base Profit</th><th>Base Margin</th><th>Total Revenue</th></tr></thead><tbody>${rows||'<tr><td colspan="6" style="text-align:center;padding:30px;color:var(--gray-400)">No booked drayage quotes yet</td></tr>'}</tbody></table></div>`;
+    content=`<div style="font-size:13px;color:var(--gray-400);margin-bottom:12px">${modeFilter==='All'?'All modes':'Mode: '+modeFilter} · ${qs.filter(q=>q.status==='Booked').length} booked · ${Object.keys(grp).length} lanes</div>
+    <div class="tbl-wrap"><table><thead><tr><th>Lane</th><th>Type</th><th style="text-align:center">Loads</th><th>Avg Cust. Rate</th><th>Base Profit</th><th>Base Margin</th><th>Total Revenue</th></tr></thead><tbody>${rows||'<tr><td colspan="6" style="text-align:center;padding:30px;color:var(--gray-400)">No booked drayage quotes yet</td></tr>'}</tbody></table></div>`;
   }
 
   else if(tab==='customers'){
@@ -6755,8 +6769,8 @@ function renderReports(){
   }
 
   else if(tab==='accessorials'){
-    const drayBooked=(S.quotes||[]).filter(q=>q.status==='Booked');
-    if(!drayBooked.length){content='<div class="empty"><div class="empty-ico">➕</div><div style="font-size:15px;font-weight:700;color:var(--gray-500)">No booked drayage quotes yet</div></div>';return $('page').innerHTML=tabBar+content;}
+    const drayBooked=(modeFilter==='All'||modeFilter==='Drayage')?(S.quotes||[]).filter(q=>q.status==='Booked'):[];
+    if(!drayBooked.length){content='<div class="empty"><div class="empty-ico">➕</div><div style="font-size:15px;font-weight:700;color:var(--gray-500)">No booked drayage quotes — accessorial breakdown is drayage only</div></div>';return $('page').innerHTML=tabBar+content;}
     const ACC_KEYS=CHARGES.filter(c=>c!=='base');
     const totals=ACC_KEYS.map(c=>({
       name:LABELS[c]||c,
