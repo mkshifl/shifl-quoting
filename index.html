@@ -991,25 +991,6 @@ function buildPreviewHTML(sel){
     <button class="btn" onclick="printQuote()">🖨️</button>
     <button class="btn" onclick="downloadPDF()">📄 PDF</button>
 
-    <!-- TRIAXLE -->
-    <div style="border:1px solid var(--gray-200);border-radius:var(--radius);padding:12px 14px;background:#fafafa">
-      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-        <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:13px;font-weight:700;min-width:140px">
-          <input type="checkbox" ${S.qi.triaxleEnabled?'checked':''} onchange="S.qi.triaxleEnabled=this.checked;if(this.checked&&!S.qi.triaxleCarrierRate&&sel?.triaxle)S.qi.triaxleCarrierRate=sel.triaxle;refreshPreviewOnly()" style="width:16px;height:16px;cursor:pointer;accent-color:var(--navy)">
-          🔺 Triaxle
-        </label>
-        ${S.qi.triaxleEnabled?`
-        <div style="display:flex;gap:5px">
-          <button onclick="S.qi.triaxleScope='both';refreshPreviewOnly()" style="padding:3px 10px;border-radius:var(--radius);border:1px solid var(--gray-300);background:${S.qi.triaxleScope!=='customer_only'?'var(--navy)':'#fff'};color:${S.qi.triaxleScope!=='customer_only'?'#fff':'var(--gray-500)'};font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">Carrier + Customer</button>
-          <button onclick="S.qi.triaxleScope='customer_only';refreshPreviewOnly()" style="padding:3px 10px;border-radius:var(--radius);border:1px solid var(--gray-300);background:${S.qi.triaxleScope==='customer_only'?'var(--navy)':'#fff'};color:${S.qi.triaxleScope==='customer_only'?'#fff':'var(--gray-500)'};font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">Customer Only</button>
-        </div>
-        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-          ${S.qi.triaxleScope!=='customer_only'?`<div style="display:flex;align-items:center;gap:5px"><span style="font-size:11px;font-weight:700;color:var(--gray-400)">CARRIER $</span><input type="number" value="${S.qi.triaxleCarrierRate||0}" min="0" oninput="S.qi.triaxleCarrierRate=+this.value;refreshPreviewOnly()" style="width:80px;padding:4px 8px;font-size:13px;border:1px solid var(--gray-300);border-radius:var(--radius)"></div>`:''}
-          <div style="display:flex;align-items:center;gap:5px"><span style="font-size:11px;font-weight:700;color:var(--gray-400)">CUSTOMER $</span><input type="number" value="${S.qi.triaxleCustomerRate||0}" min="0" oninput="S.qi.triaxleCustomerRate=+this.value;refreshPreviewOnly()" style="width:80px;padding:4px 8px;font-size:13px;border:1px solid var(--gray-300);border-radius:var(--radius)"></div>
-        </div>`:''}
-      </div>
-    </div>
-
   </div>`;
 }
 function buildPricingSection(){
@@ -1071,6 +1052,25 @@ function buildPricingSection(){
         <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
           ${S.qi.bobtailScope!=='customer_only'?`<div style="display:flex;align-items:center;gap:5px"><span style="font-size:11px;font-weight:700;color:var(--gray-400)">CARRIER $</span><input type="number" value="${S.qi.bobtailCarrierRate||0}" min="0" oninput="S.qi.bobtailCarrierRate=+this.value;refreshPreviewOnly()" style="width:80px;padding:4px 8px;font-size:13px;border:1px solid var(--gray-300);border-radius:var(--radius)"></div>`:''}
           <div style="display:flex;align-items:center;gap:5px"><span style="font-size:11px;font-weight:700;color:var(--gray-400)">CUSTOMER $</span><input type="number" value="${S.qi.bobtailCustomerRate||0}" min="0" oninput="S.qi.bobtailCustomerRate=+this.value;refreshPreviewOnly()" style="width:80px;padding:4px 8px;font-size:13px;border:1px solid var(--gray-300);border-radius:var(--radius)"></div>
+        </div>`:''}
+      </div>
+    </div>
+
+    <!-- TRIAXLE -->
+    <div style="border:1px solid var(--gray-200);border-radius:var(--radius);padding:12px 14px;background:#fafafa">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:13px;font-weight:700;min-width:140px">
+          <input type="checkbox" ${S.qi.triaxleEnabled?'checked':''} onchange="S.qi.triaxleEnabled=this.checked;if(this.checked&&!S.qi.triaxleCarrierRate&&sel?.triaxle)S.qi.triaxleCarrierRate=sel.triaxle;refreshPreviewOnly()" style="width:16px;height:16px;cursor:pointer;accent-color:var(--navy)">
+          🔺 Triaxle
+        </label>
+        ${S.qi.triaxleEnabled?`
+        <div style="display:flex;gap:5px">
+          <button onclick="S.qi.triaxleScope='both';refreshPreviewOnly()" style="padding:3px 10px;border-radius:var(--radius);border:1px solid var(--gray-300);background:${S.qi.triaxleScope!=='customer_only'?'var(--navy)':'#fff'};color:${S.qi.triaxleScope!=='customer_only'?'#fff':'var(--gray-500)'};font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">Carrier + Customer</button>
+          <button onclick="S.qi.triaxleScope='customer_only';refreshPreviewOnly()" style="padding:3px 10px;border-radius:var(--radius);border:1px solid var(--gray-300);background:${S.qi.triaxleScope==='customer_only'?'var(--navy)':'#fff'};color:${S.qi.triaxleScope==='customer_only'?'#fff':'var(--gray-500)'};font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">Customer Only</button>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+          ${S.qi.triaxleScope!=='customer_only'?`<div style="display:flex;align-items:center;gap:5px"><span style="font-size:11px;font-weight:700;color:var(--gray-400)">CARRIER $</span><input type="number" value="${S.qi.triaxleCarrierRate||0}" min="0" oninput="S.qi.triaxleCarrierRate=+this.value;refreshPreviewOnly()" style="width:80px;padding:4px 8px;font-size:13px;border:1px solid var(--gray-300);border-radius:var(--radius)"></div>`:''}
+          <div style="display:flex;align-items:center;gap:5px"><span style="font-size:11px;font-weight:700;color:var(--gray-400)">CUSTOMER $</span><input type="number" value="${S.qi.triaxleCustomerRate||0}" min="0" oninput="S.qi.triaxleCustomerRate=+this.value;refreshPreviewOnly()" style="width:80px;padding:4px 8px;font-size:13px;border:1px solid var(--gray-300);border-radius:var(--radius)"></div>
         </div>`:''}
       </div>
     </div>
