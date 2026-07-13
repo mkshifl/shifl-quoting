@@ -1027,8 +1027,14 @@ function getMatches(){
   return S.rates.filter(r=>{
     if(!r.active||r.zip!==qi.zip) return false;
     if(!(r.ld===qi.ld||r.ld==='Both')) return false;
-    // Port filter: if both qi.port and r.port are set, they must match
-    if(qi.port&&r.port&&!r.port.toLowerCase().includes(qi.port.toLowerCase().slice(0,8))&&!qi.port.toLowerCase().includes(r.port.toLowerCase().slice(0,8))) return false;
+    // Port filter: only filter if BOTH sides have a port AND they clearly differ
+    // If either side has no port set → always show (backward compatible)
+    if(qi.port&&r.port){
+      const qWords=qi.port.toLowerCase().replace(/[^a-z0-9]/g,' ').split(' ').filter(w=>w.length>2);
+      const rLow=r.port.toLowerCase();
+      const anyMatch=qWords.some(w=>rLow.includes(w));
+      if(!anyMatch) return false;
+    }
     return true;
   }).sort((a,b)=>totMode(a,qi.ld)-totMode(b,qi.ld));
 }
