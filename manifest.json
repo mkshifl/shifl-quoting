@@ -1,0 +1,52 @@
+{
+  "name": "Shifl Quoting Portal",
+  "short_name": "Shifl",
+  "description": "Shifl Logistics freight quoting and operations platform",
+  "start_url": "/shifl-quoting/",
+  "scope": "/shifl-quoting/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#1a2e4a",
+  "theme_color": "#1a2e4a",
+  "lang": "en-US",
+  "categories": ["business", "productivity"],
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Drayage Quote",
+      "short_name": "Drayage",
+      "url": "/shifl-quoting/#drayage",
+      "icons": [{ "src": "icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Freight Quote",
+      "short_name": "Freight",
+      "url": "/shifl-quoting/#freight",
+      "icons": [{ "src": "icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}
