@@ -773,7 +773,7 @@ async function dbDeleteRate(id){
   if(error) throw error;
 }
 async function dbSaveQuote(q){
-  const {error}=await db.from('quotes').insert(quoteToDb(q));
+  const {error}=await db.from('quotes').upsert(quoteToDb(q),{onConflict:'id',ignoreDuplicates:false});
   if(error) throw error;
 }
 async function dbUpdateQuoteStatus(id,status){
@@ -4865,9 +4865,11 @@ async function markShipmentClosed(type,id,closeStatus){
   if(type==='drayage'){
     const q=S.quotes.find(q=>q.id===id);
     if(q){
-      q.status=closeStatus;
-      q.bookedDate=q.bookedDate||localDateStr();
-      try{await dbSaveQuote(q);}catch(e){alert('Save failed: '+e.message);q.status='Booked';return;}
+      try{
+        await dbUpdateQuoteStatus(id,closeStatus);
+        q.status=closeStatus;
+        q.bookedDate=q.bookedDate||localDateStr();
+      }catch(e){alert('Save failed: '+e.message);return;}
     }
   } else if(type==='freight'){
     const q=(window._fqHistory||[]).find(q=>q.id===id);
@@ -7849,7 +7851,10 @@ async function revertToActive(type,id){
   if(!confirm('Revert this shipment back to Active (Booked)?')) return;
   if(type==='drayage'){
     const q=S.quotes.find(q=>q.id===id);
-    if(q){q.status='Booked';await dbSaveQuote(q).catch(()=>{});}
+    if(q){
+      try{await dbUpdateQuoteStatus(id,'Booked');q.status='Booked';}
+      catch(e){alert('Save failed: '+e.message);return;}
+    }
   } else if(type==='freight'){
     const q=(window._fqHistory||[]).find(q=>q.id===id);
     if(q){q.status='Booked';try{await dbUpdateFqStatus(id,'Booked');}catch(e){}try{localStorage.setItem('fq_history',JSON.stringify(window._fqHistory));}catch(e){}}
