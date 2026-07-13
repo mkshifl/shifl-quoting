@@ -335,7 +335,7 @@ hr{border:none;border-top:1px solid var(--gray-100);margin:14px 0}
       Sign in
     </button>
     <p style="font-size:11px;color:var(--gray-400);margin-top:14px;text-align:center">
-      Contact your admin if you need access
+      Access by invitation only — contact your Shifl admin to request an account.
     </p>
   </div>
 </div>
@@ -5824,9 +5824,15 @@ async function showLoginScreen(){
   try{
     const{data}=await db.from('app_users').select('id').limit(1);
     if(!data||!data.length){
+      // Only show first-user setup if truly no users exist
       $('first-user-banner').style.display='';
       $('login-name-field').style.display='';
       $('login-btn').textContent='Create admin account';
+    } else {
+      // Users exist — ensure sign-in only mode
+      $('first-user-banner').style.display='none';
+      $('login-name-field').style.display='none';
+      $('login-btn').textContent='Sign in';
     }
   }catch(e){/* table might not exist yet */}
   setTimeout(()=>{const el=$('login-email');if(el)el.focus();},100);
@@ -6022,6 +6028,7 @@ async function renderAdmin(){
 }
 
 function showCreateUser(){
+  if(_currentUser?.role!=='super_admin'){alert('Only a Super Admin can create new users.');return;}
   $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
     <div class="modal"><div class="modal-title">Add team member</div>
     <div class="g2">
@@ -6031,7 +6038,7 @@ function showCreateUser(){
     <div class="g2">
       <div class="field"><label>Password *</label><input type="password" id="nu-pw" placeholder="Set a temporary password"></div>
       <div class="field"><label>Role</label>
-        <select id="nu-role"><option value="user">Team member</option><option value="admin">Admin</option></select>
+        <select id="nu-role"><option value="team_member">Team Member</option><option value="admin">Admin</option><option value="super_admin">Super Admin</option></select>
       </div>
     </div>
     <div class="modal-foot">
@@ -6040,6 +6047,7 @@ function showCreateUser(){
     </div></div></div>`;
 }
 async function createUser(){
+  if(_currentUser?.role!=='super_admin'){alert('Only a Super Admin can create new users.');return;}
   const name=($('nu-name')||{}).value?.trim();
   const email=($('nu-email')||{}).value?.trim().toLowerCase();
   const pw=($('nu-pw')||{}).value;
@@ -6057,6 +6065,7 @@ async function createUser(){
   }catch(e){alert('Error creating user: '+e.message);}
 }
 async function showEditUser(id){
+  if(!can('edit_users')){alert('You do not have permission to edit users.');return;}
   const{data:u}=await db.from('app_users').select('*').eq('id',id).single();
   if(!u) return;
   $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
@@ -6078,6 +6087,7 @@ async function showEditUser(id){
     </div></div></div>`;
 }
 async function saveEditUser(id){
+  if(!can('edit_users')){alert('You do not have permission to edit users.');return;}
   const name=($('eu-name')||{}).value?.trim();
   const email=($('eu-email')||{}).value?.trim().toLowerCase();
   const role=($('eu-role')||{}).value||'user';
@@ -6094,6 +6104,7 @@ async function toggleUserActive(id,currentActive){
   renderAdmin();
 }
 async function deleteUser(id,name){
+  if(_currentUser?.role!=='super_admin'){alert('Only a Super Admin can delete users.');return;}
   if(!confirm('Permanently delete "'+name+'"? This cannot be undone.')) return;
   if(!confirm('Are you 100% sure? '+name+'\'s access will be removed immediately.')) return;
   try{
