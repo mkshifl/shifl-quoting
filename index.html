@@ -1035,6 +1035,7 @@ function buildCarrierComparison(matches){
   if(!qi.zip) return `<div class="empty"><div class="empty-ico">🔍</div><p>Enter a zip code</p></div>`;
   if(!matches.length) return `<div class="empty"><div class="empty-ico">🚚</div><p>No active carriers for zip ${qi.zip} · ${qi.ld}</p></div>`;
   const vis=CHARGES.filter(c=>c!=='base'&&isApplicable(c,qi.ld));
+  const multiPort=[...new Set(matches.map(r=>r.port).filter(Boolean))].length>1;
   const rows=matches.map((r,i)=>`
     <tr class="carrier-row${r.id===S.selId?' sel':''}" data-cid="${r.id}" onclick="selCarrier('${r.id}')">
       <td style="text-align:center;font-weight:700;color:${r.id===S.selId?'var(--steel)':'var(--gray-300)'}">${i+1}</td>
@@ -1045,7 +1046,6 @@ function buildCarrierComparison(matches){
       ${vis.map(c=>`<td>${fmt(r[c])}</td>`).join('')}
       <td class="bold">${fmt(totMode(r,qi.ld))}</td>
     </tr>`).join('');
-  const multiPort=[...new Set(matches.map(r=>r.port).filter(Boolean))].length>1;
   return `<div class="tbl-wrap"><table><thead><tr><th>#</th><th>Carrier</th><th>Destination</th>${multiPort?'<th style="color:var(--amber)">Port</th>':''}<th>Base</th>${vis.map(c=>`<th>${LABELS[c]}</th>`).join('')}<th>Total (${qi.ld})</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 function buildPreviewHTML(sel){
