@@ -883,7 +883,7 @@ let S={
       lclPriceBy:'pallets', cbm:0, transitTime:'',
       calc:{l:'',w:'',h:'',pieces:'',weightLbs:'',unit:'in'}},
   fqTab:'builder',
-  activeFilter:'all',activeView:'active',reportTab:'lanes',reportMode:'All',fqInvTab:'pending',aqTab:'builder',aqFilter:'all',_auditDate:'all',
+  activeFilter:'all',activeView:'active',allInvTab:'pending',reportTab:'lanes',reportMode:'All',fqInvTab:'pending',aqTab:'builder',aqFilter:'all',_auditDate:'all',
   tl:null, // initialized in boot via defaultTlState()
   tlTab:'builder',
 };
@@ -4869,7 +4869,8 @@ async function markShipmentClosed(type,id,closeStatus){
 }
 function renderActive(){
   if(!window._activeTracking) window._activeTracking={};
-  // Active = Booked | Completed = Delivered
+  // Active = Booked | Completed = Delivered | Invoicing
+  if(S.activeView==='invoicing'){renderAllInvoicing();return;}
   const isCompleted = S.activeView==='completed';
   const statuses = isCompleted ? ['Delivered'] : ['Booked'];
   const all = getAllShipmentsByStatus(statuses);
@@ -4887,6 +4888,12 @@ function renderActive(){
                background:${isCompleted?'#fff':'none'};color:${isCompleted?'var(--navy)':'var(--gray-500)'}">
         ✅ Completed (${getAllShipmentsByStatus(['Delivered']).length})
       </button>
+    </div>
+    <button onclick="S.activeView='invoicing';renderActive()"
+      style="padding:5px 14px;border-radius:4px;border:none;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;
+             background:${S.activeView==='invoicing'?'#fff':'none'};color:${S.activeView==='invoicing'?'var(--navy)':'var(--gray-500)'}">
+      🧾 Invoicing
+    </button>
     </div>
     <button class="btn" onclick="updateActiveBadge();renderActive()" style="margin-left:6px">⟳</button>`;
 
@@ -5039,10 +5046,21 @@ function renderActive(){
             style="padding:7px 16px;background:transparent;color:var(--steel);border:1px solid var(--steel);border-radius:var(--radius);cursor:pointer;font-size:12px;font-weight:600">
             View quote
           </button>
-          ${!isCompleted?`<button onclick="markShipmentClosed('${s.type}','${s.id}','${closeLabel}')"
-            style="padding:8px 22px;background:#22c55e;color:#fff;border:none;border-radius:var(--radius);cursor:pointer;font-size:13px;font-weight:700">
-            ✅ Mark Delivered
-          </button>`:`<span style="font-size:12px;font-weight:700;color:#22c55e;padding:8px 0">✅ Delivered</span>`}
+          ${!isCompleted
+            ?`<button onclick="markShipmentClosed('${s.type}','${s.id}','${closeLabel}')"
+                style="padding:8px 22px;background:#22c55e;color:#fff;border:none;border-radius:var(--radius);cursor:pointer;font-size:13px;font-weight:700">
+                ✅ Mark Delivered
+              </button>`
+            :`<div style="display:flex;gap:8px;align-items:center">
+                <button onclick="revertToActive('${s.type}','${s.id}')"
+                  style="padding:7px 14px;background:#fff;color:#d97706;border:1.5px solid #fbbf24;border-radius:var(--radius);cursor:pointer;font-size:12px;font-weight:700">
+                  ↩️ Revert to Active
+                </button>
+                <button onclick="sendInvoiceFromShipment('${s.type}','${s.id}')"
+                  style="padding:7px 14px;background:#fff;color:var(--steel);border:1.5px solid var(--steel);border-radius:var(--radius);cursor:pointer;font-size:12px;font-weight:700">
+                  🧾 Send Invoice
+                </button>
+              </div>`}
         </div>
       </div>
     </div>`;
@@ -7806,6 +7824,204 @@ function renderHome(){
       Logged in as <strong style="color:var(--navy)">${_currentUser?.name||''}</strong> · ${({super_admin:'Super Admin',admin:'Admin',team_member:'Team Member',user:'Team Member'})[_currentUser?.role]||_currentUser?.role||''}
     </div>
   </div>`;
+}
+
+
+// ═══════════════════════════════════════════════════════
+// SHIPMENT REVERT + UNIFIED INVOICING
+// ═══════════════════════════════════════════════════════
+
+async function revertToActive(type,id){
+  if(!requireCan('update_status','Only Admins can change shipment status.')) return;
+  if(!confirm('Revert this shipment back to Active (Booked)?')) return;
+  if(type==='drayage'){
+    const q=S.quotes.find(q=>q.id===id);
+    if(q){q.status='Booked';await dbSaveQuote(q).catch(()=>{});}
+  } else if(type==='freight'){
+    const q=(window._fqHistory||[]).find(q=>q.id===id);
+    if(q){q.status='Booked';try{await dbUpdateFqStatus(id,'Booked');}catch(e){}try{localStorage.setItem('fq_history',JSON.stringify(window._fqHistory));}catch(e){}}
+  } else if(type==='transload'){
+    const q=(window._tlHistory||[]).find(q=>q.id===id);
+    if(q){q.status='Booked';try{dbUpdateTlStatus(id,'Booked');}catch(e){}try{localStorage.setItem('tl_history',JSON.stringify(window._tlHistory));}catch(e){}}
+  }
+  logAction('status_changed',`Reverted ${type} shipment to Active`,'shipment',id);
+  updateActiveBadge();
+  S.activeView='active';
+  renderActive();
+}
+
+function sendInvoiceFromShipment(type,id){
+  // Route to the right invoice modal
+  if(type==='freight'){
+    const idx=(window._fqHistory||[]).findIndex(q=>q.id===id);
+    if(idx>=0){fqSendInvoice(idx);return;}
+  }
+  // Drayage and transload — use unified invoice modal
+  sendDrayInvoice(type,id);
+}
+
+function sendDrayInvoice(type,id){
+  let q=null,amount=0,display='';
+  if(type==='drayage'){
+    q=S.quotes.find(x=>x.id===id);
+    amount=q?.customerRates?.total||0;
+    display=`${q?.carrier||'—'} · ${q?.port||'—'} → ${q?.zip||'—'}`;
+  } else if(type==='transload'){
+    q=(window._tlHistory||[]).find(x=>x.id===id);
+    amount=q?.totalCustomer||0;
+    display=`${q?.warehouseName||'—'} · ${q?.drayPort||'—'} → ${q?.outDeliveryZip||'—'}`;
+  }
+  if(!q){alert('Shipment not found.');return;}
+  const sugInv='INV-'+(type==='drayage'?'DR':'TL')+'-'+Date.now().toString().slice(-5);
+  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:460px">
+    <div class="modal-title">🧾 Send Invoice — ${q.customer||'—'}</div>
+    <div style="background:var(--gray-50);border-radius:var(--radius);padding:12px 14px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center">
+      <div style="font-size:13px;color:var(--gray-600)">${display}</div>
+      <div class="money" style="color:var(--steel);font-size:18px">${fmtD(amount)}</div>
+    </div>
+    <div class="field"><label>Invoice number *</label><input type="text" id="dinv-num" value="${sugInv}" placeholder="INV-DR-12345"></div>
+    <div class="g2">
+      <div class="field"><label>Invoice date</label><input type="date" id="dinv-date" value="${new Date().toISOString().slice(0,10)}"></div>
+      <div class="field"><label>Due date</label><input type="date" id="dinv-due" value="${new Date(Date.now()+30*864e5).toISOString().slice(0,10)}"></div>
+    </div>
+    <div class="field"><label>Notes</label><input type="text" id="dinv-notes" placeholder="Net 30, factoring, etc."></div>
+    <div class="modal-foot">
+      <button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn blue" onclick="confirmDrayInvoice('${type}','${id}')">✅ Mark as Invoiced</button>
+    </div>
+  </div></div>`;
+}
+
+async function confirmDrayInvoice(type,id){
+  const num=($('dinv-num')||{}).value?.trim();
+  if(!num){alert('Invoice number required.');return;}
+  const inv={invoiceNum:num,invoiceDate:($('dinv-date')||{}).value||new Date().toISOString().slice(0,10),
+    invoiceDueDate:($('dinv-due')||{}).value||'',invoiceNotes:($('dinv-notes')||{}).value?.trim()||''};
+  if(type==='drayage'){
+    const q=S.quotes.find(x=>x.id===id);
+    if(q){Object.assign(q,inv,{status:'Invoiced'});await dbSaveQuote(q).catch(()=>{});}
+  } else if(type==='transload'){
+    const q=(window._tlHistory||[]).find(x=>x.id===id);
+    if(q){Object.assign(q,inv,{status:'Invoiced'});try{dbUpdateTlStatus(id,'Invoiced');}catch(e){}try{localStorage.setItem('tl_history',JSON.stringify(window._tlHistory));}catch(e){}}
+  }
+  logAction('invoice_sent',`${type} — ${id} · ${num}`,'shipment',id);
+  closeModal();
+  S.activeView='invoicing';S.allInvTab='invoiced';
+  renderActive();
+}
+
+async function markDrayPaid(type,id){
+  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:380px">
+    <div class="modal-title">✅ Mark as Paid</div>
+    <div class="field"><label>Date payment received</label><input type="date" id="dpaid-date" value="${new Date().toISOString().slice(0,10)}"></div>
+    <div class="field"><label>Payment notes</label><input type="text" id="dpaid-notes" placeholder="ACH, check #, factored…"></div>
+    <div class="modal-foot">
+      <button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn" style="background:var(--green);color:#fff;border-color:var(--green)" onclick="confirmDrayPaid('${type}','${id}')">✅ Confirm</button>
+    </div>
+  </div></div>`;
+}
+
+async function confirmDrayPaid(type,id){
+  const paid={paidDate:($('dpaid-date')||{}).value||new Date().toISOString().slice(0,10),paidNotes:($('dpaid-notes')||{}).value?.trim()||'',status:'Paid'};
+  if(type==='drayage'){
+    const q=S.quotes.find(x=>x.id===id);
+    if(q){Object.assign(q,paid);await dbSaveQuote(q).catch(()=>{});}
+  } else if(type==='freight'){
+    const idx=(window._fqHistory||[]).findIndex(x=>x.id===id);
+    if(idx>=0) fqConfirmPaid(idx);return;
+  } else if(type==='transload'){
+    const q=(window._tlHistory||[]).find(x=>x.id===id);
+    if(q){Object.assign(q,paid);try{dbUpdateTlStatus(id,'Paid');}catch(e){}try{localStorage.setItem('tl_history',JSON.stringify(window._tlHistory));}catch(e){}}
+  }
+  logAction('payment_received',`${type} shipment paid`,'shipment',id);
+  closeModal();
+  S.activeView='invoicing';S.allInvTab='paid';
+  renderActive();
+}
+
+function renderAllInvoicing(){
+  const tab=S.allInvTab||'pending';
+  $('topbar-right').innerHTML=`
+    <div style="display:flex;gap:6px;background:var(--gray-100);padding:3px;border-radius:var(--radius)">
+      <button onclick="S.activeView='active';S.activeFilter='all';renderActive()"
+        style="padding:5px 14px;border-radius:4px;border:none;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;background:none;color:var(--gray-500)">
+        🟢 Active
+      </button>
+      <button onclick="S.activeView='completed';S.activeFilter='all';renderActive()"
+        style="padding:5px 14px;border-radius:4px;border:none;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;background:none;color:var(--gray-500)">
+        ✅ Completed
+      </button>
+      <button onclick="S.activeView='invoicing';renderActive()"
+        style="padding:5px 14px;border-radius:4px;border:none;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;background:#fff;color:var(--navy)">
+        🧾 Invoicing
+      </button>
+    </div>`;
+
+  // Collect all shipments across all modes
+  const dray=(S.quotes||[]).map(q=>({id:q.id,type:'drayage',customer:q.customer||'—',detail:`${q.port||'—'} → ${q.zip||'—'}`,carrier:q.carrier||'—',amount:q.customerRates?.total||0,status:q.status,invoiceNum:q.invoiceNum,invoiceDate:q.invoiceDate,invoiceDueDate:q.invoiceDueDate,paidDate:q.paidDate,modeLabel:'Drayage'}));
+  const fq=(window._fqHistory||[]).map(q=>({id:q.id,type:'freight',customer:q.customer||'—',detail:`${q.pickupZip||'—'} → ${q.deliveryZip||'—'}`,carrier:q.carrier||'—',amount:q.customerRate||0,status:q.status,invoiceNum:q.invoiceNum,invoiceDate:q.invoiceDate,invoiceDueDate:q.invoiceDueDate,paidDate:q.paidDate,modeLabel:q.fqMode||'Freight'}));
+  const tl=(window._tlHistory||[]).map(q=>({id:q.id,type:'transload',customer:q.customer||'—',detail:`${q.drayPort||'—'} → ${q.outDeliveryZip||'—'}`,carrier:q.outCarrier||'—',amount:q.totalCustomer||0,status:q.status,invoiceNum:q.invoiceNum,invoiceDate:q.invoiceDate,invoiceDueDate:q.invoiceDueDate,paidDate:q.paidDate,modeLabel:'Transload'}));
+  const all=[...dray,...fq,...tl];
+
+  const pending=all.filter(q=>q.status==='Delivered');
+  const invoiced=all.filter(q=>q.status==='Invoiced');
+  const paid=all.filter(q=>q.status==='Paid');
+
+  const tabBar=`<div style="display:flex;gap:4px;background:var(--gray-100);padding:3px;border-radius:var(--radius);width:fit-content;margin-bottom:18px">
+    ${[{id:'pending',label:`⏳ Pending Invoice (${pending.length})`},{id:'invoiced',label:`📤 Invoiced (${invoiced.length})`},{id:'paid',label:`✅ Paid (${paid.length})`}]
+      .map(t=>`<button onclick="S.allInvTab='${t.id}';renderActive()" style="padding:6px 14px;border-radius:5px;border:none;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;background:${tab===t.id?'#fff':'none'};color:${tab===t.id?'var(--navy)':'var(--gray-500)'};box-shadow:${tab===t.id?'0 1px 3px rgba(0,0,0,.08)':'none'}">${t.label}</button>`).join('')}
+  </div>`;
+
+  let body='';
+  if(tab==='pending'){
+    if(!pending.length){$('page').innerHTML=tabBar+`<div class="empty"><div class="empty-ico">✅</div><p>No pending invoices</p></div>`;return;}
+    const rows=pending.map(q=>{
+      const days=q.status==='Delivered'&&q.paidDate?null:null;
+      return `<tr>
+        <td><div class="bold">${q.customer}</div><div class="muted" style="font-size:11px">${q.detail}</div></td>
+        <td><span class="badge bb" style="font-size:10px">${q.modeLabel}</span></td>
+        <td class="muted">${q.carrier}</td>
+        <td class="money" style="color:var(--steel)">${fmtD(q.amount)}</td>
+        <td onclick="event.stopPropagation()">
+          <button class="btn sm blue" onclick="sendInvoiceFromShipment('${q.type}','${q.id}')">🧾 Send Invoice</button>
+          <button class="btn sm" onclick="revertToActive('${q.type}','${q.id}')" style="margin-left:4px;color:#d97706;border-color:#fbbf24">↩️ Revert</button>
+        </td>
+      </tr>`;}).join('');
+    body=`<div class="tbl-wrap"><table><thead><tr><th>Customer</th><th>Type</th><th>Carrier</th><th>Amount</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  } else if(tab==='invoiced'){
+    if(!invoiced.length){$('page').innerHTML=tabBar+`<div class="empty"><div class="empty-ico">📤</div><p>No invoices sent yet</p></div>`;return;}
+    const totalOut=invoiced.reduce((s,q)=>s+q.amount,0);
+    const overdue=invoiced.filter(q=>q.invoiceDueDate&&new Date(q.invoiceDueDate+'T12:00:00')<new Date());
+    const kpis=`<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px">
+      <div class="kpi"><div class="kpi-lbl">Outstanding</div><div class="kpi-val" style="color:var(--steel)">${fmtD(totalOut)}</div></div>
+      <div class="kpi"><div class="kpi-lbl">Invoices sent</div><div class="kpi-val">${invoiced.length}</div></div>
+      <div class="kpi"><div class="kpi-lbl">Overdue</div><div class="kpi-val" style="color:var(--red)">${overdue.length}</div></div>
+    </div>`;
+    const rows=invoiced.map(q=>{
+      const dueDate=q.invoiceDueDate;
+      const daysOut=dueDate?Math.floor((Date.now()-new Date(dueDate+'T12:00:00'))/864e5):null;
+      const isOverdue=daysOut!==null&&daysOut>0;
+      return`<tr style="${isOverdue?'background:#fff5f5':''}">
+        <td><div class="bold">${q.customer}</div><div class="muted" style="font-size:11px">${q.detail}</div></td>
+        <td><span class="badge bb" style="font-size:10px">${q.modeLabel}</span></td>
+        <td style="font-family:monospace;font-size:12px;font-weight:600">${q.invoiceNum||'—'}</td>
+        <td class="money" style="color:var(--steel)">${fmtD(q.amount)}</td>
+        <td style="color:${isOverdue?'var(--red)':'var(--gray-500)'};font-weight:${isOverdue?'700':'400'}">${dueDate?(isOverdue?`⚠ ${daysOut}d overdue`:daysOut===0?'Due today':`${Math.abs(daysOut)}d left`):'—'}</td>
+        <td onclick="event.stopPropagation()">
+          <button class="btn sm" onclick="markDrayPaid('${q.type}','${q.id}')" style="color:var(--green);border-color:#86efac">✅ Mark Paid</button>
+        </td>
+      </tr>`;}).join('');
+    body=kpis+`<div class="tbl-wrap"><table><thead><tr><th>Customer</th><th>Type</th><th>Invoice #</th><th>Amount</th><th>Due</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  } else if(tab==='paid'){
+    if(!paid.length){$('page').innerHTML=tabBar+`<div class="empty"><div class="empty-ico">💰</div><p>No payments recorded yet</p></div>`;return;}
+    const totalCol=paid.reduce((s,q)=>s+q.amount,0);
+    body=`<div class="kpi" style="width:200px;margin-bottom:16px"><div class="kpi-lbl">Total Collected</div><div class="kpi-val" style="color:var(--green)">${fmtD(totalCol)}</div></div>
+    <div class="tbl-wrap"><table><thead><tr><th>Customer</th><th>Type</th><th>Invoice #</th><th>Amount</th><th>Paid Date</th></tr></thead><tbody>
+    ${paid.map(q=>`<tr><td><div class="bold">${q.customer}</div><div class="muted" style="font-size:11px">${q.detail}</div></td><td><span class="badge bb" style="font-size:10px">${q.modeLabel}</span></td><td style="font-family:monospace;font-size:12px;font-weight:600">${q.invoiceNum||'—'}</td><td class="money" style="color:var(--green);font-weight:700">${fmtD(q.amount)}</td><td class="muted">${q.paidDate||'—'}</td></tr>`).join('')}
+    </tbody></table></div>`;
+  }
+  $('page').innerHTML=tabBar+body;
 }
 
 
