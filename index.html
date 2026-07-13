@@ -8396,7 +8396,7 @@ function modeBadge(mode){
 
 // ── 5. Status timeline helper ─────────────────────────
 function statusTimeline(status){
-  const steps=['Quoted','Booked','Delivered','Invoiced','Paid'];
+  const steps=['Quoted','Booked','Delivered','Invoiced'];
   const idx=steps.indexOf(status);
   let html='<div class="status-timeline">';
   steps.forEach((s,i)=>{
