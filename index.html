@@ -5073,11 +5073,21 @@ function renderActive(){
           </div>
           ${autoUrl&&!tracking.trackingUrl?`<div style="font-size:11px;color:#22c55e;margin-top:6px;font-weight:600">${s.carrier} tracking detected - enter PRO# to activate</div>`:''}
         </div>`:''}
-        <div style="display:flex;justify-content:space-between;align-items:center">
-          <button onclick="${s.type==='drayage'?`setView('log');render();setTimeout(()=>showQuoteModal('${s.id}'),100)`:s.type==='freight'?`setView('freight');setFqTab('log');setTimeout(()=>{const idx=(window._fqHistory||[]).findIndex(q=>q.id==='${s.id}');if(idx>=0)showFqQuoteModal(idx);},100)`:`setView('transload');setTlTab('log');setTimeout(()=>{const idx=(window._tlHistory||[]).findIndex(q=>q.id==='${s.id}');if(idx>=0)showTlQuoteModal(idx);},100)`}"
-            style="padding:7px 16px;background:transparent;color:var(--steel);border:1px solid var(--steel);border-radius:var(--radius);cursor:pointer;font-size:12px;font-weight:600">
-            View quote
-          </button>
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <button onclick="${s.type==='drayage'?`setView('log');render();setTimeout(()=>showQuoteModal('${s.id}'),100)`:s.type==='freight'?`setView('freight');setFqTab('log');setTimeout(()=>{const idx=(window._fqHistory||[]).findIndex(q=>q.id==='${s.id}');if(idx>=0)showFqQuoteModal(idx);},100)`:`setView('transload');setTlTab('log');setTimeout(()=>{const idx=(window._tlHistory||[]).findIndex(q=>q.id==='${s.id}');if(idx>=0)showTlQuoteModal(idx);},100)`}"
+              style="padding:7px 14px;background:transparent;color:var(--steel);border:1px solid var(--steel);border-radius:var(--radius);cursor:pointer;font-size:12px;font-weight:600">
+              📄 View quote
+            </button>
+            <button onclick="changeShipmentCarrier('${s.type}','${s.id}','${(s.carrier||'').replace(/'/g,'')}')"
+              style="padding:7px 14px;background:transparent;color:var(--navy);border:1px solid var(--gray-300);border-radius:var(--radius);cursor:pointer;font-size:12px;font-weight:600">
+              🚛 Change carrier
+            </button>
+            ${can('delete_quotes')?`<button onclick="deleteShipment('${s.type}','${s.id}')"
+              style="padding:7px 14px;background:transparent;color:#dc2626;border:1px solid #fca5a5;border-radius:var(--radius);cursor:pointer;font-size:12px;font-weight:600">
+              🗑️ Delete
+            </button>`:''}
+          </div>
           ${!isCompleted
             ?`<button onclick="markShipmentClosed('${s.type}','${s.id}','${closeLabel}')"
                 style="padding:8px 22px;background:#22c55e;color:#fff;border:none;border-radius:var(--radius);cursor:pointer;font-size:13px;font-weight:700">
@@ -8068,6 +8078,78 @@ function localDateStr(){
 }
 function localDateTimeStr(){
   return new Date().toLocaleString('en-US',{timeZone:'America/New_York',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false}).replace(/(\d+)\/(\d+)\/(\d+),/,'$3-$1-$2');
+}
+
+// ── Active Shipment: change carrier ───────────────────────────────────────
+function changeShipmentCarrier(type,id,currentCarrier){
+  if(!can('update_status')){alert('Only Admins can edit shipment details.');return;}
+  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:400px">
+    <div class="modal-title">🚛 Change Carrier</div>
+    <div class="field">
+      <label>New carrier name</label>
+      <input type="text" id="new-carrier-input" value="${currentCarrier}" placeholder="Enter carrier name"
+        list="carrier-dl-active"
+        style="font-size:15px;font-weight:600">
+      <datalist id="carrier-dl-active">
+        ${(S.carriers||[]).map(c=>`<option value="${c.name}">`).join('')}
+      </datalist>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn blue" onclick="confirmChangeCarrier('${type}','${id}')">✅ Update Carrier</button>
+    </div>
+  </div></div>`;
+  setTimeout(()=>$('new-carrier-input')?.focus(),100);
+}
+
+async function confirmChangeCarrier(type,id){
+  const newCarrier=($('new-carrier-input')||{}).value?.trim();
+  if(!newCarrier){alert('Enter a carrier name.');return;}
+  if(type==='drayage'){
+    const q=S.quotes.find(q=>q.id===id);
+    if(q){
+      q.carrier=newCarrier;
+      try{await db.from('quotes').update({carrier:newCarrier}).eq('id',id);}catch(e){alert('Save failed: '+e.message);return;}
+    }
+  } else if(type==='freight'){
+    const q=(window._fqHistory||[]).find(q=>q.id===id);
+    if(q){
+      q.carrier=newCarrier;
+      try{await db.from('fq_quotes').update({data:q}).eq('id',id);}catch(e){}
+      try{localStorage.setItem('fq_history',JSON.stringify(window._fqHistory));}catch(e){}
+    }
+  } else if(type==='transload'){
+    const q=(window._tlHistory||[]).find(q=>q.id===id);
+    if(q){
+      q.outCarrier=newCarrier;q.drayCarrier=newCarrier;
+      try{await db.from('tl_quotes').update({data:q}).eq('id',id);}catch(e){}
+      try{localStorage.setItem('tl_history',JSON.stringify(window._tlHistory));}catch(e){}
+    }
+  }
+  logAction('status_changed',`Carrier changed to ${newCarrier}`,'shipment',id);
+  closeModal();
+  renderActive();
+}
+
+// ── Active Shipment: delete ────────────────────────────────────────────────
+async function deleteShipment(type,id){
+  if(!requireCan('delete_quotes','Only Admins can delete shipments.')) return;
+  if(!confirm('Delete this shipment? This cannot be undone.')) return;
+  if(type==='drayage'){
+    S.quotes=S.quotes.filter(q=>q.id!==id);
+    try{await db.from('quotes').delete().eq('id',id);}catch(e){alert('Delete failed: '+e.message);return;}
+  } else if(type==='freight'){
+    window._fqHistory=(window._fqHistory||[]).filter(q=>q.id!==id);
+    try{await db.from('fq_quotes').delete().eq('id',id);}catch(e){}
+    try{localStorage.setItem('fq_history',JSON.stringify(window._fqHistory));}catch(e){}
+  } else if(type==='transload'){
+    window._tlHistory=(window._tlHistory||[]).filter(q=>q.id!==id);
+    try{await db.from('tl_quotes').delete().eq('id',id);}catch(e){}
+    try{localStorage.setItem('tl_history',JSON.stringify(window._tlHistory));}catch(e){}
+  }
+  logAction('quote_deleted',`${type} shipment deleted`,'shipment',id);
+  updateActiveBadge();
+  renderActive();
 }
 boot().catch(e=>{$('loading-screen').style.display='none';$('setup-screen').style.display='flex';});
 </script>
