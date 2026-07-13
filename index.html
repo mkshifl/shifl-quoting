@@ -8083,26 +8083,136 @@ function localDateTimeStr(){
 // ── Active Shipment: change carrier ───────────────────────────────────────
 function changeShipmentCarrier(type,id,currentCarrier){
   if(!can('update_status')){alert('Only Admins can edit shipment details.');return;}
-  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:400px">
+
+  let rateRows='',noRates=false;
+
+  if(type==='drayage'){
+    const q=S.quotes.find(q=>q.id===id);
+    if(q){
+      const matches=S.rates.filter(r=>r.active&&r.zip===q.zip&&(r.ld===q.ld||r.ld==='Both'))
+        .sort((a,b)=>totMode(a,q.ld)-totMode(b,q.ld));
+      if(matches.length){
+        rateRows=matches.map(r=>{
+          const carrierTotal=totMode(r,q.ld);
+          const cuTotal=q.customerRates?.total||0;
+          const profit=cuTotal-carrierTotal;
+          const margin=cuTotal>0?profit/cuTotal:0;
+          const isCurrent=r.carrier===currentCarrier;
+          return`<div onclick="selectCarrierChange('drayage','${id}','${r.id}')"
+            style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;
+              border:1.5px solid ${isCurrent?'var(--steel)':'var(--gray-200)'};
+              background:${isCurrent?'var(--blue-bg)':'#fff'};
+              border-radius:var(--radius);cursor:pointer;margin-bottom:8px;transition:border-color .15s"
+            onmouseover="this.style.borderColor='var(--steel)'" onmouseout="this.style.borderColor='${isCurrent?'var(--steel)':'var(--gray-200)'}'"
+          >
+            <div>
+              <div style="font-weight:700;color:var(--navy)">${r.carrier}${isCurrent?' <span style='font-size:11px;color:var(--gray-400)'>(current)</span>':''}</div>
+              <div style="font-size:11px;color:var(--gray-400);margin-top:2px">Base: ${fmtD(r.base||0)} · Total: ${fmtD(carrierTotal)}</div>
+            </div>
+            <div style="text-align:right">
+              <div style="color:${profit>=0?'var(--green)':'var(--red)'};font-weight:700">${profit>=0?'+':''}${fmtD(profit)}</div>
+              <div style="font-size:11px;color:${margin>=0.10?'var(--green)':'var(--red)'}">${pct(margin)} margin</div>
+            </div>
+          </div>`;
+        }).join('');
+      } else {noRates=true;}
+    }
+  } else if(type==='freight'){
+    const q=(window._fqHistory||[]).find(q=>q.id===id);
+    if(q){
+      const matches=(window._fqRates||[]).filter(r=>r.active&&
+        (!r.pickupZip||r.pickupZip===q.pickupZip)&&
+        (!r.deliveryZip||r.deliveryZip===q.deliveryZip)&&
+        (!r.mode||r.mode===q.fqMode||r.mode==='Both'))
+        .sort((a,b)=>(a.rate||0)-(b.rate||0));
+      if(matches.length){
+        rateRows=matches.map(r=>{
+          const carrierRate=parseFloat(r.rate||r.base)||0;
+          const cuTotal=parseFloat(q.customerRate)||0;
+          const profit=cuTotal-carrierRate;
+          const margin=cuTotal>0?profit/cuTotal:0;
+          const isCurrent=r.carrier===currentCarrier;
+          return`<div onclick="selectCarrierChange('freight','${id}','${r.id}')"
+            style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;
+              border:1.5px solid ${isCurrent?'var(--steel)':'var(--gray-200)'};
+              background:${isCurrent?'var(--blue-bg)':'#fff'};
+              border-radius:var(--radius);cursor:pointer;margin-bottom:8px"
+            onmouseover="this.style.borderColor='var(--steel)'" onmouseout="this.style.borderColor='${isCurrent?'var(--steel)':'var(--gray-200)'}'"
+          >
+            <div>
+              <div style="font-weight:700;color:var(--navy)">${r.carrier}${isCurrent?' <span style='font-size:11px;color:var(--gray-400)'>(current)</span>':''}</div>
+              <div style="font-size:11px;color:var(--gray-400);margin-top:2px">${r.mode||'Freight'} · ${fmtD(carrierRate)}</div>
+            </div>
+            <div style="text-align:right">
+              <div style="color:${profit>=0?'var(--green)':'var(--red)'};font-weight:700">${profit>=0?'+':''}${fmtD(profit)}</div>
+              <div style="font-size:11px;color:${margin>=0.10?'var(--green)':'var(--red)'}">${pct(margin)} margin</div>
+            </div>
+          </div>`;
+        }).join('');
+      } else {noRates=true;}
+    }
+  }
+
+  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:480px">
     <div class="modal-title">🚛 Change Carrier</div>
-    <div class="field">
-      <label>New carrier name</label>
-      <input type="text" id="new-carrier-input" value="${currentCarrier}" placeholder="Enter carrier name"
-        list="carrier-dl-active"
-        style="font-size:15px;font-weight:600">
-      <datalist id="carrier-dl-active">
-        ${(S.carriers||[]).map(c=>`<option value="${c.name}">`).join('')}
-      </datalist>
+    ${rateRows
+      ?`<div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-400);margin-bottom:10px">
+          Select from your rate cards — profit shown vs current customer rate
+        </div>${rateRows}
+        <div style="border-top:1px solid var(--gray-200);margin-top:12px;padding-top:14px">`
+      :`<div style="font-size:13px;color:var(--gray-400);margin-bottom:14px">No rate cards found for this lane. Enter a carrier name manually:</div><div>`
+    }
+      <div class="field" style="margin-bottom:0">
+        <label>Or enter manually</label>
+        <input type="text" id="new-carrier-input" value="${currentCarrier}" placeholder="Carrier name"
+          list="carrier-dl-active">
+        <datalist id="carrier-dl-active">
+          ${(S.carriers||[]).map(c=>`<option value="${c.name}">`).join('')}
+        </datalist>
+      </div>
     </div>
     <div class="modal-foot">
       <button class="btn" onclick="closeModal()">Cancel</button>
-      <button class="btn blue" onclick="confirmChangeCarrier('${type}','${id}')">✅ Update Carrier</button>
+      <button class="btn blue" onclick="confirmChangeCarrier('${type}','${id}',null)">✅ Update (manual)</button>
     </div>
   </div></div>`;
   setTimeout(()=>$('new-carrier-input')?.focus(),100);
 }
 
-async function confirmChangeCarrier(type,id){
+async function selectCarrierChange(type,id,rateId){
+  if(type==='drayage'){
+    const q=S.quotes.find(q=>q.id===id);
+    const r=S.rates.find(r=>r.id===rateId);
+    if(!q||!r) return;
+    const ld=q.ld||'Live';
+    // Recalculate carrier rates from new rate card
+    const newCarrierRates={};
+    let ct=0;
+    CHARGES.filter(c=>isApplicable(c,ld)).forEach(c=>{const v=Number(r[c])||0;newCarrierRates[c]=v;ct+=v;});
+    newCarrierRates.total=ct;
+    q.carrier=r.carrier;
+    q.carrierRates={...q.carrierRates,...newCarrierRates,total:ct};
+    q.profit=(q.customerRates?.total||0)-ct;
+    q.profitPct=(q.customerRates?.total||0)>0?q.profit/(q.customerRates?.total||1):0;
+    try{await db.from('quotes').update({carrier:r.carrier}).eq('id',id);}catch(e){}
+    logAction('status_changed',`Carrier changed to ${r.carrier} (rate card)`,'shipment',id);
+  } else if(type==='freight'){
+    const q=(window._fqHistory||[]).find(q=>q.id===id);
+    const r=(window._fqRates||[]).find(r=>r.id===rateId);
+    if(!q||!r) return;
+    q.carrier=r.carrier;
+    q.carrierRate=parseFloat(r.rate||r.base)||0;
+    q.profit=(parseFloat(q.customerRate)||0)-q.carrierRate;
+    q.profitPct=(parseFloat(q.customerRate)||0)>0?q.profit/(parseFloat(q.customerRate)||1):0;
+    try{await db.from('fq_quotes').update({data:q}).eq('id',id);}catch(e){}
+    try{localStorage.setItem('fq_history',JSON.stringify(window._fqHistory));}catch(e){}
+    logAction('status_changed',`Carrier changed to ${r.carrier} (rate card)`,'shipment',id);
+  }
+  closeModal();
+  renderActive();
+}
+
+async function confirmChangeCarrier(type,id,rateId){
   const newCarrier=($('new-carrier-input')||{}).value?.trim();
   if(!newCarrier){alert('Enter a carrier name.');return;}
   if(type==='drayage'){
