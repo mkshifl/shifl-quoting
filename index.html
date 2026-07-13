@@ -2510,7 +2510,8 @@ async function saveFqQuote(){
 function renderFqDashboard(){
   const all=window._fqHistory||[];
   const booked=all.filter(q=>q.status==='Booked');
-  const decided=all.filter(q=>['Booked','Lost','Cancelled'].includes(q.status));
+  const decided=all.filter(q=>['Booked','Delivered','Invoiced','Paid','Lost','Cancelled','Expired'].includes(q.status));
+  const won=all.filter(q=>['Booked','Delivered','Invoiced','Paid'].includes(q.status));
   const rev=booked.reduce((s,q)=>s+(q.customerRate||0),0);
   const prof=booked.reduce((s,q)=>s+(q.profit||0),0);
   const winRate=decided.length>0?booked.length/decided.length:0;
@@ -4419,7 +4420,8 @@ function saveTlWarehouseFromQuote(){
 function renderTlDashboard(){
   const all=window._tlHistory||[];
   const booked=all.filter(q=>q.status==='Booked');
-  const decided=all.filter(q=>['Booked','Lost','Cancelled'].includes(q.status));
+  const decided=all.filter(q=>['Booked','Delivered','Invoiced','Paid','Lost','Cancelled','Expired'].includes(q.status));
+  const won=all.filter(q=>['Booked','Delivered','Invoiced','Paid'].includes(q.status));
   const rev=booked.reduce((s,q)=>s+(q.totalCustomer||0),0);
   const prof=booked.reduce((s,q)=>s+(q.profit||0),0);
   const winRate=decided.length>0?booked.length/decided.length:0;
@@ -5749,8 +5751,9 @@ function renderDash(){
     {v:filtered.filter(q=>q.status==='Cancelled').length,color:'#f3f4f6',lbl:'Cancelled'},
   ];
   // Win rate only counts decided quotes (Booked + Lost + Expired), not pending
-  const decided=filtered.filter(q=>['Booked','Lost','Expired'].includes(q.status));
-  const winRate=decided.length>0?booked.length/decided.length:0;
+  const decided=filtered.filter(q=>['Booked','Delivered','Invoiced','Paid','Lost','Cancelled','Expired'].includes(q.status));
+  const won=filtered.filter(q=>['Booked','Delivered','Invoiced','Paid'].includes(q.status));
+  const winRate=decided.length>0?won.length/decided.length:0;
   const cMap={};allBooked.forEach(q=>{if(!cMap[q.carrier])cMap[q.carrier]={n:0,p:0,rev:0};cMap[q.carrier].n++;cMap[q.carrier].p+=(q.profit||0);cMap[q.carrier].rev+=(q.customerRates?.total||0);});const topC=Object.entries(cMap).sort((a,b)=>b[1].n-a[1].n).slice(0,6);const recent=all.slice(0,8);const rangeLabel={week:'This week',month:'This month',lastmonth:'Last month',all:'All time'}[range];
   $('page').innerHTML=`
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
