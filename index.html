@@ -8106,7 +8106,7 @@ function changeShipmentCarrier(type,id,currentCarrier){
             onmouseover="this.style.borderColor='var(--steel)'" onmouseout="this.style.borderColor='${isCurrent?'var(--steel)':'var(--gray-200)'}'"
           >
             <div>
-              <div style="font-weight:700;color:var(--navy)">${r.carrier}${isCurrent?' <span style='font-size:11px;color:var(--gray-400)'>(current)</span>':''}</div>
+              <div style="font-weight:700;color:var(--navy)">${r.carrier}${isCurrent?' (current)':''}</div>
               <div style="font-size:11px;color:var(--gray-400);margin-top:2px">Base: ${fmtD(r.base||0)} · Total: ${fmtD(carrierTotal)}</div>
             </div>
             <div style="text-align:right">
@@ -8140,7 +8140,7 @@ function changeShipmentCarrier(type,id,currentCarrier){
             onmouseover="this.style.borderColor='var(--steel)'" onmouseout="this.style.borderColor='${isCurrent?'var(--steel)':'var(--gray-200)'}'"
           >
             <div>
-              <div style="font-weight:700;color:var(--navy)">${r.carrier}${isCurrent?' <span style='font-size:11px;color:var(--gray-400)'>(current)</span>':''}</div>
+              <div style="font-weight:700;color:var(--navy)">${r.carrier}${isCurrent?' (current)':''}</div>
               <div style="font-size:11px;color:var(--gray-400);margin-top:2px">${r.mode||'Freight'} · ${fmtD(carrierRate)}</div>
             </div>
             <div style="text-align:right">
