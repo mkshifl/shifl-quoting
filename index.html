@@ -45,6 +45,18 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-siz
 .nav-sub:hover{background:rgba(255,255,255,.05);color:rgba(255,255,255,.75)}
 .nav-sub.active{background:rgba(255,255,255,.08);color:#fff;border-left-color:#93c5fd}
 .sidebar-foot{padding:10px 18px;border-top:1px solid rgba(255,255,255,.07)}
+.acc-btn{width:100%;display:flex;align-items:center;justify-content:space-between;padding:11px 16px;background:none;border:none;cursor:pointer;color:rgba(255,255,255,.65);font-size:13px;font-weight:600;font-family:inherit;transition:background .15s}
+.acc-btn:hover{background:rgba(255,255,255,.05)}
+.acc-btn.open{background:rgba(255,255,255,.07);color:#fff}
+.acc-btn.open .acc-icon{color:rgba(255,255,255,.55)}
+.acc-icon{font-size:11px;color:rgba(255,255,255,.2);margin-left:auto;flex-shrink:0;transition:transform .2s}
+.acc-icon.rotated{transform:rotate(90deg)}
+.acc-sub{display:none;background:rgba(0,0,0,.18)}
+.acc-sub.open{display:block}
+.acc-sub a,.acc-sub button.sub-link{display:flex;align-items:center;gap:9px;padding:8px 16px 8px 40px;color:rgba(255,255,255,.5);font-size:12px;text-decoration:none;border:none;background:none;width:100%;text-align:left;cursor:pointer;font-family:inherit;transition:color .12s,background .12s}
+.acc-sub a:hover,.acc-sub button.sub-link:hover{color:rgba(255,255,255,.85);background:rgba(255,255,255,.05)}
+.acc-sub a.active,.acc-sub button.sub-link.active{color:#7ab8e8;background:rgba(59,142,208,.14);border-left:2px solid #3b8ed0;padding-left:38px}
+.acc-sep{height:1px;background:rgba(255,255,255,.07);margin:6px 16px}
 .sync-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#4ade80;margin-right:6px;flex-shrink:0}
 .sync-dot.off{background:#ef4444}
 .sync-dot.loading{background:#fbbf24;animation:pulse 1s infinite}
@@ -341,58 +353,95 @@ hr{border:none;border-top:1px solid var(--gray-100);margin:14px 0}
         </div>
       </div>
     </div>
-    <nav class="nav">
-      <button class="nav-btn" onclick="setView('active')" id="nav-active" style="border-left-color:transparent;position:relative">
-        <span class="ico">🟢</span>Active Shipments
-        <span id="active-badge" style="margin-left:auto;background:#22c55e;color:#fff;border-radius:99px;font-size:10px;font-weight:700;padding:2px 8px;min-width:20px;text-align:center;display:none">0</span>
+    <nav class="nav" id="main-nav">
+
+      <!-- DRAYAGE -->
+      <button class="acc-btn" id="acc-drayage" onclick="toggleAcc('drayage')">
+        <span style="display:flex;align-items:center;gap:10px">
+          <span style="font-size:16px">🚢</span>Drayage
+        </span>
+        <span class="acc-icon" id="acc-icon-drayage">▶</span>
       </button>
-      <button class="nav-btn" onclick="setView('carriers')" id="nav-carriers"><span class="ico">🤝</span>Carrier Network</button>
-      <div style="padding:10px 18px 4px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:rgba(255,255,255,.28)">Drayage</div>
-      <button class="nav-btn active" onclick="setView('quote')" id="nav-quote"><span class="ico">📋</span>Quote builder</button>
-      <button class="nav-btn" onclick="setView('customers')" id="nav-customers"><span class="ico">👥</span>Customers</button>
-      <button class="nav-btn" onclick="setView('rates')" id="nav-rates"><span class="ico">🚢</span>Carrier rates</button>
-      <button class="nav-btn" onclick="setView('log')" id="nav-log"><span class="ico">📁</span>Quote log</button>
-      <button class="nav-btn" onclick="setView('reports')" id="nav-reports"><span class="ico">📈</span>Reports</button>
-      <button class="nav-btn" onclick="setView('dash')" id="nav-dash"><span class="ico">📊</span>Dashboard</button>
-      <div style="margin:10px 18px;border-top:1px solid rgba(255,255,255,.1)"></div>
-      <div style="padding:4px 18px 6px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:rgba(255,255,255,.28)">Freight</div>
-      <button class="nav-btn" onclick="setView('freight');setFqTab('builder')" id="nav-freight" style="border-left-color:transparent">
-        <span class="ico">🚛</span>Freight Quoting
-      </button>
-      <button class="nav-sub" id="fqnav-builder" onclick="setView('freight');setFqTab('builder')"><span>🏗️</span>Quote builder</button>
-      <button class="nav-sub" id="fqnav-log" onclick="setView('freight');setFqTab('log')"><span>📁</span>Quote log</button>
-      <button class="nav-sub" id="fqnav-carriers" onclick="setView('freight');setFqTab('carriers')"><span>📋</span>Carrier rates</button>
-      <button class="nav-sub" id="fqnav-dash" onclick="setView('freight');setFqTab('dash')"><span>📊</span>Dashboard</button>
-      <button class="nav-sub" id="fqnav-invoicing" onclick="setView('freight');setFqTab('invoicing')" style="position:relative"><span>🧾</span>Invoicing<span id="fq-inv-badge" style="display:none;position:absolute;top:4px;right:8px;background:var(--red);color:#fff;border-radius:99px;font-size:9px;font-weight:800;min-width:16px;height:16px;line-height:16px;text-align:center;padding:0 3px">0</span></button>
-      <div style="margin:10px 18px;border-top:1px solid rgba(255,255,255,.1)"></div>
-      <div style="padding:4px 18px 6px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:rgba(255,255,255,.28)">Air Freight</div>
-      <button class="nav-btn" onclick="setView('air');setAqTab('builder')" id="nav-air" style="border-left-color:transparent">
-        <span class="ico">✈️</span>Air Freight
-      </button>
-      <button class="nav-sub" id="aqnav-builder" onclick="setView('air');setAqTab('builder')"><span>🏗️</span>Quote builder</button>
-      <button class="nav-sub" id="aqnav-log" onclick="setView('air');setAqTab('log')"><span>📁</span>Quote log</button>
-      <div style="margin:10px 18px;border-top:1px solid rgba(255,255,255,.1)"></div>
-      <div style="padding:4px 18px 6px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:rgba(255,255,255,.28)">Transload</div>
-      <button class="nav-btn" onclick="setView('transload');setTlTab('builder')" id="nav-transload" style="border-left-color:transparent">
-        <span class="ico">🔄</span>Transload Quoting
-      </button>
-      <button class="nav-sub" id="tlnav-builder"    onclick="setView('transload');setTlTab('builder')"><span>🏗️</span>Quote builder</button>
-      <button class="nav-sub" id="tlnav-log"        onclick="setView('transload');setTlTab('log')"><span>📁</span>Quote log</button>
-      <button class="nav-sub" id="tlnav-warehouses" onclick="setView('transload');setTlTab('warehouses')"><span>🏭</span>Warehouses</button>
-      <button class="nav-sub" id="tlnav-dash"       onclick="setView('transload');setTlTab('dash')"><span>📊</span>Dashboard</button>
-      <!-- Admin panel — only visible to admins -->
-      <div id="admin-nav-section" style="display:none">
-        <div style="margin:10px 18px;border-top:1px solid rgba(255,255,255,.1)"></div>
-        <button class="nav-btn" onclick="setView('admin')" id="nav-admin" style="border-left-color:transparent">
-          <span class="ico">⚙️</span>Admin Panel
-        </button>
-        <button class="nav-btn" onclick="setView('activity')" id="nav-activity" style="border-left-color:transparent">
-          <span class="ico">📊</span>Activity Log
-        </button>
-        <button class="nav-btn" onclick="setView('auditlog')" id="nav-auditlog" style="border-left-color:transparent">
-          <span class="ico">📋</span>Audit Log
+      <div class="acc-sub" id="acc-sub-drayage">
+        <button class="sub-link" id="nav-quote" onclick="goTo('quote')">🏗️ Quote builder</button>
+        <button class="sub-link" id="nav-log" onclick="goTo('log')">📁 Quote log</button>
+        <button class="sub-link" id="nav-rates" onclick="goTo('rates')">📋 Carrier rates</button>
+        <button class="sub-link" id="nav-customers" onclick="goTo('customers')">👥 Customers</button>
+        <button class="sub-link" id="nav-dash" onclick="goTo('dash')">📊 Dashboard</button>
+        <button class="sub-link" id="nav-active" onclick="goTo('active')" style="position:relative">
+          🟢 Active shipments
+          <span id="active-badge" style="margin-left:6px;background:#22c55e;color:#fff;border-radius:99px;font-size:10px;font-weight:700;padding:1px 7px;display:none">0</span>
         </button>
       </div>
+
+      <div class="acc-sep"></div>
+
+      <!-- FREIGHT -->
+      <button class="acc-btn" id="acc-freight" onclick="toggleAcc('freight')">
+        <span style="display:flex;align-items:center;gap:10px">
+          <span style="font-size:16px">🚛</span>Freight
+        </span>
+        <span class="acc-icon" id="acc-icon-freight">▶</span>
+      </button>
+      <div class="acc-sub" id="acc-sub-freight">
+        <button class="sub-link" id="fqnav-builder" onclick="goTo('freight','builder')">🏗️ Quote builder</button>
+        <button class="sub-link" id="fqnav-log" onclick="goTo('freight','log')">📁 Quote log</button>
+        <button class="sub-link" id="fqnav-carriers" onclick="goTo('freight','carriers')">📋 Carrier rates</button>
+        <button class="sub-link" id="fqnav-invoicing" onclick="goTo('freight','invoicing')" style="position:relative">
+          🧾 Invoicing
+          <span id="fq-inv-badge" style="display:none;margin-left:6px;background:var(--red);color:#fff;border-radius:99px;font-size:9px;font-weight:800;padding:1px 6px">0</span>
+        </button>
+        <button class="sub-link" id="fqnav-dash" onclick="goTo('freight','dash')">📊 Dashboard</button>
+      </div>
+
+      <div class="acc-sep"></div>
+
+      <!-- AIR FREIGHT -->
+      <button class="acc-btn" id="acc-air" onclick="toggleAcc('air')">
+        <span style="display:flex;align-items:center;gap:10px">
+          <span style="font-size:16px">✈️</span>Air freight
+        </span>
+        <span class="acc-icon" id="acc-icon-air">▶</span>
+      </button>
+      <div class="acc-sub" id="acc-sub-air">
+        <button class="sub-link" id="aqnav-builder" onclick="goTo('air','builder')">🏗️ Quote builder</button>
+        <button class="sub-link" id="aqnav-log" onclick="goTo('air','log')">📁 Quote log</button>
+      </div>
+
+      <div class="acc-sep"></div>
+
+      <!-- TRANSLOADING -->
+      <button class="acc-btn" id="acc-transload" onclick="toggleAcc('transload')">
+        <span style="display:flex;align-items:center;gap:10px">
+          <span style="font-size:16px">🔄</span>Transloading
+        </span>
+        <span class="acc-icon" id="acc-icon-transload">▶</span>
+      </button>
+      <div class="acc-sub" id="acc-sub-transload">
+        <button class="sub-link" id="tlnav-builder" onclick="goTo('transload','builder')">🏗️ Quote builder</button>
+        <button class="sub-link" id="tlnav-log" onclick="goTo('transload','log')">📁 Quote log</button>
+        <button class="sub-link" id="tlnav-warehouses" onclick="goTo('transload','warehouses')">🏭 Warehouses</button>
+        <button class="sub-link" id="tlnav-dash" onclick="goTo('transload','dash')">📊 Dashboard</button>
+      </div>
+
+      <!-- ADMIN (conditional) -->
+      <div id="admin-nav-section" style="display:none">
+        <div class="acc-sep"></div>
+        <button class="acc-btn" id="acc-admin" onclick="toggleAcc('admin')">
+          <span style="display:flex;align-items:center;gap:10px">
+            <span style="font-size:16px">⚙️</span>Admin
+          </span>
+          <span class="acc-icon" id="acc-icon-admin">▶</span>
+        </button>
+        <div class="acc-sub" id="acc-sub-admin">
+          <button class="sub-link" id="nav-admin" onclick="goTo('admin')">⚙️ Admin panel</button>
+          <button class="sub-link" id="nav-reports" onclick="goTo('reports')">📈 Reports</button>
+          <button class="sub-link" id="nav-activity" onclick="goTo('activity')">📊 Activity log</button>
+          <button class="sub-link" id="nav-auditlog" onclick="goTo('auditlog')">📋 Audit log</button>
+          <button class="sub-link" id="nav-carriers" onclick="goTo('carriers')">🤝 Carrier network</button>
+        </div>
+      </div>
+
     </nav>
     <div class="sidebar-foot">
       <!-- User info block -->
@@ -795,7 +844,7 @@ function setSaving(on){
 // STATE
 // ═══════════════════════════════════════════════════════
 let S={
-  view:'quote',rates:[],quotes:[],customers:[],
+  view:'home',rates:[],quotes:[],customers:[],
   qi:{customer:'',customerEmail:'',customerId:null,port:'New York / Newark, NJ',zip:'',ld:'Live',
       baseMarkup:{...DEFAULT_BASE_MARKUP},flatRates:{...DEFAULT_FLAT_RATES},notes:'',shiflRef:'',
       gensetEnabled:false,gensetScope:'both',gensetCarrierRate:0,gensetCustomerRate:0,
@@ -920,9 +969,12 @@ function cuTot(r){
 // ═══════════════════════════════════════════════════════
 function setView(v){
   S.view=v;
-  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.nav-btn,.sub-link').forEach(b=>b.classList.remove('active'));
   const navEl=$('nav-'+v);if(navEl) navEl.classList.add('active');
-  $('view-title').textContent={quote:'Quote builder',customers:'Customers',rates:'Carrier rates',log:'Quote log',dash:'Dashboard',freight:'Freight Quoting',transload:'Transload Quoting',active:'Active Shipments',admin:'Admin Panel'}[v];
+  const titles={quote:'Quote builder',customers:'Customers',rates:'Carrier rates',log:'Quote log',dash:'Dashboard',freight:'Freight Quoting',transload:'Transload Quoting',active:'Active Shipments',admin:'Admin Panel',reports:'Reports',activity:'Activity Log',auditlog:'Audit Log',carriers:'Carrier Network',air:'Air Freight',home:'Home'};
+  $('view-title').textContent=titles[v]||v;
+  openAccFor(v);
+  updateSubActive(v);
   render();
 }
 function render(){
@@ -935,6 +987,7 @@ function render(){
   else if(S.view==='admin')      renderAdmin();
   else if(S.view==='activity')   renderActivity();
   else if(S.view==='air')         renderAirFreight();
+  else if(S.view==='home')        renderHome();
   else if(S.view==='reports')    renderReports();
   else if(S.view==='auditlog')   renderAuditLog();
   else if(S.view==='freight')    renderFreight();
@@ -1547,8 +1600,9 @@ function renderFreight(){
 
 function setFqTab(t){
   S.fqTab=t;
-  document.querySelectorAll('.nav-sub').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.nav-sub,.sub-link').forEach(b=>b.classList.remove('active'));
   const el=$('fqnav-'+t);if(el) el.classList.add('active');
+  openAccFor('freight');updateSubActive('freight',t);
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
   const nf=$('nav-freight');if(nf) nf.classList.add('active');
   renderFreight();
@@ -3482,8 +3536,9 @@ function buildTlDrayPricing(tl, sel){
 }
 function setTlTab(t){
   S.tlTab=t;
-  document.querySelectorAll('.nav-sub').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.nav-sub,.sub-link').forEach(b=>b.classList.remove('active'));
   const el=$('tlnav-'+t);if(el) el.classList.add('active');
+  openAccFor('transload');updateSubActive('transload',t);
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
   const nt=$('nav-transload');if(nt) nt.classList.add('active');
   renderTransload();
@@ -5714,6 +5769,7 @@ function updateUserUI(){
   }else{
     if(infoEl) infoEl.style.display='none';
     if(adminNav) adminNav.style.display='none';
+    ['drayage','freight','air','transload','admin'].forEach(k=>{$('acc-sub-'+k)?.classList.remove('open');$('acc-'+k)?.classList.remove('open');$('acc-icon-'+k)?.classList.remove('rotated');});
   }
 }
 
@@ -7169,8 +7225,9 @@ function renderAirFreight(){
 
 function setAqTab(t){
   S.aqTab=t;
-  document.querySelectorAll('.nav-sub').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.nav-sub,.sub-link').forEach(b=>b.classList.remove('active'));
   const el=$('aqnav-'+t);if(el) el.classList.add('active');
+  openAccFor('air');updateSubActive('air',t);
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
   const nf=$('nav-air');if(nf) nf.classList.add('active');
   renderAirFreight();
@@ -7460,6 +7517,149 @@ async function delAqQuote(idx){
   try{localStorage.setItem('aq_history',JSON.stringify(window._aqHistory));}catch(e){}
   try{await db.from('fq_quotes').delete().eq('id',q.id);}catch(e){}
   renderAqLog();
+}
+
+
+// ═══════════════════════════════════════════════════════
+// WELCOME HOME PAGE + ACCORDION NAV
+// ═══════════════════════════════════════════════════════
+
+// View → accordion section mapping
+const VIEW_TO_ACC={
+  quote:'drayage',log:'drayage',rates:'drayage',customers:'drayage',dash:'drayage',active:'drayage',
+  freight:'freight',
+  air:'air',
+  transload:'transload',
+  admin:'admin',reports:'admin',activity:'admin',auditlog:'admin',carriers:'admin'
+};
+
+// Sub-link ID → view mapping for active state
+const SUBLINK_VIEWS={
+  'nav-quote':'quote','nav-log':'log','nav-rates':'rates','nav-customers':'customers',
+  'nav-dash':'dash','nav-active':'active',
+  'fqnav-builder':'freight-builder','fqnav-log':'freight-log','fqnav-carriers':'freight-carriers',
+  'fqnav-invoicing':'freight-invoicing','fqnav-dash':'freight-dash',
+  'aqnav-builder':'air-builder','aqnav-log':'air-log',
+  'tlnav-builder':'transload-builder','tlnav-log':'transload-log',
+  'tlnav-warehouses':'transload-warehouses','tlnav-dash':'transload-dash',
+  'nav-admin':'admin','nav-reports':'reports','nav-activity':'activity',
+  'nav-auditlog':'auditlog','nav-carriers':'carriers'
+};
+
+function goTo(view,subtab){
+  if(subtab){
+    if(view==='freight'){setView('freight');setFqTab(subtab);}
+    else if(view==='transload'){setView('transload');setTlTab(subtab);}
+    else if(view==='air'){setView('air');setAqTab(subtab);}
+  } else {
+    setView(view);
+  }
+}
+
+function toggleAcc(id){
+  const isOpen=$('acc-sub-'+id)?.classList.contains('open');
+  // Close all
+  ['drayage','freight','air','transload','admin'].forEach(k=>{
+    $('acc-sub-'+k)?.classList.remove('open');
+    $('acc-btn-'+k)?.classList.remove('open'); // fallback
+    const btn=$('acc-'+k);if(btn) btn.classList.remove('open');
+    const icon=$('acc-icon-'+k);if(icon) icon.classList.remove('rotated');
+  });
+  // Open clicked if was closed
+  if(!isOpen){
+    $('acc-sub-'+id)?.classList.add('open');
+    $('acc-'+id)?.classList.add('open');
+    $('acc-icon-'+id)?.classList.add('rotated');
+  }
+}
+
+function openAccFor(view){
+  const section=VIEW_TO_ACC[view];
+  if(!section) return;
+  ['drayage','freight','air','transload','admin'].forEach(k=>{
+    $('acc-sub-'+k)?.classList.remove('open');
+    $('acc-'+k)?.classList.remove('open');
+    $('acc-icon-'+k)?.classList.remove('rotated');
+  });
+  $('acc-sub-'+section)?.classList.add('open');
+  $('acc-'+section)?.classList.add('open');
+  $('acc-icon-'+section)?.classList.add('rotated');
+}
+
+function updateSubActive(view,subtab){
+  document.querySelectorAll('.sub-link').forEach(b=>b.classList.remove('active'));
+  // Determine which sub-link to highlight
+  let target=null;
+  if(view==='quote') target='nav-quote';
+  else if(view==='log') target='nav-log';
+  else if(view==='rates') target='nav-rates';
+  else if(view==='customers') target='nav-customers';
+  else if(view==='dash') target='nav-dash';
+  else if(view==='active') target='nav-active';
+  else if(view==='freight'&&subtab) target='fqnav-'+subtab;
+  else if(view==='freight') target='fqnav-builder';
+  else if(view==='air'&&subtab) target='aqnav-'+subtab;
+  else if(view==='air') target='aqnav-builder';
+  else if(view==='transload'&&subtab) target='tlnav-'+subtab;
+  else if(view==='transload') target='tlnav-builder';
+  else if(view==='admin') target='nav-admin';
+  else if(view==='reports') target='nav-reports';
+  else if(view==='activity') target='nav-activity';
+  else if(view==='auditlog') target='nav-auditlog';
+  else if(view==='carriers') target='nav-carriers';
+  if(target&&$(target)) $(target).classList.add('active');
+}
+
+function renderHome(){
+  $('topbar-right').innerHTML='';
+  document.title='Shifl Quoting Portal';
+  $('page').innerHTML=`
+  <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:70vh;padding:40px 20px;text-align:center">
+    <!-- Shifl Logo -->
+    <div style="width:100px;height:100px;background:#3b8ed0;border-radius:22px;display:flex;align-items:center;justify-content:center;margin-bottom:28px">
+      <svg width="62" height="52" viewBox="0 0 60 50" fill="none">
+        <polygon points="10,50 25,14 44,45" fill="white"/>
+        <polygon points="25,14 44,45 53,37" fill="#dceeff"/>
+        <polygon points="10,50 44,45 53,50" fill="white"/>
+        <polygon points="10,50 22,50 17,44" fill="rgba(255,255,255,.55)"/>
+        <line x1="25" y1="14" x2="44" y2="50" stroke="#3b8ed0" stroke-width="1.8" opacity=".35"/>
+      </svg>
+    </div>
+
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.14em;color:var(--gray-400);margin-bottom:12px">Shifl Logistics</div>
+    <h1 style="font-size:28px;font-weight:800;color:var(--navy);margin:0 0 12px;line-height:1.2">Welcome to the Shifl<br>Quoting Portal</h1>
+    <p style="font-size:14px;color:var(--gray-500);margin:0 0 40px;max-width:400px;line-height:1.7">
+      Build quotes, track shipments, and manage your freight operations.<br>Select a mode below or use the left menu to get started.
+    </p>
+
+    <!-- Quick action cards -->
+    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:14px;width:100%;max-width:480px">
+      <div onclick="goTo('quote');openAccFor('quote');updateSubActive('quote')" style="background:#fff;border:1.5px solid var(--gray-200);border-radius:14px;padding:22px 20px;cursor:pointer;text-align:left;transition:border-color .15s,box-shadow .15s" onmouseover="this.style.borderColor='#3b8ed0';this.style.boxShadow='0 0 0 3px rgba(59,142,208,.12)'" onmouseout="this.style.borderColor='var(--gray-200)';this.style.boxShadow='none'">
+        <div style="font-size:28px;margin-bottom:10px">🚢</div>
+        <div style="font-size:15px;font-weight:800;color:var(--navy);margin-bottom:4px">Drayage</div>
+        <div style="font-size:12px;color:var(--gray-400);line-height:1.4">Port pickup &amp; delivery</div>
+      </div>
+      <div onclick="goTo('freight','builder');openAccFor('freight');updateSubActive('freight','builder')" style="background:#fff;border:1.5px solid var(--gray-200);border-radius:14px;padding:22px 20px;cursor:pointer;text-align:left;transition:border-color .15s,box-shadow .15s" onmouseover="this.style.borderColor='#3b8ed0';this.style.boxShadow='0 0 0 3px rgba(59,142,208,.12)'" onmouseout="this.style.borderColor='var(--gray-200)';this.style.boxShadow='none'">
+        <div style="font-size:28px;margin-bottom:10px">🚛</div>
+        <div style="font-size:15px;font-weight:800;color:var(--navy);margin-bottom:4px">Freight</div>
+        <div style="font-size:12px;color:var(--gray-400);line-height:1.4">FTL · LTL · LCL</div>
+      </div>
+      <div onclick="goTo('air','builder');openAccFor('air');updateSubActive('air','builder')" style="background:#fff;border:1.5px solid var(--gray-200);border-radius:14px;padding:22px 20px;cursor:pointer;text-align:left;transition:border-color .15s,box-shadow .15s" onmouseover="this.style.borderColor='#3b8ed0';this.style.boxShadow='0 0 0 3px rgba(59,142,208,.12)'" onmouseout="this.style.borderColor='var(--gray-200)';this.style.boxShadow='none'">
+        <div style="font-size:28px;margin-bottom:10px">✈️</div>
+        <div style="font-size:15px;font-weight:800;color:var(--navy);margin-bottom:4px">Air freight</div>
+        <div style="font-size:12px;color:var(--gray-400);line-height:1.4">Airport to door delivery</div>
+      </div>
+      <div onclick="goTo('transload','builder');openAccFor('transload');updateSubActive('transload','builder')" style="background:#fff;border:1.5px solid var(--gray-200);border-radius:14px;padding:22px 20px;cursor:pointer;text-align:left;transition:border-color .15s,box-shadow .15s" onmouseover="this.style.borderColor='#3b8ed0';this.style.boxShadow='0 0 0 3px rgba(59,142,208,.12)'" onmouseout="this.style.borderColor='var(--gray-200)';this.style.boxShadow='none'">
+        <div style="font-size:28px;margin-bottom:10px">🔄</div>
+        <div style="font-size:15px;font-weight:800;color:var(--navy);margin-bottom:4px">Transloading</div>
+        <div style="font-size:12px;color:var(--gray-400);line-height:1.4">Warehouse &amp; cross-docking</div>
+      </div>
+    </div>
+
+    <div style="margin-top:32px;font-size:12px;color:var(--gray-400)">
+      Logged in as <strong style="color:var(--navy)">${_currentUser?.name||''}</strong> · ${({super_admin:'Super Admin',admin:'Admin',team_member:'Team Member',user:'Team Member'})[_currentUser?.role]||_currentUser?.role||''}
+    </div>
+  </div>`;
 }
 
 
