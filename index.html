@@ -883,7 +883,7 @@ let S={
       lclPriceBy:'pallets', cbm:0, transitTime:'',
       calc:{l:'',w:'',h:'',pieces:'',weightLbs:'',unit:'in'}},
   fqTab:'builder',
-  activeFilter:'all',activeView:'active',reportTab:'lanes',reportMode:'All',fqInvTab:'pending',aqTab:'builder',aqFilter:'all',
+  activeFilter:'all',activeView:'active',reportTab:'lanes',reportMode:'All',fqInvTab:'pending',aqTab:'builder',aqFilter:'all',_auditDate:'all',
   tl:null, // initialized in boot via defaultTlState()
   tlTab:'builder',
 };
@@ -2013,6 +2013,7 @@ async function downloadSelectedFqPDFs(){
 async function updateFqStatus(idx,status){
   if(status==='Booked'){if(!requireCan('book_quotes','You do not have permission to book quotes.')) return;}
   else if(!requireCan('update_status','Only Admins can change quote status.')) return;
+  const _fq=(window._fqHistory||[])[idx];if(_fq) logAction('status_changed',`${_fq.fqMode||'Freight'} — ${_fq.customer||'—'} | ${_fq.pickupZip||'—'} → ${_fq.deliveryZip||'—'} → ${status}`,'fq_quote',_fq.id);
   if(!window._fqHistory||!window._fqHistory[idx]) return;
   if(status==='Booked'){showFqBookingModal(idx);return;}
   const q=window._fqHistory[idx];
@@ -6057,6 +6058,7 @@ async function createUser(){
     const hash=await hashPassword(email,pw);
     const{error}=await db.from('app_users').insert({id:uid(),name,email,password_hash:hash,role,active:true});
     if(error) throw error;
+    logAction('user_added',`${name} (${email}) — Role: ${role}`);
     closeModal();renderAdmin();
     // Email credentials via mailto
     const subj=encodeURIComponent('Your Shifl account is ready');
@@ -6608,61 +6610,172 @@ async function renderAuditLog(){
   if(!can('view_admin')){$('page').innerHTML='<div style="padding:40px;text-align:center;color:var(--gray-400)">Admin access required</div>';return;}
   $('page').innerHTML='<div class="loading-page"><div class="spin" style="margin:0 auto 12px"></div><div style="color:var(--gray-400);font-size:13px">Loading audit log...</div></div>';
   try{
-    const{data:logs}=await db.from('audit_log').select('*').order('created_at',{ascending:false}).limit(500);
+    // Fetch audit log AND all users simultaneously
+    const [{data:logs},{data:allUsers}]=await Promise.all([
+      db.from('audit_log').select('*').order('created_at',{ascending:false}).limit(1000),
+      db.from('app_users').select('id,name,email,role,active,last_login').order('name')
+    ]);
     const all=logs||[];
-    if(!all.length){
-      $('page').innerHTML='<div class="empty"><div class="empty-ico">📋</div><div style="font-size:16px;font-weight:700;color:var(--gray-500)">No activity yet</div><div style="font-size:13px;color:var(--gray-400);margin-top:6px">Actions will appear here as users interact with the system</div></div>';
-      return;
-    }
+    const users=allUsers||[];
+
     // Stats
-    const users=[...new Set(all.map(l=>l.user_name).filter(Boolean))];
     const today=new Date().toISOString().slice(0,10);
     const todayCount=all.filter(l=>l.created_at?.startsWith(today)).length;
+    const week=new Date(Date.now()-7*864e5).toISOString();
+    const weekCount=all.filter(l=>l.created_at>=week).length;
+    const activeUserIds=[...new Set(all.map(l=>l.user_id).filter(Boolean))];
 
     // Filters
     const filterUser=S._auditUser||'all';
     const filterAction=S._auditAction||'all';
-    const shown=all.filter(l=>{
-      if(filterUser!=='all'&&l.user_name!==filterUser) return false;
+    const filterDate=S._auditDate||'all';
+
+    let shown=all.filter(l=>{
+      if(filterUser!=='all'&&l.user_id!==filterUser&&l.user_name!==filterUser) return false;
       if(filterAction!=='all'&&l.action!==filterAction) return false;
+      if(filterDate==='today'&&!l.created_at?.startsWith(today)) return false;
+      if(filterDate==='week'&&l.created_at<week) return false;
+      if(filterDate==='month'&&l.created_at<new Date(Date.now()-30*864e5).toISOString()) return false;
       return true;
     });
 
-    const userOpts=users.map(u=>`<option value="${u}"${filterUser===u?' selected':''}>${u}</option>`).join('');
-    const actionOpts=[...new Set(all.map(l=>l.action))].map(a=>`<option value="${a}"${filterAction===a?' selected':''}>${ACTION_LABELS[a]||a}</option>`).join('');
-
-    let h=`<div class="g3" style="margin-bottom:18px">
-      <div class="kpi"><div class="kpi-l">Total actions</div><div class="kpi-v">${all.length}</div></div>
-      <div class="kpi"><div class="kpi-l">Today</div><div class="kpi-v">${todayCount}</div></div>
-      <div class="kpi"><div class="kpi-l">Active users</div><div class="kpi-v">${users.length}</div></div>
+    // ── KPI row ───────────────────────────────────────────────────────────
+    let h=`<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:18px">
+      <div class="kpi"><div class="kpi-lbl">Total entries</div><div class="kpi-val">${all.length.toLocaleString()}</div></div>
+      <div class="kpi"><div class="kpi-lbl">Today</div><div class="kpi-val" style="color:var(--steel)">${todayCount}</div></div>
+      <div class="kpi"><div class="kpi-lbl">Last 7 days</div><div class="kpi-val">${weekCount}</div></div>
+      <div class="kpi"><div class="kpi-lbl">Active users</div><div class="kpi-val" style="color:var(--green)">${activeUserIds.length} / ${users.length}</div></div>
     </div>`;
 
+    // ── User activity cards ────────────────────────────────────────────────
+    h+=`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px;margin-bottom:18px">`;
+    users.forEach(u=>{
+      const uLogs=all.filter(l=>l.user_id===u.id||l.user_name===u.name);
+      const lastLog=uLogs[0];
+      const lastLogin=all.filter(l=>(l.user_id===u.id||l.user_name===u.name)&&l.action==='login')[0];
+      const ROLE_LABELS={super_admin:'Super Admin',admin:'Admin',team_member:'Team Member',user:'Team Member'};
+      const hasActivity=uLogs.length>0;
+      const isFiltered=filterUser!=='all'&&(filterUser===u.id||filterUser===u.name);
+      h+=`<div onclick="S._auditUser=S._auditUser===u.id?'all':'${u.id}';renderAuditLog()"
+        style="background:${isFiltered?'var(--blue-bg)':'#fff'};border:1.5px solid ${isFiltered?'var(--steel)':'var(--gray-200)'};border-radius:10px;padding:12px;cursor:pointer;transition:border-color .15s"
+        onmouseover="this.style.borderColor='var(--steel)'" onmouseout="this.style.borderColor='${isFiltered?'var(--steel)':'var(--gray-200)'}'"
+      >
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <div style="width:28px;height:28px;border-radius:50%;background:${u.active?'var(--steel)':'var(--gray-300)'};color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0">${u.name.slice(0,2).toUpperCase()}</div>
+          <div style="min-width:0">
+            <div style="font-size:12px;font-weight:700;color:var(--navy);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${u.name}</div>
+            <div style="font-size:10px;color:var(--gray-400)">${ROLE_LABELS[u.role]||u.role}${u.active?'':' · Inactive'}</div>
+          </div>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:10px">
+          <span style="color:${hasActivity?'var(--steel)':'var(--gray-300)'};font-weight:600">${uLogs.length} actions</span>
+          <span style="color:var(--gray-400)">${lastLogin?new Date(lastLogin.created_at).toLocaleDateString('en-US',{month:'short',day:'numeric'}):'Never logged in'}</span>
+        </div>
+      </div>`;
+    });
+    h+=`</div>`;
+
+    // ── Filter bar ─────────────────────────────────────────────────────────
+    const userOpts=users.map(u=>`<option value="${u.id}"${filterUser===u.id?' selected':''}>${u.name}${all.filter(l=>l.user_id===u.id||l.user_name===u.name).length===0?' (no activity)':''}</option>`).join('');
+    const actionGroups={
+      'Logins':['login','logout'],
+      'Quotes':['quote_created','quote_deleted','quote_booked','status_changed'],
+      'Rates':['rate_added','rate_edited','rate_deleted'],
+      'Carriers':['carrier_added','carrier_edited','carrier_deleted'],
+      'Users':['user_added','user_edited','user_deleted'],
+      'Finance':['invoice_sent','payment_received','margin_override'],
+      'Email':['email_sent'],
+    };
+    const allActions=[...new Set(all.map(l=>l.action))];
+    let actionOpts='';
+    Object.entries(actionGroups).forEach(([grp,acts])=>{
+      const matching=acts.filter(a=>allActions.includes(a));
+      if(matching.length){
+        actionOpts+=`<optgroup label="${grp}">`;
+        matching.forEach(a=>actionOpts+=`<option value="${a}"${filterAction===a?' selected':''}>${ACTION_LABELS[a]||a}</option>`);
+        actionOpts+=`</optgroup>`;
+      }
+    });
+
     h+=`<div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center">
-      <select onchange="S._auditUser=this.value;renderAuditLog()" style="padding:7px 10px;border:1px solid var(--gray-200);border-radius:var(--radius);font-size:13px;font-family:inherit">
+      <select onchange="S._auditUser=this.value;renderAuditLog()" style="padding:7px 10px;border:1px solid var(--gray-200);border-radius:var(--radius);font-size:13px;font-family:inherit;min-width:160px">
         <option value="all">All users</option>${userOpts}
       </select>
       <select onchange="S._auditAction=this.value;renderAuditLog()" style="padding:7px 10px;border:1px solid var(--gray-200);border-radius:var(--radius);font-size:13px;font-family:inherit">
         <option value="all">All actions</option>${actionOpts}
       </select>
-      <span style="font-size:12px;color:var(--gray-400);margin-left:4px">${shown.length} entries</span>
-      <button class="btn btn-sm" onclick="exportAuditLog()" style="margin-left:auto">📥 Export CSV</button>
+      <select onchange="S._auditDate=this.value;renderAuditLog()" style="padding:7px 10px;border:1px solid var(--gray-200);border-radius:var(--radius);font-size:13px;font-family:inherit">
+        <option value="all"${filterDate==='all'?' selected':''}>All time</option>
+        <option value="today"${filterDate==='today'?' selected':''}>Today</option>
+        <option value="week"${filterDate==='week'?' selected':''}>Last 7 days</option>
+        <option value="month"${filterDate==='month'?' selected':''}>Last 30 days</option>
+      </select>
+      ${filterUser!=='all'||filterAction!=='all'||filterDate!=='all'?`<button class="btn sm" onclick="S._auditUser='all';S._auditAction='all';S._auditDate='all';renderAuditLog()">✕ Clear filters</button>`:''}
+      <span style="font-size:12px;color:var(--gray-400)">${shown.length.toLocaleString()} entries</span>
+      <button class="btn sm" onclick="exportAuditLog()" style="margin-left:auto">📥 Export CSV</button>
     </div>`;
 
-    h+=`<div class="tbl-wrap"><table><thead><tr>
-      <th>Time</th><th>User</th><th>Action</th><th>Details</th>
-    </tr></thead><tbody>`;
-    h+=shown.slice(0,200).map(l=>{
-      const dt=new Date(l.created_at);
-      const timeStr=dt.toLocaleDateString('en-US',{month:'short',day:'numeric'})+' '+dt.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
-      const isErr=l.action?.includes('delete')||l.action?.includes('margin');
-      return `<tr>
-        <td style="font-size:11px;color:var(--gray-400);white-space:nowrap">${timeStr}</td>
-        <td style="font-weight:600;font-size:13px">${l.user_name||'System'}</td>
-        <td style="white-space:nowrap"><span style="font-size:12px;background:${isErr?'#fee2e2':'#f1f5f9'};color:${isErr?'#b91c1c':'var(--gray-600)'};padding:3px 8px;border-radius:4px;font-weight:600">${ACTION_LABELS[l.action]||l.action}</span></td>
-        <td style="font-size:12px;color:var(--gray-500)">${l.details||'—'}</td>
-      </tr>`;
-    }).join('');
-    h+='</tbody></table></div>';
+    // ── Table ──────────────────────────────────────────────────────────────
+    const ACTION_COLORS={
+      login:'#dbeafe',logout:'#f3f4f6',
+      quote_created:'#dcfce7',quote_deleted:'#fee2e2',quote_booked:'#d1fae5',status_changed:'#fef3c7',
+      rate_added:'#e0f2fe',rate_edited:'#e0e7ff',rate_deleted:'#fee2e2',
+      carrier_added:'#f0fdf4',carrier_edited:'#e0e7ff',carrier_deleted:'#fee2e2',
+      user_added:'#fef9c3',user_edited:'#e0e7ff',user_deleted:'#fee2e2',
+      invoice_sent:'#fef3c7',payment_received:'#dcfce7',margin_override:'#fef3c7',
+      email_sent:'#e0e7ff',
+    };
+    const ACTION_TEXT={
+      login:'#1e40af',logout:'#6b7280',
+      quote_created:'#166534',quote_deleted:'#b91c1c',quote_booked:'#065f46',status_changed:'#92400e',
+      rate_added:'#0c4a6e',rate_edited:'#3730a3',rate_deleted:'#b91c1c',
+      carrier_added:'#14532d',carrier_edited:'#3730a3',carrier_deleted:'#b91c1c',
+      user_added:'#713f12',user_edited:'#3730a3',user_deleted:'#b91c1c',
+      invoice_sent:'#92400e',payment_received:'#166534',margin_override:'#92400e',
+      email_sent:'#3730a3',
+    };
+
+    if(!shown.length){
+      h+='<div class="empty"><div class="empty-ico">🔍</div><div style="font-size:15px;font-weight:700;color:var(--gray-500)">No entries match filters</div></div>';
+    } else {
+      h+=`<div class="tbl-wrap"><table><thead><tr>
+        <th style="width:130px">Date &amp; Time</th>
+        <th style="width:130px">User</th>
+        <th style="width:160px">Action</th>
+        <th>Details</th>
+        <th style="width:90px">Type</th>
+      </tr></thead><tbody>`;
+
+      h+=shown.slice(0,300).map(l=>{
+        const dt=new Date(l.created_at);
+        const dateStr=dt.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+        const timeStr=dt.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',second:'2-digit'});
+        const bg=ACTION_COLORS[l.action]||'#f1f5f9';
+        const col=ACTION_TEXT[l.action]||'var(--gray-600)';
+        const user=users.find(u=>u.id===l.user_id);
+        const ROLE_LABELS={super_admin:'SA',admin:'Admin',team_member:'TM',user:'TM'};
+        const roleLabel=user?ROLE_LABELS[user.role]||'':'' ;
+        return `<tr>
+          <td style="white-space:nowrap">
+            <div style="font-size:11px;font-weight:600;color:var(--gray-600)">${dateStr}</div>
+            <div style="font-size:10px;color:var(--gray-400)">${timeStr}</div>
+          </td>
+          <td>
+            <div style="font-size:12px;font-weight:700;color:var(--navy)">${l.user_name||'System'}</div>
+            ${roleLabel?`<div style="font-size:10px;color:var(--gray-400)">${roleLabel}</div>`:''}
+          </td>
+          <td>
+            <span style="display:inline-block;font-size:11px;background:${bg};color:${col};padding:3px 9px;border-radius:5px;font-weight:700;white-space:nowrap">
+              ${ACTION_LABELS[l.action]||l.action}
+            </span>
+          </td>
+          <td style="font-size:12px;color:var(--gray-600);max-width:320px">${l.details||'—'}</td>
+          <td style="font-size:10px;color:var(--gray-400);white-space:nowrap">${l.entity_type?`<span style="background:var(--gray-100);padding:2px 6px;border-radius:4px">${l.entity_type}</span>`:''}</td>
+        </tr>`;
+      }).join('');
+      h+='</tbody></table></div>';
+      if(shown.length>300) h+=`<div style="text-align:center;padding:12px;font-size:12px;color:var(--gray-400)">Showing 300 of ${shown.length} entries — export CSV for full data</div>`;
+    }
     $('page').innerHTML=h;
   }catch(e){
     $('page').innerHTML=`<div style="padding:20px;color:var(--red)">Error loading audit log: ${e.message}</div>
