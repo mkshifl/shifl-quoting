@@ -58,6 +58,29 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-siz
 .nav-sub:hover{background:rgba(255,255,255,.05);color:rgba(255,255,255,.75)}
 .nav-sub.active{background:rgba(255,255,255,.08);color:#fff;border-left-color:#93c5fd}
 .sidebar-foot{padding:10px 18px;border-top:1px solid rgba(255,255,255,.07)}
+/* Row hover */
+.tbl-wrap table tbody tr{transition:background .12s,border-left .12s;border-left:3px solid transparent}
+.tbl-wrap table tbody tr:hover{background:#f0f5ff;border-left:3px solid #1a2e4a;cursor:pointer}
+/* Color-coded mode badges */
+.badge.mode-drayage{background:#1a2e4a;color:#fff}
+.badge.mode-ftl{background:#1e40af;color:#fff}
+.badge.mode-ltl{background:#6d28d9;color:#fff}
+.badge.mode-lcl{background:#0f766e;color:#fff}
+.badge.mode-air{background:#0369a1;color:#fff}
+.badge.mode-transload{background:#c2410c;color:#fff}
+/* Skeleton loader */
+.skel{background:linear-gradient(90deg,#f0f4f8 25%,#e4ebf2 50%,#f0f4f8 75%);background-size:200% 100%;animation:skel-shimmer 1.4s infinite;border-radius:6px}
+@keyframes skel-shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+/* Topbar clock */
+#topbar-clock{font-size:12px;font-weight:600;color:var(--gray-400);font-family:monospace;white-space:nowrap}
+/* Status timeline */
+.status-timeline{display:flex;align-items:center;gap:0;margin-top:12px}
+.tl-step{flex:1;height:3px;background:#e8f0fb;position:relative}
+.tl-step.done{background:#1a2e4a}
+.tl-step.active{background:#2e75b6}
+.tl-dot{width:8px;height:8px;border-radius:50%;background:#e8f0fb;border:2px solid #fff;margin:0 -1px;flex-shrink:0;z-index:1}
+.tl-dot.done{background:#1a2e4a}
+.tl-dot.active{background:#2e75b6;box-shadow:0 0 0 3px #dbeafe}
 .acc-btn{width:100%;display:flex;align-items:center;justify-content:space-between;padding:11px 16px;background:none;border:none;cursor:pointer;color:rgba(255,255,255,.65);font-size:13px;font-weight:600;font-family:inherit;transition:background .15s}
 .acc-btn:hover{background:rgba(255,255,255,.05)}
 .acc-btn.open{background:rgba(255,255,255,.07);color:#fff}
@@ -461,7 +484,7 @@ hr{border:none;border-top:1px solid var(--gray-100);margin:14px 0}
   </aside>
 
   <div class="main">
-    <div class="topbar">
+    <div class="topbar"><span id="topbar-clock" style="font-size:12px;font-weight:600;color:var(--gray-400);font-family:monospace;white-space:nowrap;margin-right:12px"></span>
       <h1 id="view-title">Quote builder</h1>
       <div class="topbar-right" id="topbar-right"></div>
     </div>
@@ -1892,7 +1915,7 @@ function renderFqLog(){
           onfocus="this.style.background='var(--blue-bg)';this.style.border='1px solid var(--steel)'"
           onblur="this.style.border='none';this.style.background=this.value?'var(--blue-bg)':'transparent'">
       </td>
-      <td><span class="badge ${q.fqMode==='FTL'?'b':q.fqMode==='LTL'?'p':'t'}">${q.fqMode}</span>
+      <td>${modeBadge(q.fqMode)}
           ${q.fqEquip?`<span class="badge gr" style="margin-left:4px">${q.fqEquip}</span>`:''}</td>
       <td class="bold">${q.pickupZip} -> ${q.deliveryZip}</td>
       <td>${q.carrier}</td>
@@ -1998,6 +2021,7 @@ async function downloadSelectedFqPDFs(){
 async function updateFqStatus(idx,status){
   if(status==='Booked'){if(!requireCan('book_quotes','You do not have permission to book quotes.')) return;}
   else if(!requireCan('update_status','Only Admins can change quote status.')) return;
+  if(status==='Booked') setTimeout(fireConfetti,200);
   const _fq=(window._fqHistory||[])[idx];if(_fq) logAction('status_changed',`${_fq.fqMode||'Freight'} — ${_fq.customer||'—'} | ${_fq.pickupZip||'—'} → ${_fq.deliveryZip||'—'} → ${status}`,'fq_quote',_fq.id);
   if(!window._fqHistory||!window._fqHistory[idx]) return;
   if(status==='Booked'){showFqBookingModal(idx);return;}
@@ -2572,7 +2596,7 @@ function renderFqDashboard(){
         <tbody>${recent.map((q,i)=>`<tr>
           <td class="muted small">${q.date}</td>
           <td class="bold">${q.customer||'—'}</td>
-          <td><span class="badge ${q.fqMode==='FTL'?'b':q.fqMode==='LTL'?'p':'t'}">${q.fqMode}</span></td>
+          <td>${modeBadge(q.fqMode)}</td>
           <td>${q.pickupZip} → ${q.deliveryZip}</td>
           <td>${q.carrier}</td>
           <td class="bold" style="color:var(--steel)">${fmtD(q.customerRate)}</td>
@@ -4986,7 +5010,7 @@ function renderActive(){
           <span style="font-size:22px">${isUrgent?'🔥':tc.icon}</span>
           <div>
             <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:${isUrgent?'#dc2626':tc.color}">
-              ${tc.label}${s.fqMode?' - '+fqTypeLabel(s):''}${s.outMode?' - '+s.outMode:''}
+              ${modeBadge(s.type==='drayage'?'Drayage':s.type==='transload'?'Transload':(s.fqMode||'Freight'))} ${s.outMode?'<small style="color:var(--gray-400)">'+s.outMode+'</small>':''}
               ${isUrgent?'<span style="background:#ef4444;color:#fff;border-radius:4px;padding:1px 6px;font-size:9px;margin-left:6px">URGENT</span>':''}
             </div>
             <div style="font-size:17px;font-weight:800;color:var(--navy)">${s.customer}</div>
@@ -5035,7 +5059,8 @@ function renderActive(){
           </div>
           ${autoUrl&&!tracking.trackingUrl?`<div style="font-size:11px;color:#22c55e;margin-top:6px;font-weight:600">${s.carrier} tracking detected - enter PRO# to activate</div>`:''}
         </div>`:''}
-        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+        ${statusTimeline(s.status)}
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-top:12px">
           <div style="display:flex;gap:6px;flex-wrap:wrap">
             <button onclick="${s.type==='drayage'?`setView('log');render();setTimeout(()=>showQuoteModal('${s.id}'),100)`:s.type==='freight'?`setView('freight');setFqTab('log');setTimeout(()=>{const idx=(window._fqHistory||[]).findIndex(q=>q.id==='${s.id}');if(idx>=0)showFqQuoteModal(idx);},100)`:`setView('transload');setTlTab('log');setTimeout(()=>{const idx=(window._tlHistory||[]).findIndex(q=>q.id==='${s.id}');if(idx>=0)showTlQuoteModal(idx);},100)`}"
               style="padding:7px 14px;background:transparent;color:var(--steel);border:1px solid var(--steel);border-radius:var(--radius);cursor:pointer;font-size:12px;font-weight:600">
@@ -8290,6 +8315,101 @@ async function deleteShipment(type,id){
   updateActiveBadge();
   renderActive();
 }
+// ═══════════════════════════════════════════════════════
+// COSMETIC FEATURES
+// ═══════════════════════════════════════════════════════
+
+// ── 1. Topbar live clock ──────────────────────────────
+function startClock(){
+  function tick(){
+    const el=$('topbar-clock');if(!el) return;
+    const now=new Date();
+    const time=now.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',second:'2-digit',timeZone:'America/New_York'});
+    const date=now.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',timeZone:'America/New_York'});
+    el.textContent=date+' · '+time;
+  }
+  tick();
+  setInterval(tick,1000);
+}
+
+// ── 2. Skeleton loaders ───────────────────────────────
+function skelRow(cols){
+  return`<tr>${cols.map(w=>`<td><div class="skel" style="height:14px;width:${w};border-radius:4px"></div></td>`).join('')}</tr>`;
+}
+function skelTable(rows,cols){
+  const r=Array.from({length:rows},()=>skelRow(cols));
+  return`<div class="tbl-wrap"><table><tbody>${r.join('')}</tbody></table></div>`;
+}
+function skelPage(rows=6){
+  const cols=['60%','80%','40%','50%','30%','20%'];
+  return`<div style="padding:8px 0">${skelTable(rows,cols)}</div>`;
+}
+
+// ── 3. Confetti on booking ────────────────────────────
+function fireConfetti(){
+  const canvas=document.createElement('canvas');
+  canvas.style.cssText='position:fixed;top:0;left:0;width:100vw;height:100vh;pointer-events:none;z-index:99999';
+  document.body.appendChild(canvas);
+  const ctx=canvas.getContext('2d');
+  canvas.width=window.innerWidth;canvas.height=window.innerHeight;
+  const colors=['#1a2e4a','#2e75b6','#22c55e','#f59e0b','#7c3aed','#e11d48'];
+  const pieces=Array.from({length:120},()=>({
+    x:Math.random()*canvas.width,y:-10-Math.random()*canvas.height*0.3,
+    w:8+Math.random()*8,h:4+Math.random()*4,
+    angle:Math.random()*Math.PI*2,
+    vx:(Math.random()-0.5)*6,vy:3+Math.random()*5,
+    va:(Math.random()-0.5)*0.2,
+    color:colors[Math.floor(Math.random()*colors.length)],
+    opacity:1
+  }));
+  let frame=0;
+  function draw(){
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    pieces.forEach(p=>{
+      p.x+=p.vx;p.y+=p.vy;p.angle+=p.va;p.vy+=0.15;
+      if(frame>80) p.opacity=Math.max(0,p.opacity-0.02);
+      ctx.save();ctx.translate(p.x,p.y);ctx.rotate(p.angle);
+      ctx.globalAlpha=p.opacity;ctx.fillStyle=p.color;
+      ctx.fillRect(-p.w/2,-p.h/2,p.w,p.h);ctx.restore();
+    });
+    frame++;
+    if(frame<120) requestAnimationFrame(draw);
+    else document.body.removeChild(canvas);
+  }
+  draw();
+}
+
+// ── 4. Color-coded badge helper ───────────────────────
+function modeBadge(mode){
+  const map={
+    'Drayage':'mode-drayage','drayage':'mode-drayage',
+    'FTL':'mode-ftl','ftl':'mode-ftl',
+    'LTL':'mode-ltl','ltl':'mode-ltl',
+    'LCL':'mode-lcl','lcl':'mode-lcl',
+    'Air':'mode-air','air':'mode-air',
+    'Transload':'mode-transload','transload':'mode-transload',
+  };
+  const cls=map[mode]||'b';
+  return`<span class="badge ${cls}">${mode}</span>`;
+}
+
+// ── 5. Status timeline helper ─────────────────────────
+function statusTimeline(status){
+  const steps=['Quoted','Booked','Delivered','Invoiced','Paid'];
+  const idx=steps.indexOf(status);
+  let html='<div class="status-timeline">';
+  steps.forEach((s,i)=>{
+    const done=i<idx,active=i===idx;
+    html+=`<div class="tl-dot ${done?'done':active?'active':''}" title="${s}"></div>`;
+    if(i<steps.length-1) html+=`<div class="tl-step ${done?'done':active?'active':''}"></div>`;
+  });
+  html+=`</div><div style="display:flex;justify-content:space-between;margin-top:4px">
+    ${steps.map((s,i)=>`<div style="font-size:9px;font-weight:${steps.indexOf(status)===i?'700':'400'};color:${steps.indexOf(status)===i?'#1a2e4a':'#bbc8d4'};text-align:center;flex:1">${s}</div>`).join('')}
+  </div>`;
+  return html;
+}
+
+
 boot().catch(e=>{$('loading-screen').style.display='none';$('setup-screen').style.display='flex';});
 </script>
 <script>
