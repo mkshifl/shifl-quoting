@@ -1890,6 +1890,12 @@ function renderFqBuilder(){
 
 // ── Freight Quote Log ──────────────────────────────────────────────────────
 function updateFqInvBadge(){const pending=(window._fqHistory||[]).filter(q=>q.status==='Delivered').length;const b=$('fq-inv-badge');if(b){b.textContent=pending;b.style.display=pending?'':'none';}}
+async function saveFqRef(idx,val){
+  const q=(window._fqHistory||[])[idx];if(!q) return;
+  q.shiflRef=val.trim();
+  try{localStorage.setItem('fq_history',JSON.stringify(window._fqHistory));}catch(e){}
+  try{await db.from('fq_quotes').update({data:q}).eq('id',q.id);}catch(e){}
+}
 function renderFqLog(){
   updateFqInvBadge();
   const history=window._fqHistory||[];
@@ -1905,6 +1911,15 @@ function renderFqLog(){
         <input type="checkbox" ${sel.has(i)?'checked':''} onchange="toggleFqSelect(${i},this.checked)" style="width:auto;cursor:pointer"></td>
       <td class="muted small">${q.date}</td>
       <td class="bold">${q.customer||'—'}</td>
+      <td onclick="event.stopPropagation()" style="min-width:100px">
+        <input type="text" value="${q.shiflRef||''}"
+          onclick="event.stopPropagation()"
+          onchange="saveFqRef(${i},this.value)"
+          placeholder="Add ref #"
+          style="border:none;background:${q.shiflRef?'var(--blue-bg)':'transparent'};color:${q.shiflRef?'var(--steel)':'var(--gray-300)'};font-weight:${q.shiflRef?'700':'400'};font-size:12px;padding:3px 6px;border-radius:4px;width:90px;cursor:text;outline:none"
+          onfocus="this.style.background='var(--blue-bg)';this.style.border='1px solid var(--steel)'"
+          onblur="this.style.border='none';this.style.background=this.value?'var(--blue-bg)':'transparent'">
+      </td>
       <td><span class="badge ${q.fqMode==='FTL'?'b':q.fqMode==='LTL'?'p':'t'}">${q.fqMode}</span>
           ${q.fqEquip?`<span class="badge gr" style="margin-left:4px">${q.fqEquip}</span>`:''}</td>
       <td class="bold">${q.pickupZip} -> ${q.deliveryZip}</td>
@@ -1952,7 +1967,7 @@ function renderFqLog(){
     <div class="tbl-wrap"><table>
       <thead><tr>
         <th style="width:32px"></th>
-        <th>Date</th><th>Customer</th><th>Type</th><th>Lane</th><th>Carrier</th>
+        <th>Date</th><th>Customer</th><th style="color:var(--steel)">Ref #</th><th>Type</th><th>Lane</th><th>Carrier</th>
         <th>Carrier rate</th><th>Customer rate</th><th>Base Profit</th><th>By</th><th>Status</th><th></th>
       </tr></thead>
       <tbody>${rows}</tbody>
