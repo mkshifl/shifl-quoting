@@ -2,7 +2,20 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<!-- PWA -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1a2e4a">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Shifl">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<!-- SEO / Social -->
+<meta name="description" content="Shifl Logistics — freight quoting and operations platform">
+<meta property="og:title" content="Shifl Quoting Portal">
+<meta property="og:description" content="Drayage, freight, air, and transload quoting">
+<meta property="og:image" content="icon-512.png">
 <title>Shifl Trucking Quoting</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -7675,6 +7688,19 @@ function renderHome(){
 
 
 boot().catch(e=>{$('loading-screen').style.display='none';$('setup-screen').style.display='flex';});
+</script>
+<script>
+if('serviceWorker' in navigator){
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/shifl-quoting/sw.js')
+      .then(r => console.log('SW registered:', r.scope))
+      .catch(e => console.log('SW failed:', e));
+  });
+}
+// Handle deep-link shortcuts from manifest
+const hash = location.hash;
+if(hash === '#drayage') window.addEventListener('DOMContentLoaded', () => setTimeout(() => goTo('quote'), 1000));
+if(hash === '#freight') window.addEventListener('DOMContentLoaded', () => setTimeout(() => goTo('freight','builder'), 1000));
 </script>
 </body>
 </html>
