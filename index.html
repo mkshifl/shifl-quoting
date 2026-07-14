@@ -6565,7 +6565,7 @@ async function doSendCarrierEmail(quoteId){
     try{ pdfB64 = await getQuotePDFBase64(q); }catch(e){ console.warn('PDF gen failed:',e.message); }
 
     const payload = {
-      from: 'Shifl Logistics <trucking@shifl.com>',
+      from: 'Shifl Logistics <onboarding@resend.dev>',
       to: [toEmail],
       cc: ccEmail ? [ccEmail] : [],
       subject: 'Rate Confirmation — ' + (q.customer||'') + ' | ' + (q.port||'') + ' → ' + (q.zip||'') + ' | Quote #' + q.quoteNum,
@@ -6584,7 +6584,8 @@ async function doSendCarrierEmail(quoteId){
       body:JSON.stringify(payload),
     });
     const result = await resp.json();
-    if(!resp.ok) throw new Error(result.message||result.error||'Send failed');
+    console.log('Resend response:', resp.status, JSON.stringify(result));
+    if(!resp.ok) throw new Error(`${resp.status}: ${JSON.stringify(result)}`);
 
     // Save carrier email back to network
     if(toEmail && q.carrier){
@@ -6604,6 +6605,28 @@ async function doSendCarrierEmail(quoteId){
 
 
 
+async function testResendKey(){
+  const k=localStorage.getItem('shifl_resend_key')||'';
+  if(!k){alert('Save a Resend API key first.');return;}
+  const toEmail=_currentUser?.email||'';
+  if(!toEmail){alert('No email found for your account.');return;}
+  try{
+    const r=await fetch('https://api.resend.com/emails',{
+      method:'POST',
+      headers:{'Authorization':'Bearer '+k,'Content-Type':'application/json'},
+      body:JSON.stringify({
+        from:'Shifl Logistics <onboarding@resend.dev>',
+        to:[toEmail],
+        subject:'Shifl Email Test',
+        html:'<p>✅ Your Resend API key is working! You can now send quotes to carriers.</p><p>Note: To send from trucking@shifl.com you need to verify the shifl.com domain in your Resend dashboard.</p>'
+      })
+    });
+    const result=await r.json();
+    console.log('Test result:',r.status,JSON.stringify(result));
+    if(r.ok) alert('✅ Test email sent to '+toEmail+'! Check your inbox.\n\nIf you see it, your API key works. To send from trucking@shifl.com you need to verify shifl.com in Resend.');
+    else alert('❌ Test failed: '+JSON.stringify(result)+'\n\nCheck that your API key is correct in Resend dashboard.');
+  }catch(e){alert('❌ Error: '+e.message);}
+}
 function saveResendKey(){
   const k = ($('resend-key-input')||{}).value?.trim();
   if(!k){ alert('Enter a Resend API key.'); return; }
