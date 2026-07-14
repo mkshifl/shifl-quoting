@@ -75,12 +75,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-siz
 #topbar-clock{font-size:12px;font-weight:600;color:var(--gray-400);font-family:monospace;white-space:nowrap}
 /* Status timeline */
 .status-timeline{display:flex;align-items:center;gap:0;margin-top:12px}
-.tl-step{flex:1;height:3px;background:#e8f0fb;position:relative}
-.tl-step.done{background:#1a2e4a}
-.tl-step.active{background:#2e75b6}
-.tl-dot{width:8px;height:8px;border-radius:50%;background:#e8f0fb;border:2px solid #fff;margin:0 -1px;flex-shrink:0;z-index:1}
-.tl-dot.done{background:#1a2e4a}
-.tl-dot.active{background:#2e75b6;box-shadow:0 0 0 3px #dbeafe}
+.pipe-step{flex:1;height:3px;background:#e8f0fb;position:relative}
+.pipe-step.done{background:#1a2e4a}
+.pipe-step.active{background:#2e75b6}
+.pipe-dot{width:8px;height:8px;border-radius:50%;background:#e8f0fb;border:2px solid #fff;margin:0 -1px;flex-shrink:0;z-index:1}
+.pipe-dot.done{background:#1a2e4a}
+.pipe-dot.active{background:#2e75b6;box-shadow:0 0 0 3px #dbeafe}
 .acc-btn{width:100%;display:flex;align-items:center;justify-content:space-between;padding:11px 16px;background:none;border:none;cursor:pointer;color:rgba(255,255,255,.65);font-size:13px;font-weight:600;font-family:inherit;transition:background .15s}
 .acc-btn:hover{background:rgba(255,255,255,.05)}
 .acc-btn.open{background:rgba(255,255,255,.07);color:#fff}
@@ -8433,8 +8433,8 @@ function statusTimeline(status){
   let html='<div class="status-timeline">';
   steps.forEach((s,i)=>{
     const done=i<idx,active=i===idx;
-    html+=`<div class="tl-dot ${done?'done':active?'active':''}" title="${s}"></div>`;
-    if(i<steps.length-1) html+=`<div class="tl-step ${done?'done':active?'active':''}"></div>`;
+    html+=`<div class="pipe-dot ${done?'done':active?'active':''}" title="${s}"></div>`;
+    if(i<steps.length-1) html+=`<div class="pipe-step ${done?'done':active?'active':''}"></div>`;
   });
   html+=`</div><div style="display:flex;justify-content:space-between;margin-top:4px">
     ${steps.map((s,i)=>`<div style="font-size:9px;font-weight:${steps.indexOf(status)===i?'700':'400'};color:${steps.indexOf(status)===i?'#1a2e4a':'#bbc8d4'};text-align:center;flex:1">${s}</div>`).join('')}
