@@ -1218,7 +1218,16 @@ function renderQuote(){
   const isExport=qi.drayType==='export';const matches=getMatches();
   if(!S.selId&&matches.length) S.selId=matches[0].id;
   const sel=matches.find(r=>r.id===S.selId)||matches[0]||null;
-  $('topbar-right').innerHTML=`<button class="btn" onclick="saveDraft('drayage')">📋 Save draft</button><button class="btn" onclick="printQuote()">🖨️ Print</button><button class="btn" onclick="downloadPDF()">📄 PDF</button><button class="btn blue" onclick="saveQuote()">💾 Save quote</button>`;
+  $('topbar-right').innerHTML=`<div style="display:flex;align-items:center;gap:8px">
+    <div style="display:flex;gap:0;border:1.5px solid var(--gray-200);border-radius:7px;overflow:hidden;margin-right:4px">
+      <button onclick="S.qi.drayType='import';S.selId=null;renderQuote()" style="padding:6px 16px;border:none;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;background:${qi.drayType!=='export'?'#1a2e4a':'#fff'};color:${qi.drayType!=='export'?'#fff':'var(--gray-500)'}">📥 Import</button>
+      <button onclick="S.qi.drayType='export';S.selId=null;renderQuote()" style="padding:6px 16px;border:none;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;background:${qi.drayType==='export'?'#92400e':'#fff'};color:${qi.drayType==='export'?'#fff':'var(--gray-500)'}">📤 Export</button>
+    </div>
+    <button class="btn" onclick="saveDraft('drayage')">📋 Save draft</button>
+    <button class="btn" onclick="printQuote()">🖨️ Print</button>
+    <button class="btn" onclick="downloadPDF()">📄 PDF</button>
+    <button class="btn blue" onclick="saveQuote()">💾 Save quote</button>
+  </div>`;
   $('page').innerHTML=draftBanner('drayage','drayage')+`<div class="two-col">
     <div>
       <div class="card">
