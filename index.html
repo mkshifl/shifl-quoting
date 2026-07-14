@@ -6101,8 +6101,9 @@ async function renderAdmin(){
         <input type="password" id="resend-key-input" value="${resendKey}" placeholder="re_xxxxxxxxxxxxxxxxxx" style="font-family:monospace">
       </div>
       <button class="btn blue" onclick="saveResendKey()" style="flex-shrink:0;padding:8px 18px">Save</button>
+      <button class="btn" onclick="testResendKey()" style="flex-shrink:0;padding:8px 18px">🔬 Test</button>
     </div>
-    ${resendKey?'<div style="font-size:12px;color:var(--green);margin-top:8px;font-weight:600">✓ Resend API key saved</div>':''}
+    ${resendKey?'<div style="font-size:12px;color:var(--green);margin-top:8px;font-weight:600">✓ Resend API key saved — <a href="#" onclick="testResendKey();return false" style="color:var(--steel)">Send test email →</a></div>':''}
   </div>`;
 }
 
