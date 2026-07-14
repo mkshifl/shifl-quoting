@@ -4548,7 +4548,9 @@ async function downloadTlCustomerPDF(idx, rawTl, existingDoc){
   doc.text('QUOTE',W-M,47,{align:'right'});
   y=64;
 
+  function checkPageC(){if(y>252){doc.addPage();y=16;}}
   function section(colorArr,title,subLines,rows,subtotal){
+    checkPageC();
     doc.setFillColor(...colorArr);doc.roundedRect(M,y,CW,10,1,1,'F');
     doc.setFont('helvetica','bold');doc.setFontSize(9.5);doc.setTextColor(255,255,255);
     doc.text(doc.splitTextToSize(title,CW-8)[0],M+4,y+7.5);
@@ -4597,7 +4599,7 @@ async function downloadTlCustomerPDF(idx, rawTl, existingDoc){
   }
   if(drayTotal>0){
     section([26,80,150],'INBOUND DRAYAGE',
-      ['Origin: '+(q?q.drayPort:tl?.drayPort||'—')+' → '+(q?q.drayZip:tl?.drayZip||'—')+' ('+(q?q.drayLd:tl?.drayLd||'Live')+')'],
+      ['Origin: '+(q?q.drayPort:tl?.drayPort||'—')+' to '+(q?q.drayZip:tl?.drayZip||'—')+' ('+(q?q.drayLd:tl?.drayLd||'Live')+')'],
       drayRows,drayTotal);
   }
 
@@ -4631,16 +4633,20 @@ async function downloadTlCustomerPDF(idx, rawTl, existingDoc){
     const b=parseFloat(tl.outManualRate)||0;
     outTotal=tl.outMarkupMode==='pct'?b*(1+(tl.outMarkupAmount||0)/100):b+(Number(tl.outMarkupAmount)||0);
   }
-  if(outTotal>0){
+  // Always show outbound section if we have any info
+  {
     const multiStop=q?.outMultiStop||tl?.outMultiStop;
     const stops=q?.outStops||tl?.outStops;
     const outZip=q?.outDeliveryZip||tl?.outDeliveryZip||'—';
     const outEquip=q?.outEquipment||tl?.outEquipment||'';
     if(multiStop&&stops?.length&&outMode==='LTL'){
       stops.filter(s=>s.zip).forEach((s,i)=>outRows.push(['LTL Stop '+(i+1)+' → '+s.zip+(s.carrier?' ('+s.carrier+')':''),parseFloat(s.customerRate)||0]));
-    } else {outRows=[['Freight rate',outTotal]];}
+    } else if(outTotal>0){outRows=[['Freight rate',outTotal]];}
+    else {outRows=[['Freight rate — TBD',0]];}
     const delivLine=(multiStop&&stops?.length)?stops.filter(s=>s.zip).map((s,i)=>'Stop '+(i+1)+': '+s.zip).join('  ·  '):'Delivery ZIP: '+outZip;
-    section([160,90,10],'OUTBOUND '+outMode,[outEquip||'',delivLine],outRows,outTotal);
+    if(outTotal>0||outZip!=='—'){
+      section([160,90,10],'OUTBOUND '+outMode,[outEquip||'',delivLine],outRows.filter(r=>r[1]>0),outTotal);
+    }
   }
 
   // Grand total
@@ -4704,7 +4710,13 @@ async function downloadTlInternalPDF(idx){
   }
   y=68;
 
+  function checkPage(){
+    if(y>252){doc.addPage();y=16;
+      doc.setFillColor(255,255,255);doc.rect(0,0,W,H,'F');
+    }
+  }
   function secHeader(colorArr,title,subInfo){
+    checkPage();
     doc.setFillColor(...colorArr);doc.roundedRect(M,y,CW,10,1,1,'F');
     doc.setFont('helvetica','bold');doc.setFontSize(9.5);doc.setTextColor(255,255,255);
     doc.text(doc.splitTextToSize(title,CW-8)[0],M+4,y+7.5);
@@ -4725,6 +4737,7 @@ async function downloadTlInternalPDF(idx){
   }
 
   function dataRow(label,carrier,customer){
+    checkPage();
     const profit=customer-carrier;
     doc.setFillColor(250,252,255);doc.rect(M,y,CW,11,'F');
     doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(45,58,78);
@@ -4738,6 +4751,7 @@ async function downloadTlInternalPDF(idx){
   }
 
   function secTotal(carrier,customer){
+    checkPage();
     const profit=customer-carrier;
     y+=2;
     doc.setFillColor(228,235,248);doc.roundedRect(M,y,CW,12,1,1,'F');
@@ -4752,7 +4766,7 @@ async function downloadTlInternalPDF(idx){
   // Drayage
   secHeader([26,80,150],
     'INBOUND DRAYAGE  |  Carrier: '+(q.drayCarrier||'—'),
-    'Origin: '+q.drayPort+'  →  '+q.drayZip+' ('+q.drayLd+')');
+    'Origin: '+q.drayPort+' → '+q.drayZip+' ('+q.drayLd+')');
   const tl=q.rawTl;const sel=tl?S.rates.find(r=>r.id===tl.selDrayId):null;
   if(sel&&tl){
     CHARGES.filter(c=>isApplicable(c,tl.drayLd)).forEach(c=>{
