@@ -6610,8 +6610,30 @@ async function doSendCarrierEmail(quoteId){
 async function testResendKey(){
   const k=localStorage.getItem('shifl_resend_key')||'';
   if(!k){alert('Save a Resend API key first.');return;}
-  const toEmail=_currentUser?.email||'';
-  if(!toEmail){alert('No email found for your account.');return;}
+
+  // Show modal to enter test destination
+  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:420px">
+    <div class="modal-title">🔬 Test Email Connection</div>
+    <p style="font-size:13px;color:var(--gray-500);margin-bottom:16px">Enter the email address to send the test to. Use the email address you signed up to Resend with for best results.</p>
+    <div class="field"><label>Send test to *</label>
+      <input type="email" id="test-email-to" value="${_currentUser?.email||''}" placeholder="your@email.com">
+    </div>
+    <div style="background:var(--gray-50);border-radius:var(--radius);padding:10px 12px;font-size:12px;color:var(--gray-500);margin-bottom:14px">
+      API key: <code style="font-family:monospace">${k.slice(0,8)}••••••••</code>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn blue" id="test-send-btn" onclick="doTestEmail()">📧 Send test</button>
+    </div>
+  </div></div>`;
+}
+
+async function doTestEmail(){
+  const k=localStorage.getItem('shifl_resend_key')||'';
+  const toEmail=($('test-email-to')||{}).value?.trim();
+  if(!toEmail){alert('Enter an email address.');return;}
+  const btn=$('test-send-btn');
+  if(btn){btn.textContent='Sending...';btn.disabled=true;}
   try{
     const r=await fetch('https://api.resend.com/emails',{
       method:'POST',
@@ -6619,15 +6641,28 @@ async function testResendKey(){
       body:JSON.stringify({
         from:'Shifl Logistics <onboarding@resend.dev>',
         to:[toEmail],
-        subject:'Shifl Email Test',
-        html:'<p>✅ Your Resend API key is working! You can now send quotes to carriers.</p><p>Note: To send from trucking@shifl.com you need to verify the shifl.com domain in your Resend dashboard.</p>'
+        subject:'✅ Shifl Email Test — '+new Date().toLocaleTimeString(),
+        html:'<div style="font-family:sans-serif;max-width:500px;margin:0 auto;padding:24px"><div style="background:#1a2e4a;border-radius:10px;padding:16px 20px;margin-bottom:20px"><div style="color:#fff;font-size:20px;font-weight:900">SHIFL</div></div><h2 style="color:#1a2e4a">Email connection is working! ✅</h2><p style="color:#6b7280">Your Resend API key is configured correctly. The Shifl Quoting Portal can now send rate confirmation emails to carriers.</p><hr style="border:none;border-top:1px solid #e5e7eb;margin:20px 0"><p style="font-size:12px;color:#9ca3af">Sent from Shifl Quoting Portal</p></div>'
       })
     });
     const result=await r.json();
-    console.log('Test result:',r.status,JSON.stringify(result));
-    if(r.ok) alert('✅ Test email sent to '+toEmail+'! Check your inbox.\n\nIf you see it, your API key works. To send from trucking@shifl.com you need to verify shifl.com in Resend.');
-    else alert('❌ Test failed: '+JSON.stringify(result)+'\n\nCheck that your API key is correct in Resend dashboard.');
-  }catch(e){alert('❌ Error: '+e.message);}
+    console.log('Resend test:',r.status,JSON.stringify(result));
+    if(r.ok){
+      closeModal();
+      alert('✅ Test email sent to '+toEmail+'!\n\nCheck your inbox — if it arrives, everything is working and you can email quotes to carriers.');
+    } else {
+      const msg=result.message||result.error||JSON.stringify(result);
+      if(btn){btn.textContent='📧 Send test';btn.disabled=false;}
+      alert('❌ Failed ('+r.status+'): '+msg+'\n\n'+
+        (r.status===403?'Your API key may not have permission to send emails. Check it in Resend dashboard → API Keys.':
+         r.status===422?'The email address or from address may be invalid.':
+         r.status===429?'Rate limit hit — try again in a minute.':
+         'Check your Resend dashboard for more details.'));
+    }
+  }catch(e){
+    if(btn){btn.textContent='📧 Send test';btn.disabled=false;}
+    alert('❌ Network error: '+e.message+'\n\nThis may be a browser CORS issue. Try refreshing and testing again.');
+  }
 }
 function saveResendKey(){
   const k = ($('resend-key-input')||{}).value?.trim();
