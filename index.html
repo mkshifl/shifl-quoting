@@ -4621,7 +4621,7 @@ async function downloadTlCustomerPDF(idx, rawTl, existingDoc){
   }
   if(tlTotal>0){
     section([30,110,65],'TRANSLOAD SERVICES',
-      ['Facility: '+(q?.warehouseName||'Shifl facility'),q?.warehouseAddress||''],
+      ['Warehouse: '+((q?.warehouseAddress||'').split(' ').pop()||'—')+' area'],  // customer PDF — ZIP only
       tlRows,tlTotal);
   }
 
