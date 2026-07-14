@@ -752,13 +752,13 @@ function disconnectSupabase(){
 function dbToRate(r){
   return {id:r.id,region:r.region||'NE',carrier:r.carrier||'',port:r.port||'',destination:r.destination||'',
     zip:r.zip||'',ld:r.ld||'Live',active:r.active!==false,notes:r.notes||'',
-    base:+r.base||0,chassis:+r.chassis||0,prepull:+r.prepull||0,det_port:+r.det_port||0,det_cust:+r.det_cust||0,
+    base:+r.base||0,exportBase:+r.export_base||0,chassis:+r.chassis||0,prepull:+r.prepull||0,det_port:+r.det_port||0,det_cust:+r.det_cust||0,
     storage:+r.storage||0,ovw43:+r.ovw43||0,ovw48:+r.ovw48||0,bobtail:+r.bobtail||0,toll:+r.toll||0};
 }
 function rateToDb(r){
   return {id:r.id,region:r.region,carrier:r.carrier,port:r.port||'',destination:r.destination||'',
     zip:r.zip||'',ld:r.ld,active:r.active,notes:r.notes||'',
-    base:r.base||0,chassis:r.chassis||0,prepull:r.prepull||0,det_port:r.det_port||0,det_cust:r.det_cust||0,
+    base:r.base||0,export_base:r.exportBase||0,chassis:r.chassis||0,prepull:r.prepull||0,det_port:r.det_port||0,det_cust:r.det_cust||0,
     storage:r.storage||0,ovw43:r.ovw43||0,ovw48:r.ovw48||0,bobtail:r.bobtail||0,toll:r.toll||0};
 }
 function dbToQuote(r){
@@ -894,7 +894,7 @@ function setSaving(on){
 // ═══════════════════════════════════════════════════════
 let S={
   view:'home',rates:[],quotes:[],customers:[],
-  qi:{customer:'',customerEmail:'',customerId:null,port:'New York / Newark, NJ',zip:'',ld:'Live',
+  qi:{customer:'',customerEmail:'',customerId:null,port:'New York / Newark, NJ',zip:'',ld:'Live',drayType:'import',commodity:'',pickupZip:'',
       baseMarkup:{...DEFAULT_BASE_MARKUP},flatRates:{...DEFAULT_FLAT_RATES},notes:'',shiflRef:'',
       gensetEnabled:false,gensetScope:'both',gensetCarrierRate:0,gensetCustomerRate:0,
       bobtailEnabled:false,bobtailScope:'both',bobtailCarrierRate:0,bobtailCustomerRate:0,
@@ -1051,11 +1051,19 @@ function render(){
 // ═══════════════════════════════════════════════════════
 function getMatches(){
   const qi=S.qi;
+  const isExport=qi.drayType==='export';
+  const matchZip=isExport?qi.pickupZip:qi.zip;
   return S.rates.filter(r=>{
-    if(!r.active||r.zip!==qi.zip) return false;
+    if(!r.active) return false;
+    if(r.zip!==matchZip) return false;
     if(!(r.ld===qi.ld||r.ld==='Both')) return false;
+    if(isExport&&!r.exportBase) return false; // must have export rate
     return true;
-  }).sort((a,b)=>totMode(a,qi.ld)-totMode(b,qi.ld));
+  }).sort((a,b)=>{
+    const av=isExport?(a.exportBase||0):(totMode(a,qi.ld));
+    const bv=isExport?(b.exportBase||0):(totMode(b,qi.ld));
+    return av-bv;
+  });
 }
 function buildCarrierComparison(matches){
   const qi=S.qi;
@@ -1069,7 +1077,7 @@ function buildCarrierComparison(matches){
       <td><span class="bold">${r.carrier}</span>${i===0?' <span class="badge best">Best</span>':''}${r.ld==='Both'?' <span class="badge t" style="margin-left:3px">Both</span>':''}${r.notes?`<div class="subtext">${r.notes}</div>`:''}</td>
       ${multiPort?`<td class="muted small" style="color:var(--amber);font-size:11px">${r.port||'—'}</td>`:''}
       <td class="muted small">${r.destination}</td>
-      <td class="bold">${fmt(r.base)}</td>
+      <td class="bold">${fmt(S.qi?.drayType==='export'?(r.exportBase||r.base):r.base)}</td>
       ${vis.map(c=>`<td>${fmt(r[c])}</td>`).join('')}
       <td class="bold">${fmt(totMode(r,qi.ld))}</td>
     </tr>`).join('');
@@ -1190,7 +1198,8 @@ function buildPricingSection(){
 }
 
 function renderQuote(){
-  const qi=S.qi;const matches=getMatches();
+  const qi=S.qi;
+  const isExport=qi.drayType==='export';const matches=getMatches();
   if(!S.selId&&matches.length) S.selId=matches[0].id;
   const sel=matches.find(r=>r.id===S.selId)||matches[0]||null;
   $('topbar-right').innerHTML=`<button class="btn" onclick="saveDraft('drayage')">📋 Save draft</button><button class="btn" onclick="printQuote()">🖨️ Print</button><button class="btn" onclick="downloadPDF()">📄 PDF</button><button class="btn blue" onclick="saveQuote()">💾 Save quote</button>`;
@@ -1215,14 +1224,18 @@ function renderQuote(){
           </div>
           <div class="field" style="width:240px;flex-shrink:0;margin-bottom:0">
             <label>Port / Rail origin</label>
-            <input type="text" value="${qi.port}" oninput="S.qi.port=this.value" list="port-dl" placeholder="New York / Newark, NJ" style="width:240px">
+            ${qi.drayType==='export'
+              ?`<input type="text" value="${qi.pickupZip||''}" oninput="S.qi.pickupZip=this.value;onZip(this.value)" placeholder="Pickup ZIP (shipper)" style="width:200px" maxlength="10">`
+              :`<input type="text" value="${qi.port}" oninput="S.qi.port=this.value" list="port-dl" placeholder="New York / Newark, NJ" style="width:240px">`}
             <datalist id="port-dl">${US_PORTS.map(p=>`<option value="${p}">`).join('')}</datalist>
           </div>
         </div>
         <div style="display:flex;align-items:flex-start;gap:16px;flex-wrap:wrap">
           <div class="field" style="width:130px;flex-shrink:0;margin-bottom:0">
             <label>Delivery zip</label>
-            <input type="text" value="${qi.zip}" oninput="onZip(this.value)" placeholder="07728" maxlength="10" style="width:130px">
+            ${isExport
+              ?`<input type="text" value="${qi.zip||''}" oninput="onZip(this.value)" placeholder="Export port ZIP" maxlength="10" style="width:130px">`
+              :`<input type="text" value="${qi.zip}" oninput="onZip(this.value)" placeholder="07728" maxlength="10" style="width:130px">`}
             ${getSpecialZipBadge(qi.zip)}
           </div>
           <div class="field" style="width:110px;flex-shrink:0;margin-bottom:0">
@@ -1936,7 +1949,7 @@ function renderFqLog(){
     <tr style="cursor:pointer" onclick="showFqQuoteModal(${i})" title="Click to view" onmouseenter="showQuotePreview(event,{customer:'${q.customer||''}',lane:'${q.pickupZip||''} → ${q.deliveryZip||''}',carrier:'${q.carrier||''}',carrierRate:${q.carrierRate||0},customerRate:${q.customerRate||0},profit:${q.profit||0},margin:${q.profitPct||0},status:'${q.status}',statusBadge:'${q.status==='Booked'?'g':q.status==='Lost'?'r':'a'}',date:'${q.date||''}'})" onmouseleave="hideQuotePreview()">
       <td onclick="event.stopPropagation()" style="width:32px;text-align:center">
         <input type="checkbox" ${sel.has(i)?'checked':''} onchange="toggleFqSelect(${i},this.checked)" style="width:auto;cursor:pointer"></td>
-      <td class="muted small">${q.date}</td>
+      <td class="muted small">${q.date}${q.drayType==='export'?'<br><span class="badge" style="font-size:9px;background:#92400e;color:#fff">EXP</span>':''}</td>
       <td class="bold">${q.customer||'—'}</td>
       <td onclick="event.stopPropagation()" style="min-width:100px">
         <input type="text" value="${q.shiflRef||''}"
@@ -2397,7 +2410,7 @@ function renderFqCarriers(){
           <td>${q.pickupZip} → ${q.deliveryZip}</td>
           <td>${q.weight?Number(q.weight).toLocaleString()+' lbs':'—'}</td>
           <td class="bold">${fmtD(q.carrierRate)}</td>
-          <td class="muted small">${q.date}</td>
+          <td class="muted small">${q.date}${q.drayType==='export'?'<br><span class="badge" style="font-size:9px;background:#92400e;color:#fff">EXP</span>':''}</td>
           <td><span class="badge ${q.status==='Booked'?'g':q.status==='Lost'?'gr':'a'}">${q.status}</span></td>
         </tr>`).join('')}</tbody>
       </table></div>
@@ -2625,7 +2638,7 @@ function renderFqDashboard(){
       ${recent.length?`<div class="tbl-wrap" style="box-shadow:none;border:none"><table>
         <thead><tr><th>Date</th><th>Customer</th><th>Type</th><th>Lane</th><th>Carrier</th><th>Customer rate</th><th>Profit</th><th>Status</th></tr></thead>
         <tbody>${recent.map((q,i)=>`<tr>
-          <td class="muted small">${q.date}</td>
+          <td class="muted small">${q.date}${q.drayType==='export'?'<br><span class="badge" style="font-size:9px;background:#92400e;color:#fff">EXP</span>':''}</td>
           <td class="bold">${q.customer||'—'}</td>
           <td>${modeBadge(q.fqMode)}</td>
           <td>${q.pickupZip} → ${q.deliveryZip}</td>
@@ -4462,7 +4475,7 @@ function renderTlDashboard(){
       <div class="tbl-wrap" style="box-shadow:none;border:none"><table>
         <thead><tr><th>Date</th><th>Customer</th><th>Origin</th><th>Warehouse</th><th>Total</th><th>Status</th></tr></thead>
         <tbody>${all.slice(0,8).map(q=>`<tr>
-          <td class="muted small">${q.date}</td><td class="bold">${q.customer}</td>
+          <td class="muted small">${q.date}${q.drayType==='export'?'<br><span class="badge" style="font-size:9px;background:#92400e;color:#fff">EXP</span>':''}</td><td class="bold">${q.customer}</td>
           <td class="muted small">${q.drayPort?q.drayPort.split(',')[0]:'—'}</td>
           <td class="muted small">${q.warehouseName||'—'}</td>
           <td class="bold" style="color:var(--steel)">${fmtD(q.totalCustomer)}</td>
@@ -4765,7 +4778,7 @@ async function downloadTlInternalPDF(idx){
 
   // Drayage
   secHeader([26,80,150],
-    'INBOUND DRAYAGE  |  Carrier: '+(q.drayCarrier||'—'),
+    (q.drayType==='export'?'OUTBOUND DRAYAGE  |  Carrier: ':'INBOUND DRAYAGE  |  Carrier: ')+(q.drayCarrier||'—'),
     'Origin: '+q.drayPort+' → '+q.drayZip+' ('+q.drayLd+')');
   const tl=q.rawTl;const sel=tl?S.rates.find(r=>r.id===tl.selDrayId):null;
   if(sel&&tl){
@@ -5187,7 +5200,7 @@ function renderRates(){
     <input type="file" id="csv-fi" accept=".csv" style="display:none" onchange="handleCSVFile(this)">
     <button class="btn" onclick="showManageSpecialZips()">🏠 Special ZIPs</button>
     <button class="btn blue" onclick="showAddRate()">+ Add rate</button>`;
-  $('page').innerHTML=`<div class="tbl-wrap"><table><thead><tr><th style="width:30px;text-align:center">#</th><th>Region</th><th>Carrier</th><th>Destination</th><th>Zip</th><th>Mode</th><th>Base</th><th>Chassis</th><th>Pre-pull</th><th>Det.Port</th><th>Det.Cust</th><th>Storage</th><th>OVW 43k</th><th>OVW 48k</th><th>Bobtail</th><th>Toll</th><th>Total</th><th>Status</th><th></th></tr></thead><tbody id="rates-tbody">${buildRateRows()}</tbody></table></div>`;
+  $('page').innerHTML=`<div class="tbl-wrap"><table><thead><tr><th style="width:30px;text-align:center">#</th><th>Region</th><th>Carrier</th><th>Destination</th><th>Zip</th><th>Mode</th><th>Import</th><th>Export</th><th>Chassis</th><th>Pre-pull</th><th>Det.Port</th><th>Det.Cust</th><th>Storage</th><th>OVW 43k</th><th>OVW 48k</th><th>Bobtail</th><th>Toll</th><th>Total</th><th>Status</th><th></th></tr></thead><tbody id="rates-tbody">${buildRateRows()}</tbody></table></div>`;
 }
 function onRateSearch(v){
   S.rSearch=v;
@@ -5281,7 +5294,7 @@ async function duplicateRate(id){
   setSaving(true);try{await dbSaveRate(copy);S.rates.push(copy);const t=$('rates-tbody');if(t) t.innerHTML=buildRateRows();}catch(e){alert('Error: '+e.message);}finally{setSaving(false);}
 }
 function rateFields(r){
-  const fld=(id,lbl,v,note)=>`<div class="field"><label>${lbl}${note?`<span class="cond-note" style="margin-left:4px">${note}</span>`:''}</label><input type="number" id="f-${id}" value="${r?(r[id]||0):0}" min="0" placeholder="0"></div>`;
+  const fld=(id,lbl,v,note)=>`<div class="field"><label>${lbl}${note?`<span class="cond-note" style="margin-left:4px">${note}</span>`:''}</label><input type="number" id="f-${id}" value="${r?(r[id]||r[id.replace(/([A-Z])/g,'_$1').toLowerCase()]||0):0}" min="0" placeholder="0"></div>`;
   return `<div class="g3">
     <div class="field"><label>Region</label><select id="f-region">${REGIONS.map(rg=>`<option${(r?r.region===rg:rg==='NE')?' selected':''}>${rg}</option>`).join('')}</select></div>
     <div class="field"><label>Carrier name *</label><input type="text" id="f-carrier" value="${r?r.carrier:''}" placeholder="e.g. Platnum"></div>
@@ -5293,7 +5306,8 @@ function rateFields(r){
     <div class="field"><label>Mode</label><select id="f-ld"><option${!r||r.ld==='Live'?' selected':''}>Live</option><option${r&&r.ld==='Drop'?' selected':''}>Drop</option><option${r&&r.ld==='Both'?' selected':''}>Both</option></select><div class="cond-note" style="margin-top:3px">"Both" = carrier does Live or Drop</div></div>
   </div>
   <div class="charge-group-label">Core rates</div>
-  <div class="g4">${fld('base','Base')}${fld('chassis','Chassis')}${fld('prepull','Pre-pull')}${fld('storage','Storage')}</div>
+  <div class="g4">${fld('base','Import base ($)')}${fld('exportBase','Export base ($)')}${fld('chassis','Chassis')}${fld('prepull','Pre-pull')}</div>
+  <div class="g4">${fld('storage','Storage')}</div>
   <div class="charge-group-label">Detention <span class="cond-note">(Live only)</span></div>
   <div class="g2">${fld('det_port','Detention – Port',null,'at port')}${fld('det_cust','Detention – Customer',null,'at customer')}</div>
   <div class="charge-group-label">Overweight</div>
@@ -5332,7 +5346,7 @@ function downloadTemplate(){const hdrs=['Region','Carrier','Port','Destination',
 function triggerImport(){$('csv-fi').value='';$('csv-fi').click();}
 function handleCSVFile(input){const file=input.files[0];if(!file) return;const reader=new FileReader();reader.onload=e=>{try{const rows=parseCSV(e.target.result);if(!rows.length){alert('No data rows found.');return;}showImportPreview(rows);}catch(err){alert('Could not read CSV: '+err.message);}};reader.readAsText(file);}
 function parseCSV(text){const lines=text.trim().split(/\r?\n/);if(lines.length<2) return [];function parseLine(line){const cols=[];let cur='';let inQ=false;for(let i=0;i<line.length;i++){const ch=line[i];if(ch==='"'){inQ=!inQ;}else if(ch===','&&!inQ){cols.push(cur.trim());cur='';}else{cur+=ch;}}cols.push(cur.trim());return cols;}const headers=parseLine(lines[0]).map(h=>h.toLowerCase().replace(/[^a-z0-9]/g,''));const MAP={region:'region',carrier:'carrier',port:'port',destination:'destination',dest:'destination',zip:'zip',liveordrop:'ld',mode:'ld',ld:'ld',active:'active',base:'base',chassis:'chassis',prepull:'prepull',detport:'det_port',detentioncust:'det_cust',detcust:'det_cust',storage:'storage',ovw43k:'ovw43',ovw43:'ovw43',ovw48k:'ovw48',ovw48:'ovw48',bobtail:'bobtail',toll:'toll',notes:'notes'};return lines.slice(1).map(line=>{const l2=line.trim();if(!l2) return null;const cols=parseLine(l2);const row={};headers.forEach((h,idx)=>{const f=MAP[h];if(f) row[f]=cols[idx]||'';});return row.carrier?row:null;}).filter(Boolean);}
-function showImportPreview(rows){_importRows=rows;$('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal"><div class="modal-title">Import preview — ${rows.length} rate${rows.length!==1?'s':''} found</div><div style="overflow-x:auto;max-height:280px;overflow-y:auto;border:1px solid var(--gray-200);border-radius:var(--radius)"><table style="width:100%;font-size:12px"><thead style="position:sticky;top:0;background:var(--gray-50)"><tr><th>Carrier</th><th>Destination</th><th>Zip</th><th>Mode</th><th>Base</th><th>Chassis</th></tr></thead><tbody>${rows.slice(0,25).map(r=>`<tr><td class="bold">${r.carrier}</td><td>${r.destination||'—'}</td><td>${r.zip||'—'}</td><td>${r.ld||'Live'}</td><td>${r.base||0}</td><td>${r.chassis||0}</td></tr>`).join('')}</tbody></table></div>${rows.length>25?`<p class="muted small" style="margin-top:6px">…and ${rows.length-25} more</p>`:''}<div style="margin-top:12px;padding:10px;background:var(--gray-50);border-radius:var(--radius);font-size:13px"><label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="import-replace" style="width:auto"><span>⚠️ <strong>Replace all existing rates</strong> — deletes everything first (leave unchecked to add alongside)</span></label></div><div class="modal-foot"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn blue" onclick="confirmImport()">Import ${rows.length} rate${rows.length!==1?'s':''}</button></div></div></div>`;}
+function showImportPreview(rows){_importRows=rows;$('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal"><div class="modal-title">Import preview — ${rows.length} rate${rows.length!==1?'s':''} found</div><div style="overflow-x:auto;max-height:280px;overflow-y:auto;border:1px solid var(--gray-200);border-radius:var(--radius)"><table style="width:100%;font-size:12px"><thead style="position:sticky;top:0;background:var(--gray-50)"><tr><th>Carrier</th><th>Destination</th><th>Zip</th><th>Mode</th><th>Import</th><th>Export</th><th>Chassis</th></tr></thead><tbody>${rows.slice(0,25).map(r=>`<tr><td class="bold">${r.carrier}</td><td>${r.destination||'—'}</td><td>${r.zip||'—'}</td><td>${r.ld||'Live'}</td><td>${r.base||0}</td><td>${r.chassis||0}</td></tr>`).join('')}</tbody></table></div>${rows.length>25?`<p class="muted small" style="margin-top:6px">…and ${rows.length-25} more</p>`:''}<div style="margin-top:12px;padding:10px;background:var(--gray-50);border-radius:var(--radius);font-size:13px"><label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="import-replace" style="width:auto"><span>⚠️ <strong>Replace all existing rates</strong> — deletes everything first (leave unchecked to add alongside)</span></label></div><div class="modal-foot"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn blue" onclick="confirmImport()">Import ${rows.length} rate${rows.length!==1?'s':''}</button></div></div></div>`;}
 async function confirmImport(){
   const rows=_importRows;if(!rows?.length){alert('Nothing to import.');return;}
   const replace=$('import-replace')&&$('import-replace').checked;
