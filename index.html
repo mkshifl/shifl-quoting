@@ -6565,9 +6565,10 @@ async function doSendCarrierEmail(quoteId){
     try{ pdfB64 = await getQuotePDFBase64(q); }catch(e){ console.warn('PDF gen failed:',e.message); }
 
     const payload = {
-      from: 'Shifl Logistics <quotes@emailquoteshifl.com>',
+      from: 'Shifl Logistics <onboarding@resend.dev>',
       to: [toEmail],
       cc: ccEmail ? [ccEmail] : [],
+      reply_to: _currentUser?.email||'mk@shifl.com',
       subject: 'Rate Confirmation — ' + (q.customer||'') + ' | ' + (q.port||'') + ' → ' + (q.zip||'') + ' | Quote #' + q.quoteNum,
       html: htmlBody,
     };
@@ -6615,7 +6616,7 @@ async function testResendKey(){
       method:'POST',
       headers:{'Authorization':'Bearer '+k,'Content-Type':'application/json'},
       body:JSON.stringify({
-        from:'Shifl Logistics <quotes@emailquoteshifl.com>',
+        from:'Shifl Logistics <onboarding@resend.dev>',
         to:[toEmail],
         subject:'Shifl Email Test',
         html:'<p>✅ Your Resend API key is working! You can now send quotes to carriers.</p><p>Note: To send from trucking@shifl.com you need to verify the shifl.com domain in your Resend dashboard.</p>'
