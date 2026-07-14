@@ -2538,7 +2538,6 @@ async function saveFqQuote(){
 function renderFqDashboard(){
   const all=window._fqHistory||[];
   const booked=all.filter(q=>q.status==='Booked');
-  const decided=all.filter(q=>['Booked','Delivered','Invoiced','Paid','Lost','Cancelled','Expired'].includes(q.status));
   const won=all.filter(q=>['Booked','Delivered','Invoiced','Paid'].includes(q.status));
   const rev=booked.reduce((s,q)=>s+(q.customerRate||0),0);
   const prof=booked.reduce((s,q)=>s+(q.profit||0),0);
@@ -4448,7 +4447,6 @@ function saveTlWarehouseFromQuote(){
 function renderTlDashboard(){
   const all=window._tlHistory||[];
   const booked=all.filter(q=>q.status==='Booked');
-  const decided=all.filter(q=>['Booked','Delivered','Invoiced','Paid','Lost','Cancelled','Expired'].includes(q.status));
   const won=all.filter(q=>['Booked','Delivered','Invoiced','Paid'].includes(q.status));
   const rev=booked.reduce((s,q)=>s+(q.totalCustomer||0),0);
   const prof=booked.reduce((s,q)=>s+(q.profit||0),0);
@@ -5780,9 +5778,8 @@ function renderDash(){
     {v:filtered.filter(q=>q.status==='Cancelled').length,color:'#f3f4f6',lbl:'Cancelled'},
   ];
   // Win rate only counts decided quotes (Booked + Lost + Expired), not pending
-  const decided=filtered.filter(q=>['Booked','Delivered','Invoiced','Paid','Lost','Cancelled','Expired'].includes(q.status));
   const won=filtered.filter(q=>['Booked','Delivered','Invoiced','Paid'].includes(q.status));
-  const winRate=decided.length>0?won.length/decided.length:0;
+  const winRate=filtered.length>0?won.length/filtered.length:0;
   const cMap={};allBooked.forEach(q=>{if(!cMap[q.carrier])cMap[q.carrier]={n:0,p:0,rev:0};cMap[q.carrier].n++;cMap[q.carrier].p+=(q.profit||0);cMap[q.carrier].rev+=(q.customerRates?.total||0);});const topC=Object.entries(cMap).sort((a,b)=>b[1].n-a[1].n).slice(0,6);const recent=all.slice(0,8);const rangeLabel={week:'This week',month:'This month',lastmonth:'Last month',all:'All time'}[range];
   $('page').innerHTML=`
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
@@ -5791,7 +5788,7 @@ function renderDash(){
     </div>
     <div class="kpi-grid">
       <div class="kpi" style="cursor:pointer" onclick="setView('log');S.logFilter='all';render()"><div class="kpi-lbl">Quotes built</div><div class="kpi-val">${filtered.length}</div><div style="font-size:11px;color:var(--gray-400);margin-top:4px">click to view →</div></div>
-      <div class="kpi" style="cursor:pointer" onclick="setView('log');S.logFilter='Booked';render()"><div class="kpi-lbl">Booked</div><div class="kpi-val b">${booked.length}</div><div style="font-size:11px;color:var(--steel);margin-top:4px">${pct(winRate)} win rate</div></div>
+      <div class="kpi" style="cursor:pointer" onclick="setView('log');S.logFilter='Booked';render()"><div class="kpi-lbl">Booked</div><div class="kpi-val b">${booked.length}</div><div style="font-size:11px;color:var(--steel);margin-top:4px">${pct(winRate)} of all quotes</div></div>
       <div class="kpi"><div class="kpi-lbl">Total Revenue</div><div class="kpi-val g">${rev>0?fmtD(rev):'—'}</div><div style="font-size:11px;color:var(--gray-400);margin-top:4px">booked only</div></div>
       <div class="kpi"><div class="kpi-lbl">Total Profit</div><div class="kpi-val g">${prof>0?fmtD(prof):'—'}</div><div style="font-size:11px;color:${prof>0?'var(--green)':'var(--gray-400)'};margin-top:4px">${booked.length>0?'avg '+pct(booked.reduce((s,q)=>s+(q.profitPct||0),0)/booked.length)+' margin':'—'}</div></div>
     </div>
@@ -7067,8 +7064,8 @@ function renderReports(){
     const grp=group(qs,'customer');
     const rows=Object.entries(grp).sort((a,b)=>b[1].reduce((s,q)=>s+q.customerRate,0)-a[1].reduce((s,q)=>s+q.customerRate,0)).map(([cust,arr])=>{
       const booked=arr.filter(q=>q.status==='Booked');
-      const decided=arr.filter(q=>['Booked','Lost','Expired','Cancelled'].includes(q.status));
-      const winRate=decided.length>0?booked.length/decided.length:null;
+      const wonA=arr.filter(q=>['Booked','Delivered','Invoiced','Paid'].includes(q.status));
+      const winRate=arr.length>0?wonA.length/arr.length:null;
       const rev=booked.reduce((s,q)=>s+q.customerRate,0);
       const baseProf=booked.reduce((s,q)=>s+(q.baseCustomer-q.baseCarrier),0);
       const baseRev=booked.reduce((s,q)=>s+q.baseCustomer,0);
@@ -7083,8 +7080,8 @@ function renderReports(){
     const grp=group(qs.filter(q=>q.carrier&&q.carrier!=='—'),'carrier');
     const rows=Object.entries(grp).sort((a,b)=>b[1].length-a[1].length).map(([carrier,arr])=>{
       const booked=arr.filter(q=>q.status==='Booked');
-      const decided=arr.filter(q=>['Booked','Lost','Expired','Cancelled'].includes(q.status));
-      const winRate=decided.length>0?booked.length/decided.length:null;
+      const wonA=arr.filter(q=>['Booked','Delivered','Invoiced','Paid'].includes(q.status));
+      const winRate=arr.length>0?wonA.length/arr.length:null;
       const totalCarrierCost=booked.reduce((s,q)=>s+q.carrierRate,0);
       const totalCustRev=booked.reduce((s,q)=>s+q.customerRate,0);
       const baseProf=booked.reduce((s,q)=>s+(q.baseCustomer-q.baseCarrier),0);
