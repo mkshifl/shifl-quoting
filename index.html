@@ -908,7 +908,7 @@ let S={
       lclPriceBy:'pallets', cbm:0, transitTime:'',
       calc:{l:'',w:'',h:'',pieces:'',weightLbs:'',unit:'in'}},
   fqTab:'builder',
-  activeFilter:'all',activeView:'active',allInvTab:'pending',reportTab:'lanes',reportMode:'All',fqInvTab:'pending',aqTab:'builder',aqFilter:'all',_auditDate:'all',
+  activeFilter:'all',activeView:'active',allInvTab:'pending',rateTab:'import',reportTab:'lanes',reportMode:'All',fqInvTab:'pending',aqTab:'builder',aqFilter:'all',_auditDate:'all',
   tl:null, // initialized in boot via defaultTlState()
   tlTab:'builder',
 };
@@ -1218,20 +1218,17 @@ function renderQuote(){
   const isExport=qi.drayType==='export';const matches=getMatches();
   if(!S.selId&&matches.length) S.selId=matches[0].id;
   const sel=matches.find(r=>r.id===S.selId)||matches[0]||null;
-  $('topbar-right').innerHTML=`<div style="display:flex;align-items:center;gap:8px">
-    <div style="display:flex;gap:0;border:1.5px solid var(--gray-200);border-radius:7px;overflow:hidden;margin-right:4px">
-      <button onclick="S.qi.drayType='import';S.selId=null;renderQuote()" style="padding:6px 16px;border:none;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;background:${qi.drayType!=='export'?'#1a2e4a':'#fff'};color:${qi.drayType!=='export'?'#fff':'var(--gray-500)'}">📥 Import</button>
-      <button onclick="S.qi.drayType='export';S.selId=null;renderQuote()" style="padding:6px 16px;border:none;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;background:${qi.drayType==='export'?'#92400e':'#fff'};color:${qi.drayType==='export'?'#fff':'var(--gray-500)'}">📤 Export</button>
-    </div>
-    <button class="btn" onclick="saveDraft('drayage')">📋 Save draft</button>
-    <button class="btn" onclick="printQuote()">🖨️ Print</button>
-    <button class="btn" onclick="downloadPDF()">📄 PDF</button>
-    <button class="btn blue" onclick="saveQuote()">💾 Save quote</button>
-  </div>`;
+  $('topbar-right').innerHTML=`<button class="btn" onclick="saveDraft('drayage')">📋 Save draft</button><button class="btn" onclick="printQuote()">🖨️ Print</button><button class="btn" onclick="downloadPDF()">📄 PDF</button><button class="btn blue" onclick="saveQuote()">💾 Save quote</button>`;
   $('page').innerHTML=draftBanner('drayage','drayage')+`<div class="two-col">
     <div>
       <div class="card">
-        <div class="sec-head">Lane details</div>
+        <div class="sec-head" style="display:flex;align-items:center;justify-content:space-between">
+          <span>Lane details</span>
+          <div style="display:flex;gap:0;border:1.5px solid var(--gray-200);border-radius:6px;overflow:hidden">
+            <button onclick="S.qi.drayType='import';S.qi.pickupZip='';S.selId=null;renderQuote()" style="padding:4px 14px;border:none;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;background:${qi.drayType!=='export'?'#1a2e4a':'#fff'};color:${qi.drayType!=='export'?'#fff':'var(--gray-500)'}">📥 Import</button>
+            <button onclick="S.qi.drayType='export';S.qi.zip='';S.selId=null;renderQuote()" style="padding:4px 14px;border:none;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;background:${qi.drayType==='export'?'#92400e':'#fff'};color:${qi.drayType==='export'?'#fff':'var(--gray-500)'}">📤 Export</button>
+          </div>
+        </div>
         <div style="display:flex;align-items:flex-start;gap:16px;flex-wrap:wrap">
           <div class="field" style="width:220px;flex-shrink:0;margin-bottom:0">
             <label>Customer</label>
@@ -1248,20 +1245,23 @@ function renderQuote(){
             </div>
           </div>
           <div class="field" style="width:240px;flex-shrink:0;margin-bottom:0">
-            <label>Port / Rail origin</label>
+            <label>${qi.drayType==='export'?'Pickup ZIP (shipper warehouse)':'Port / Rail origin'}</label>
             ${qi.drayType==='export'
-              ?`<input type="text" value="${qi.pickupZip||''}" oninput="S.qi.pickupZip=this.value;onZip(this.value)" placeholder="Pickup ZIP (shipper)" style="width:200px" maxlength="10">`
+              ?`<input type="text" value="${qi.pickupZip||''}" oninput="S.qi.pickupZip=this.value;onZip(this.value)" placeholder="e.g. 07728" style="width:200px" maxlength="10">`
               :`<input type="text" value="${qi.port}" oninput="S.qi.port=this.value" list="port-dl" placeholder="New York / Newark, NJ" style="width:240px">`}
             <datalist id="port-dl">${US_PORTS.map(p=>`<option value="${p}">`).join('')}</datalist>
           </div>
         </div>
         <div style="display:flex;align-items:flex-start;gap:16px;flex-wrap:wrap">
-          <div class="field" style="width:130px;flex-shrink:0;margin-bottom:0">
-            <label>Delivery zip</label>
+          <div class="field" style="${isExport?'width:260px':'width:130px'};flex-shrink:0;margin-bottom:0">
+            <label>${isExport?'Export port':'Delivery ZIP'}</label>
             ${isExport
-              ?`<input type="text" value="${qi.zip||''}" oninput="onZip(this.value)" placeholder="Export port ZIP" maxlength="10" style="width:130px">`
+              ?`<select onchange="S.qi.port=this.value" style="width:260px">
+                  <option value="">Select export port…</option>
+                  ${US_PORTS.map(p=>`<option value="${p}"${qi.port===p?' selected':''}>${p}</option>`).join('')}
+                </select>`
               :`<input type="text" value="${qi.zip}" oninput="onZip(this.value)" placeholder="07728" maxlength="10" style="width:130px">`}
-            ${getSpecialZipBadge(qi.zip)}
+            ${isExport?'':`${getSpecialZipBadge(qi.zip)}`}
           </div>
           <div class="field" style="width:110px;flex-shrink:0;margin-bottom:0">
             <label>Live or Drop</label>
@@ -5182,8 +5182,13 @@ function renderActive(){
 }const regCol={NE:'g',WC:'b',SE:'a',Central:'p'};const ldCol={Live:'b',Drop:'gr',Both:'t'};
 function buildRateRows(){
   const s=S.rSearch.toLowerCase();
+  const isExportTab=S.rateTab==='export';
   const filtered=S.rates
-    .filter(r=>!s||(r.carrier+r.zip+r.destination+r.region+r.notes).toLowerCase().includes(s))
+    .filter(r=>{
+      if(s&&!(r.carrier+r.zip+r.destination+r.region+r.notes).toLowerCase().includes(s)) return false;
+      if(isExportTab&&!r.exportBase) return false; // export tab: only show rates with export base
+      return true;
+    })
     .sort((a,b)=>{
       const z=(a.zip||'').localeCompare(b.zip||'');
       if(z!==0) return z;
@@ -5224,6 +5229,10 @@ function renderRates(){
     <button class="btn" onclick="triggerImport()">📤 Import CSV</button>
     <input type="file" id="csv-fi" accept=".csv" style="display:none" onchange="handleCSVFile(this)">
     <button class="btn" onclick="showManageSpecialZips()">🏠 Special ZIPs</button>
+    <div style="display:flex;gap:0;border:1.5px solid var(--gray-200);border-radius:6px;overflow:hidden;margin-right:4px">
+      <button onclick="S.rateTab='import';renderRates()" style="padding:6px 14px;border:none;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;background:${S.rateTab!=='export'?'#1a2e4a':'#fff'};color:${S.rateTab!=='export'?'#fff':'var(--gray-500)'}">📥 Import</button>
+      <button onclick="S.rateTab='export';renderRates()" style="padding:6px 14px;border:none;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;background:${S.rateTab==='export'?'#92400e':'#fff'};color:${S.rateTab==='export'?'#fff':'var(--gray-500)'}">📤 Export</button>
+    </div>
     <button class="btn blue" onclick="showAddRate()">+ Add rate</button>`;
   $('page').innerHTML=`<div class="tbl-wrap"><table><thead><tr><th style="width:30px;text-align:center">#</th><th>Region</th><th>Carrier</th><th>Destination</th><th>Zip</th><th>Mode</th><th>Import</th><th>Export</th><th>Chassis</th><th>Pre-pull</th><th>Det.Port</th><th>Det.Cust</th><th>Storage</th><th>OVW 43k</th><th>OVW 48k</th><th>Bobtail</th><th>Toll</th><th>Total</th><th>Status</th><th></th></tr></thead><tbody id="rates-tbody">${buildRateRows()}</tbody></table></div>`;
 }
