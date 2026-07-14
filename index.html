@@ -1067,8 +1067,24 @@ function getMatches(){
 }
 function buildCarrierComparison(matches){
   const qi=S.qi;
-  if(!qi.zip) return `<div class="empty"><div class="empty-ico">🔍</div><p>Enter a zip code</p></div>`;
-  if(!matches.length) return `<div class="empty"><div class="empty-ico">🚚</div><p>No active carriers for zip ${qi.zip} · ${qi.ld}</p></div>`;
+  const searchZip=S.qi?.drayType==='export'?(S.qi.pickupZip||qi.zip):qi.zip;
+  if(!searchZip) return `<div class="empty"><div class="empty-ico">🔍</div><p>${S.qi?.drayType==='export'?'Enter pickup ZIP':'Enter a zip code'}</p></div>`;
+  if(!matches.length){
+    const total=S.rates.filter(r=>r.active).length;
+    const zipMatches=S.rates.filter(r=>r.active&&r.zip===qi.zip).length;
+    return `<div class="empty"><div class="empty-ico">🚚</div>
+      <p style="font-weight:700;color:var(--gray-600)">No carriers found</p>
+      <p style="font-size:12px;color:var(--gray-400);margin-top:4px">
+        Searching: <strong>${searchZip}</strong> · <strong>${qi.ld}</strong>${S.qi.drayType==='export'?' (Export)':' (Import)'}<br>
+        ${total===0
+          ?'<span style="color:var(--red)">⚠ No active rates in system — go to Carrier Rates and add rates</span>'
+          :zipMatches===0
+          ?`<span style="color:var(--amber)">⚠ ${total} rate${total!==1?'s':''} exist but none for ZIP <strong>${qi.zip}</strong> — check the ZIP or add a rate for this lane</span>`
+          :`<span style="color:var(--amber)">⚠ ${zipMatches} rate${zipMatches!==1?'s':''} found for ZIP ${qi.zip} but none match move type <strong>${qi.ld}</strong></span>`
+        }
+      </p>
+    </div>`;
+  }
   const vis=CHARGES.filter(c=>c!=='base'&&isApplicable(c,qi.ld));
   const multiPort=[...new Set(matches.map(r=>r.port).filter(Boolean))].length>1;
   const rows=matches.map((r,i)=>`
