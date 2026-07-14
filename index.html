@@ -269,6 +269,35 @@ hr{border:none;border-top:1px solid var(--gray-100);margin:14px 0}
   /* Freight mode selector — stack cards */
   [style*="display:flex;gap:14px"]{flex-direction:column}
 }
+
+/* ── DARK MODE ─────────────────────────────────────────── */
+body.dark{--gray-50:#0f1723;--gray-100:#1a2533;--gray-200:#243447;--gray-300:#2e4060;
+  --gray-500:#8fa3b8;--gray-700:#c5d4e4;--gray-900:#e8f0f8;--white:#1a2533;
+  --blue-bg:#162033;--blue-mid:#1e3050;--green-bg:#0d2218;--red-bg:#2a0e0e;
+  --amber-bg:#281a04;background:#0f1723;color:#e8f0f8}
+body.dark .card{background:#1a2533;border-color:#243447}
+body.dark .sidebar{background:#0c1520}
+body.dark .brand{border-color:#1e2d3d}
+body.dark .topbar{background:#1a2533;border-color:#243447}
+body.dark .modal{background:#1a2533;border-color:#243447}
+body.dark .overlay{background:rgba(0,0,0,.7)}
+body.dark .tbl-wrap table{background:#1a2533}
+body.dark .tbl-wrap table thead tr{background:#0f1723}
+body.dark .tbl-wrap table thead th{border-color:#243447;color:#8fa3b8}
+body.dark .tbl-wrap table tbody tr{border-color:#243447}
+body.dark .tbl-wrap table tbody tr:hover{background:#1e3050!important;border-left-color:#2e75b6}
+body.dark .tbl-wrap table tbody td{border-color:#1e2d3d;color:#c5d4e4}
+body.dark input,body.dark select,body.dark textarea{background:#0f1723!important;color:#e8f0f8!important;border-color:#2e4060!important}
+body.dark .btn{background:#1a2533;color:#c5d4e4;border-color:#2e4060}
+body.dark .btn:hover{background:#243447}
+body.dark .btn.blue,body.dark .btn.green{filter:brightness(1.1)}
+body.dark .kpi{background:#1a2533;border-color:#243447}
+body.dark .field label{color:#8fa3b8}
+body.dark .acc-btn{color:rgba(255,255,255,.65)}
+body.dark .acc-sub{background:rgba(0,0,0,.25)}
+body.dark #notif-dropdown,body.dark #quote-preview{background:#1a2533!important;border-color:#243447!important;color:#e8f0f8}
+body.dark .page{background:#0f1723}
+@keyframes fadeInPreview{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
 </style>
 </head>
 <body>
@@ -462,7 +491,8 @@ hr{border:none;border-top:1px solid var(--gray-100);margin:14px 0}
       </div>
 
     </nav>
-    <div class="sidebar-foot">
+    <div class="sidebar-foot" style="display:flex;flex-direction:column;gap:8px">
+      <button id="dark-toggle" onclick="toggleDarkMode()" style="background:rgba(255,255,255,.07);border:none;border-radius:6px;color:rgba(255,255,255,.6);font-size:12px;font-weight:600;padding:7px 12px;cursor:pointer;font-family:inherit;text-align:left;width:100%">🌙 Dark mode</button>
       <!-- User info block -->
       <div id="user-info" style="display:none;margin-bottom:10px;padding:9px 11px;background:rgba(255,255,255,.07);border-radius:var(--radius);cursor:pointer" onclick="showEditMyProfile()" title="Edit your profile">
         <div style="display:flex;align-items:center;justify-content:space-between">
@@ -484,7 +514,7 @@ hr{border:none;border-top:1px solid var(--gray-100);margin:14px 0}
   </aside>
 
   <div class="main">
-    <div class="topbar"><span id="topbar-clock" style="font-size:12px;font-weight:600;color:var(--gray-400);font-family:monospace;white-space:nowrap;margin-right:12px"></span>
+    <div class="topbar"><button id="notif-btn" onclick="renderNotifDropdown()" style="position:relative;background:none;border:none;cursor:pointer;padding:4px 6px;border-radius:6px;font-size:18px;color:var(--gray-500);margin-right:4px" title="Notifications">🔔<span id="notif-badge" style="display:none;position:absolute;top:-2px;right:-2px;min-width:16px;height:16px;background:#dc2626;color:#fff;border-radius:99px;font-size:9px;font-weight:800;align-items:center;justify-content:center;padding:0 3px">0</span></button><span id="topbar-clock" style="font-size:12px;font-weight:600;color:var(--gray-400);font-family:monospace;white-space:nowrap;margin-right:12px"></span>
       <h1 id="view-title">Quote builder</h1>
       <div class="topbar-right" id="topbar-right"></div>
     </div>
@@ -998,6 +1028,7 @@ function setView(v){
   render();
 }
 function render(){
+  setTimeout(()=>animPage(),10);
   if(S.view==='quote')      renderQuote();
   else if(S.view==='customers')  renderCustomers();
   else if(S.view==='rates')      renderRates();
@@ -1902,7 +1933,7 @@ function renderFqLog(){
   if(!window._fqSelected) window._fqSelected=new Set();
   const sel=window._fqSelected;
   const rows=history.map((q,i)=>`
-    <tr style="cursor:pointer" onclick="showFqQuoteModal(${i})" title="Click to view">
+    <tr style="cursor:pointer" onclick="showFqQuoteModal(${i})" title="Click to view" onmouseenter="showQuotePreview(event,{customer:'${q.customer||''}',lane:'${q.pickupZip||''} → ${q.deliveryZip||''}',carrier:'${q.carrier||''}',carrierRate:${q.carrierRate||0},customerRate:${q.customerRate||0},profit:${q.profit||0},margin:${q.profitPct||0},status:'${q.status}',statusBadge:'${q.status==='Booked'?'g':q.status==='Lost'?'r':'a'}',date:'${q.date||''}'})" onmouseleave="hideQuotePreview()">
       <td onclick="event.stopPropagation()" style="width:32px;text-align:center">
         <input type="checkbox" ${sel.has(i)?'checked':''} onchange="toggleFqSelect(${i},this.checked)" style="width:auto;cursor:pointer"></td>
       <td class="muted small">${q.date}</td>
@@ -8408,6 +8439,180 @@ function statusTimeline(status){
     ${steps.map((s,i)=>`<div style="font-size:9px;font-weight:${steps.indexOf(status)===i?'700':'400'};color:${steps.indexOf(status)===i?'#1a2e4a':'#bbc8d4'};text-align:center;flex:1">${s}</div>`).join('')}
   </div>`;
   return html;
+}
+
+
+// ═══════════════════════════════════════════════════════
+// DARK MODE + TRANSITIONS + NOTIFICATIONS + HOVER PREVIEW
+// ═══════════════════════════════════════════════════════
+
+// ── Dark mode ─────────────────────────────────────────
+function initDarkMode(){
+  if(localStorage.getItem('shifl_dark')==='1') document.body.classList.add('dark');
+}
+function toggleDarkMode(){
+  const on=document.body.classList.toggle('dark');
+  localStorage.setItem('shifl_dark',on?'1':'0');
+  updateDarkBtn();
+}
+function updateDarkBtn(){
+  const btn=$('dark-toggle');if(!btn) return;
+  btn.textContent=document.body.classList.contains('dark')?'☀️ Light mode':'🌙 Dark mode';
+}
+
+// ── Smooth page transitions ────────────────────────────
+let _transitioning=false;
+function fadeIn(el){
+  if(!el) return;
+  el.style.opacity='0';el.style.transform='translateY(6px)';
+  el.style.transition='opacity .18s ease, transform .18s ease';
+  requestAnimationFrame(()=>{el.style.opacity='1';el.style.transform='translateY(0)';});
+}
+const _origRender=null;
+function animPage(){
+  const page=$('page');
+  if(page){fadeIn(page);}
+}
+
+// ── Notifications ──────────────────────────────────────
+function getNotifications(){
+  const notes=[];
+  const today=localDateStr();
+  const allQ=[
+    ...(S.quotes||[]).map(q=>({...q,_type:'drayage',_amount:q.customerRates?.total||0})),
+    ...(window._fqHistory||[]).map(q=>({...q,_type:'freight',_amount:q.customerRate||0})),
+    ...(window._tlHistory||[]).map(q=>({...q,_type:'transload',_amount:q.totalCustomer||0})),
+    ...(window._aqHistory||[]).map(q=>({...q,_type:'air',_amount:q.customerRate||0}))
+  ];
+
+  // Overdue invoices
+  const overdue=allQ.filter(q=>q.status==='Invoiced'&&q.invoiceDueDate&&q.invoiceDueDate<today);
+  overdue.forEach(q=>notes.push({
+    type:'danger',icon:'⚠️',
+    title:`Invoice overdue — ${q.customer||'—'}`,
+    body:`${fmtD(q._amount)} · ${Math.floor((Date.now()-new Date(q.invoiceDueDate+'T12:00:00'))/864e5)}d past due`,
+    action:()=>{S.activeView='invoicing';S.allInvTab='invoiced';goTo('active');}
+  }));
+
+  // Stale open quotes (14+ days)
+  const stale=allQ.filter(q=>q.status==='Quoted'&&q.date&&Math.floor((Date.now()-new Date(q.date+'T12:00:00'))/864e5)>=14);
+  if(stale.length) notes.push({
+    type:'warning',icon:'⏳',
+    title:`${stale.length} quote${stale.length!==1?'s':''} older than 14 days`,
+    body:'These may need a follow-up or close-out',
+    action:()=>{S.reportTab='pipeline';S.reportMode='All';goTo('reports');}
+  });
+
+  // Expiring soon (7-13 days old, still Quoted)
+  const expiring=allQ.filter(q=>{
+    if(!(q.status==='Quoted'&&q.date)) return false;
+    const d=Math.floor((Date.now()-new Date(q.date+'T12:00:00'))/864e5);
+    return d>=7&&d<14;
+  });
+  if(expiring.length) notes.push({
+    type:'info',icon:'📅',
+    title:`${expiring.length} quote${expiring.length!==1?'s':''} expiring soon`,
+    body:'Open for 7+ days — follow up before they go cold',
+    action:()=>{S.reportTab='pipeline';S.reportMode='All';goTo('reports');}
+  });
+
+  // Pending invoices
+  const pending=allQ.filter(q=>q.status==='Delivered');
+  if(pending.length) notes.push({
+    type:'info',icon:'🧾',
+    title:`${pending.length} shipment${pending.length!==1?'s':''} ready to invoice`,
+    body:fmtD(pending.reduce((s,q)=>s+q._amount,0))+' waiting to be invoiced',
+    action:()=>{S.activeView='invoicing';S.allInvTab='pending';goTo('active');}
+  });
+
+  return notes;
+}
+
+function renderNotifDropdown(){
+  const notes=getNotifications();
+  const existing=$('notif-dropdown');
+  if(existing){existing.remove();return;}
+  const colors={danger:'#fee2e2',warning:'#fef3c7',info:'#dbeafe'};
+  const textC={danger:'#991b1b',warning:'#92400e',info:'#1e40af'};
+  const btn=$('notif-btn');
+  if(!btn) return;
+  const rect=btn.getBoundingClientRect();
+  const dd=document.createElement('div');
+  dd.id='notif-dropdown';
+  dd.style.cssText=`position:fixed;top:${rect.bottom+6}px;right:${window.innerWidth-rect.right}px;width:320px;background:var(--white);border:1px solid var(--gray-200);border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,.16);z-index:9999;overflow:hidden`;
+  dd.innerHTML=`
+    <div style="padding:12px 16px;border-bottom:1px solid var(--gray-100);display:flex;justify-content:space-between;align-items:center">
+      <span style="font-size:13px;font-weight:700;color:var(--navy)">🔔 Notifications</span>
+      <span style="font-size:11px;color:var(--gray-500)">${notes.length} alert${notes.length!==1?'s':''}</span>
+    </div>
+    ${notes.length?notes.map((n,i)=>`
+      <div onclick="window._notifActions&&window._notifActions[${i}]()" style="padding:12px 16px;border-bottom:1px solid var(--gray-100);cursor:pointer;background:${colors[n.type]||'#fff'};transition:opacity .12s" onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">
+        <div style="display:flex;align-items:flex-start;gap:10px">
+          <span style="font-size:18px;flex-shrink:0">${n.icon}</span>
+          <div>
+            <div style="font-size:12px;font-weight:700;color:${textC[n.type]||'#1a2e4a'}">${n.title}</div>
+            <div style="font-size:11px;color:${textC[n.type]||'#6b7280'};margin-top:2px;opacity:.8">${n.body}</div>
+          </div>
+        </div>
+      </div>`).join('')
+    :`<div style="padding:32px 16px;text-align:center;color:var(--gray-500)"><div style="font-size:24px;margin-bottom:8px">✅</div><div style="font-size:13px;font-weight:600">All clear!</div><div style="font-size:12px;margin-top:4px">No alerts right now</div></div>`}
+  `;
+  window._notifActions=notes.map(n=>()=>{dd.remove();n.action&&n.action();});
+  document.body.appendChild(dd);
+  setTimeout(()=>document.addEventListener('click',function h(e){if(!dd.contains(e.target)&&e.target.id!=='notif-btn'){dd.remove();document.removeEventListener('click',h);}},true),100);
+}
+
+function updateNotifBadge(){
+  const badge=$('notif-badge');if(!badge) return;
+  const count=getNotifications().length;
+  badge.textContent=count;
+  badge.style.display=count?'flex':'none';
+}
+
+// ── Quote hover preview ────────────────────────────────
+let _hoverTimeout=null,_hoverEl=null;
+function showQuotePreview(e,data){
+  clearTimeout(_hoverTimeout);
+  _hoverTimeout=setTimeout(()=>{
+    hideQuotePreview();
+    const preview=document.createElement('div');
+    preview.id='quote-preview';
+    const x=Math.min(e.clientX+16,window.innerWidth-310);
+    const y=Math.min(e.clientY+8,window.innerHeight-220);
+    preview.style.cssText=`position:fixed;top:${y}px;left:${x}px;width:290px;background:var(--white);border:1px solid var(--gray-200);border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,.18);z-index:9998;padding:14px 16px;pointer-events:none;animation:fadeInPreview .12s ease`;
+    preview.innerHTML=`
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
+        <div>
+          <div style="font-size:13px;font-weight:800;color:var(--navy)">${data.customer||'—'}</div>
+          <div style="font-size:11px;color:var(--gray-500);margin-top:2px">${data.lane||'—'}</div>
+        </div>
+        <span class="badge ${data.statusBadge||'a'}">${data.status||'—'}</span>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+        <div style="background:var(--gray-50);border-radius:6px;padding:8px 10px">
+          <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--gray-500)">Carrier</div>
+          <div style="font-size:12px;font-weight:600;color:var(--navy);margin-top:2px">${data.carrier||'—'}</div>
+          <div style="font-size:11px;color:var(--gray-500)">${fmtD(data.carrierRate||0)}</div>
+        </div>
+        <div style="background:var(--gray-50);border-radius:6px;padding:8px 10px">
+          <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--gray-500)">Customer</div>
+          <div style="font-size:13px;font-weight:800;color:var(--steel);margin-top:2px">${fmtD(data.customerRate||0)}</div>
+        </div>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;padding-top:8px;border-top:1px solid var(--gray-100)">
+        <span style="font-size:11px;color:var(--gray-500)">Profit</span>
+        <span style="font-size:14px;font-weight:800;color:${(data.profit||0)>=0?'var(--green)':'var(--red)'}">${(data.profit||0)>=0?'+':''}${fmtD(data.profit||0)} <span style="font-size:11px;font-weight:600">${pct(data.margin||0)}</span></span>
+      </div>
+      ${data.date?`<div style="font-size:10px;color:var(--gray-400);margin-top:6px">Created ${data.date}</div>`:''}
+    `;
+    document.body.appendChild(preview);
+    _hoverEl=preview;
+  },350);
+}
+function hideQuotePreview(){
+  clearTimeout(_hoverTimeout);
+  const p=$('quote-preview');if(p) p.remove();
+  _hoverEl=null;
 }
 
 
