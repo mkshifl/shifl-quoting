@@ -5327,21 +5327,60 @@ async function duplicateRate(id){
   const copy={...r,id:uid(),notes:(r.notes?r.notes+' (copy)':'copy')};
   setSaving(true);try{await dbSaveRate(copy);S.rates.push(copy);const t=$('rates-tbody');if(t) t.innerHTML=buildRateRows();}catch(e){alert('Error: '+e.message);}finally{setSaving(false);}
 }
+function toggleRateType(type){
+  const imp=$('rf-type-import');const exp=$('rf-type-export');const both=$('rf-type-both');
+  const impFld=$('rf-import-wrap');const expFld=$('rf-export-wrap');
+  [imp,exp,both].forEach(b=>{if(b){b.style.background='#fff';b.style.color='var(--gray-500)';}});
+  if(type==='import'&&imp){imp.style.background='#1a2e4a';imp.style.color='#fff';}
+  if(type==='export'&&exp){exp.style.background='#92400e';exp.style.color='#fff';}
+  if(type==='both'&&both){both.style.background='#1e40af';both.style.color='#fff';}
+  if(impFld) impFld.style.display=(type==='import'||type==='both')?'':'none';
+  if(expFld) expFld.style.display=(type==='export'||type==='both')?'':'none';
+  const hidden=$('rf-rate-type');if(hidden) hidden.value=type;
+}
 function rateFields(r){
   const fld=(id,lbl,v,note)=>`<div class="field"><label>${lbl}${note?`<span class="cond-note" style="margin-left:4px">${note}</span>`:''}</label><input type="number" id="f-${id}" value="${r?(r[id]||r[id.replace(/([A-Z])/g,'_$1').toLowerCase()]||0):0}" min="0" placeholder="0"></div>`;
-  return `<div class="g3">
-    <div class="field"><label>Region</label><select id="f-region">${REGIONS.map(rg=>`<option${(r?r.region===rg:rg==='NE')?' selected':''}>${rg}</option>`).join('')}</select></div>
-    <div class="field"><label>Carrier name *</label><input type="text" id="f-carrier" value="${r?r.carrier:''}" placeholder="e.g. Platnum"></div>
-    <div class="field"><label>Port / Rail</label><input type="text" id="f-port" value="${r?r.port:''}" placeholder="e.g. New York / Newark, NJ"></div>
+  // Determine initial rate type from existing rate
+  const initType=r?(r.base&&r.exportBase?'both':r.exportBase?'export':'import'):'import';
+  return `
+  <!-- Rate type selector -->
+  <input type="hidden" id="rf-rate-type" value="${initType}">
+  <div class="charge-group-label">Rate type</div>
+  <div style="display:flex;gap:0;border:1.5px solid var(--gray-200);border-radius:7px;overflow:hidden;margin-bottom:16px;width:fit-content">
+    <button type="button" id="rf-type-import" onclick="toggleRateType('import')"
+      style="padding:7px 18px;border:none;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;background:${initType==='import'?'#1a2e4a':'#fff'};color:${initType==='import'?'#fff':'var(--gray-500)'}">
+      📥 Import
+    </button>
+    <button type="button" id="rf-type-export" onclick="toggleRateType('export')"
+      style="padding:7px 18px;border:none;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;background:${initType==='export'?'#92400e':'#fff'};color:${initType==='export'?'#fff':'var(--gray-500)'}">
+      📤 Export
+    </button>
+    <button type="button" id="rf-type-both" onclick="toggleRateType('both')"
+      style="padding:7px 18px;border:none;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;background:${initType==='both'?'#1e40af':'#fff'};color:${initType==='both'?'#fff':'var(--gray-500)'}">
+      ↔️ Both
+    </button>
   </div>
   <div class="g3">
-    <div class="field"><label>Destination</label><input type="text" id="f-destination" value="${r?r.destination:''}" placeholder="e.g. Bayshore, NY"></div>
-    <div class="field"><label>Zip</label><input type="text" id="f-zip" value="${r?r.zip:''}" placeholder="07706" maxlength="10"></div>
-    <div class="field"><label>Mode</label><select id="f-ld"><option${!r||r.ld==='Live'?' selected':''}>Live</option><option${r&&r.ld==='Drop'?' selected':''}>Drop</option><option${r&&r.ld==='Both'?' selected':''}>Both</option></select><div class="cond-note" style="margin-top:3px">"Both" = carrier does Live or Drop</div></div>
+    <div class="field"><label>Region</label><select id="f-region">${REGIONS.map(rg=>`<option${(r?r.region===rg:rg==='NE')?' selected':''}>${rg}</option>`).join('')}</select></div>
+    <div class="field"><label>Carrier name *</label><input type="text" id="f-carrier" value="${r?r.carrier:''}" placeholder="e.g. Platnum"></div>
+    <div class="field"><label>${initType==='export'?'Export Port':'Port / Rail'}</label><input type="text" id="f-port" value="${r?r.port:''}" placeholder="e.g. New York / Newark, NJ"></div>
   </div>
-  <div class="charge-group-label">Core rates</div>
-  <div class="g4">${fld('base','Import base ($)')}${fld('exportBase','Export base ($)')}${fld('chassis','Chassis')}${fld('prepull','Pre-pull')}</div>
-  <div class="g4">${fld('storage','Storage')}</div>
+  <div class="g3">
+    <div class="field"><label>${initType==='export'?'Pickup ZIP (shipper)':'Destination'}</label><input type="text" id="f-destination" value="${r?r.destination:''}" placeholder="${initType==='export'?'e.g. Bayshore, NY':'e.g. Bayshore, NY'}"></div>
+    <div class="field"><label>${initType==='export'?'Pickup ZIP *':'ZIP *'}</label><input type="text" id="f-zip" value="${r?r.zip:''}" placeholder="07706" maxlength="10"></div>
+    <div class="field"><label>Move type</label><select id="f-ld"><option${!r||r.ld==='Live'?' selected':''}>Live</option><option${r&&r.ld==='Drop'?' selected':''}>Drop</option><option${r&&r.ld==='Both'?' selected':''}>Both</option></select><div class="cond-note" style="margin-top:3px">"Both" = carrier does Live or Drop</div></div>
+  </div>
+  <div class="charge-group-label">Base rate</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+    <div id="rf-import-wrap" style="display:${initType==='export'?'none':''}">
+      <div class="field"><label>Import base ($)</label><input type="number" id="f-base" value="${r?r.base||0:0}" min="0" placeholder="0"></div>
+    </div>
+    <div id="rf-export-wrap" style="display:${initType==='import'?'none':''}">
+      <div class="field"><label>Export base ($)</label><input type="number" id="f-exportBase" value="${r?r.exportBase||0:0}" min="0" placeholder="0"></div>
+    </div>
+  </div>
+  <div class="charge-group-label">Accessorials</div>
+  <div class="g4">${fld('chassis','Chassis')}${fld('prepull','Pre-pull')}${fld('storage','Storage')}</div>
   <div class="charge-group-label">Detention <span class="cond-note">(Live only)</span></div>
   <div class="g2">${fld('det_port','Detention – Port',null,'at port')}${fld('det_cust','Detention – Customer',null,'at customer')}</div>
   <div class="charge-group-label">Overweight</div>
@@ -5359,7 +5398,8 @@ function showAddRate(){
 }
 async function submitAdd(){
   const carrier=$v('carrier');if(!carrier){alert('Carrier name required.');return;}
-  const nr={id:uid(),region:$v('region'),carrier,port:$v('port'),destination:$v('destination'),zip:$v('zip'),ld:$v('ld'),active:true,notes:$v('notes'),base:parseFloat($v('base'))||0};
+  const _rt=($('rf-rate-type')||{}).value||'import';
+  const nr={id:uid(),region:$v('region'),carrier,port:$v('port'),destination:$v('destination'),zip:$v('zip'),ld:$v('ld'),active:true,notes:$v('notes'),base:_rt==='export'?0:parseFloat($v('base'))||0,exportBase:_rt==='import'?0:parseFloat($v('exportBase'))||0};
   CHARGES.filter(c=>c!=='base').forEach(c=>{nr[c]=parseFloat($v(c))||0;});
   setSaving(true);try{await dbSaveRate(nr);S.rates.push(nr);logAction('rate_added',`${nr.carrier||'—'} | ${nr.port||'—'} → ${nr.zip||'—'}`,'rate',nr.id);closeModal();renderRates();}catch(e){alert('Error: '+e.message);}finally{setSaving(false);}
 }
@@ -5370,7 +5410,8 @@ function editRate(id){
 }
 async function submitEdit(id){
   const r=S.rates.find(r=>r.id===id);if(!r) return;const carrier=$v('carrier');if(!carrier){alert('Carrier name required.');return;}
-  Object.assign(r,{region:$v('region'),carrier,port:$v('port'),destination:$v('destination'),zip:$v('zip'),ld:$v('ld'),notes:$v('notes'),base:parseFloat($v('base'))||0});
+  const _rtE=($('rf-rate-type')||{}).value||'import';
+  Object.assign(r,{region:$v('region'),carrier,port:$v('port'),destination:$v('destination'),zip:$v('zip'),ld:$v('ld'),notes:$v('notes'),base:_rtE==='export'?0:parseFloat($v('base'))||0,exportBase:_rtE==='import'?0:parseFloat($v('exportBase'))||0});
   CHARGES.filter(c=>c!=='base').forEach(c=>{r[c]=parseFloat($v(c))||0;});
   setSaving(true);try{await dbSaveRate(r);logAction('rate_edited',`${r.carrier||'—'} | ${r.port||'—'} → ${r.zip||'—'}`,'rate',r.id);closeModal();renderRates();}catch(e){alert('Error: '+e.message);}finally{setSaving(false);}
 }
