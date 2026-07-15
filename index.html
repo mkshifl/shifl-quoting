@@ -58,6 +58,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-siz
 .nav-sub:hover{background:rgba(255,255,255,.05);color:rgba(255,255,255,.75)}
 .nav-sub.active{background:rgba(255,255,255,.08);color:#fff;border-left-color:#93c5fd}
 .sidebar-foot{padding:10px 18px;border-top:1px solid rgba(255,255,255,.07)}
+/* Row color coding */
+.log-row[style*="#f0fdf4"]:hover{background:#dcfce7!important}
+.log-row[style*="#fffbeb"]:hover{background:#fef3c7!important}
 /* Row hover */
 .tbl-wrap table tbody tr{transition:background .12s,border-left .12s;border-left:3px solid transparent}
 .tbl-wrap table tbody tr:hover{background:#f0f5ff;border-left:3px solid #1a2e4a;cursor:pointer}
@@ -420,6 +423,7 @@ body.dark .page{background:#0f1723}
         <button class="sub-link" id="nav-rates" onclick="goTo('rates')">📋 Carrier rates</button>
         <button class="sub-link" id="nav-customers" onclick="goTo('customers')">👥 Customers</button>
         <button class="sub-link" id="nav-dash" onclick="goTo('dash')">📊 Dashboard</button>
+        <button class="sub-link" id="nav-templates-dray" onclick="renderTemplates('drayage')">📋 Templates</button>
 
       </div>
 
@@ -441,6 +445,7 @@ body.dark .page{background:#0f1723}
           <span id="fq-inv-badge" style="display:none;margin-left:6px;background:var(--red);color:#fff;border-radius:99px;font-size:9px;font-weight:800;padding:1px 6px">0</span>
         </button>
         <button class="sub-link" id="fqnav-dash" onclick="goTo('freight','dash')">📊 Dashboard</button>
+        <button class="sub-link" id="fqnav-templates" onclick="renderTemplates('freight')">📋 Templates</button>
       </div>
 
       <div class="acc-sep"></div>
@@ -2190,7 +2195,7 @@ async function downloadSelectedFqPDFs(){
 async function updateFqStatus(idx,status){
   if(status==='Booked'){if(!requireCan('book_quotes','You do not have permission to book quotes.')) return;}
   else if(!requireCan('update_status','Only Admins can change quote status.')) return;
-  if(status==='Booked') setTimeout(fireConfetti,200);
+  if(status==='Booked'){setTimeout(fireConfetti,200);showToast('🎉 Quote booked!','success',4000);}
   const _fq=(window._fqHistory||[])[idx];if(_fq) logAction('status_changed',`${_fq.fqMode||'Freight'} — ${_fq.customer||'—'} | ${_fq.pickupZip||'—'} → ${_fq.deliveryZip||'—'} → ${status}`,'fq_quote',_fq.id);
   if(!window._fqHistory||!window._fqHistory[idx]) return;
   if(status==='Booked'){showFqBookingModal(idx);return;}
@@ -3097,7 +3102,7 @@ function onZip(v){
   const card=$('lane-history-card');
   const body=$('lane-history-body');
   if(card) card.style.display=S.qi.zip?'':'none';
-  if(body) body.innerHTML=buildLaneHistory(S.qi.zip,S.qi.ld);
+  if(body) body.innerHTML=buildLaneHistoryEnhanced(S.qi.zip,S.qi.ld)||buildLaneHistory(S.qi.zip,S.qi.ld);
 }
 function onLd(v){S.qi.ld=v;S.selId=null;if($('carriers-body')){refreshCarriersAndPreview();refreshPricingAndPreview();}}
 function selCarrier(id){S.selId=id;refreshCarrierHighlight(id);refreshPreviewOnly();}
@@ -8897,6 +8902,407 @@ function getMultiplier(charge){
   if(!S.qi.perContainerFlags) return n;
   return S.qi.perContainerFlags[charge]!==false?n:1;
 }
+
+// ── PDF disclaimer helper ──────────────────────────────────────────
+function addPDFDisclaimer(doc,y,type,W,M){
+  const text=type==='drayage'
+    ?'Rates exclude per diem, demurrage, detention, chassis overage, pre-pull, storage, and exam fees unless stated. Per diem/demurrage per steamship line tariff is customer responsibility.'
+    :'Rates are estimates, valid 7 days, exclusive of accessorials, and subject to reweigh/reclass. Transit times are estimates and not guaranteed. Correct BOL must be tendered at pickup — Shifl is not responsible for rate increases resulting from use of an incorrect BOL. Shifl acts as a broker only.';
+  const pageH=doc.internal.pageSize.getHeight();
+  if(y>pageH-28) {doc.addPage();y=14;}
+  doc.setDrawColor(220,230,240);doc.line(M,y,W-M,y);y+=4;
+  doc.setFontSize(6.5);doc.setTextColor(140,150,165);doc.setFont('helvetica','italic');
+  const lines=doc.splitTextToSize(text,W-M*2);
+  lines.forEach(l=>{doc.text(l,M,y);y+=3.5;});
+  doc.setFont('helvetica','normal');
+  return y;
+}
+
+function countUp(el,target,duration=900,prefix='',suffix=''){
+  if(!el) return;
+  const start=Date.now();
+  const step=()=>{
+    const elapsed=Date.now()-start;
+    const progress=Math.min(elapsed/duration,1);
+    const ease=1-Math.pow(1-progress,3);
+    const val=Math.round(target*ease);
+    el.textContent=prefix+(typeof target==='number'&&target%1!==0?(val.toLocaleString()):val.toLocaleString())+suffix;
+    if(progress<1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+function animateKPIs(){
+  document.querySelectorAll('[data-countup]').forEach(el=>{
+    const target=parseFloat(el.dataset.countup)||0;
+    const prefix=el.dataset.prefix||'';
+    const suffix=el.dataset.suffix||'';
+    countUp(el,target,900,prefix,suffix);
+  });
+}
+// ══════════════════════════════════════════════════════════════
+// FEATURE 4: BULK STATUS UPDATE (Drayage quote log)
+// ══════════════════════════════════════════════════════════════
+let _bulkSelected = new Set();
+
+function toggleBulkSelect(id, checked) {
+  if(checked) _bulkSelected.add(id);
+  else _bulkSelected.delete(id);
+  updateBulkBar();
+}
+
+function toggleSelectAll(checked) {
+  const boxes = document.querySelectorAll('.bulk-chk');
+  boxes.forEach(b => {
+    b.checked = checked;
+    if(checked) _bulkSelected.add(b.dataset.id);
+    else _bulkSelected.delete(b.dataset.id);
+  });
+  updateBulkBar();
+}
+
+function updateBulkBar() {
+  const bar = $('bulk-action-bar');
+  if(!bar) return;
+  const n = _bulkSelected.size;
+  bar.style.display = n > 0 ? 'flex' : 'none';
+  const lbl = bar.querySelector('#bulk-count');
+  if(lbl) lbl.textContent = `${n} quote${n!==1?'s':''} selected`;
+}
+
+async function bulkUpdateStatus(status) {
+  if(!_bulkSelected.size) return;
+  if(!confirm(`Set ${_bulkSelected.size} quote${_bulkSelected.size!==1?'s':''} to "${status}"?`)) return;
+  for(const id of _bulkSelected) {
+    const q = S.quotes.find(q=>q.id===id);
+    if(q) {
+      try { await dbUpdateQuoteStatus(id, status); q.status = status; }
+      catch(e) { console.error('Bulk update error:', e); }
+    }
+  }
+  _bulkSelected.clear();
+  logAction('status_changed', `Bulk set ${_bulkSelected.size} quotes to ${status}`, 'bulk');
+  renderLog();
+}
+
+// ══════════════════════════════════════════════════════════════
+// FEATURE 5: QUOTE COMMENTS / NOTES THREAD
+// ══════════════════════════════════════════════════════════════
+function getQuoteComments(quoteId) {
+  try { return JSON.parse(localStorage.getItem('qc_'+quoteId)||'[]'); } catch(e) { return []; }
+}
+function saveQuoteComment(quoteId, text) {
+  const comments = getQuoteComments(quoteId);
+  comments.push({
+    id: uid(), text: text.trim(),
+    user: _currentUser?.name || 'Unknown',
+    ts: new Date().toLocaleString('en-US',{timeZone:'America/New_York',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})
+  });
+  localStorage.setItem('qc_'+quoteId, JSON.stringify(comments));
+  return comments;
+}
+function deleteQuoteComment(quoteId, commentId) {
+  const comments = getQuoteComments(quoteId).filter(c=>c.id!==commentId);
+  localStorage.setItem('qc_'+quoteId, JSON.stringify(comments));
+  return comments;
+}
+function renderComments(quoteId) {
+  const comments = getQuoteComments(quoteId);
+  const el = $('comments-thread-'+quoteId);
+  if(!el) return;
+  el.innerHTML = comments.length ? comments.map(c=>`
+    <div style="display:flex;gap:8px;padding:8px 0;border-bottom:1px solid var(--gray-100)">
+      <div style="width:24px;height:24px;border-radius:50%;background:var(--steel);color:#fff;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;flex-shrink:0">${c.user.slice(0,2).toUpperCase()}</div>
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;justify-content:space-between;align-items:baseline">
+          <span style="font-size:12px;font-weight:700;color:var(--navy)">${c.user}</span>
+          <span style="font-size:10px;color:var(--gray-400)">${c.ts}</span>
+        </div>
+        <div style="font-size:13px;color:var(--gray-700);margin-top:2px">${c.text}</div>
+      </div>
+      ${can('delete_quotes')?`<button onclick="deleteQuoteComment('${quoteId}','${c.id}');renderComments('${quoteId}')" style="background:none;border:none;color:var(--gray-300);cursor:pointer;font-size:14px;flex-shrink:0">×</button>`:''}
+    </div>`).join('')
+    : '<div style="font-size:12px;color:var(--gray-400);padding:8px 0">No comments yet</div>';
+}
+function buildCommentsSection(quoteId) {
+  const comments = getQuoteComments(quoteId);
+  return `<div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--gray-200)">
+    <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--gray-500);margin-bottom:10px">
+      💬 Comments ${comments.length?`<span style="background:var(--steel);color:#fff;border-radius:99px;font-size:9px;font-weight:700;padding:1px 6px;margin-left:4px">${comments.length}</span>`:''}
+    </div>
+    <div id="comments-thread-${quoteId}">${''}</div>
+    <div style="display:flex;gap:8px;margin-top:10px">
+      <input type="text" id="comment-input-${quoteId}" placeholder="Add a comment…"
+        style="flex:1;padding:7px 10px;border:1px solid var(--gray-200);border-radius:var(--radius);font-size:13px"
+        onkeydown="if(event.key==='Enter'){const v=this.value.trim();if(v){saveQuoteComment('${quoteId}',v);this.value='';renderComments('${quoteId}');}}">
+      <button class="btn sm blue" onclick="const v=$('comment-input-${quoteId}').value.trim();if(v){saveQuoteComment('${quoteId}',v);$('comment-input-${quoteId}').value='';renderComments('${quoteId}');}">Post</button>
+    </div>
+  </div>`;
+}
+
+// ══════════════════════════════════════════════════════════════
+// FEATURE 6: "QUOTED THIS LANE BEFORE" BANNER
+// ══════════════════════════════════════════════════════════════
+function buildLaneHistoryEnhanced(zip, ld) {
+  if(!zip) return '';
+  const matches = (S.quotes||[]).filter(q=>q.zip===zip&&q.status!=='Quoted'&&q.status!=='Draft').slice(0,3);
+  if(!matches.length) return '';
+  const last = matches[0];
+  const daysSince = Math.floor((Date.now()-new Date(last.date+'T12:00:00'))/864e5);
+  return `<div style="background:#f0f9ff;border:1.5px solid #bae6fd;border-radius:10px;padding:12px 16px">
+    <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:#0369a1;margin-bottom:8px">
+      🕐 You've quoted this lane before
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
+      ${matches.map(q=>`
+        <div style="background:#fff;border-radius:6px;padding:8px 10px;border:1px solid #e0f2fe">
+          <div style="font-size:10px;color:#6b7280">${q.date} · ${q.status}</div>
+          <div style="font-size:12px;font-weight:700;color:#1a2e4a;margin-top:2px">${q.carrier||'—'}</div>
+          <div style="display:flex;justify-content:space-between;margin-top:4px">
+            <span style="font-size:11px;color:#0369a1">${fmtD(q.customerRates?.total||0)}</span>
+            <span style="font-size:11px;color:${(q.profitPct||0)>=0.15?'#16a34a':'#d97706'};font-weight:600">${pct(q.profitPct||0)}</span>
+          </div>
+        </div>`).join('')}
+    </div>
+  </div>`;
+}
+
+// ══════════════════════════════════════════════════════════════
+// FEATURE 7: CLEAR DATA ON NAVIGATION (dirty state)
+// ══════════════════════════════════════════════════════════════
+let _dirtyState = false;
+function markDirty() { _dirtyState = true; }
+function clearDirty() { _dirtyState = false; }
+function checkDirty(callback) {
+  if(!_dirtyState) { callback(); return; }
+  if(confirm('You have unsaved changes. Leave without saving?')) {
+    clearDirty(); callback();
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// FEATURE 8: WIN RATE BY CARRIER (added to reports)
+// ══════════════════════════════════════════════════════════════
+function buildCarrierWinRate() {
+  const allQ = [...(S.quotes||[]).map(q=>({...q,_mode:'drayage',_carrier:q.carrier})),
+    ...(window._fqHistory||[]).map(q=>({...q,_mode:'freight',_carrier:q.carrier}))];
+  const byCarrier = {};
+  allQ.forEach(q=>{
+    if(!q._carrier) return;
+    if(!byCarrier[q._carrier]) byCarrier[q._carrier]={carrier:q._carrier,total:0,booked:0,revenue:0,profit:0};
+    byCarrier[q._carrier].total++;
+    if(['Booked','Delivered','Invoiced','Paid'].includes(q.status)){
+      byCarrier[q._carrier].booked++;
+      byCarrier[q._carrier].revenue+=(q.customerRates?.total||q.customerRate||0);
+      byCarrier[q._carrier].profit+=(q.profit||0);
+    }
+  });
+  const rows = Object.values(byCarrier).sort((a,b)=>b.booked-a.booked).slice(0,15);
+  if(!rows.length) return '<div class="empty"><div class="empty-ico">🚛</div><p>No carrier data yet</p></div>';
+  return `<div class="tbl-wrap"><table><thead><tr>
+    <th>Carrier</th><th>Quotes</th><th>Booked</th><th>Win rate</th><th>Revenue</th><th>Avg margin</th>
+  </tr></thead><tbody>${rows.map(r=>{
+    const wr=r.total>0?r.booked/r.total:0;
+    const avgMargin=r.revenue>0?r.profit/r.revenue:0;
+    return`<tr>
+      <td style="font-weight:700;color:var(--navy)">${r.carrier}</td>
+      <td class="muted">${r.total}</td>
+      <td><span style="font-weight:700;color:var(--steel)">${r.booked}</span></td>
+      <td><div style="display:flex;align-items:center;gap:6px">
+        <div style="height:6px;width:60px;background:var(--gray-100);border-radius:3px">
+          <div style="height:6px;width:${Math.round(wr*60)}px;background:${wr>=0.5?'var(--green)':'var(--amber)'};border-radius:3px"></div>
+        </div>
+        <span style="font-weight:700;color:${wr>=0.5?'var(--green)':'var(--amber)'}">${pct(wr)}</span>
+      </div></td>
+      <td class="money">${fmtD(r.revenue)}</td>
+      <td style="font-weight:700;color:${avgMargin>=0.15?'var(--green)':'var(--amber)'}">${pct(avgMargin)}</td>
+    </tr>`;}).join('')}</tbody></table></div>`;
+}
+
+// ══════════════════════════════════════════════════════════════
+// FEATURE 9: MARGIN TREND BY CUSTOMER
+// ══════════════════════════════════════════════════════════════
+function buildCustomerMarginTrend() {
+  const allQ = [...(S.quotes||[]).map(q=>({...q,_cust:q.customer,_revenue:q.customerRates?.total||0,_profit:q.profit||0,_margin:q.profitPct||0})),
+    ...(window._fqHistory||[]).map(q=>({...q,_cust:q.customer,_revenue:q.customerRate||0,_profit:q.profit||0,_margin:q.profitPct||0}))];
+  const byCust = {};
+  allQ.forEach(q=>{
+    if(!q._cust||!['Booked','Delivered','Invoiced','Paid'].includes(q.status)) return;
+    if(!byCust[q._cust]) byCust[q._cust]={cust:q._cust,loads:0,revenue:0,profit:0,margins:[]};
+    byCust[q._cust].loads++;
+    byCust[q._cust].revenue+=q._revenue;
+    byCust[q._cust].profit+=q._profit;
+    byCust[q._cust].margins.push({date:q.date,m:q._margin});
+  });
+  const rows = Object.values(byCust).sort((a,b)=>b.revenue-a.revenue).slice(0,12);
+  if(!rows.length) return '<div class="empty"><div class="empty-ico">👥</div><p>No customer data yet</p></div>';
+  return `<div class="tbl-wrap"><table><thead><tr>
+    <th>Customer</th><th>Loads</th><th>Revenue</th><th>Avg margin</th><th>Trend</th>
+  </tr></thead><tbody>${rows.map(r=>{
+    const avgM=r.revenue>0?r.profit/r.revenue:0;
+    const sorted=r.margins.sort((a,b)=>a.date.localeCompare(b.date));
+    const recentAvg=sorted.slice(-3).reduce((s,x)=>s+x.m,0)/Math.max(1,sorted.slice(-3).length);
+    const oldAvg=sorted.slice(0,-3).reduce((s,x)=>s+x.m,0)/Math.max(1,sorted.slice(0,-3).length);
+    const trend=sorted.length>=4?(recentAvg>oldAvg+0.01?'↑':recentAvg<oldAvg-0.01?'↓':'→'):'—';
+    return`<tr>
+      <td style="font-weight:700;color:var(--navy)">${r.cust}</td>
+      <td class="muted">${r.loads}</td>
+      <td class="money">${fmtD(r.revenue)}</td>
+      <td style="font-weight:700;color:${avgM>=0.15?'var(--green)':'var(--amber)'}">${pct(avgM)}</td>
+      <td style="font-size:18px;font-weight:900;color:${trend==='↑'?'var(--green)':trend==='↓'?'var(--red)':'var(--gray-400)'}">${trend}</td>
+    </tr>`;}).join('')}</tbody></table></div>`;
+}
+
+
+// ══════════════════════════════════════════════════════════════
+// FEATURE 10: QUOTE TEMPLATES
+// ══════════════════════════════════════════════════════════════
+function getTemplates(mode) {
+  try { return JSON.parse(localStorage.getItem('qtpl_'+mode)||'[]'); } catch(e) { return []; }
+}
+function saveTemplate(mode, name, data) {
+  const tpls = getTemplates(mode);
+  tpls.push({id:uid(), name, data, created:localDateStr()});
+  localStorage.setItem('qtpl_'+mode, JSON.stringify(tpls));
+}
+function deleteTemplate(mode, id) {
+  const tpls = getTemplates(mode).filter(t=>t.id!==id);
+  localStorage.setItem('qtpl_'+mode, JSON.stringify(tpls));
+}
+
+function showSaveTemplateModal(mode) {
+  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:380px">
+    <div class="modal-title">💾 Save as template</div>
+    <div class="field"><label>Template name *</label>
+      <input type="text" id="tpl-name" placeholder="e.g. NY/NJ → 07728 Live" autofocus>
+    </div>
+    <p style="font-size:12px;color:var(--gray-500)">Saves the current lane, carrier markup settings, and flat rates as a reusable template.</p>
+    <div class="modal-foot">
+      <button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn blue" onclick="confirmSaveTemplate('${mode}')">Save template</button>
+    </div>
+  </div></div>`;
+  setTimeout(()=>$('tpl-name')?.focus(),100);
+}
+
+function confirmSaveTemplate(mode) {
+  const name = ($('tpl-name')||{}).value?.trim();
+  if(!name) { alert('Enter a template name.'); return; }
+  let data = {};
+  if(mode==='drayage') data = {port:S.qi.port, zip:S.qi.zip, ld:S.qi.ld, drayType:S.qi.drayType, baseMarkup:{...S.qi.baseMarkup}, flatRates:{...S.qi.flatRates}};
+  else if(mode==='freight') data = {fqMode:S.fq.mode, equipment:S.fq.equipment, pickupZip:S.fq.pickupZip, deliveryZip:S.fq.deliveryZip};
+  saveTemplate(mode, name, data);
+  closeModal();
+  alert('✅ Template "'+name+'" saved!');
+}
+
+function loadTemplate(mode, id) {
+  const tpl = getTemplates(mode).find(t=>t.id===id);
+  if(!tpl) return;
+  if(mode==='drayage') {
+    Object.assign(S.qi, tpl.data);
+    clearDirty(); renderQuote();
+  } else if(mode==='freight') {
+    S.fq.mode = tpl.data.fqMode;
+    S.fq.equipment = tpl.data.equipment;
+    S.fq.pickupZip = tpl.data.pickupZip;
+    S.fq.deliveryZip = tpl.data.deliveryZip;
+    renderFreight();
+  }
+  showToast('Template "'+tpl.name+'" loaded');
+}
+
+function renderTemplates(mode) {
+  const tpls = getTemplates(mode);
+  const modeLabels = {drayage:'🚢 Drayage',freight:'🚛 Freight',air:'✈️ Air',transload:'🔄 Transload'};
+  $('topbar-right').innerHTML=`<button class="btn blue" onclick="showSaveTemplateModal('${mode}')">+ Save current as template</button>`;
+  $('page').innerHTML=`
+    <div style="margin-bottom:16px;display:flex;align-items:center;justify-content:space-between">
+      <div>
+        <div style="font-size:18px;font-weight:800;color:var(--navy)">${modeLabels[mode]||mode} Templates</div>
+        <div style="font-size:13px;color:var(--gray-500);margin-top:2px">Saved quote configurations — one click to load into the quote builder</div>
+      </div>
+    </div>
+    ${tpls.length===0
+      ?`<div class="empty"><div class="empty-ico">📋</div>
+          <p style="font-size:15px;font-weight:700;color:var(--gray-500)">No templates yet</p>
+          <p style="font-size:13px;color:var(--gray-400)">Build a quote and click "+ Save current as template" to save it here</p>
+        </div>`
+      :`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px">
+          ${tpls.map(t=>`
+            <div style="background:#fff;border:1.5px solid var(--gray-200);border-radius:12px;padding:18px 20px">
+              <div style="font-size:14px;font-weight:800;color:var(--navy);margin-bottom:4px">${t.name}</div>
+              <div style="font-size:11px;color:var(--gray-400);margin-bottom:14px">Saved ${t.created}</div>
+              ${t.data.port?`<div style="font-size:12px;color:var(--gray-600);margin-bottom:2px">Port: ${t.data.port}</div>`:''}
+              ${t.data.zip?`<div style="font-size:12px;color:var(--gray-600);margin-bottom:2px">ZIP: ${t.data.zip} · ${t.data.ld||''}</div>`:''}
+              ${t.data.pickupZip?`<div style="font-size:12px;color:var(--gray-600);margin-bottom:2px">${t.data.pickupZip} → ${t.data.deliveryZip||'—'}</div>`:''}
+              <div style="display:flex;gap:8px;margin-top:14px">
+                <button class="btn sm blue" onclick="loadTemplate('${mode}','${t.id}');${mode==='drayage'?"setView('quote');openAccFor('quote')":`setView('${mode}');openAccFor('${mode}')`}" style="flex:1">Load →</button>
+                <button class="btn sm" onclick="if(confirm('Delete this template?')){deleteTemplate('${mode}','${t.id}');renderTemplates('${mode}')}" style="color:var(--red);border-color:#fca5a5">🗑️</button>
+              </div>
+            </div>`).join('')}
+        </div>`}`;
+}
+
+// ══════════════════════════════════════════════════════════════
+// FEATURE 11: TOAST NOTIFICATIONS
+// ══════════════════════════════════════════════════════════════
+function showToast(msg, type='success', duration=3000) {
+  let container = $('toast-container');
+  if(!container) {
+    container = document.createElement('div');
+    container.id = 'toast-container';
+    container.style.cssText = 'position:fixed;bottom:24px;right:24px;z-index:99999;display:flex;flex-direction:column;gap:8px;pointer-events:none';
+    document.body.appendChild(container);
+  }
+  const toast = document.createElement('div');
+  const colors = {success:'#1a2e4a',error:'#dc2626',warning:'#d97706',info:'#2e75b6'};
+  const icons = {success:'✅',error:'❌',warning:'⚠️',info:'ℹ️'};
+  toast.style.cssText = `background:${colors[type]||colors.success};color:#fff;padding:12px 18px;border-radius:10px;font-size:13px;font-weight:600;font-family:inherit;box-shadow:0 4px 16px rgba(0,0,0,.25);opacity:0;transform:translateY(8px);transition:opacity .2s,transform .2s;pointer-events:all;max-width:320px`;
+  toast.innerHTML = `${icons[type]||'✅'} ${msg}`;
+  container.appendChild(toast);
+  requestAnimationFrame(()=>{toast.style.opacity='1';toast.style.transform='translateY(0)';});
+  setTimeout(()=>{toast.style.opacity='0';toast.style.transform='translateY(8px)';setTimeout(()=>toast.remove(),250);}, duration);
+}
+
+// ══════════════════════════════════════════════════════════════
+// FEATURE 12: LANE HEAT MAP (in reports)
+// ══════════════════════════════════════════════════════════════
+function buildLaneHeatMap() {
+  const allQ = [...(S.quotes||[]).map(q=>({zip:q.zip,port:q.port,revenue:q.customerRates?.total||0,profit:q.profit||0,status:q.status,type:'drayage'}))];
+  const byZip = {};
+  allQ.forEach(q=>{
+    if(!q.zip) return;
+    if(!byZip[q.zip]) byZip[q.zip]={zip:q.zip,quotes:0,booked:0,revenue:0,profit:0,ports:new Set()};
+    byZip[q.zip].quotes++;
+    if(['Booked','Delivered','Invoiced','Paid'].includes(q.status)){
+      byZip[q.zip].booked++;
+      byZip[q.zip].revenue+=q.revenue;
+      byZip[q.zip].profit+=q.profit;
+    }
+    if(q.port) byZip[q.zip].ports.add(q.port);
+  });
+  const rows = Object.values(byZip).map(r=>({...r,winRate:r.quotes>0?r.booked/r.quotes:0,avgMargin:r.revenue>0?r.profit/r.revenue:0,ports:[...r.ports]})).sort((a,b)=>b.quotes-a.quotes).slice(0,20);
+  if(!rows.length) return '<div class="empty"><div class="empty-ico">🗺️</div><p>No lane data yet</p></div>';
+  const maxQ = rows[0].quotes;
+  return `<div class="tbl-wrap"><table><thead><tr>
+    <th>ZIP</th><th>Ports served</th><th>Activity</th><th>Quotes</th><th>Win rate</th><th>Revenue</th><th>Avg margin</th>
+  </tr></thead><tbody>${rows.map(r=>`
+    <tr>
+      <td style="font-size:15px;font-weight:900;color:var(--navy);font-family:monospace">${r.zip}</td>
+      <td style="font-size:11px;color:var(--gray-500)">${r.ports.slice(0,2).join(', ')}</td>
+      <td>
+        <div style="background:var(--gray-100);border-radius:3px;height:8px;width:100px">
+          <div style="background:${r.winRate>=0.5?'var(--steel)':'var(--amber)'};height:8px;border-radius:3px;width:${Math.round((r.quotes/maxQ)*100)}%"></div>
+        </div>
+      </td>
+      <td style="font-weight:700">${r.quotes}</td>
+      <td style="font-weight:700;color:${r.winRate>=0.5?'var(--green)':'var(--amber)'}">${pct(r.winRate)}</td>
+      <td class="money">${fmtD(r.revenue)}</td>
+      <td style="font-weight:700;color:${r.avgMargin>=0.15?'var(--green)':'var(--amber)'}">${pct(r.avgMargin)}</td>
+    </tr>`).join('')}</tbody></table></div>`;
+}
+
+
 boot().catch(e=>{$('loading-screen').style.display='none';$('setup-screen').style.display='flex';});
 </script>
 <script>
