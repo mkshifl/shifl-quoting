@@ -9342,17 +9342,16 @@ function openInvoiceBuilder(type, id){
   const today=localDateStr();
   const due30=new Date(Date.now()+30*864e5).toISOString().slice(0,10);
 
-  // Base charges from quote
+  // Base charges — ONLY the base rate, not the total
   const baseCharges=type==='drayage'?[
-    {key:'base',label:'Base drayage rate',amount:q.customerRates?.total||0,locked:true},
+    {key:'base',label:'Base drayage rate',amount:q.customerRates?.base||0,locked:true},
   ]:[
     {key:'tlBase',label:'Transload service',amount:q.totalCustomer||0,locked:true},
   ];
 
-  // Accessorials from quote that have values
   const qRates=q.customerRates||{};
   const ACC=[
-    {key:'chassis',label:'Chassis',note:'Per move'},
+    {key:'chassis',label:'Chassis',note:'Per day'},
     {key:'prepull',label:'Pre-pull',note:'Container staged before appointment'},
     {key:'det_port',label:'Detention — port',note:'Waiting time at port, per hour'},
     {key:'det_cust',label:'Detention — customer',note:'Waiting time at customer, per hour'},
@@ -9360,23 +9359,35 @@ function openInvoiceBuilder(type, id){
     {key:'ovw43',label:'Overweight (43k lb)',note:'Flat charge'},
     {key:'ovw48',label:'Overweight (48k lb)',note:'Flat charge'},
     {key:'toll',label:'Toll',note:'If applicable'},
-    {key:'bobtail',label:'Bobtail',note:'Drop moves'},
+    {key:'bobtail',label:'Bobtail',note:'Drop moves — flat'},
+    {key:'genset',label:'Genset',note:'Per move — carrier + customer rate'},
+    {key:'triaxle',label:'Triaxle',note:'Per move — carrier + customer rate'},
   ];
 
   const HOURLY=['det_port','det_cust'];
-  const DAILY=['storage'];
+  const DAILY=['storage','chassis'];
+  const DUAL=['genset','triaxle','bobtail'];
 
   const saved=existing.accessorials||{};
 
   const rows=ACC.map(a=>{
+    const quotedCarrier=type==='drayage'?(q.carrierRates?.[a.key]||0):0;
     const quotedAmt=type==='drayage'?qRates[a.key]||0:0;
     const sv=saved[a.key]||{};
     const isChecked=sv.enabled!==undefined?sv.enabled:quotedAmt>0;
     const isHourly=HOURLY.includes(a.key);
     const isDaily=DAILY.includes(a.key);
+    const isDual=DUAL.includes(a.key);
 
     let detail='';
-    if(isHourly){
+    if(isDual){
+      const carrierRate=sv.carrierRate||quotedCarrier||0;
+      const customerRate=sv.amount||quotedAmt||0;
+      detail=`<div class="inv-acc-detail" id="acc-detail-${a.key}" style="display:${isChecked?'grid':'none'};grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;padding:10px;background:var(--gray-50);border-radius:6px">
+        <div><div class="inv-sm-lbl">Carrier rate ($)</div><input type="number" id="acc-carrier-${a.key}" value="${carrierRate}" min="0" placeholder="0" oninput="calcInvTotal()" style="width:100%;padding:5px 7px;font-size:12px"></div>
+        <div><div class="inv-sm-lbl">Customer rate ($)</div><input type="number" id="acc-flat-${a.key}" value="${customerRate}" min="0" placeholder="0" oninput="calcInvTotal()" style="width:100%;padding:5px 7px;font-size:12px"></div>
+      </div>`;
+    } else if(isHourly){
       const freeHrs=sv.freeHrs??2;
       const totalHrs=sv.totalHrs||0;
       const rate=sv.rate||quotedAmt||75;
@@ -9402,7 +9413,7 @@ function openInvoiceBuilder(type, id){
 
     return `<div style="padding:10px 0;border-bottom:1px solid var(--gray-100)">
       <div style="display:flex;align-items:center;gap:10px">
-        <input type="checkbox" id="acc-chk-${a.key}" ${isChecked?'checked':''} onchange="toggleAccRow('${a.key}',this.checked,${isHourly},${isDaily})" style="flex-shrink:0">
+        <input type="checkbox" id="acc-chk-${a.key}" ${isChecked?'checked':''} onchange="toggleAccRow('${a.key}',this.checked,${isHourly},${isDaily},${isDual})" style="flex-shrink:0">
         <div style="flex:1">
           <label for="acc-chk-${a.key}" style="font-size:13px;font-weight:600;color:var(--navy);cursor:pointer">${a.label}</label>
           ${quotedAmt>0?`<span style="font-size:10px;background:var(--blue-bg);color:var(--steel);padding:1px 7px;border-radius:99px;margin-left:6px;font-weight:600">Quoted ${fmtD(quotedAmt)}</span>`:''}
@@ -9447,16 +9458,17 @@ function openInvoiceBuilder(type, id){
     <div style="font-size:11px;color:var(--gray-400);margin-bottom:8px">Check any that apply — items with free time calculate billable amounts automatically</div>
     ${rows}
 
-    <div style="padding:10px 0;border-bottom:1px solid var(--gray-100)">
-      <div style="display:flex;align-items:center;gap:10px">
-        <input type="checkbox" id="acc-chk-custom" ${custom.enabled?'checked':''} onchange="toggleCustomRow(this.checked)" style="flex-shrink:0">
-        <div style="flex:1"><label for="acc-chk-custom" style="font-size:13px;font-weight:600;color:var(--navy);cursor:pointer">Other / custom charge</label></div>
-        <input type="number" id="acc-flat-custom" value="${custom.amount||''}" placeholder="0" min="0" oninput="calcInvTotal()" style="width:80px;padding:5px 7px;font-size:13px;text-align:right;${!custom.enabled?'opacity:.4':''}" ${!custom.enabled?'disabled':''}>
-      </div>
-      <div id="custom-desc-row" style="display:${custom.enabled?'block':'none'};margin-top:8px;padding:0 0 0 26px">
-        <input type="text" id="custom-desc" value="${custom.desc||''}" placeholder="Description (e.g. Exam fee)" style="width:100%;box-sizing:border-box;font-size:12px;padding:5px 8px">
-      </div>
+    <div id="custom-charges-container">
+      ${(existing.customCharges||[{desc:'',amount:0,enabled:false}]).map((cc,ci)=>`
+      <div style="padding:10px 0;border-bottom:1px solid var(--gray-100)" id="custom-row-${ci}">
+        <div style="display:flex;align-items:center;gap:10px">
+          <input type="checkbox" id="acc-chk-custom-${ci}" ${cc.enabled?'checked':''} onchange="toggleCustomCharge(${ci},this.checked)" style="flex-shrink:0">
+          <input type="text" id="custom-desc-${ci}" value="${cc.desc||''}" placeholder="Charge description (e.g. Exam fee, Per diem...)" style="flex:1;padding:5px 8px;font-size:13px;border:1px solid var(--gray-200);border-radius:var(--radius);${!cc.enabled?'opacity:.4':''}">
+          <input type="number" id="acc-flat-custom-${ci}" value="${cc.amount||''}" placeholder="$0" min="0" oninput="calcInvTotal()" style="width:80px;padding:5px 7px;font-size:13px;text-align:right;${!cc.enabled?'opacity:.4':''}">
+        </div>
+      </div>`).join('')}
     </div>
+    <button type="button" onclick="addCustomCharge()" style="width:100%;padding:8px;border:1.5px dashed var(--gray-300);background:transparent;border-radius:var(--radius);font-size:13px;color:var(--gray-500);cursor:pointer;margin-top:6px">+ Add another charge</button>
 
     <div style="margin-top:14px;padding:12px 14px;background:var(--gray-50);border-radius:var(--radius)">
       <div style="display:flex;justify-content:space-between;margin-bottom:6px;font-size:13px;color:var(--gray-600)">
@@ -9491,11 +9503,13 @@ function openInvoiceBuilder(type, id){
   },50);
 }
 
-function toggleAccRow(key, checked, isHourly, isDaily){
+function toggleAccRow(key, checked, isHourly, isDaily, isDual){
   const detail=document.getElementById('acc-detail-'+key);
   if(detail) detail.style.display=checked?'grid':'none';
   const flatInput=document.getElementById('acc-flat-'+key);
   if(flatInput){flatInput.disabled=!checked;flatInput.style.opacity=checked?'1':'.4';}
+  const carrierInput=document.getElementById('acc-carrier-'+key);
+  if(carrierInput){carrierInput.disabled=!checked;carrierInput.style.opacity=checked?'1':'.4';}
   const amtEl=document.getElementById('acc-amt-'+key);
   if(amtEl&&!checked){amtEl.textContent='—';}
   calcInvTotal();
@@ -9546,7 +9560,8 @@ function calcInvTotal(){
   let acc=0;
   const HOURLY=['det_port','det_cust'];
   const DAILY=['storage'];
-  const ALL_KEYS=['chassis','prepull','det_port','det_cust','storage','ovw43','ovw48','toll','bobtail'];
+  const ALL_KEYS=['chassis','prepull','det_port','det_cust','storage','ovw43','ovw48','toll','bobtail','genset','triaxle'];
+  const DUAL_KEYS=['genset','triaxle','bobtail'];
   ALL_KEYS.forEach(k=>{
     if(!document.getElementById('acc-chk-'+k)?.checked) return;
     if(HOURLY.includes(k)||DAILY.includes(k)){
@@ -9556,8 +9571,13 @@ function calcInvTotal(){
       acc+=parseFloat(document.getElementById('acc-flat-'+k)?.value)||0;
     }
   });
-  if(document.getElementById('acc-chk-custom')?.checked)
-    acc+=parseFloat(document.getElementById('acc-flat-custom')?.value)||0;
+  const customContainer=document.getElementById('custom-charges-container');
+  if(customContainer){
+    customContainer.querySelectorAll('[id^="acc-flat-custom-"]').forEach((el,i)=>{
+      const chk=document.getElementById('acc-chk-custom-'+i);
+      if(chk?.checked) acc+=parseFloat(el.value)||0;
+    });
+  }
   const el=document.getElementById('inv-acc-total');
   const tot=document.getElementById('inv-grand-total');
   if(el) el.textContent=fmtD(acc);
@@ -9570,14 +9590,18 @@ async function saveInvoiceData(type, id){
   const base=window._invBaseTotal||0;
   const HOURLY=['det_port','det_cust'];
   const DAILY=['storage'];
-  const ALL_KEYS=['chassis','prepull','det_port','det_cust','storage','ovw43','ovw48','toll','bobtail'];
+  const ALL_KEYS=['chassis','prepull','det_port','det_cust','storage','ovw43','ovw48','toll','bobtail','genset','triaxle'];
+  const DUAL_KEYS=['genset','triaxle','bobtail'];
   const accessorials={};
   let accTotal=0;
   ALL_KEYS.forEach(k=>{
     const checked=document.getElementById('acc-chk-'+k)?.checked||false;
     if(!checked) return;
     const entry={enabled:true};
-    if(HOURLY.includes(k)){
+    if(DUAL_KEYS.includes(k)){
+      entry.carrierRate=parseFloat(document.getElementById('acc-carrier-'+k)?.value)||0;
+      entry.amount=parseFloat(document.getElementById('acc-flat-'+k)?.value)||0;
+    } else if(HOURLY.includes(k)){
       entry.freeHrs=parseFloat(document.getElementById('acc-free-'+k)?.value)||0;
       entry.totalHrs=parseFloat(document.getElementById('acc-hrs-'+k)?.value)||0;
       entry.rate=parseFloat(document.getElementById('acc-rate-'+k)?.value)||0;
@@ -9595,10 +9619,17 @@ async function saveInvoiceData(type, id){
     accessorials[k]=entry;
     accTotal+=entry.amount||0;
   });
-  if(document.getElementById('acc-chk-custom')?.checked){
-    accessorials.custom={enabled:true,amount:parseFloat(document.getElementById('acc-flat-custom')?.value)||0,desc:($('custom-desc')||{}).value?.trim()||''};
-    accTotal+=(accessorials.custom.amount||0);
-  }
+  const savedCustomCharges=[];
+  const customCont=document.getElementById('custom-charges-container');
+  if(customCont){customCont.querySelectorAll('[id^="acc-flat-custom-"]').forEach((el,i)=>{
+    const chk=document.getElementById('acc-chk-custom-'+i);
+    const desc=document.getElementById('custom-desc-'+i);
+    if(chk?.checked&&parseFloat(el.value)>0){
+      const amt=parseFloat(el.value)||0;
+      savedCustomCharges.push({desc:desc?.value?.trim()||'Custom charge',amount:amt,enabled:true});
+      accTotal+=amt;
+    }
+  });} inv.customCharges=savedCustomCharges;
   const inv={invNum:num,invDate:($('inv-date')||{}).value||localDateStr(),invDue:($('inv-due')||{}).value||'',notes:($('inv-notes')||{}).value?.trim()||'',baseTotal:base,accTotal,grandTotal:base+accTotal,accessorials,type,savedAt:localDateStr()};
   saveInvoice(id,inv);
   // Update shipment status to Invoiced
@@ -9728,6 +9759,28 @@ function updateInvNavBadge(){
   const n=dray+fq+tl+invoiced;
   const badge=$('inv-nav-badge');
   if(badge){badge.textContent=n;badge.style.display=n?'inline':'none';}
+}
+
+function addCustomCharge(){
+  const container=document.getElementById('custom-charges-container');
+  if(!container) return;
+  const ci=container.querySelectorAll('[id^="custom-row-"]').length;
+  const div=document.createElement('div');
+  div.id='custom-row-'+ci;
+  div.style.cssText='padding:10px 0;border-bottom:1px solid var(--gray-100)';
+  div.innerHTML=`<div style="display:flex;align-items:center;gap:10px">
+    <input type="checkbox" id="acc-chk-custom-${ci}" checked onchange="toggleCustomCharge(${ci},this.checked)" style="flex-shrink:0">
+    <input type="text" id="custom-desc-${ci}" placeholder="Charge description (e.g. Exam fee, Per diem...)" style="flex:1;padding:5px 8px;font-size:13px;border:1px solid var(--gray-200);border-radius:var(--radius)">
+    <input type="number" id="acc-flat-custom-${ci}" placeholder="$0" min="0" oninput="calcInvTotal()" style="width:80px;padding:5px 7px;font-size:13px;text-align:right">
+  </div>`;
+  container.appendChild(div);
+}
+function toggleCustomCharge(i, checked){
+  const desc=document.getElementById('custom-desc-'+i);
+  const amt=document.getElementById('acc-flat-custom-'+i);
+  if(desc) desc.style.opacity=checked?'1':'.4';
+  if(amt) amt.style.opacity=checked?'1':'.4';
+  calcInvTotal();
 }
 boot().catch(e=>{$('loading-screen').style.display='none';$('setup-screen').style.display='flex';});
 </script>
