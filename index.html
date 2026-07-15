@@ -1180,7 +1180,7 @@ function buildPricingSection(){
     <div style="border:1px solid var(--gray-200);border-radius:var(--radius);padding:12px 14px;margin-bottom:8px;background:#fafafa">
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
         <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:13px;font-weight:700;min-width:140px">
-          <input type="checkbox" ${S.qi.gensetEnabled?'checked':''} onchange="S.qi.gensetEnabled=this.checked;if(this.checked&&!S.qi.gensetCarrierRate&&sel?.genset)S.qi.gensetCarrierRate=sel.genset;refreshPreviewOnly()" style="width:16px;height:16px;cursor:pointer;accent-color:var(--navy)">
+          <input type="checkbox" ${S.qi.gensetEnabled?'checked':''} onchange="S.qi.gensetEnabled=this.checked;if(this.checked&&!S.qi.gensetCarrierRate&&sel?.genset)S.qi.gensetCarrierRate=sel.genset;if(!S.qi.gensetScope)S.qi.gensetScope='both';renderQuote()" style="width:16px;height:16px;cursor:pointer;accent-color:var(--navy)">
           ⚡ Genset
         </label>
         ${S.qi.gensetEnabled?`
@@ -1199,7 +1199,7 @@ function buildPricingSection(){
     <div style="border:1px solid var(--gray-200);border-radius:var(--radius);padding:12px 14px;background:#fafafa">
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
         <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:13px;font-weight:700;min-width:140px">
-          <input type="checkbox" ${S.qi.bobtailEnabled?'checked':''} onchange="S.qi.bobtailEnabled=this.checked;if(this.checked&&!S.qi.bobtailCarrierRate&&sel?.bobtail)S.qi.bobtailCarrierRate=sel.bobtail;refreshPreviewOnly()" style="width:16px;height:16px;cursor:pointer;accent-color:var(--navy)">
+          <input type="checkbox" ${S.qi.bobtailEnabled?'checked':''} onchange="S.qi.bobtailEnabled=this.checked;if(this.checked&&!S.qi.bobtailCarrierRate&&sel?.bobtail)S.qi.bobtailCarrierRate=sel.bobtail;if(!S.qi.bobtailScope)S.qi.bobtailScope='both';renderQuote()" style="width:16px;height:16px;cursor:pointer;accent-color:var(--navy)">
           🔁 Bobtail
         </label>
         ${S.qi.bobtailEnabled?`
@@ -1218,7 +1218,7 @@ function buildPricingSection(){
     <div style="border:1px solid var(--gray-200);border-radius:var(--radius);padding:12px 14px;background:#fafafa">
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
         <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:13px;font-weight:700;min-width:140px">
-          <input type="checkbox" ${S.qi.triaxleEnabled?'checked':''} onchange="S.qi.triaxleEnabled=this.checked;if(this.checked&&!S.qi.triaxleCarrierRate&&sel?.triaxle)S.qi.triaxleCarrierRate=sel.triaxle;refreshPreviewOnly()" style="width:16px;height:16px;cursor:pointer;accent-color:var(--navy)">
+          <input type="checkbox" ${S.qi.triaxleEnabled?'checked':''} onchange="S.qi.triaxleEnabled=this.checked;if(this.checked&&!S.qi.triaxleCarrierRate&&sel?.triaxle)S.qi.triaxleCarrierRate=sel.triaxle;if(!S.qi.triaxleScope)S.qi.triaxleScope='both';renderQuote()" style="width:16px;height:16px;cursor:pointer;accent-color:var(--navy)">
           🔺 Triaxle
         </label>
         ${S.qi.triaxleEnabled?`
@@ -1376,6 +1376,11 @@ function emailQuote(){
     'BASE RATE: '+fmtD(cuRate(Number(sel.base)||0,'base')),'',
   ];
   const accessorials=CHARGES.filter(c=>c!=='base'&&isApplicable(c,ld)&&cuRate(Number(sel[c])||0,c)>0);
+  // Add genset/triaxle/bobtail if enabled
+  const extraCharges=[];
+  if(qi.gensetEnabled&&qi.gensetCustomerRate>0) extraCharges.push({label:'Genset',cuAmt:qi.gensetCustomerRate,caAmt:qi.gensetScope==='customer_only'?0:qi.gensetCarrierRate});
+  if(qi.bobtailEnabled&&qi.bobtailCustomerRate>0) extraCharges.push({label:'Bobtail',cuAmt:qi.bobtailCustomerRate,caAmt:qi.bobtailScope==='customer_only'?0:qi.bobtailCarrierRate});
+  if(qi.triaxleEnabled&&qi.triaxleCustomerRate>0) extraCharges.push({label:'Triaxle',cuAmt:qi.triaxleCustomerRate,caAmt:qi.triaxleScope==='customer_only'?0:qi.triaxleCarrierRate});
   if(accessorials.length){
     lines.push('The following charges will apply when applicable:');
     accessorials.forEach(c=>{
