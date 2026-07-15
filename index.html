@@ -2249,6 +2249,8 @@ function showFqBookingModal(idx){
 }
 
 async function confirmFqBooking(idx, downloadSheet){
+  setTimeout(fireConfetti,400);
+  showToast('🎉 Quote booked!','success',4000);
   const q=(window._fqHistory||[])[idx];if(!q) return;
   q.status='Booked';
   q.bookedDate=localDateStr();
@@ -5712,6 +5714,8 @@ async function confirmBooking(id, downloadSheet){
     q.booked_by=_currentUser?.id||null;
     q.booked_by_name=_currentUser?.name||null;
     closeModal();
+    setTimeout(fireConfetti,200);
+    showToast('🎉 Quote booked!','success',4000);
     const t=$('log-tbody');if(t) t.innerHTML=buildLogRows();
     updateActiveBadge();
     if(downloadSheet) await downloadCarrierRateSheet(q,selRate);
