@@ -407,7 +407,7 @@ body.dark .page{background:#0f1723}
           <span style="font-size:15px">🤝</span>Carrier Network
         </span>
       </button>
-      <button class="acc-btn" id="nav-invoicing" onclick="goTo('invoicing')" style="font-size:13px">
+      <button class="acc-btn" id="nav-invoicing" onclick="S.activeView='active';goTo('invoicing')" style="font-size:13px">
         <span style="display:flex;align-items:center;gap:10px">
           <span style="font-size:15px">🧾</span>Invoicing
           <span id="inv-nav-badge" style="display:none;background:#dc2626;color:#fff;border-radius:99px;font-size:10px;font-weight:700;padding:1px 7px">0</span>
@@ -5104,7 +5104,7 @@ async function markShipmentClosed(type,id,closeStatus){
 function renderActive(){
   if(!window._activeTracking) window._activeTracking={};
   // Active = Booked | Completed = Delivered | Invoicing
-  if(S.activeView==='invoicing'){renderAllInvoicing();return;}
+  if(S.activeView==='invoicing'){S.activeView='active';}
   const isCompleted = S.activeView==='completed';
   const statuses = isCompleted ? ['Delivered'] : ['Booked'];
   const all = getAllShipmentsByStatus(statuses);
@@ -8132,6 +8132,7 @@ function updateSubActive(view,subtab){
   else if(view==='activity') target='nav-activity';
   else if(view==='auditlog') target='nav-auditlog';
   else if(view==='carriers') target='nav-carriers';
+  else if(view==='invoicing') target='nav-invoicing';
   if(target&&$(target)) $(target).classList.add('active');
 }
 
@@ -9513,11 +9514,12 @@ function openInvoiceBuilder(type, id){
     </div>
 
     <div class="field" style="margin-top:14px"><label>Notes</label><input type="text" id="inv-notes" value="${existing.notes||''}" placeholder="Net 30, factoring info, etc."></div>
+    ${buildAttachmentSection('${id}','customer','${type}')}
 
     <div class="modal-foot">
       <button class="btn" onclick="closeModal()">Cancel</button>
       <button class="btn" onclick="previewInvoicePDF('${type}','${id}')">📄 Preview PDF</button>
-      <button class="btn blue" onclick="saveInvoiceData('${type}','${id}')">✅ ${existing.invNum?'Save changes':'Mark as invoiced'}</button>
+      <button class="btn blue" onclick="saveInvoiceData('${type}','${id}')">📤 ${existing.invNum?'Save changes':'Send to SHIFL'}</button>
     </div>
   </div></div>`;
 
@@ -9768,7 +9770,7 @@ function renderCustomerInvoiceTab(all,pending,invoiced,paid,subTab){
       <td class="muted">${q.carrier}</td>
       <td class="money" style="color:var(--steel);font-weight:700">${fmtD(q.customerAmount)}</td>
       <td onclick="event.stopPropagation()" style="white-space:nowrap">
-        <button class="btn sm blue" onclick="openInvoiceBuilder('${q.type}','${q.id}')">🧾 Create</button>
+        <button class="btn sm blue" onclick="openInvoiceBuilder('${q.type}','${q.id}')">📤 Send to SHIFL</button>
         <button class="btn sm" onclick="revertToActive('${q.type}','${q.id}')" style="color:#d97706;border-color:#fbbf24">↩️</button>
       </td>
     </tr>`).join('')}</tbody></table></div>`;
@@ -9831,7 +9833,7 @@ function renderCarrierInvoiceTab(all,delivered,paid,subTab){
       <td class="money" style="color:#d97706;font-weight:700">${fmtD(q.carrierAmount)}</td>
       <td style="font-family:monospace;font-size:12px;color:var(--gray-500)">${q.carrierInvNum||'—'}</td>
       <td onclick="event.stopPropagation()" style="white-space:nowrap">
-        <button class="btn sm" onclick="openCarrierInvoiceBuilder('${q.type}','${q.id}')" style="color:#d97706;border-color:#fbbf24">🚛 Invoice</button>
+        <button class="btn sm" onclick="openCarrierInvoiceBuilder('${q.type}','${q.id}')" style="color:#d97706;border-color:#fbbf24">📤 Send to SHIFL</button>
       </td>
     </tr>`).join('')}</tbody></table></div>`;
   } else {
@@ -10038,10 +10040,11 @@ function openCarrierInvoiceBuilder(type, id){
     </div>
 
     <div class="field" style="margin-top:14px"><label>Notes</label><input type="text" id="cinv-notes" value="${existing.notes||''}" placeholder="Payment terms, factoring, etc."></div>
+    ${buildAttachmentSection('${id}','carrier','${type}')}
 
     <div class="modal-foot">
       <button class="btn" onclick="closeModal()">Cancel</button>
-      <button class="btn blue" onclick="saveCarrierInvoiceData('${type}','${id}')">✅ Save carrier invoice</button>
+      <button class="btn blue" onclick="saveCarrierInvoiceData('${type}','${id}')">📤 Send to SHIFL</button>
     </div>
   </div></div>`;
 
@@ -10151,6 +10154,76 @@ async function saveDrayRef(id, val){
   try{await db.from('quotes').update({shifl_ref:val.trim()}).eq('id',id);}
   catch(e){console.warn('Failed to save ref#:',e.message);}
 }
+// ════════════════════════════════════════════════════════════════════
+// FILE ATTACHMENTS FOR INVOICES
+// ════════════════════════════════════════════════════════════════════
+
+function getInvoiceAttachments(id, invType){
+  try{ return JSON.parse(localStorage.getItem('inv_attach_'+invType+'_'+id)||'[]'); }catch(e){ return []; }
+}
+function saveInvoiceAttachments(id, invType, files){
+  try{ localStorage.setItem('inv_attach_'+invType+'_'+id, JSON.stringify(files)); }catch(e){}
+}
+
+function buildAttachmentSection(id, invType, shipType){
+  const files = getInvoiceAttachments(id, invType);
+  const isDrayage = shipType==='drayage';
+  const isCarrier = invType==='carrier';
+
+  const types = [
+    {key:'pod', label:'📋 POD', desc:'Proof of Delivery', always:true},
+    {key:'eir', label:'🎫 EIR Ticket', desc:'Equipment Interchange Receipt', always:isDrayage},
+    {key:'carrier_inv', label:'🧾 Carrier Invoice', desc:"Carrier's invoice to Shifl", always:isCarrier},
+  ].filter(t=>t.always);
+
+  return `<div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--gray-100)">
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gray-400);margin-bottom:10px">📎 Attachments</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+      ${types.map(t=>`
+        <label style="display:flex;align-items:center;gap:6px;padding:6px 12px;border:1.5px dashed var(--gray-200);border-radius:var(--radius);cursor:pointer;font-size:12px;color:var(--gray-500);transition:border-color .15s" onmouseover="this.style.borderColor='var(--steel)'" onmouseout="this.style.borderColor='var(--gray-200)'">
+          ${t.label} <span style="font-size:11px">${t.desc}</span>
+          <input type="file" accept=".pdf,.jpg,.jpeg,.png,.webp" multiple style="display:none" onchange="handleAttachment('${id}','${invType}','${t.key}',this.files)">
+        </label>`).join('')}
+    </div>
+    <div id="attach-list-${invType}-${id}" style="display:flex;flex-wrap:wrap;gap:6px">
+      ${files.map((f,i)=>`<div style="display:flex;align-items:center;gap:6px;padding:4px 10px;background:var(--blue-bg);border-radius:var(--radius);font-size:12px;color:var(--steel)">
+        <span>${f.name}</span>
+        <button onclick="removeAttachment('${id}','${invType}',${i})" style="background:none;border:none;cursor:pointer;color:var(--gray-400);font-size:14px;padding:0;line-height:1">×</button>
+      </div>`).join('')}
+    </div>
+  </div>`;
+}
+
+function handleAttachment(id, invType, docType, fileList){
+  const files = getInvoiceAttachments(id, invType);
+  Array.from(fileList).forEach(file=>{
+    const reader = new FileReader();
+    reader.onload = e=>{
+      files.push({name:file.name, type:docType, size:file.size, data:e.target.result, uploadedAt:localDateStr()});
+      saveInvoiceAttachments(id, invType, files);
+      const listEl = document.getElementById('attach-list-'+invType+'-'+id);
+      if(listEl) listEl.innerHTML = files.map((f,i)=>`<div style="display:flex;align-items:center;gap:6px;padding:4px 10px;background:var(--blue-bg);border-radius:var(--radius);font-size:12px;color:var(--steel)">
+        <span>${f.name}</span>
+        <button onclick="removeAttachment('${id}','${invType}',${i})" style="background:none;border:none;cursor:pointer;color:var(--gray-400);font-size:14px;padding:0;line-height:1">×</button>
+      </div>`).join('');
+      showToast(file.name+' attached','success',2000);
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function removeAttachment(id, invType, idx){
+  const files = getInvoiceAttachments(id, invType);
+  files.splice(idx,1);
+  saveInvoiceAttachments(id, invType, files);
+  const listEl = document.getElementById('attach-list-'+invType+'-'+id);
+  if(listEl) listEl.innerHTML = files.map((f,i)=>`<div style="display:flex;align-items:center;gap:6px;padding:4px 10px;background:var(--blue-bg);border-radius:var(--radius);font-size:12px;color:var(--steel)">
+    <span>${f.name}</span>
+    <button onclick="removeAttachment('${id}','${invType}',${i})" style="background:none;border:none;cursor:pointer;color:var(--gray-400);font-size:14px;padding:0;line-height:1">×</button>
+  </div>`).join('');
+}
+
+
 boot().catch(e=>{$('loading-screen').style.display='none';$('setup-screen').style.display='flex';});
 </script>
 <script>
