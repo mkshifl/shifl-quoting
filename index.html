@@ -777,14 +777,14 @@ function dbToQuote(r){
     zip:r.zip||'',ld:r.ld||'Live',carrier:r.carrier||'',destination:r.destination||'',
     carrierRates:r.carrier_costs||{},customerRates:r.customer_prices||{},
     baseMarkup:r.base_markup||DEFAULT_BASE_MARKUP,flatRates:r.flat_rates||{...DEFAULT_FLAT_RATES},
-    profit:+r.profit||0,profitPct:+r.profit_pct||0,status:r.status||'Quoted',notes:r.notes||''};
+    profit:+r.profit||0,profitPct:+r.profit_pct||0,status:r.status||'Quoted',notes:r.notes||'',shiflRef:r.shifl_ref||''};
 }
 function quoteToDb(q){
   return {id:q.id,quote_num:q.quoteNum,date:q.date,customer:q.customer||'',port:q.port||'',
     zip:q.zip||'',ld:q.ld,carrier:q.carrier||'',destination:q.destination||'',
     carrier_costs:q.carrierRates,customer_prices:q.customerRates,
     base_markup:q.baseMarkup,flat_rates:q.flatRates,
-    profit:q.profit||0,profit_pct:q.profitPct||0,status:q.status,notes:q.notes||''};
+    profit:q.profit||0,profit_pct:q.profitPct||0,status:q.status,notes:q.notes||'',shifl_ref:q.shiflRef||''};
 }
 
 // ═══════════════════════════════════════════════════════
@@ -5589,7 +5589,15 @@ function buildLogRows(){
       <td onclick="event.stopPropagation()" style="width:32px;text-align:center">
         <input type="checkbox" ${sel.has(q.id)?'checked':''} onchange="toggleDraySelect('${q.id}',this.checked)" style="width:auto;cursor:pointer"></td>
       <td class="muted small">#${q.quoteNum}</td>
-      <td style="font-weight:600;color:var(--steel);font-size:13px;white-space:nowrap">${q.shiflRef||''}</td>
+      <td onclick="event.stopPropagation()" style="min-width:90px">
+        <input type="text" value="${q.shiflRef||''}"
+          onclick="event.stopPropagation()"
+          onchange="saveDrayRef('${q.id}',this.value)"
+          placeholder="Add ref #"
+          style="border:none;background:${q.shiflRef?'var(--blue-bg)':'transparent'};color:${q.shiflRef?'var(--steel)':'var(--gray-300)'};font-weight:${q.shiflRef?'700':'400'};font-size:12px;padding:3px 6px;border-radius:4px;width:90px;cursor:text;outline:none"
+          onfocus="this.style.background='var(--blue-bg)';this.style.border='1px solid var(--steel)'"
+          onblur="this.style.border='none';this.style.background=this.value?'var(--blue-bg)':'transparent'">
+      </td>
       <td>${q.date}</td>
       <td class="bold">${q.customer}</td>
       <td>${q.zip} · ${q.ld}<div class="subtext">${q.destination||''}</div>${getSpecialZipBadge(q.zip)}</td>
@@ -10059,6 +10067,14 @@ function openFqCarrierInvoice(idx){
 }
 
 
+
+async function saveDrayRef(id, val){
+  const q=S.quotes.find(q=>q.id===id);
+  if(!q) return;
+  q.shiflRef=val.trim();
+  try{await db.from('quotes').update({shifl_ref:val.trim()}).eq('id',id);}
+  catch(e){console.warn('Failed to save ref#:',e.message);}
+}
 boot().catch(e=>{$('loading-screen').style.display='none';$('setup-screen').style.display='flex';});
 </script>
 <script>
