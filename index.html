@@ -2251,7 +2251,7 @@ function showFqBookingModal(idx){
         </div>
         <div style="background:var(--green-bg);border-radius:var(--radius);padding:12px">
           <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-400);margin-bottom:4px">Profit</div>
-          <div style="font-size:20px;font-weight:700;color:var(--green)">${fmtD(q.profit)} <span style="font-size:13px">(${pct(q.profitPct)})</span></div>
+          <div style="font-size:20px;font-weight:700;color:var(--green)">${(p=>fmtD(p.profit)+' <span style="font-size:13px">('+pct(p.margin)+')</span> '+profitBadge(p.isActual))(getShipmentProfit(q,'freight'))}</div>
         </div>
       </div>
       <div class="alert info" style="margin-bottom:0">
@@ -2707,7 +2707,7 @@ function renderFqDashboard(){
   const booked=all.filter(q=>q.status==='Booked');
   const won=all.filter(q=>['Booked','Delivered','Invoiced','Paid'].includes(q.status));
   const rev=booked.reduce((s,q)=>s+getShipmentProfit(q,'freight').revenue,0);
-  const prof=booked.reduce((s,q)=>s+(q.profit||0),0);
+  const prof=booked.reduce((s,q)=>s+getShipmentProfit(q,'drayage').profit,0);
   const winRate=all.length>0?won.length/all.length:0;
 
   // Mode breakdown
@@ -2738,7 +2738,7 @@ function renderFqDashboard(){
       <div class="kpi"><div class="kpi-lbl">Total quotes</div><div class="kpi-val">${all.length}</div><div style="font-size:11px;color:var(--gray-400);margin-top:4px">${booked.length} booked</div></div>
       <div class="kpi"><div class="kpi-lbl">Win rate</div><div class="kpi-val b">${all.length>0?pct(winRate):'—'}</div><div style="font-size:11px;color:var(--gray-400);margin-top:4px">of all quotes</div></div>
       <div class="kpi"><div class="kpi-lbl">Revenue</div><div class="kpi-val g">${rev>0?fmtD(rev):'—'}</div><div style="font-size:11px;color:var(--gray-400);margin-top:4px">booked only</div></div>
-      <div class="kpi"><div class="kpi-lbl">Profit</div><div class="kpi-val g">${prof>0?fmtD(prof):'—'}</div><div style="font-size:11px;color:${prof>0?'var(--green)':'var(--gray-400)'};margin-top:4px">${booked.length>0?'avg '+pct(booked.reduce((s,q)=>s+(q.profitPct||0),0)/booked.length)+' margin':'—'}</div></div>
+      <div class="kpi"><div class="kpi-lbl">Profit</div><div class="kpi-val g">${prof>0?fmtD(prof):'—'}</div><div style="font-size:11px;color:${prof>0?'var(--green)':'var(--gray-400)'};margin-top:4px">${booked.length>0?'avg '+pct(booked.reduce((s,q)=>s+getShipmentProfit(q,'freight').margin,0)/booked.length)+' margin':'—'}</div></div>
     </div>
 
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-bottom:14px">
@@ -2798,7 +2798,7 @@ function renderFqDashboard(){
           <td>${q.pickupZip} → ${q.deliveryZip}</td>
           <td>${q.carrier}</td>
           <td class="bold" style="color:var(--steel)">${fmtD(q.customerRate)}</td>
-          <td style="color:var(--green);font-weight:600">+${fmtD(q.profit)}</td>
+          <td style="color:var(--green);font-weight:600">${(p=>`${p.isActual?'':'~'}+${fmtD(p.profit)}`)(getShipmentProfit(q,'freight'))}</td>
           <td><select onchange="updateFqStatus(${i},this.value)" style="font-size:11px;padding:3px 5px;width:110px">
             <option${q.status==='Quoted'?' selected':''}>Quoted</option>
             <option${q.status==='Booked'?' selected':''}>Booked</option>
@@ -4429,8 +4429,8 @@ function renderTlLog(){
     <td class="muted small">${q.outDeliveryZip||'—'}</td>
     <td>${q.palletCount||'—'} pallets</td>
     <td class="bold" style="color:var(--steel)">${fmtD(q.totalCustomer)}</td>
-    <td style="color:var(--green);font-weight:600">+${fmtD(q.profit)}</td>
-    <td><span class="badge ${q.profitPct>=0.10?'g':'r'}">${pct(q.profitPct)}</span></td>
+    <td style="white-space:nowrap">${(p=>{const c=p.isActual?'var(--green)':p.margin>=0.08?'var(--amber)':'var(--red)';return`<span style='font-weight:600;color:${c}'>+${fmtD(p.profit)}</span><br>${profitBadge(p.isActual)}`;})(getShipmentProfit(q,'transload'))}</td>
+    <td><span class="badge ${(p=>p.margin>=0.10?'g':'r')(getShipmentProfit(q,'transload'))}">${pct(getShipmentProfit(q,'transload').margin)}</span></td>
     <td style="font-size:11px;color:var(--gray-400);white-space:nowrap">${q.created_by_name||'—'}</td>
     <td onclick="event.stopPropagation()">
       <select onchange="updateTlStatus(${i},this.value)" style="font-size:12px;padding:4px 7px;width:110px">
@@ -4541,7 +4541,7 @@ function showTlQuoteModal(idx){
       <div style="background:var(--navy);border-radius:var(--radius);padding:12px 16px;display:flex;justify-content:space-between;align-items:center">
         <div style="font-size:15px;font-weight:700;color:#fff">GRAND TOTAL</div>
         <div style="text-align:right"><div style="font-size:20px;font-weight:800;color:#fff">${fmtD(q.totalCustomer)}</div>
-        <div style="color:#86efac;font-size:12px">+${fmtD(q.profit)} profit · ${pct(q.profitPct)} margin</div></div>
+        <div style="color:#86efac;font-size:12px">${(p=>`${p.isActual?'':'~'}+${fmtD(p.profit)} profit · ${pct(p.margin)} margin ${p.isActual?'✓ actual':'est.'}`)(getShipmentProfit(q,'drayage'))}</div></div>
       </div>
       <div class="modal-foot">
         <button class="btn" onclick="closeModal()">Close</button>
@@ -4616,7 +4616,7 @@ function renderTlDashboard(){
   const booked=all.filter(q=>q.status==='Booked');
   const won=all.filter(q=>['Booked','Delivered','Invoiced','Paid'].includes(q.status));
   const rev=booked.reduce((s,q)=>s+(q.totalCustomer||0),0);
-  const prof=booked.reduce((s,q)=>s+(q.profit||0),0);
+  const prof=booked.reduce((s,q)=>s+getShipmentProfit(q,'freight').profit,0);
   const winRate=decided.length>0?booked.length/decided.length:0;
   $('page').innerHTML=`
     <div class="kpi-grid" style="margin-bottom:16px">
@@ -6043,7 +6043,7 @@ function renderDash(){
       <div class="kpi" style="cursor:pointer" onclick="setView('log');S.logFilter='all';render()"><div class="kpi-lbl">Quotes built</div><div class="kpi-val">${filtered.length}</div><div style="font-size:11px;color:var(--gray-400);margin-top:4px">click to view →</div></div>
       <div class="kpi" style="cursor:pointer" onclick="setView('log');S.logFilter='Booked';render()"><div class="kpi-lbl">Booked</div><div class="kpi-val b">${booked.length}</div><div style="font-size:11px;color:var(--steel);margin-top:4px">${pct(winRate)} of all quotes</div></div>
       <div class="kpi"><div class="kpi-lbl">Total Revenue</div><div class="kpi-val g">${rev>0?fmtD(rev):'—'}</div><div style="font-size:11px;color:var(--gray-400);margin-top:4px">booked only</div></div>
-      <div class="kpi"><div class="kpi-lbl">Total Profit</div><div class="kpi-val g">${prof>0?fmtD(prof):'—'}</div><div style="font-size:11px;color:${prof>0?'var(--green)':'var(--gray-400)'};margin-top:4px">${booked.length>0?'avg '+pct(booked.reduce((s,q)=>s+(q.profitPct||0),0)/booked.length)+' margin':'—'}</div></div>
+      <div class="kpi"><div class="kpi-lbl">Total Profit</div><div class="kpi-val g">${prof>0?fmtD(prof):'—'}</div><div style="font-size:11px;color:${prof>0?'var(--green)':'var(--gray-400)'};margin-top:4px">${booked.length>0?'avg '+pct(booked.reduce((s,q)=>s+getShipmentProfit(q,'freight').margin,0)/booked.length)+' margin':'—'}</div></div>
     </div>
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px">
       <div class="kpi" style="border-left:3px solid var(--green)"><div class="kpi-lbl">Base Revenue</div><div class="kpi-val g" style="font-size:18px">${baseRev>0?fmtD(baseRev):'—'}</div><div style="font-size:11px;color:var(--gray-400);margin-top:4px">core freight only</div></div>
