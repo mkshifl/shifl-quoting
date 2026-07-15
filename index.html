@@ -9322,6 +9322,12 @@ function loadInvoices(){
 }
 
 function openInvoiceBuilder(type, id){
+  // Freight routes to existing invoice flow
+  if(type==='freight'){
+    const idx=(window._fqHistory||[]).findIndex(q=>q.id===id);
+    if(idx>=0){fqSendInvoice(idx);return;}
+    alert('Freight shipment not found.');return;
+  }
   // Only allow if status is Delivered
   let q=null;
   if(type==='drayage') q=S.quotes.find(x=>x.id===id);
