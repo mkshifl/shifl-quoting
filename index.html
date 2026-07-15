@@ -905,10 +905,11 @@ function setSaving(on){
 // ═══════════════════════════════════════════════════════
 let S={
   view:'home',rates:[],quotes:[],customers:[],
-  qi:{customer:'',customerEmail:'',customerId:null,port:'New York / Newark, NJ',zip:'',ld:'Live',drayType:'import',commodity:'',pickupZip:'',containerCount:1,perContainerFlags:{base:true,chassis:true,prepull:true,det_port:true,det_cust:true,storage:true,ovw43:true,ovw48:true,bobtail:true,toll:false,genset:true,triaxle:true},
+  qi:{customer:'',customerEmail:'',customerId:null,port:'New York / Newark, NJ',zip:'',ld:'Live',drayType:'import',commodity:'',pickupZip:'',containerCount:1,perContainerFlags:{base:true,chassis:false,prepull:true,det_port:true,det_cust:true,storage:false,ovw43:true,ovw48:true,bobtail:false,toll:false,genset:true,triaxle:true},
       baseMarkup:{...DEFAULT_BASE_MARKUP},flatRates:{...DEFAULT_FLAT_RATES},notes:'',shiflRef:'',
       gensetEnabled:false,gensetScope:'both',gensetCarrierRate:0,gensetCustomerRate:0,
       bobtailEnabled:false,bobtailScope:'both',bobtailCarrierRate:0,bobtailCustomerRate:0,
+      triaxleScope:'both',
       triaxleEnabled:false,triaxleScope:'both',triaxleCarrierRate:0,triaxleCustomerRate:0},
   selId:null,rSearch:'',logFilter:'all',dashFilter:'month',cSearch:'',
   fq:{mode:null,equipment:null,pickupZip:'',deliveryZip:'',weight:'',palletCount:'',
@@ -1180,18 +1181,17 @@ function buildPricingSection(){
     <div style="border:1px solid var(--gray-200);border-radius:var(--radius);padding:12px 14px;margin-bottom:8px;background:#fafafa">
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
         <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:13px;font-weight:700;min-width:140px">
-          <input type="checkbox" ${S.qi.gensetEnabled?'checked':''} onchange="S.qi.gensetEnabled=this.checked;if(this.checked&&!S.qi.gensetCarrierRate&&sel?.genset)S.qi.gensetCarrierRate=sel.genset;if(!S.qi.gensetScope)S.qi.gensetScope='both';renderQuote()" style="width:16px;height:16px;cursor:pointer;accent-color:var(--navy)">
+          <input type="checkbox" ${S.qi.gensetEnabled?'checked':''} onchange="S.qi.gensetEnabled=this.checked;if(!S.qi.gensetScope)S.qi.gensetScope='both';document.getElementById('genset-fields').style.display=this.checked?'flex':'none';refreshPreviewOnly()" style="width:16px;height:16px;cursor:pointer;accent-color:var(--navy)">
           ⚡ Genset
         </label>
-        ${S.qi.gensetEnabled?`
-        <div style="display:flex;gap:5px">
-          <button onclick="S.qi.gensetScope='both';refreshPreviewOnly()" style="padding:3px 10px;border-radius:var(--radius);border:1px solid var(--gray-300);background:${S.qi.gensetScope!=='customer_only'?'var(--navy)':'#fff'};color:${S.qi.gensetScope!=='customer_only'?'#fff':'var(--gray-500)'};font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">Carrier + Customer</button>
-          <button onclick="S.qi.gensetScope='customer_only';refreshPreviewOnly()" style="padding:3px 10px;border-radius:var(--radius);border:1px solid var(--gray-300);background:${S.qi.gensetScope==='customer_only'?'var(--navy)':'#fff'};color:${S.qi.gensetScope==='customer_only'?'#fff':'var(--gray-500)'};font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">Customer Only</button>
-        </div>
-        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-          ${S.qi.gensetScope!=='customer_only'?`<div style="display:flex;align-items:center;gap:5px"><span style="font-size:11px;font-weight:700;color:var(--gray-400)">CARRIER $</span><input type="number" value="${S.qi.gensetCarrierRate||0}" min="0" oninput="S.qi.gensetCarrierRate=+this.value;refreshPreviewOnly()" style="width:80px;padding:4px 8px;font-size:13px;border:1px solid var(--gray-300);border-radius:var(--radius)"></div>`:''}
+        <div id="genset-fields" style="display:${S.qi.gensetEnabled?'flex':'none'};align-items:center;gap:10px;flex-wrap:wrap">
+          <div style="display:flex;gap:5px">
+            <button onclick="S.qi.gensetScope='both';this.style.background='var(--navy)';this.style.color='#fff';this.nextElementSibling.style.background='#fff';this.nextElementSibling.style.color='var(--gray-500)';document.getElementById('genset-carrier-wrap').style.display='flex';refreshPreviewOnly()" style="padding:3px 10px;border-radius:var(--radius);border:1px solid var(--gray-300);background:${S.qi.gensetScope!=='customer_only'?'var(--navy)':'#fff'};color:${S.qi.gensetScope!=='customer_only'?'#fff':'var(--gray-500)'};font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">Carrier + Customer</button>
+            <button onclick="S.qi.gensetScope='customer_only';this.style.background='var(--navy)';this.style.color='#fff';this.previousElementSibling.style.background='#fff';this.previousElementSibling.style.color='var(--gray-500)';document.getElementById('genset-carrier-wrap').style.display='none';refreshPreviewOnly()" style="padding:3px 10px;border-radius:var(--radius);border:1px solid var(--gray-300);background:${S.qi.gensetScope==='customer_only'?'var(--navy)':'#fff'};color:${S.qi.gensetScope==='customer_only'?'#fff':'var(--gray-500)'};font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">Customer Only</button>
+          </div>
+          <div id="genset-carrier-wrap" style="display:${S.qi.gensetScope!=='customer_only'?'flex':'none'};align-items:center;gap:5px"><span style="font-size:11px;font-weight:700;color:var(--gray-400)">CARRIER $</span><input type="number" value="${S.qi.gensetCarrierRate||0}" min="0" oninput="S.qi.gensetCarrierRate=+this.value;refreshPreviewOnly()" style="width:80px;padding:4px 8px;font-size:13px;border:1px solid var(--gray-300);border-radius:var(--radius)"></div>
           <div style="display:flex;align-items:center;gap:5px"><span style="font-size:11px;font-weight:700;color:var(--gray-400)">CUSTOMER $</span><input type="number" value="${S.qi.gensetCustomerRate||0}" min="0" oninput="S.qi.gensetCustomerRate=+this.value;refreshPreviewOnly()" style="width:80px;padding:4px 8px;font-size:13px;border:1px solid var(--gray-300);border-radius:var(--radius)"></div>
-        </div>`:''}
+        </div>
       </div>
     </div>
 
@@ -1199,7 +1199,7 @@ function buildPricingSection(){
     <div style="border:1px solid var(--gray-200);border-radius:var(--radius);padding:12px 14px;background:#fafafa">
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
         <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:13px;font-weight:700;min-width:140px">
-          <input type="checkbox" ${S.qi.bobtailEnabled?'checked':''} onchange="S.qi.bobtailEnabled=this.checked;if(this.checked&&!S.qi.bobtailCarrierRate&&sel?.bobtail)S.qi.bobtailCarrierRate=sel.bobtail;if(!S.qi.bobtailScope)S.qi.bobtailScope='both';renderQuote()" style="width:16px;height:16px;cursor:pointer;accent-color:var(--navy)">
+          <input type="checkbox" ${S.qi.bobtailEnabled?'checked':''} onchange="S.qi.bobtailEnabled=this.checked;if(!S.qi.bobtailScope)S.qi.bobtailScope='both';document.getElementById('bobtail-fields').style.display=this.checked?'flex':'none';refreshPreviewOnly()" style="width:16px;height:16px;cursor:pointer;accent-color:var(--navy)">
           🔁 Bobtail
         </label>
         ${S.qi.bobtailEnabled?`
@@ -1218,18 +1218,17 @@ function buildPricingSection(){
     <div style="border:1px solid var(--gray-200);border-radius:var(--radius);padding:12px 14px;background:#fafafa">
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
         <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:13px;font-weight:700;min-width:140px">
-          <input type="checkbox" ${S.qi.triaxleEnabled?'checked':''} onchange="S.qi.triaxleEnabled=this.checked;if(this.checked&&!S.qi.triaxleCarrierRate&&sel?.triaxle)S.qi.triaxleCarrierRate=sel.triaxle;if(!S.qi.triaxleScope)S.qi.triaxleScope='both';renderQuote()" style="width:16px;height:16px;cursor:pointer;accent-color:var(--navy)">
+          <input type="checkbox" ${S.qi.triaxleEnabled?'checked':''} onchange="S.qi.triaxleEnabled=this.checked;if(!S.qi.triaxleScope)S.qi.triaxleScope='both';document.getElementById('triaxle-fields').style.display=this.checked?'flex':'none';refreshPreviewOnly()" style="width:16px;height:16px;cursor:pointer;accent-color:var(--navy)">
           🔺 Triaxle
         </label>
-        ${S.qi.triaxleEnabled?`
-        <div style="display:flex;gap:5px">
-          <button onclick="S.qi.triaxleScope='both';refreshPreviewOnly()" style="padding:3px 10px;border-radius:var(--radius);border:1px solid var(--gray-300);background:${S.qi.triaxleScope!=='customer_only'?'var(--navy)':'#fff'};color:${S.qi.triaxleScope!=='customer_only'?'#fff':'var(--gray-500)'};font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">Carrier + Customer</button>
-          <button onclick="S.qi.triaxleScope='customer_only';refreshPreviewOnly()" style="padding:3px 10px;border-radius:var(--radius);border:1px solid var(--gray-300);background:${S.qi.triaxleScope==='customer_only'?'var(--navy)':'#fff'};color:${S.qi.triaxleScope==='customer_only'?'#fff':'var(--gray-500)'};font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">Customer Only</button>
-        </div>
-        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-          ${S.qi.triaxleScope!=='customer_only'?`<div style="display:flex;align-items:center;gap:5px"><span style="font-size:11px;font-weight:700;color:var(--gray-400)">CARRIER $</span><input type="number" value="${S.qi.triaxleCarrierRate||0}" min="0" oninput="S.qi.triaxleCarrierRate=+this.value;refreshPreviewOnly()" style="width:80px;padding:4px 8px;font-size:13px;border:1px solid var(--gray-300);border-radius:var(--radius)"></div>`:''}
+        <div id="triaxle-fields" style="display:${S.qi.triaxleEnabled?'flex':'none'};align-items:center;gap:10px;flex-wrap:wrap">
+          <div style="display:flex;gap:5px">
+            <button onclick="S.qi.triaxleScope='both';this.style.background='var(--navy)';this.style.color='#fff';this.nextElementSibling.style.background='#fff';this.nextElementSibling.style.color='var(--gray-500)';document.getElementById('triaxle-carrier-wrap').style.display='flex';refreshPreviewOnly()" style="padding:3px 10px;border-radius:var(--radius);border:1px solid var(--gray-300);background:${S.qi.triaxleScope!=='customer_only'?'var(--navy)':'#fff'};color:${S.qi.triaxleScope!=='customer_only'?'#fff':'var(--gray-500)'};font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">Carrier + Customer</button>
+            <button onclick="S.qi.triaxleScope='customer_only';this.style.background='var(--navy)';this.style.color='#fff';this.previousElementSibling.style.background='#fff';this.previousElementSibling.style.color='var(--gray-500)';document.getElementById('triaxle-carrier-wrap').style.display='none';refreshPreviewOnly()" style="padding:3px 10px;border-radius:var(--radius);border:1px solid var(--gray-300);background:${S.qi.triaxleScope==='customer_only'?'var(--navy)':'#fff'};color:${S.qi.triaxleScope==='customer_only'?'#fff':'var(--gray-500)'};font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">Customer Only</button>
+          </div>
+          <div id="triaxle-carrier-wrap" style="display:${S.qi.triaxleScope!=='customer_only'?'flex':'none'};align-items:center;gap:5px"><span style="font-size:11px;font-weight:700;color:var(--gray-400)">CARRIER $</span><input type="number" value="${S.qi.triaxleCarrierRate||0}" min="0" oninput="S.qi.triaxleCarrierRate=+this.value;refreshPreviewOnly()" style="width:80px;padding:4px 8px;font-size:13px;border:1px solid var(--gray-300);border-radius:var(--radius)"></div>
           <div style="display:flex;align-items:center;gap:5px"><span style="font-size:11px;font-weight:700;color:var(--gray-400)">CUSTOMER $</span><input type="number" value="${S.qi.triaxleCustomerRate||0}" min="0" oninput="S.qi.triaxleCustomerRate=+this.value;refreshPreviewOnly()" style="width:80px;padding:4px 8px;font-size:13px;border:1px solid var(--gray-300);border-radius:var(--radius)"></div>
-        </div>`:''}
+        </div>
       </div>
     </div>
 
@@ -1238,6 +1237,10 @@ function buildPricingSection(){
 
 function renderQuote(){
   const qi=S.qi;
+  // Ensure scope defaults exist for all per-quote charges
+  if(!qi.gensetScope) qi.gensetScope='both';
+  if(!qi.bobtailScope) qi.bobtailScope='both';
+  if(!qi.triaxleScope) qi.triaxleScope='both';
   const isExport=qi.drayType==='export';const matches=getMatches();
   if(!S.selId&&matches.length) S.selId=matches[0].id;
   const sel=matches.find(r=>r.id===S.selId)||matches[0]||null;
