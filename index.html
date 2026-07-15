@@ -913,7 +913,7 @@ let S={
       lclPriceBy:'pallets', cbm:0, transitTime:'',
       calc:{l:'',w:'',h:'',pieces:'',weightLbs:'',unit:'in'}},
   fqTab:'builder',
-  activeFilter:'all',activeView:'active',allInvTab:'pending',rateTab:'import',reportTab:'lanes',reportMode:'All',fqInvTab:'pending',aqTab:'builder',aqFilter:'all',_auditDate:'all',
+  activeFilter:'all',activeView:'active',allInvTab:'pending',rateTab:'import',invoices:{},reportTab:'lanes',reportMode:'All',fqInvTab:'pending',aqTab:'builder',aqFilter:'all',_auditDate:'all',
   tl:null, // initialized in boot via defaultTlState()
   tlTab:'builder',
 };
@@ -8256,13 +8256,11 @@ async function revertToActive(type,id){
 }
 
 function sendInvoiceFromShipment(type,id){
-  // Route to the right invoice modal
   if(type==='freight'){
     const idx=(window._fqHistory||[]).findIndex(q=>q.id===id);
     if(idx>=0){fqSendInvoice(idx);return;}
   }
-  // Drayage and transload — use unified invoice modal
-  sendDrayInvoice(type,id);
+  openInvoiceBuilder(type,id);
 }
 
 function sendDrayInvoice(type,id){
@@ -8389,7 +8387,7 @@ function renderAllInvoicing(){
         <td class="muted">${q.carrier}</td>
         <td class="money" style="color:var(--steel)">${fmtD(q.amount)}</td>
         <td onclick="event.stopPropagation()">
-          <button class="btn sm blue" onclick="sendInvoiceFromShipment('${q.type}','${q.id}')">🧾 Send Invoice</button>
+          <button class="btn sm blue" onclick="openInvoiceBuilder('${q.type}','${q.id}')">🧾 Create Invoice</button>
           <button class="btn sm" onclick="revertToActive('${q.type}','${q.id}')" style="margin-left:4px;color:#d97706;border-color:#fbbf24">↩️ Revert</button>
         </td>
       </tr>`;}).join('');
@@ -8410,10 +8408,11 @@ function renderAllInvoicing(){
       return`<tr style="${isOverdue?'background:#fff5f5':''}">
         <td><div class="bold">${q.customer}</div><div class="muted" style="font-size:11px">${q.detail}</div></td>
         <td><span class="badge bb" style="font-size:10px">${q.modeLabel}</span></td>
-        <td style="font-family:monospace;font-size:12px;font-weight:600">${q.invoiceNum||'—'}</td>
-        <td class="money" style="color:var(--steel)">${fmtD(q.amount)}</td>
+        <td style="font-family:monospace;font-size:12px;font-weight:600">${q.invoiceNum||getInvoice(q.id)?.invNum||'—'}</td>
+        <td class="money" style="color:var(--steel)">${fmtD(getInvoice(q.id)?.grandTotal||q.amount)}</td>
         <td style="color:${isOverdue?'var(--red)':'var(--gray-500)'};font-weight:${isOverdue?'700':'400'}">${dueDate?(isOverdue?`⚠ ${daysOut}d overdue`:daysOut===0?'Due today':`${Math.abs(daysOut)}d left`):'—'}</td>
-        <td onclick="event.stopPropagation()">
+        <td onclick="event.stopPropagation()" style="white-space:nowrap">
+          <button class="btn sm" onclick="openInvoiceBuilder('${q.type}','${q.id}')" style="margin-right:4px">✏️ Edit</button>
           <button class="btn sm" onclick="markDrayPaid('${q.type}','${q.id}')" style="color:var(--green);border-color:#86efac">✅ Mark Paid</button>
         </td>
       </tr>`;}).join('');
@@ -9304,6 +9303,314 @@ function buildLaneHeatMap() {
       <td class="money">${fmtD(r.revenue)}</td>
       <td style="font-weight:700;color:${r.avgMargin>=0.15?'var(--green)':'var(--amber)'}">${pct(r.avgMargin)}</td>
     </tr>`).join('')}</tbody></table></div>`;
+}
+
+
+// ════════════════════════════════════════════════════════════════════
+// FULL INVOICING SYSTEM — DRAYAGE + TRANSLOAD
+// Only appears after shipment is marked Delivered
+// ════════════════════════════════════════════════════════════════════
+
+function getInvoice(id){ return (S.invoices||{})[id]||null; }
+function saveInvoice(id, inv){
+  if(!S.invoices) S.invoices={};
+  S.invoices[id]=inv;
+  try{localStorage.setItem('shifl_invoices',JSON.stringify(S.invoices));}catch(e){}
+}
+function loadInvoices(){
+  try{const d=localStorage.getItem('shifl_invoices');if(d) S.invoices=JSON.parse(d);}catch(e){S.invoices={};}
+}
+
+function openInvoiceBuilder(type, id){
+  // Only allow if status is Delivered
+  let q=null;
+  if(type==='drayage') q=S.quotes.find(x=>x.id===id);
+  else if(type==='transload') q=(window._tlHistory||[]).find(x=>x.id===id);
+  if(!q){alert('Shipment not found.');return;}
+  if(q.status!=='Delivered'){alert('Invoices can only be created after a shipment is marked as Delivered.');return;}
+
+  const existing=getInvoice(id)||{};
+  const invNum=existing.invNum||'INV-'+(type==='drayage'?'DR':'TL')+'-'+Date.now().toString().slice(-5);
+  const today=localDateStr();
+  const due30=new Date(Date.now()+30*864e5).toISOString().slice(0,10);
+
+  // Base charges from quote
+  const baseCharges=type==='drayage'?[
+    {key:'base',label:'Base drayage rate',amount:q.customerRates?.total||0,locked:true},
+  ]:[
+    {key:'tlBase',label:'Transload service',amount:q.totalCustomer||0,locked:true},
+  ];
+
+  // Accessorials from quote that have values
+  const qRates=q.customerRates||{};
+  const ACC=[
+    {key:'chassis',label:'Chassis',note:'Per move'},
+    {key:'prepull',label:'Pre-pull',note:'Container staged before appointment'},
+    {key:'det_port',label:'Detention — port',note:'Waiting time at port, per hour'},
+    {key:'det_cust',label:'Detention — customer',note:'Waiting time at customer, per hour'},
+    {key:'storage',label:'Storage',note:'Per day'},
+    {key:'ovw43',label:'Overweight (43k lb)',note:'Flat charge'},
+    {key:'ovw48',label:'Overweight (48k lb)',note:'Flat charge'},
+    {key:'toll',label:'Toll',note:'If applicable'},
+    {key:'bobtail',label:'Bobtail',note:'Drop moves'},
+  ];
+
+  const HOURLY=['det_port','det_cust'];
+  const DAILY=['storage'];
+
+  const saved=existing.accessorials||{};
+
+  const rows=ACC.map(a=>{
+    const quotedAmt=type==='drayage'?qRates[a.key]||0:0;
+    const sv=saved[a.key]||{};
+    const isChecked=sv.enabled!==undefined?sv.enabled:quotedAmt>0;
+    const isHourly=HOURLY.includes(a.key);
+    const isDaily=DAILY.includes(a.key);
+
+    let detail='';
+    if(isHourly){
+      const freeHrs=sv.freeHrs??2;
+      const totalHrs=sv.totalHrs||0;
+      const rate=sv.rate||quotedAmt||75;
+      detail=`<div class="inv-acc-detail" id="acc-detail-${a.key}" style="display:${isChecked?'grid':'none'};grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px;padding:10px;background:var(--gray-50);border-radius:6px">
+        <div><div class="inv-sm-lbl">Free time (hrs)</div><input type="number" id="acc-free-${a.key}" value="${freeHrs}" min="0" step="0.5" oninput="calcAccHourly('${a.key}')" style="width:100%;padding:5px 7px;font-size:12px"></div>
+        <div><div class="inv-sm-lbl">Total hours</div><input type="number" id="acc-hrs-${a.key}" value="${totalHrs}" min="0" step="0.5" oninput="calcAccHourly('${a.key}')" style="width:100%;padding:5px 7px;font-size:12px"></div>
+        <div><div class="inv-sm-lbl">Rate ($/hr)</div><input type="number" id="acc-rate-${a.key}" value="${rate}" min="0" oninput="calcAccHourly('${a.key}')" style="width:100%;padding:5px 7px;font-size:12px"></div>
+        <div style="grid-column:1/-1;font-size:11px;color:var(--amber)" id="acc-calc-${a.key}"></div>
+      </div>`;
+    } else if(isDaily){
+      const freeDays=sv.freeDays??3;
+      const totalDays=sv.totalDays||0;
+      const rate=sv.rate||quotedAmt||50;
+      detail=`<div class="inv-acc-detail" id="acc-detail-${a.key}" style="display:${isChecked?'grid':'none'};grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px;padding:10px;background:var(--gray-50);border-radius:6px">
+        <div><div class="inv-sm-lbl">Free days</div><input type="number" id="acc-free-${a.key}" value="${freeDays}" min="0" oninput="calcAccDaily('${a.key}')" style="width:100%;padding:5px 7px;font-size:12px"></div>
+        <div><div class="inv-sm-lbl">Total days</div><input type="number" id="acc-days-${a.key}" value="${totalDays}" min="0" oninput="calcAccDaily('${a.key}')" style="width:100%;padding:5px 7px;font-size:12px"></div>
+        <div><div class="inv-sm-lbl">Rate ($/day)</div><input type="number" id="acc-rate-${a.key}" value="${rate}" min="0" oninput="calcAccDaily('${a.key}')" style="width:100%;padding:5px 7px;font-size:12px"></div>
+        <div style="grid-column:1/-1;font-size:11px;color:var(--amber)" id="acc-calc-${a.key}"></div>
+      </div>`;
+    }
+
+    const flatAmt=sv.amount!==undefined?sv.amount:quotedAmt;
+
+    return `<div style="padding:10px 0;border-bottom:1px solid var(--gray-100)">
+      <div style="display:flex;align-items:center;gap:10px">
+        <input type="checkbox" id="acc-chk-${a.key}" ${isChecked?'checked':''} onchange="toggleAccRow('${a.key}',this.checked,${isHourly},${isDaily})" style="flex-shrink:0">
+        <div style="flex:1">
+          <label for="acc-chk-${a.key}" style="font-size:13px;font-weight:600;color:var(--navy);cursor:pointer">${a.label}</label>
+          ${quotedAmt>0?`<span style="font-size:10px;background:var(--blue-bg);color:var(--steel);padding:1px 7px;border-radius:99px;margin-left:6px;font-weight:600">Quoted ${fmtD(quotedAmt)}</span>`:''}
+          <div style="font-size:11px;color:var(--gray-400)">${a.note}</div>
+        </div>
+        ${!isHourly&&!isDaily?`<input type="number" id="acc-flat-${a.key}" value="${isChecked?flatAmt:''}" placeholder="0" min="0" oninput="calcInvTotal()" style="width:80px;padding:5px 7px;font-size:13px;text-align:right;${!isChecked?'opacity:.4':''}" ${!isChecked?'disabled':''}>`:
+        `<span id="acc-amt-${a.key}" style="font-size:13px;font-weight:700;color:var(--navy);min-width:70px;text-align:right">${isChecked&&quotedAmt>0?fmtD(quotedAmt):'—'}</span>`}
+      </div>
+      ${detail}
+    </div>`;
+  }).join('');
+
+  // Custom line item
+  const custom=saved.custom||{};
+  const baseTotal=baseCharges.reduce((s,c)=>s+c.amount,0);
+
+  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal" style="max-width:600px;max-height:90vh;overflow-y:auto">
+    <style>
+      .inv-sm-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-400);margin-bottom:4px}
+    </style>
+    <div class="modal-title">${existing.invNum?'✏️ Edit invoice':'🧾 Create invoice'} — ${q.customer||'—'}</div>
+
+    <div style="background:var(--blue-bg);border-radius:var(--radius);padding:10px 14px;margin-bottom:16px;display:flex;justify-content:space-between;font-size:12px">
+      <span style="color:var(--gray-600)">${type==='drayage'?(q.port||'—')+' → '+(q.zip||'—'):(q.drayPort||'—')+' → '+(q.outDeliveryZip||'—')} · ${q.carrier||q.drayCarrier||'—'}</span>
+      <span style="color:var(--steel);font-weight:700">Status: ${q.status}</span>
+    </div>
+
+    <div class="g3" style="margin-bottom:14px">
+      <div class="field"><label>Invoice # *</label><input type="text" id="inv-num" value="${existing.invNum||invNum}"></div>
+      <div class="field"><label>Invoice date</label><input type="date" id="inv-date" value="${existing.invDate||today}"></div>
+      <div class="field"><label>Due date</label><input type="date" id="inv-due" value="${existing.invDue||due30}"></div>
+    </div>
+
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gray-400);margin-bottom:8px">Base charges (from quote)</div>
+    ${baseCharges.map(c=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--gray-100);opacity:.75">
+      <span style="font-size:13px;font-weight:500;color:var(--navy)">${c.label} <span style="font-size:10px;background:var(--gray-100);padding:1px 7px;border-radius:99px;color:var(--gray-500)">locked</span></span>
+      <span style="font-size:14px;font-weight:700;color:var(--navy)">${fmtD(c.amount)}</span>
+    </div>`).join('')}
+
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gray-400);margin:16px 0 0">Accessorial charges</div>
+    <div style="font-size:11px;color:var(--gray-400);margin-bottom:8px">Check any that apply — items with free time calculate billable amounts automatically</div>
+    ${rows}
+
+    <div style="padding:10px 0;border-bottom:1px solid var(--gray-100)">
+      <div style="display:flex;align-items:center;gap:10px">
+        <input type="checkbox" id="acc-chk-custom" ${custom.enabled?'checked':''} onchange="toggleCustomRow(this.checked)" style="flex-shrink:0">
+        <div style="flex:1"><label for="acc-chk-custom" style="font-size:13px;font-weight:600;color:var(--navy);cursor:pointer">Other / custom charge</label></div>
+        <input type="number" id="acc-flat-custom" value="${custom.amount||''}" placeholder="0" min="0" oninput="calcInvTotal()" style="width:80px;padding:5px 7px;font-size:13px;text-align:right;${!custom.enabled?'opacity:.4':''}" ${!custom.enabled?'disabled':''}>
+      </div>
+      <div id="custom-desc-row" style="display:${custom.enabled?'block':'none'};margin-top:8px;padding:0 0 0 26px">
+        <input type="text" id="custom-desc" value="${custom.desc||''}" placeholder="Description (e.g. Exam fee)" style="width:100%;box-sizing:border-box;font-size:12px;padding:5px 8px">
+      </div>
+    </div>
+
+    <div style="margin-top:14px;padding:12px 14px;background:var(--gray-50);border-radius:var(--radius)">
+      <div style="display:flex;justify-content:space-between;margin-bottom:6px;font-size:13px;color:var(--gray-600)">
+        <span>Base</span><span>${fmtD(baseTotal)}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;margin-bottom:10px;font-size:13px;color:var(--gray-600)">
+        <span>Accessorials</span><span id="inv-acc-total">$0.00</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;padding-top:10px;border-top:1px solid var(--gray-200)">
+        <span style="font-size:16px;font-weight:700;color:var(--navy)">Total due</span>
+        <span style="font-size:20px;font-weight:800;color:var(--steel)" id="inv-grand-total">${fmtD(baseTotal)}</span>
+      </div>
+    </div>
+
+    <div class="field" style="margin-top:14px"><label>Notes</label><input type="text" id="inv-notes" value="${existing.notes||''}" placeholder="Net 30, factoring info, etc."></div>
+
+    <div class="modal-foot">
+      <button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn" onclick="previewInvoicePDF('${type}','${id}')">📄 Preview PDF</button>
+      <button class="btn blue" onclick="saveInvoiceData('${type}','${id}')">✅ ${existing.invNum?'Save changes':'Mark as invoiced'}</button>
+    </div>
+  </div></div>`;
+
+  // Init calcs after render
+  setTimeout(()=>{
+    window._invBaseTotal=baseTotal;
+    window._invType=type;
+    window._invId=id;
+    calcInvTotal();
+    HOURLY.forEach(k=>{ if(document.getElementById('acc-chk-'+k)?.checked) calcAccHourly(k); });
+    DAILY.forEach(k=>{ if(document.getElementById('acc-chk-'+k)?.checked) calcAccDaily(k); });
+  },50);
+}
+
+function toggleAccRow(key, checked, isHourly, isDaily){
+  const detail=document.getElementById('acc-detail-'+key);
+  if(detail) detail.style.display=checked?'grid':'none';
+  const flatInput=document.getElementById('acc-flat-'+key);
+  if(flatInput){flatInput.disabled=!checked;flatInput.style.opacity=checked?'1':'.4';}
+  const amtEl=document.getElementById('acc-amt-'+key);
+  if(amtEl&&!checked){amtEl.textContent='—';}
+  calcInvTotal();
+}
+
+function toggleCustomRow(checked){
+  const inp=document.getElementById('acc-flat-custom');
+  const row=document.getElementById('custom-desc-row');
+  if(inp){inp.disabled=!checked;inp.style.opacity=checked?'1':'.4';}
+  if(row) row.style.display=checked?'block':'none';
+  calcInvTotal();
+}
+
+function calcAccHourly(key){
+  const free=parseFloat(document.getElementById('acc-free-'+key)?.value)||0;
+  const hrs=parseFloat(document.getElementById('acc-hrs-'+key)?.value)||0;
+  const rate=parseFloat(document.getElementById('acc-rate-'+key)?.value)||0;
+  const billable=Math.max(0,hrs-free);
+  const amt=billable*rate;
+  const calc=document.getElementById('acc-calc-'+key);
+  const amtEl=document.getElementById('acc-amt-'+key);
+  if(calc){
+    if(hrs<=free) calc.textContent=`${hrs}h used — within ${free}h free time. No charge.`;
+    else calc.textContent=`${hrs}h − ${free}h free = ${billable}h billable × $${rate}/hr = $${amt.toFixed(2)}`;
+  }
+  if(amtEl) amtEl.textContent=amt>0?fmtD(amt):'$0.00';
+  calcInvTotal();
+}
+
+function calcAccDaily(key){
+  const free=parseFloat(document.getElementById('acc-free-'+key)?.value)||0;
+  const days=parseFloat(document.getElementById('acc-days-'+key)?.value)||0;
+  const rate=parseFloat(document.getElementById('acc-rate-'+key)?.value)||0;
+  const billable=Math.max(0,days-free);
+  const amt=billable*rate;
+  const calc=document.getElementById('acc-calc-'+key);
+  const amtEl=document.getElementById('acc-amt-'+key);
+  if(calc){
+    if(days<=free) calc.textContent=`${days} days — within ${free} free days. No charge.`;
+    else calc.textContent=`${days}d − ${free}d free = ${billable}d billable × $${rate}/day = $${amt.toFixed(2)}`;
+  }
+  if(amtEl) amtEl.textContent=amt>0?fmtD(amt):'$0.00';
+  calcInvTotal();
+}
+
+function calcInvTotal(){
+  const base=window._invBaseTotal||0;
+  let acc=0;
+  const HOURLY=['det_port','det_cust'];
+  const DAILY=['storage'];
+  const ALL_KEYS=['chassis','prepull','det_port','det_cust','storage','ovw43','ovw48','toll','bobtail'];
+  ALL_KEYS.forEach(k=>{
+    if(!document.getElementById('acc-chk-'+k)?.checked) return;
+    if(HOURLY.includes(k)||DAILY.includes(k)){
+      const amtEl=document.getElementById('acc-amt-'+k);
+      acc+=parseFloat(amtEl?.textContent?.replace(/[^0-9.]/g,''))||0;
+    } else {
+      acc+=parseFloat(document.getElementById('acc-flat-'+k)?.value)||0;
+    }
+  });
+  if(document.getElementById('acc-chk-custom')?.checked)
+    acc+=parseFloat(document.getElementById('acc-flat-custom')?.value)||0;
+  const el=document.getElementById('inv-acc-total');
+  const tot=document.getElementById('inv-grand-total');
+  if(el) el.textContent=fmtD(acc);
+  if(tot) tot.textContent=fmtD(base+acc);
+}
+
+async function saveInvoiceData(type, id){
+  const num=($('inv-num')||{}).value?.trim();
+  if(!num){alert('Invoice number required.');return;}
+  const base=window._invBaseTotal||0;
+  const HOURLY=['det_port','det_cust'];
+  const DAILY=['storage'];
+  const ALL_KEYS=['chassis','prepull','det_port','det_cust','storage','ovw43','ovw48','toll','bobtail'];
+  const accessorials={};
+  let accTotal=0;
+  ALL_KEYS.forEach(k=>{
+    const checked=document.getElementById('acc-chk-'+k)?.checked||false;
+    if(!checked) return;
+    const entry={enabled:true};
+    if(HOURLY.includes(k)){
+      entry.freeHrs=parseFloat(document.getElementById('acc-free-'+k)?.value)||0;
+      entry.totalHrs=parseFloat(document.getElementById('acc-hrs-'+k)?.value)||0;
+      entry.rate=parseFloat(document.getElementById('acc-rate-'+k)?.value)||0;
+      const billable=Math.max(0,entry.totalHrs-entry.freeHrs);
+      entry.amount=billable*entry.rate;
+    } else if(DAILY.includes(k)){
+      entry.freeDays=parseFloat(document.getElementById('acc-free-'+k)?.value)||0;
+      entry.totalDays=parseFloat(document.getElementById('acc-days-'+k)?.value)||0;
+      entry.rate=parseFloat(document.getElementById('acc-rate-'+k)?.value)||0;
+      const billable=Math.max(0,entry.totalDays-entry.freeDays);
+      entry.amount=billable*entry.rate;
+    } else {
+      entry.amount=parseFloat(document.getElementById('acc-flat-'+k)?.value)||0;
+    }
+    accessorials[k]=entry;
+    accTotal+=entry.amount||0;
+  });
+  if(document.getElementById('acc-chk-custom')?.checked){
+    accessorials.custom={enabled:true,amount:parseFloat(document.getElementById('acc-flat-custom')?.value)||0,desc:($('custom-desc')||{}).value?.trim()||''};
+    accTotal+=(accessorials.custom.amount||0);
+  }
+  const inv={invNum:num,invDate:($('inv-date')||{}).value||localDateStr(),invDue:($('inv-due')||{}).value||'',notes:($('inv-notes')||{}).value?.trim()||'',baseTotal:base,accTotal,grandTotal:base+accTotal,accessorials,type,savedAt:localDateStr()};
+  saveInvoice(id,inv);
+  // Update shipment status to Invoiced
+  if(type==='drayage'){
+    const q=S.quotes.find(x=>x.id===id);
+    if(q&&q.status==='Delivered'){try{await dbUpdateQuoteStatus(id,'Invoiced');q.status='Invoiced';}catch(e){}}
+  } else if(type==='transload'){
+    const q=(window._tlHistory||[]).find(x=>x.id===id);
+    if(q&&q.status==='Delivered'){q.status='Invoiced';try{localStorage.setItem('tl_history',JSON.stringify(window._tlHistory));}catch(e){}}
+  }
+  logAction('invoice_sent',`${type} invoice ${num} — ${fmtD(base+accTotal)}`,'invoice',id);
+  closeModal();
+  showToast('Invoice saved — '+num,'success');
+  updateActiveBadge();
+  S.activeView='invoicing';S.allInvTab='invoiced';
+  renderActive();
+}
+
+function previewInvoicePDF(type,id){
+  showToast('PDF preview coming soon','info',2000);
 }
 
 
