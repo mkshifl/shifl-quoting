@@ -5034,13 +5034,13 @@ function getAllShipmentsByStatus(statuses){
       date:q.date,bookedDate:q.bookedDate||q.date,
       fqMode:q.fqMode,fqEquip:q.fqEquip,
       from:q.pickupZip,to:q.deliveryZip,total:q.customerRate||0,
-      weight:q.weight,palletCount:q.palletCount,transitTime:q.transitTime,status:q.status});
+      weight:q.weight,palletCount:q.palletCount,transitTime:q.transitTime,shiflRef:q.shiflRef||'',status:q.status});
   });
   (window._tlHistory||[]).filter(q=>statuses.includes(q.status)).forEach(q=>{
     items.push({type:'transload',id:q.id,customer:q.customer,
       carrier:q.outCarrier,date:q.date,bookedDate:q.bookedDate||q.date,
       from:q.drayPort,warehouse:q.warehouseName,to:q.outDeliveryZip,
-      outMode:q.outMode,total:q.totalCustomer||0,status:q.status});
+      outMode:q.outMode,total:q.totalCustomer||0,shiflRef:q.shiflRef||'',status:q.status});
   });
   return items.sort((a,b)=>(b.bookedDate||b.date).localeCompare(a.bookedDate||a.date));
 }
