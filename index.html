@@ -894,7 +894,7 @@ function setSaving(on){
 // ═══════════════════════════════════════════════════════
 let S={
   view:'home',rates:[],quotes:[],customers:[],
-  qi:{customer:'',customerEmail:'',customerId:null,port:'New York / Newark, NJ',zip:'',ld:'Live',drayType:'import',commodity:'',pickupZip:'',
+  qi:{customer:'',customerEmail:'',customerId:null,port:'New York / Newark, NJ',zip:'',ld:'Live',drayType:'import',commodity:'',pickupZip:'',containerCount:1,
       baseMarkup:{...DEFAULT_BASE_MARKUP},flatRates:{...DEFAULT_FLAT_RATES},notes:'',shiflRef:'',
       gensetEnabled:false,gensetScope:'both',gensetCarrierRate:0,gensetCustomerRate:0,
       bobtailEnabled:false,bobtailScope:'both',bobtailCarrierRate:0,bobtailCustomerRate:0,
@@ -1095,7 +1095,7 @@ function buildCarrierComparison(matches){
       <td class="muted small">${r.destination}</td>
       <td class="bold">${fmt(S.qi?.drayType==='export'?(r.exportBase||r.base):r.base)}</td>
       ${vis.map(c=>`<td>${fmt(r[c])}</td>`).join('')}
-      <td class="bold">${fmt(totMode(r,qi.ld))}</td>
+      <td class="bold">${fmt(totMode(r,qi.ld)*(qi.containerCount||1))}${(qi.containerCount||1)>1?`<div style="font-size:10px;color:var(--gray-400)">${fmt(totMode(r,qi.ld))} each</div>`:''}</td>
     </tr>`).join('');
   return `<div class="tbl-wrap"><table><thead><tr><th>#</th><th>Carrier</th><th>Destination</th>${multiPort?'<th style="color:var(--amber)">Port</th>':''}<th>Base</th>${vis.map(c=>`<th>${LABELS[c]}</th>`).join('')}<th>Total (${qi.ld})</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
@@ -1267,6 +1267,15 @@ function renderQuote(){
             <label>Live or Drop</label>
             <select onchange="onLd(this.value)" style="width:110px"><option${qi.ld==='Live'?' selected':''}>Live</option><option${qi.ld==='Drop'?' selected':''}>Drop</option><option${qi.ld==='Both'?' selected':''}>Both</option></select>
           </div>
+          <div class="field" style="width:90px;flex-shrink:0;margin-bottom:0">
+            <label># Containers</label>
+            <div style="display:flex;align-items:center;gap:4px">
+              <button onclick="if(S.qi.containerCount>1){S.qi.containerCount--;refreshCarriersAndPreview();refreshPricingAndPreview();renderQuote();}" style="width:26px;height:30px;border:1px solid var(--gray-200);background:#fff;border-radius:4px;cursor:pointer;font-size:16px;line-height:1;color:var(--navy)">−</button>
+              <span style="font-size:16px;font-weight:800;color:var(--navy);min-width:20px;text-align:center">${qi.containerCount||1}</span>
+              <button onclick="if(S.qi.containerCount<10){S.qi.containerCount=(S.qi.containerCount||1)+1;refreshCarriersAndPreview();refreshPricingAndPreview();renderQuote();}" style="width:26px;height:30px;border:1px solid var(--gray-200);background:#fff;border-radius:4px;cursor:pointer;font-size:16px;line-height:1;color:var(--navy)">+</button>
+            </div>
+            ${(qi.containerCount||1)>1?`<div style="font-size:10px;color:var(--amber);font-weight:600;margin-top:2px">×${qi.containerCount} containers</div>`:''}
+          </div>
         </div>
       </div>
       <div class="card"><div class="sec-head">Pricing</div><div id="pricing-section">${buildPricingSection()}</div></div>
@@ -1274,7 +1283,7 @@ function renderQuote(){
         <div id="lane-history-body">${buildLaneHistory(qi.zip,qi.ld)}</div>
       </div>
       <div class="card">
-        <div class="sec-head" id="carriers-head">Carriers · ${qi.zip||'—'} · ${qi.ld}${matches.length?` <span class="badge b">${matches.length} found</span>`:''}</div>
+        <div class="sec-head" id="carriers-head">Carriers · ${qi.zip||'—'} · ${qi.ld}${(qi.containerCount||1)>1?` <span class="badge" style="background:#f59e0b;color:#fff">×${qi.containerCount}</span>`:''}${matches.length?` <span class="badge b">${matches.length} found</span>`:''}</div>
         <div id="carriers-body">${buildCarrierComparison(matches)}</div>
       </div>
     </div>
@@ -1974,7 +1983,7 @@ function renderFqLog(){
     <tr style="cursor:pointer" onclick="showFqQuoteModal(${i})" title="Click to view" onmouseenter="showQuotePreview(event,{customer:'${q.customer||''}',lane:'${q.pickupZip||''} → ${q.deliveryZip||''}',carrier:'${q.carrier||''}',carrierRate:${q.carrierRate||0},customerRate:${q.customerRate||0},profit:${q.profit||0},margin:${q.profitPct||0},status:'${q.status}',statusBadge:'${q.status==='Booked'?'g':q.status==='Lost'?'r':'a'}',date:'${q.date||''}'})" onmouseleave="hideQuotePreview()">
       <td onclick="event.stopPropagation()" style="width:32px;text-align:center">
         <input type="checkbox" ${sel.has(i)?'checked':''} onchange="toggleFqSelect(${i},this.checked)" style="width:auto;cursor:pointer"></td>
-      <td class="muted small">${q.date}${q.drayType==='export'?'<br><span class="badge" style="font-size:9px;background:#92400e;color:#fff">EXP</span>':''}</td>
+      <td class="muted small">${q.date}${q.drayType==='export'?'<br><span class="badge" style="font-size:9px;background:#92400e;color:#fff">EXP</span>':''}${(q.containerCount||1)>1?`<br><span class="badge" style="font-size:9px;background:#f59e0b;color:#fff">×${q.containerCount}</span>`:''}</td>
       <td class="bold">${q.customer||'—'}</td>
       <td onclick="event.stopPropagation()" style="min-width:100px">
         <input type="text" value="${q.shiflRef||''}"
@@ -2435,7 +2444,7 @@ function renderFqCarriers(){
           <td>${q.pickupZip} → ${q.deliveryZip}</td>
           <td>${q.weight?Number(q.weight).toLocaleString()+' lbs':'—'}</td>
           <td class="bold">${fmtD(q.carrierRate)}</td>
-          <td class="muted small">${q.date}${q.drayType==='export'?'<br><span class="badge" style="font-size:9px;background:#92400e;color:#fff">EXP</span>':''}</td>
+          <td class="muted small">${q.date}${q.drayType==='export'?'<br><span class="badge" style="font-size:9px;background:#92400e;color:#fff">EXP</span>':''}${(q.containerCount||1)>1?`<br><span class="badge" style="font-size:9px;background:#f59e0b;color:#fff">×${q.containerCount}</span>`:''}</td>
           <td><span class="badge ${q.status==='Booked'?'g':q.status==='Lost'?'gr':'a'}">${q.status}</span></td>
         </tr>`).join('')}</tbody>
       </table></div>
@@ -2663,7 +2672,7 @@ function renderFqDashboard(){
       ${recent.length?`<div class="tbl-wrap" style="box-shadow:none;border:none"><table>
         <thead><tr><th>Date</th><th>Customer</th><th>Type</th><th>Lane</th><th>Carrier</th><th>Customer rate</th><th>Profit</th><th>Status</th></tr></thead>
         <tbody>${recent.map((q,i)=>`<tr>
-          <td class="muted small">${q.date}${q.drayType==='export'?'<br><span class="badge" style="font-size:9px;background:#92400e;color:#fff">EXP</span>':''}</td>
+          <td class="muted small">${q.date}${q.drayType==='export'?'<br><span class="badge" style="font-size:9px;background:#92400e;color:#fff">EXP</span>':''}${(q.containerCount||1)>1?`<br><span class="badge" style="font-size:9px;background:#f59e0b;color:#fff">×${q.containerCount}</span>`:''}</td>
           <td class="bold">${q.customer||'—'}</td>
           <td>${modeBadge(q.fqMode)}</td>
           <td>${q.pickupZip} → ${q.deliveryZip}</td>
@@ -4500,7 +4509,7 @@ function renderTlDashboard(){
       <div class="tbl-wrap" style="box-shadow:none;border:none"><table>
         <thead><tr><th>Date</th><th>Customer</th><th>Origin</th><th>Warehouse</th><th>Total</th><th>Status</th></tr></thead>
         <tbody>${all.slice(0,8).map(q=>`<tr>
-          <td class="muted small">${q.date}${q.drayType==='export'?'<br><span class="badge" style="font-size:9px;background:#92400e;color:#fff">EXP</span>':''}</td><td class="bold">${q.customer}</td>
+          <td class="muted small">${q.date}${q.drayType==='export'?'<br><span class="badge" style="font-size:9px;background:#92400e;color:#fff">EXP</span>':''}${(q.containerCount||1)>1?`<br><span class="badge" style="font-size:9px;background:#f59e0b;color:#fff">×${q.containerCount}</span>`:''}</td><td class="bold">${q.customer}</td>
           <td class="muted small">${q.drayPort?q.drayPort.split(',')[0]:'—'}</td>
           <td class="muted small">${q.warehouseName||'—'}</td>
           <td class="bold" style="color:var(--steel)">${fmtD(q.totalCustomer)}</td>
