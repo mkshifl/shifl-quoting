@@ -919,7 +919,7 @@ let S={
       lclPriceBy:'pallets', cbm:0, transitTime:'',
       calc:{l:'',w:'',h:'',pieces:'',weightLbs:'',unit:'in'}},
   fqTab:'builder',
-  activeFilter:'all',activeView:'active',allInvTab:'pending',rateTab:'import',invoices:{},reportTab:'lanes',reportMode:'All',fqInvTab:'pending',aqTab:'builder',aqFilter:'all',_auditDate:'all',
+  activeFilter:'all',activeView:'active',allInvTab:'pending',invMainTab:'customer',rateTab:'import',invoices:{},reportTab:'lanes',reportMode:'All',fqInvTab:'pending',aqTab:'builder',aqFilter:'all',_auditDate:'all',
   tl:null, // initialized in boot via defaultTlState()
   tlTab:'builder',
 };
@@ -9684,103 +9684,179 @@ function previewInvoicePDF(type,id){
 
 
 function renderFullInvoicing(){
-  const tab=S.allInvTab||'pending';
+  const mainTab=S.invMainTab||'customer';
+  const subTab=S.allInvTab||'pending';
+
+  // ── Topbar: Customer / Carrier toggle ─────────────────────────────────
   $('topbar-right').innerHTML=`
-    <div style="display:flex;gap:0;background:var(--gray-100);padding:3px;border-radius:var(--radius)">
-      ${[{id:'pending',label:'⏳ Pending'},{id:'invoiced',label:'📤 Invoiced'},{id:'paid',label:'✅ Paid'}].map(t=>
-        `<button onclick="S.allInvTab='${t.id}';renderFullInvoicing()"
-          style="padding:5px 14px;border-radius:4px;border:none;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;background:${tab===t.id?'#fff':'none'};color:${tab===t.id?'var(--navy)':'var(--gray-500)'}">
-          ${t.label}
-        </button>`).join('')}
+    <div style="display:flex;gap:0;border:1.5px solid var(--gray-200);border-radius:7px;overflow:hidden">
+      <button onclick="S.invMainTab='customer';S.allInvTab='pending';renderFullInvoicing()"
+        style="padding:7px 20px;border:none;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;background:${mainTab==='customer'?'#1a2e4a':'#fff'};color:${mainTab==='customer'?'#fff':'var(--gray-500)'}">
+        🧾 Customer (AR)
+      </button>
+      <button onclick="S.invMainTab='carrier';S.allInvTab='pending';renderFullInvoicing()"
+        style="padding:7px 20px;border:none;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;background:${mainTab==='carrier'?'#92400e':'#fff'};color:${mainTab==='carrier'?'#fff':'var(--gray-500)'}">
+        🚛 Carrier (AP)
+      </button>
     </div>`;
 
-  // Collect ALL shipments across all modes
-  const WON=['Booked','Delivered','Invoiced','Paid'];
-  const dray=(S.quotes||[]).map(q=>({id:q.id,type:'drayage',customer:q.customer||'—',detail:`${q.port||'—'} → ${q.zip||'—'}`,carrier:q.carrier||'—',amount:getInvoice(q.id)?.grandTotal||q.customerRates?.total||0,baseAmount:q.customerRates?.total||0,status:q.status,invoiceNum:getInvoice(q.id)?.invNum||q.invoiceNum||'',invoiceDate:getInvoice(q.id)?.invDate||'',invoiceDueDate:getInvoice(q.id)?.invDue||'',paidDate:q.paidDate,modeLabel:'Drayage',shiflRef:q.shiflRef||'',date:q.date}));
-  const fq=(window._fqHistory||[]).map(q=>({id:q.id,type:'freight',customer:q.customer||'—',detail:`${q.pickupZip||'—'} → ${q.deliveryZip||'—'}`,carrier:q.carrier||'—',amount:q.customerRate||0,baseAmount:q.customerRate||0,status:q.status,invoiceNum:q.invoiceNum||'',invoiceDate:q.invoiceDate||'',invoiceDueDate:q.invoiceDueDate||'',paidDate:q.paidDate,modeLabel:q.fqMode||'Freight',shiflRef:q.shiflRef||'',date:q.date}));
-  const tl=(window._tlHistory||[]).map(q=>({id:q.id,type:'transload',customer:q.customer||'—',detail:`${q.drayPort||'—'} → ${q.outDeliveryZip||'—'}`,carrier:q.outCarrier||'—',amount:getInvoice(q.id)?.grandTotal||q.totalCustomer||0,baseAmount:q.totalCustomer||0,status:q.status,invoiceNum:getInvoice(q.id)?.invNum||q.invoiceNum||'',invoiceDate:getInvoice(q.id)?.invDate||'',invoiceDueDate:getInvoice(q.id)?.invDue||'',paidDate:q.paidDate,modeLabel:'Transload',shiflRef:q.shiflRef||'',date:q.date}));
+  // ── Collect all shipments ─────────────────────────────────────────────
+  const dray=(S.quotes||[]).map(q=>({id:q.id,type:'drayage',customer:q.customer||'—',detail:`${q.port||'—'} → ${q.zip||'—'}`,carrier:q.carrier||'—',
+    customerAmount:getInvoice(q.id)?.grandTotal||q.customerRates?.total||0,
+    carrierAmount:getCarrierInvoice(q.id)?.grandTotal||q.carrierRates?.total||0,
+    status:q.status,
+    custInv:getInvoice(q.id),carrInv:getCarrierInvoice(q.id),
+    invoiceNum:getInvoice(q.id)?.invNum||'',carrierInvNum:getCarrierInvoice(q.id)?.invNum||'',
+    invDue:getInvoice(q.id)?.invDue||'',carrInvDue:getCarrierInvoice(q.id)?.invDue||'',
+    paidDate:q.paidDate,modeLabel:'Drayage',shiflRef:q.shiflRef||'',date:q.date}));
+  const fq=(window._fqHistory||[]).map(q=>({id:q.id,type:'freight',customer:q.customer||'—',detail:`${q.pickupZip||'—'} → ${q.deliveryZip||'—'}`,carrier:q.carrier||'—',
+    customerAmount:q.customerRate||0,carrierAmount:q.carrierRate||0,
+    status:q.status,custInv:null,carrInv:null,
+    invoiceNum:q.invoiceNum||'',carrierInvNum:'',
+    invDue:q.invoiceDueDate||'',carrInvDue:'',
+    paidDate:q.paidDate,modeLabel:q.fqMode||'Freight',shiflRef:q.shiflRef||'',date:q.date}));
+  const tl=(window._tlHistory||[]).map(q=>({id:q.id,type:'transload',customer:q.customer||'—',detail:`${q.drayPort||'—'} → ${q.outDeliveryZip||'—'}`,carrier:q.outCarrier||'—',
+    customerAmount:getInvoice(q.id)?.grandTotal||q.totalCustomer||0,
+    carrierAmount:getCarrierInvoice(q.id)?.grandTotal||q.drayCarrierCost||0,
+    status:q.status,custInv:getInvoice(q.id),carrInv:getCarrierInvoice(q.id),
+    invoiceNum:getInvoice(q.id)?.invNum||'',carrierInvNum:getCarrierInvoice(q.id)?.invNum||'',
+    invDue:getInvoice(q.id)?.invDue||'',carrInvDue:getCarrierInvoice(q.id)?.invDue||'',
+    paidDate:q.paidDate,modeLabel:'Transload',shiflRef:q.shiflRef||'',date:q.date}));
   const all=[...dray,...fq,...tl];
 
-  const pending=all.filter(q=>q.status==='Delivered');
-  const invoiced=all.filter(q=>q.status==='Invoiced');
+  const delivered=all.filter(q=>q.status==='Delivered');
+  const invoicedCust=all.filter(q=>q.status==='Invoiced');
+  const invoicedCarr=all.filter(q=>q.status==='Invoiced'||q.status==='Delivered');
   const paid=all.filter(q=>q.status==='Paid');
 
-  // Update badge
+  // Update nav badge
   const badge=$('inv-nav-badge');
-  if(badge){const n=pending.length+invoiced.filter(q=>{const d=q.invoiceDueDate;return d&&new Date(d+'T12:00:00')<new Date();}).length;badge.textContent=n;badge.style.display=n?'inline':'none';}
+  if(badge){const n=delivered.length;badge.textContent=n;badge.style.display=n?'inline':'none';}
 
-  const tabBar=`<div style="display:flex;gap:4px;background:var(--gray-100);padding:3px;border-radius:var(--radius);width:fit-content;margin-bottom:18px">
-    ${[{id:'pending',label:`⏳ Pending Invoice (${pending.length})`},{id:'invoiced',label:`📤 Invoiced (${invoiced.length})`},{id:'paid',label:`✅ Paid (${paid.length})`}]
-      .map(t=>`<button onclick="S.allInvTab='${t.id}';renderFullInvoicing()" style="padding:6px 14px;border-radius:5px;border:none;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;background:${tab===t.id?'#fff':'none'};color:${tab===t.id?'var(--navy)':'var(--gray-500)'};box-shadow:${tab===t.id?'0 1px 3px rgba(0,0,0,.08)':'none'}">${t.label}</button>`).join('')}
-  </div>`;
+  if(mainTab==='customer'){
+    renderCustomerInvoiceTab(all,delivered,invoicedCust,paid,subTab);
+  } else {
+    renderCarrierInvoiceTab(all,delivered,paid,subTab);
+  }
+}
 
-  // KPI row
-  const totalPending=pending.reduce((s,q)=>s+q.amount,0);
-  const totalInvoiced=invoiced.reduce((s,q)=>s+q.amount,0);
-  const totalPaid=paid.reduce((s,q)=>s+q.amount,0);
-  const overdue=invoiced.filter(q=>q.invoiceDueDate&&new Date(q.invoiceDueDate+'T12:00:00')<new Date());
+function renderCustomerInvoiceTab(all,pending,invoiced,paid,subTab){
+  const totalPending=pending.reduce((s,q)=>s+q.customerAmount,0);
+  const totalInvoiced=invoiced.reduce((s,q)=>s+q.customerAmount,0);
+  const totalPaid=paid.reduce((s,q)=>s+q.customerAmount,0);
+  const today=localDateStr();
+  const overdue=invoiced.filter(q=>q.invDue&&q.invDue<today);
 
   const kpis=`<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px">
     <div class="kpi"><div class="kpi-lbl">Pending invoice</div><div class="kpi-val" style="color:var(--amber)">${pending.length}</div><div style="font-size:11px;color:var(--gray-400);margin-top:2px">${fmtD(totalPending)}</div></div>
-    <div class="kpi"><div class="kpi-lbl">Outstanding</div><div class="kpi-val" style="color:var(--steel)">${fmtD(totalInvoiced)}</div><div style="font-size:11px;color:var(--gray-400);margin-top:2px">${invoiced.length} invoices</div></div>
-    <div class="kpi"><div class="kpi-lbl">Overdue</div><div class="kpi-val" style="color:${overdue.length?'var(--red)':'var(--green)'}">${overdue.length}</div><div style="font-size:11px;color:var(--gray-400);margin-top:2px">${overdue.length?fmtD(overdue.reduce((s,q)=>s+q.amount,0))+' past due':'All current'}</div></div>
-    <div class="kpi"><div class="kpi-lbl">Collected</div><div class="kpi-val" style="color:var(--green)">${fmtD(totalPaid)}</div><div style="font-size:11px;color:var(--gray-400);margin-top:2px">${paid.length} loads paid</div></div>
+    <div class="kpi"><div class="kpi-lbl">Outstanding AR</div><div class="kpi-val" style="color:var(--steel)">${fmtD(totalInvoiced)}</div><div style="font-size:11px;color:var(--gray-400);margin-top:2px">${invoiced.length} invoices</div></div>
+    <div class="kpi"><div class="kpi-lbl">Overdue</div><div class="kpi-val" style="color:${overdue.length?'var(--red)':'var(--green)'}">${overdue.length}</div><div style="font-size:11px;color:var(--gray-400);margin-top:2px">${overdue.length?fmtD(overdue.reduce((s,q)=>s+q.customerAmount,0))+' past due':'All current'}</div></div>
+    <div class="kpi"><div class="kpi-lbl">Collected</div><div class="kpi-val" style="color:var(--green)">${fmtD(totalPaid)}</div><div style="font-size:11px;color:var(--gray-400);margin-top:2px">${paid.length} paid</div></div>
   </div>`;
 
+  const tabBar=buildInvSubTabs(subTab,'customer',pending.length,invoiced.length,paid.length);
   let body='';
-  if(tab==='pending'){
-    if(!pending.length){$('page').innerHTML=kpis+tabBar+`<div class="empty"><div class="empty-ico">✅</div><p>No loads pending invoice</p><small>Loads appear here after being marked Delivered</small></div>`;return;}
-    const rows=pending.map(q=>`<tr>
-      <td><div class="bold">${q.customer}</div><div class="muted small">${q.shiflRef||q.date||'—'}</div></td>
+
+  if(subTab==='pending'){
+    if(!pending.length){$('page').innerHTML=kpis+tabBar+`<div class="empty"><div class="empty-ico">✅</div><p>No loads pending customer invoice</p></div>`;return;}
+    body=`<div class="tbl-wrap"><table><thead><tr><th>Customer</th><th>Type</th><th>Ref #</th><th>Lane</th><th>Carrier</th><th>Amount</th><th></th></tr></thead><tbody>
+    ${pending.map(q=>`<tr>
+      <td><div class="bold">${q.customer}</div><div class="muted small">${q.date}</div></td>
       <td>${modeBadge(q.modeLabel)}</td>
+      <td style="font-family:monospace;font-size:12px;color:var(--steel);font-weight:600">${q.shiflRef||'—'}</td>
       <td class="muted small">${q.detail}</td>
       <td class="muted">${q.carrier}</td>
-      <td class="money" style="color:var(--steel);font-weight:700">${fmtD(q.amount)}</td>
+      <td class="money" style="color:var(--steel);font-weight:700">${fmtD(q.customerAmount)}</td>
       <td onclick="event.stopPropagation()" style="white-space:nowrap">
-        <button class="btn sm blue" onclick="openInvoiceBuilder('${q.type}','${q.id}')">🧾 Customer</button>
-          <button class="btn sm" onclick="openCarrierInvoiceBuilder('${q.type}','${q.id}')" style="color:#d97706;border-color:#fbbf24">🚛 Carrier</button>
-        <button class="btn sm" onclick="revertToActive('${q.type}','${q.id}')" style="margin-left:4px;color:#d97706;border-color:#fbbf24">↩️ Revert</button>
+        <button class="btn sm blue" onclick="openInvoiceBuilder('${q.type}','${q.id}')">🧾 Create</button>
+        <button class="btn sm" onclick="revertToActive('${q.type}','${q.id}')" style="color:#d97706;border-color:#fbbf24">↩️</button>
       </td>
-    </tr>`).join('');
-    body=`<div class="tbl-wrap"><table><thead><tr><th>Customer</th><th>Type</th><th>Lane</th><th>Carrier</th><th>Amount</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`;
-  } else if(tab==='invoiced'){
-    if(!invoiced.length){$('page').innerHTML=kpis+tabBar+`<div class="empty"><div class="empty-ico">📤</div><p>No outstanding invoices</p></div>`;return;}
-    const rows=invoiced.map(q=>{
-      const dueDate=q.invoiceDueDate;
-      const daysOut=dueDate?Math.floor((Date.now()-new Date(dueDate+'T12:00:00'))/864e5):null;
-      const isOverdue=daysOut!==null&&daysOut>0;
+    </tr>`).join('')}</tbody></table></div>`;
+  } else if(subTab==='invoiced'){
+    if(!invoiced.length){$('page').innerHTML=kpis+tabBar+`<div class="empty"><div class="empty-ico">📤</div><p>No outstanding customer invoices</p></div>`;return;}
+    body=`<div class="tbl-wrap"><table><thead><tr><th>Customer</th><th>Type</th><th>Ref #</th><th>Invoice #</th><th>Amount</th><th>Due</th><th></th></tr></thead><tbody>
+    ${invoiced.map(q=>{
+      const isOverdue=q.invDue&&q.invDue<today;
       return`<tr style="${isOverdue?'background:#fff5f5':''}">
-        <td><div class="bold">${q.customer}</div><div class="muted small">${q.shiflRef||q.date||'—'}</div></td>
+        <td><div class="bold">${q.customer}</div><div class="muted small">${q.date}</div></td>
         <td>${modeBadge(q.modeLabel)}</td>
-        <td class="muted small">${q.detail}</td>
+        <td style="font-family:monospace;font-size:12px;color:var(--steel);font-weight:600">${q.shiflRef||'—'}</td>
         <td style="font-family:monospace;font-size:12px;font-weight:600">${q.invoiceNum||'—'}</td>
-        <td class="money" style="color:var(--steel);font-weight:700">${fmtD(q.amount)}</td>
-        <td style="color:${isOverdue?'var(--red)':'var(--gray-500)'};font-weight:${isOverdue?'700':'400'}">
-          ${dueDate?(isOverdue?`⚠ ${daysOut}d overdue`:daysOut===0?'Due today':`${Math.abs(daysOut)}d left`):'—'}
-        </td>
+        <td class="money" style="color:var(--steel);font-weight:700">${fmtD(q.customerAmount)}</td>
+        <td style="color:${isOverdue?'var(--red)':'var(--gray-500)'};font-weight:${isOverdue?'700':'400'}">${q.invDue?(isOverdue?'⚠ Overdue':'Due '+q.invDue):'—'}</td>
         <td onclick="event.stopPropagation()" style="white-space:nowrap">
-          <button class="btn sm" onclick="openInvoiceBuilder('${q.type}','${q.id}')" style="margin-right:4px">✏️ Customer</button>
-          <button class="btn sm" onclick="openCarrierInvoiceBuilder('${q.type}','${q.id}')" style="margin-right:4px;color:#d97706;border-color:#fbbf24">🚛 Carrier</button>
-          <button class="btn sm" onclick="markDrayPaid('${q.type}','${q.id}')" style="color:var(--green);border-color:#86efac">✅ Mark paid</button>
+          <button class="btn sm" onclick="openInvoiceBuilder('${q.type}','${q.id}')" style="margin-right:4px">✏️</button>
+          <button class="btn sm" onclick="markDrayPaid('${q.type}','${q.id}')" style="color:var(--green);border-color:#86efac">✅ Paid</button>
         </td>
-      </tr>`;}).join('');
-    body=`<div class="tbl-wrap"><table><thead><tr><th>Customer</th><th>Type</th><th>Lane</th><th>Invoice #</th><th>Amount</th><th>Due</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`;
-  } else if(tab==='paid'){
-    if(!paid.length){$('page').innerHTML=kpis+tabBar+`<div class="empty"><div class="empty-ico">💰</div><p>No payments recorded yet</p></div>`;return;}
-    const totalCol=paid.reduce((s,q)=>s+q.amount,0);
-    const rows=paid.map(q=>`<tr>
-      <td><div class="bold">${q.customer}</div><div class="muted small">${q.shiflRef||q.date||'—'}</div></td>
+      </tr>`;}).join('')}</tbody></table></div>`;
+  } else {
+    if(!paid.length){$('page').innerHTML=kpis+tabBar+`<div class="empty"><div class="empty-ico">💰</div><p>No payments recorded</p></div>`;return;}
+    body=`<div class="tbl-wrap"><table><thead><tr><th>Customer</th><th>Type</th><th>Ref #</th><th>Invoice #</th><th>Amount</th><th>Paid date</th></tr></thead><tbody>
+    ${paid.map(q=>`<tr>
+      <td><div class="bold">${q.customer}</div></td>
       <td>${modeBadge(q.modeLabel)}</td>
-      <td class="muted small">${q.detail}</td>
+      <td style="font-family:monospace;font-size:12px;color:var(--steel)">${q.shiflRef||'—'}</td>
       <td style="font-family:monospace;font-size:12px;font-weight:600">${q.invoiceNum||'—'}</td>
-      <td class="money" style="color:var(--green);font-weight:700">${fmtD(q.amount)}</td>
+      <td class="money" style="color:var(--green);font-weight:700">${fmtD(q.customerAmount)}</td>
       <td class="muted">${q.paidDate||'—'}</td>
-    </tr>`).join('');
-    body=`<div class="kpi" style="width:220px;margin-bottom:16px"><div class="kpi-lbl">Total collected</div><div class="kpi-val" style="color:var(--green)">${fmtD(totalCol)}</div></div>
-    <div class="tbl-wrap"><table><thead><tr><th>Customer</th><th>Type</th><th>Lane</th><th>Invoice #</th><th>Amount</th><th>Paid date</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+    </tr>`).join('')}</tbody></table></div>`;
   }
   $('page').innerHTML=kpis+tabBar+body;
 }
+
+function renderCarrierInvoiceTab(all,delivered,paid,subTab){
+  const toPay=delivered; // need to pay carrier for all delivered
+  const totalToPay=toPay.reduce((s,q)=>s+q.carrierAmount,0);
+  const totalPaid=paid.reduce((s,q)=>s+q.carrierAmount,0);
+  const today=localDateStr();
+  const ovrdCarrier=toPay.filter(q=>q.carrInv?.invDue&&q.carrInv.invDue<today);
+
+  const kpis=`<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:20px">
+    <div class="kpi"><div class="kpi-lbl">Pending payment</div><div class="kpi-val" style="color:#d97706">${toPay.length}</div><div style="font-size:11px;color:var(--gray-400);margin-top:2px">${fmtD(totalToPay)}</div></div>
+    <div class="kpi"><div class="kpi-lbl">Overdue AP</div><div class="kpi-val" style="color:${ovrdCarrier.length?'var(--red)':'var(--green)'}">${ovrdCarrier.length}</div><div style="font-size:11px;color:var(--gray-400);margin-top:2px">${ovrdCarrier.length?'Past due date':'All current'}</div></div>
+    <div class="kpi"><div class="kpi-lbl">Paid to carriers</div><div class="kpi-val" style="color:var(--green)">${fmtD(totalPaid)}</div><div style="font-size:11px;color:var(--gray-400);margin-top:2px">${paid.length} loads</div></div>
+  </div>`;
+
+  const tabBar=buildInvSubTabs(subTab,'carrier',toPay.length,0,paid.length);
+  let body='';
+
+  if(subTab==='pending'){
+    if(!toPay.length){$('page').innerHTML=kpis+tabBar+`<div class="empty"><div class="empty-ico">✅</div><p>No pending carrier payments</p></div>`;return;}
+    body=`<div class="tbl-wrap"><table><thead><tr><th>Customer</th><th>Type</th><th>Ref #</th><th>Carrier</th><th>Carrier cost</th><th>Carrier inv #</th><th></th></tr></thead><tbody>
+    ${toPay.map(q=>`<tr>
+      <td><div class="bold">${q.customer}</div><div class="muted small">${q.date}</div></td>
+      <td>${modeBadge(q.modeLabel)}</td>
+      <td style="font-family:monospace;font-size:12px;color:var(--steel);font-weight:600">${q.shiflRef||'—'}</td>
+      <td class="bold" style="color:var(--navy)">${q.carrier}</td>
+      <td class="money" style="color:#d97706;font-weight:700">${fmtD(q.carrierAmount)}</td>
+      <td style="font-family:monospace;font-size:12px;color:var(--gray-500)">${q.carrierInvNum||'—'}</td>
+      <td onclick="event.stopPropagation()" style="white-space:nowrap">
+        <button class="btn sm" onclick="openCarrierInvoiceBuilder('${q.type}','${q.id}')" style="color:#d97706;border-color:#fbbf24">🚛 Invoice</button>
+      </td>
+    </tr>`).join('')}</tbody></table></div>`;
+  } else {
+    if(!paid.length){$('page').innerHTML=kpis+tabBar+`<div class="empty"><div class="empty-ico">💳</div><p>No carrier payments recorded</p></div>`;return;}
+    body=`<div class="tbl-wrap"><table><thead><tr><th>Customer</th><th>Type</th><th>Carrier</th><th>Carrier cost</th><th>Paid date</th></tr></thead><tbody>
+    ${paid.map(q=>`<tr>
+      <td><div class="bold">${q.customer}</div></td>
+      <td>${modeBadge(q.modeLabel)}</td>
+      <td class="bold">${q.carrier}</td>
+      <td class="money" style="color:var(--green);font-weight:700">${fmtD(q.carrierAmount)}</td>
+      <td class="muted">${q.paidDate||'—'}</td>
+    </tr>`).join('')}</tbody></table></div>`;
+  }
+  $('page').innerHTML=kpis+tabBar+body;
+}
+
+function buildInvSubTabs(active,main,pendingCount,invoicedCount,paidCount){
+  const tabs=main==='customer'
+    ?[{id:'pending',label:`⏳ Pending (${pendingCount})`},{id:'invoiced',label:`📤 Invoiced (${invoicedCount})`},{id:'paid',label:`✅ Paid (${paidCount})`}]
+    :[{id:'pending',label:`⏳ To pay (${pendingCount})`},{id:'paid',label:`✅ Paid (${paidCount})`}];
+  return `<div style="display:flex;gap:4px;background:var(--gray-100);padding:3px;border-radius:var(--radius);width:fit-content;margin-bottom:18px">
+    ${tabs.map(t=>`<button onclick="S.allInvTab='${t.id}';renderFullInvoicing()" style="padding:6px 14px;border-radius:5px;border:none;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;background:${active===t.id?'#fff':'none'};color:${active===t.id?'var(--navy)':'var(--gray-500)'};box-shadow:${active===t.id?'0 1px 3px rgba(0,0,0,.08)':'none'}">${t.label}</button>`).join('')}
+  </div>`;
+}
+
 
 function updateInvNavBadge(){
   const dray=(S.quotes||[]).filter(q=>q.status==='Delivered').length;
