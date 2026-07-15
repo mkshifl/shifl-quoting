@@ -894,7 +894,7 @@ function setSaving(on){
 // ═══════════════════════════════════════════════════════
 let S={
   view:'home',rates:[],quotes:[],customers:[],
-  qi:{customer:'',customerEmail:'',customerId:null,port:'New York / Newark, NJ',zip:'',ld:'Live',drayType:'import',commodity:'',pickupZip:'',containerCount:1,
+  qi:{customer:'',customerEmail:'',customerId:null,port:'New York / Newark, NJ',zip:'',ld:'Live',drayType:'import',commodity:'',pickupZip:'',containerCount:1,perContainerFlags:{base:true,chassis:true,prepull:true,det_port:true,det_cust:true,storage:true,ovw43:true,ovw48:true,bobtail:true,toll:false,genset:true,triaxle:true},
       baseMarkup:{...DEFAULT_BASE_MARKUP},flatRates:{...DEFAULT_FLAT_RATES},notes:'',shiflRef:'',
       gensetEnabled:false,gensetScope:'both',gensetCarrierRate:0,gensetCustomerRate:0,
       bobtailEnabled:false,bobtailScope:'both',bobtailCarrierRate:0,bobtailCustomerRate:0,
@@ -1003,8 +1003,9 @@ function totMode(r,ld){
 function cuRate(carrierVal,charge){
   const ld=S.qi.ld;
   if(!isApplicable(charge,ld)) return 0;
-  if(charge==='base'){if(!carrierVal) return 0;const bm=S.qi.baseMarkup;return bm.mode==='pct'?carrierVal*(1+bm.amount/100):carrierVal+bm.amount;}
-  return carrierVal>0?(S.qi.flatRates[charge]||0):0;
+  const mult=getMultiplier(charge);
+  if(charge==='base'){if(!carrierVal) return 0;const bm=S.qi.baseMarkup;const single=bm.mode==='pct'?carrierVal*(1+bm.amount/100):carrierVal+bm.amount;return single*mult;}
+  return carrierVal>0?((S.qi.flatRates[charge]||0)*mult):0;
 }
 function cuTot(r){
   let t=CHARGES.reduce((s,c)=>s+cuRate(Number(r[c])||0,c),0);
@@ -1095,7 +1096,7 @@ function buildCarrierComparison(matches){
       <td class="muted small">${r.destination}</td>
       <td class="bold">${fmt(S.qi?.drayType==='export'?(r.exportBase||r.base):r.base)}</td>
       ${vis.map(c=>`<td>${fmt(r[c])}</td>`).join('')}
-      <td class="bold">${fmt(totMode(r,qi.ld)*(qi.containerCount||1))}${(qi.containerCount||1)>1?`<div style="font-size:10px;color:var(--gray-400)">${fmt(totMode(r,qi.ld))} each</div>`:''}</td>
+      <td class="bold">${fmt(totMode(r,qi.ld)*getMultiplier('base')+(CHARGES.filter(c=>c!=='base'&&isApplicable(c,qi.ld)).reduce((s,c)=>s+(Number(r[c])||0)*getMultiplier(c),0)))}${(qi.containerCount||1)>1?`<div style="font-size:10px;color:var(--gray-400)">${fmt(totMode(r,qi.ld))} base each</div>`:''}</td>
     </tr>`).join('');
   return `<div class="tbl-wrap"><table><thead><tr><th>#</th><th>Carrier</th><th>Destination</th>${multiPort?'<th style="color:var(--amber)">Port</th>':''}<th>Base</th>${vis.map(c=>`<th>${LABELS[c]}</th>`).join('')}<th>Total (${qi.ld})</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
@@ -1130,11 +1131,21 @@ function buildPreviewHTML(sel){
 }
 function buildPricingSection(){
   const qi=S.qi;const ld=qi.ld;const bm=qi.baseMarkup;const fr=qi.flatRates;
+  const ctrs=qi.containerCount||1;
+  const flags=qi.perContainerFlags||{};
   const extraRows=CHARGES.filter(c=>c!=='base'&&isApplicable(c,ld)).map(c=>{
     const note=c==='det_port'?'Per hour at port':c==='det_cust'?'Per hour at customer':c==='ovw43'?'Over 43,000 lb':c==='ovw48'?'Over 48,000 lb':c==='toll'?'Only if applicable':c==='bobtail'?'Drop moves':'';
+    const isPerCtr=flags[c]!==false;
+    const toggleBtn=ctrs>1?`<button onclick="togglePerContainer('${c}')" title="${isPerCtr?'Per container — click to set as per trip':'Per trip — click to set as per container'}"
+      style="padding:2px 8px;border-radius:4px;border:1px solid ${isPerCtr?'var(--steel)':'var(--amber)'};background:${isPerCtr?'var(--blue-bg)':'#fff8ed'};color:${isPerCtr?'var(--steel)':'#d97706'};font-size:10px;font-weight:700;cursor:pointer;white-space:nowrap">
+      ${isPerCtr?'× per ctr':'flat'}
+    </button>`:'';
     return `<tr><td style="color:var(--gray-600);font-weight:500;padding:5px 0;width:160px">${LABELS[c]}${note?`<div class="cond-note">${note}</div>`:''}</td>
       <td style="padding:5px 0"><div style="display:flex;align-items:center;gap:5px"><span style="color:var(--gray-400)">$</span>
-        <input type="number" value="${fr[c]||0}" min="0" oninput="setFlatRate('${c}',+this.value)" style="width:90px;padding:5px 8px;font-size:13px"></div></td></tr>`;
+        <input type="number" value="${fr[c]||0}" min="0" oninput="setFlatRate('${c}',+this.value)" style="width:90px;padding:5px 8px;font-size:13px">
+        ${toggleBtn}
+        ${ctrs>1&&(fr[c]||0)>0?`<span style="font-size:11px;color:var(--gray-400)">=&nbsp;${fmtD((fr[c]||0)*(isPerCtr?ctrs:1))}</span>`:''}
+      </div></td></tr>`;
   }).join('');
   return `<div style="margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid var(--gray-100)">
     <p style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-500);margin-bottom:8px">Base markup</p>
@@ -8787,6 +8798,20 @@ function hideQuotePreview(){
 }
 
 
+
+function togglePerContainer(charge){
+  if(!S.qi.perContainerFlags) S.qi.perContainerFlags={};
+  S.qi.perContainerFlags[charge]=!S.qi.perContainerFlags[charge];
+  refreshCarriersAndPreview();
+  refreshPricingAndPreview();
+  renderQuote();
+}
+function getMultiplier(charge){
+  const n=S.qi.containerCount||1;
+  if(n<=1) return 1;
+  if(!S.qi.perContainerFlags) return n;
+  return S.qi.perContainerFlags[charge]!==false?n:1;
+}
 boot().catch(e=>{$('loading-screen').style.display='none';$('setup-screen').style.display='flex';});
 </script>
 <script>
