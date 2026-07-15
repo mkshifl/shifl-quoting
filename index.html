@@ -495,6 +495,7 @@ body.dark .page{background:#0f1723}
         </button>
         <div class="acc-sub" id="acc-sub-admin">
           <button class="sub-link" id="nav-admin" onclick="goTo('admin')">⚙️ Admin panel</button>
+          <button class="sub-link" id="nav-profit-monitor" onclick="renderProfitMonitor()" style="${_currentUser?.role==='super_admin'?'':'display:none'}">💰 Profit monitor</button>
           <button class="sub-link" id="nav-reports" onclick="goTo('reports')">📈 Reports</button>
           <button class="sub-link" id="nav-activity" onclick="goTo('activity')">📊 Activity log</button>
           <button class="sub-link" id="nav-auditlog" onclick="goTo('auditlog')">📋 Audit log</button>
@@ -920,7 +921,7 @@ let S={
       lclPriceBy:'pallets', cbm:0, transitTime:'',
       calc:{l:'',w:'',h:'',pieces:'',weightLbs:'',unit:'in'}},
   fqTab:'builder',
-  activeFilter:'all',activeView:'active',allInvTab:'pending',invMainTab:'customer',rateTab:'import',invoices:{},reportTab:'lanes',reportMode:'All',fqInvTab:'pending',aqTab:'builder',aqFilter:'all',_auditDate:'all',
+  activeFilter:'all',activeView:'active',allInvTab:'pending',invMainTab:'customer',rateTab:'import',invoices:{},pmFilter:'all',pmDate:'all',reportTab:'lanes',reportMode:'All',fqInvTab:'pending',aqTab:'builder',aqFilter:'all',_auditDate:'all',
   tl:null, // initialized in boot via defaultTlState()
   tlTab:'builder',
 };
@@ -1052,6 +1053,7 @@ function render(){
   else if(S.view==='activity')   renderActivity();
   else if(S.view==='air')         renderAirFreight();
   else if(S.view==='home')        renderHome();
+  else if(S.view==='profit')      renderProfitMonitor();
   else if(S.view==='invoicing')    renderFullInvoicing();
   else if(S.view==='reports')    renderReports();
   else if(S.view==='auditlog')   renderAuditLog();
@@ -10485,6 +10487,156 @@ function showRepeatPicker(){
     </div>
     <div class="modal-foot"><button class="btn" onclick="closeModal()">Cancel</button></div>
   </div></div>`;
+}
+
+// ════════════════════════════════════════════════════════════════════
+// PROFIT MONITOR — Super Admin Only
+// ════════════════════════════════════════════════════════════════════
+function renderProfitMonitor(){
+  if(_currentUser?.role!=='super_admin'){
+    $('page').innerHTML='<div class="empty"><p>Super Admin access only.</p></div>';return;
+  }
+
+  const commPct = parseFloat(localStorage.getItem('shifl_comm_pct')||'0');
+  const filter = S.pmFilter||'all';
+  const dateFilter = S.pmDate||'all';
+
+  const WON=['Delivered','Invoiced','Paid'];
+  const dray=(S.quotes||[]).filter(q=>WON.includes(q.status)).map(q=>({
+    id:q.id,type:'drayage',customer:q.customer||'—',shiflRef:q.shiflRef||'—',
+    lane:`${q.port||'—'} → ${q.zip||'—'}`,carrier:q.carrier||'—',
+    date:q.date,status:q.status,
+    carrierCost:q.carrierRates?.total||0,
+    customerRate:q.customerRates?.total||0,
+    profit:q.profit||0,
+    margin:q.profitPct||0,
+    modeLabel:'Drayage'
+  }));
+  const fq=(window._fqHistory||[]).filter(q=>WON.includes(q.status)).map(q=>({
+    id:q.id,type:'freight',customer:q.customer||'—',shiflRef:q.shiflRef||'—',
+    lane:`${q.pickupZip||'—'} → ${q.deliveryZip||'—'}`,carrier:q.carrier||'—',
+    date:q.date,status:q.status,
+    carrierCost:q.carrierRate||0,
+    customerRate:q.customerRate||0,
+    profit:q.profit||0,
+    margin:q.profitPct||0,
+    modeLabel:q.fqMode||'Freight'
+  }));
+  const tl=(window._tlHistory||[]).filter(q=>WON.includes(q.status)).map(q=>({
+    id:q.id,type:'transload',customer:q.customer||'—',shiflRef:q.shiflRef||'—',
+    lane:`${q.drayPort||'—'} → ${q.outDeliveryZip||'—'}`,carrier:q.outCarrier||'—',
+    date:q.date,status:q.status,
+    carrierCost:(q.drayCarrierCost||0)+(q.warehouseCost||0)+(q.outCarrierCost||0),
+    customerRate:q.totalCustomer||0,
+    profit:(q.totalCustomer||0)-((q.drayCarrierCost||0)+(q.warehouseCost||0)+(q.outCarrierCost||0)),
+    margin:0,
+    modeLabel:'Transload'
+  }));
+
+  let all=[...dray,...fq,...tl];
+
+  // Date filter
+  const today=localDateStr();
+  const week=new Date(Date.now()-7*864e5).toISOString().slice(0,10);
+  const month=new Date(Date.now()-30*864e5).toISOString().slice(0,10);
+  if(dateFilter==='week') all=all.filter(q=>q.date>=week);
+  else if(dateFilter==='month') all=all.filter(q=>q.date>=month);
+  else if(dateFilter==='today') all=all.filter(q=>q.date===today);
+
+  // Mode filter
+  if(filter!=='all') all=all.filter(q=>q.type===filter);
+
+  // Totals
+  const totalCarrier=all.reduce((s,q)=>s+q.carrierCost,0);
+  const totalCustomer=all.reduce((s,q)=>s+q.customerRate,0);
+  const totalProfit=all.reduce((s,q)=>s+q.profit,0);
+  const totalMargin=totalCustomer>0?totalProfit/totalCustomer:0;
+  const myCommission=totalProfit*(commPct/100);
+
+  $('topbar-right').innerHTML='';
+  $('page').innerHTML=`
+  <!-- Commission + filter bar -->
+  <div class="card" style="margin-bottom:14px;display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+    <div style="display:flex;align-items:center;gap:10px;flex:1">
+      <span style="font-size:13px;font-weight:700;color:var(--navy);white-space:nowrap">My commission rate:</span>
+      <div style="display:flex;align-items:center;gap:6px">
+        <input type="number" id="pm-comm" value="${commPct}" min="0" max="100" step="0.5"
+          oninput="localStorage.setItem('shifl_comm_pct',this.value);renderProfitMonitor()"
+          style="width:80px;padding:6px 10px;font-size:16px;font-weight:700;border:2px solid var(--steel);border-radius:var(--radius);text-align:center">
+        <span style="font-size:18px;font-weight:700;color:var(--steel)">%</span>
+        <span style="font-size:12px;color:var(--gray-500)">of profit</span>
+      </div>
+    </div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap">
+      ${['all','drayage','freight','transload'].map(m=>`
+        <button onclick="S.pmFilter='${m}';renderProfitMonitor()" style="padding:5px 12px;border-radius:var(--radius);border:1px solid var(--gray-200);background:${filter===m?'var(--navy)':'#fff'};color:${filter===m?'#fff':'var(--gray-500)'};font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">${m==='all'?'All':m.charAt(0).toUpperCase()+m.slice(1)}</button>`).join('')}
+    </div>
+    <div style="display:flex;gap:6px">
+      ${['all','today','week','month'].map(d=>`
+        <button onclick="S.pmDate='${d}';renderProfitMonitor()" style="padding:5px 12px;border-radius:var(--radius);border:1px solid var(--gray-200);background:${dateFilter===d?'var(--navy)':'#fff'};color:${dateFilter===d?'#fff':'var(--gray-500)'};font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">${d==='all'?'All time':d.charAt(0).toUpperCase()+d.slice(1)}</button>`).join('')}
+    </div>
+  </div>
+
+  <!-- KPI cards -->
+  <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:20px">
+    <div class="kpi"><div class="kpi-lbl">Shipments</div><div class="kpi-val">${all.length}</div></div>
+    <div class="kpi" style="border-color:#fca5a5;background:#fff5f5">
+      <div class="kpi-lbl" style="color:#dc2626">Total carrier pay</div>
+      <div class="kpi-val" style="color:#dc2626;font-size:18px">${fmtD(totalCarrier)}</div>
+    </div>
+    <div class="kpi" style="border-color:#86efac;background:#f0fdf4">
+      <div class="kpi-lbl" style="color:#16a34a">Total customer sell</div>
+      <div class="kpi-val" style="color:#16a34a;font-size:18px">${fmtD(totalCustomer)}</div>
+    </div>
+    <div class="kpi" style="border-color:#93c5fd;background:#eff6ff;border-width:2px">
+      <div class="kpi-lbl" style="color:#1d4ed8;font-size:11px">Net profit</div>
+      <div class="kpi-val" style="color:#1d4ed8;font-size:22px;font-weight:900">${fmtD(totalProfit)}</div>
+      <div style="font-size:11px;color:#3b82f6;margin-top:2px">${pct(totalMargin)} margin</div>
+    </div>
+    <div class="kpi" style="border-color:#c4b5fd;background:#faf5ff;border-width:2px">
+      <div class="kpi-lbl" style="color:#7c3aed;font-size:11px">My commission (${commPct}%)</div>
+      <div class="kpi-val" style="color:#7c3aed;font-size:22px;font-weight:900">${fmtD(myCommission)}</div>
+      <div style="font-size:10px;color:#a78bfa;margin-top:2px">${commPct}% × ${fmtD(totalProfit)}</div>
+    </div>
+  </div>
+
+  <!-- Shipments table -->
+  ${all.length===0?`<div class="empty"><div class="empty-ico">📊</div><p>No completed shipments yet</p></div>`:`
+  <div class="tbl-wrap"><table>
+    <thead><tr>
+      <th>Customer</th><th>Type</th><th>Ref #</th><th>Lane</th><th>Carrier</th><th>Date</th><th>Status</th>
+      <th style="color:#dc2626">Carrier pay</th>
+      <th style="color:#16a34a">Sell rate</th>
+      <th style="color:#1d4ed8">Profit</th>
+      <th style="color:#1d4ed8">Margin</th>
+      <th style="color:#7c3aed">My cut</th>
+    </tr></thead>
+    <tbody>${all.sort((a,b)=>b.date.localeCompare(a.date)).map(q=>{
+      const comm=q.profit*(commPct/100);
+      return`<tr>
+        <td class="bold">${q.customer}</td>
+        <td>${modeBadge(q.modeLabel)}</td>
+        <td style="font-family:monospace;font-size:12px;color:var(--steel);font-weight:600">${q.shiflRef||'—'}</td>
+        <td class="muted small">${q.lane}</td>
+        <td class="muted">${q.carrier}</td>
+        <td class="muted small">${q.date}</td>
+        <td><span class="badge ${q.status==='Paid'?'g':'a'}">${q.status}</span></td>
+        <td class="money" style="color:#dc2626">${fmtD(q.carrierCost)}</td>
+        <td class="money" style="color:#16a34a;font-weight:700">${fmtD(q.customerRate)}</td>
+        <td class="money" style="color:#1d4ed8;font-weight:700">${fmtD(q.profit)}</td>
+        <td style="font-weight:700;color:${q.margin>=0.15?'var(--green)':q.margin>=0.08?'var(--amber)':'var(--red)'}">${pct(q.margin)}</td>
+        <td class="money" style="color:#7c3aed;font-weight:800">${fmtD(comm)}</td>
+      </tr>`;}).join('')}
+      <tr style="background:var(--gray-50);font-weight:700;border-top:2px solid var(--gray-200)">
+        <td colspan="7" style="text-align:right;color:var(--gray-600);padding-right:14px">TOTAL</td>
+        <td class="money" style="color:#dc2626;font-weight:800">${fmtD(totalCarrier)}</td>
+        <td class="money" style="color:#16a34a;font-weight:800">${fmtD(totalCustomer)}</td>
+        <td class="money" style="color:#1d4ed8;font-weight:900;font-size:15px">${fmtD(totalProfit)}</td>
+        <td style="color:#1d4ed8;font-weight:800">${pct(totalMargin)}</td>
+        <td class="money" style="color:#7c3aed;font-weight:900;font-size:15px">${fmtD(myCommission)}</td>
+      </tr>
+    </tbody>
+  </table></div>`}`;
 }
 boot().catch(e=>{$('loading-screen').style.display='none';$('setup-screen').style.display='flex';});
 </script>
