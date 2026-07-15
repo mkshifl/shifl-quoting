@@ -904,7 +904,7 @@ let S={
       pallets:[{w:'',l:'',h:''}],sameDims:true,singleW:'',singleL:'',singleH:'',
       notes:'',customer:'',customerEmail:'',customerId:null,shiflRef:'',
       carriers:[{name:'',rate:''}], markupMode:'flat', markupAmount:150, selCarrierIdx:0,
-      selFqRateId:null, lclDetentionHours:0, lclPalletExchange:0,
+      selFqRateId:null, lclDetentionHours:0, lclPalletExchange:0, lclPalletCount:0, lclFreeHours:2, lclCustomerDetRate:0, lclCustomerPalletRate:0,
       lclPriceBy:'pallets', cbm:0, transitTime:'',
       calc:{l:'',w:'',h:'',pieces:'',weightLbs:'',unit:'in'}},
   fqTab:'builder',
@@ -1803,20 +1803,99 @@ function renderFqBuilder(){
             </div>
           </div>
           ${isSelected?`
-            <div style="border-top:1px solid var(--blue-mid);padding-top:10px;display:grid;grid-template-columns:1fr 1fr;gap:10px">
-              <div class="field" style="margin-bottom:0">
-                <label>Waiting time (hours)</label>
-                <input type="number" value="${fq.lclDetentionHours||0}" min="0" step="0.5"
-                  oninput="S.fq.lclDetentionHours=+this.value;refreshFreightPreview()" onclick="event.stopPropagation()"
-                  placeholder="0" style="padding:5px 8px;font-size:13px">
-                ${r.detentionRate?`<div style="font-size:10px;color:var(--gray-400);margin-top:3px">Rate: ${fmtD(r.detentionRate)}/hr → ${fmtD((fq.lclDetentionHours||0)*(r.detentionRate||0))} total</div>`:'<div style="font-size:10px;color:var(--gray-400);margin-top:3px">Set rate on carrier card to auto-calculate</div>'}
+            <div style="border-top:1px solid var(--blue-mid);padding-top:14px;margin-top:4px">
+
+              <!-- PALLET COUNT (required) -->
+              <div style="background:#fffbeb;border:1.5px solid #fbbf24;border-radius:8px;padding:10px 14px;margin-bottom:14px;display:flex;align-items:center;gap:12px">
+                <div style="font-size:20px">📦</div>
+                <div class="field" style="margin:0;flex:1">
+                  <label style="color:#92400e;font-weight:800">Pallet count <span style="color:var(--red)">*</span></label>
+                  <input type="number" value="${fq.lclPalletCount||''}" min="1"
+                    oninput="S.fq.lclPalletCount=+this.value;refreshFreightPreview()" onclick="event.stopPropagation()"
+                    placeholder="Enter # of pallets" style="padding:5px 8px;font-size:13px;border-color:#fbbf24">
+                </div>
+                ${fq.lclPalletCount?`<div style="font-size:12px;font-weight:700;color:#92400e">${fq.lclPalletCount} pallets</div>`:'<div style="font-size:11px;color:#92400e">Required to save</div>'}
               </div>
-              <div class="field" style="margin-bottom:0">
-                <label>Pallets exchanged</label>
-                <input type="number" value="${fq.lclPalletExchange||0}" min="0"
-                  oninput="S.fq.lclPalletExchange=+this.value;refreshFreightPreview()" onclick="event.stopPropagation()"
-                  placeholder="0" style="padding:5px 8px;font-size:13px">
-                ${r.palletExchangeRate?`<div style="font-size:10px;color:var(--gray-400);margin-top:3px">Rate: ${fmtD(r.palletExchangeRate)}/pallet → ${fmtD((fq.lclPalletExchange||0)*(r.palletExchangeRate||0))} total</div>`:'<div style="font-size:10px;color:var(--gray-400);margin-top:3px">Set rate on carrier card to auto-calculate</div>'}
+
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+
+                <!-- WAITING TIME -->
+                <div style="background:var(--gray-50);border-radius:8px;padding:12px 14px">
+                  <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--gray-500);margin-bottom:10px">⏱ Waiting time</div>
+                  <div class="field" style="margin-bottom:8px">
+                    <label>Free time (hours)</label>
+                    <input type="number" value="${fq.lclFreeHours??2}" min="0" step="0.5"
+                      oninput="S.fq.lclFreeHours=+this.value;refreshFreightPreview()" onclick="event.stopPropagation()"
+                      placeholder="2" style="padding:5px 8px;font-size:13px;width:80px">
+                    <div style="font-size:10px;color:var(--gray-400);margin-top:2px">Hours before billing starts</div>
+                  </div>
+                  <div class="field" style="margin-bottom:8px">
+                    <label>Total waiting (hours)</label>
+                    <input type="number" value="${fq.lclDetentionHours||0}" min="0" step="0.5"
+                      oninput="S.fq.lclDetentionHours=+this.value;refreshFreightPreview()" onclick="event.stopPropagation()"
+                      placeholder="0" style="padding:5px 8px;font-size:13px;width:80px">
+                    ${(fq.lclDetentionHours||0)>(fq.lclFreeHours??2)?
+                      `<div style="font-size:10px;color:var(--amber);font-weight:600;margin-top:2px">
+                        ${fmtD((fq.lclDetentionHours||0)-(fq.lclFreeHours??2),1)}h billable (after ${fq.lclFreeHours??2}h free)
+                      </div>`
+                      :`<div style="font-size:10px;color:var(--green);margin-top:2px">Within free time</div>`}
+                  </div>
+                  <div style="border-top:1px solid var(--gray-200);padding-top:8px;margin-top:8px">
+                    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-400);margin-bottom:6px">Rates</div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+                      <div>
+                        <div style="font-size:10px;color:var(--gray-400)">Carrier ($/hr)</div>
+                        <div style="font-size:12px;font-weight:600;color:var(--navy)">${r.detentionRate?fmtD(r.detentionRate):'—'}</div>
+                      </div>
+                      <div>
+                        <div style="font-size:10px;color:var(--gray-400)">Customer ($/hr)</div>
+                        <input type="number" value="${fq.lclCustomerDetRate||r.detentionRate||''}" min="0" step="1"
+                          oninput="S.fq.lclCustomerDetRate=+this.value;refreshFreightPreview()" onclick="event.stopPropagation()"
+                          placeholder="0" style="padding:3px 6px;font-size:12px;width:70px;font-weight:600">
+                      </div>
+                    </div>
+                    ${(fq.lclDetentionHours||0)>(fq.lclFreeHours??2)?`
+                    <div style="margin-top:6px;padding:6px 8px;background:#fff;border-radius:5px;display:flex;justify-content:space-between;font-size:11px">
+                      <span style="color:var(--gray-500)">Billable:</span>
+                      <span style="font-weight:700;color:var(--red)">Carrier ${fmtD(((fq.lclDetentionHours||0)-(fq.lclFreeHours??2))*(r.detentionRate||0))}</span>
+                      <span style="font-weight:700;color:var(--steel)">Customer ${fmtD(((fq.lclDetentionHours||0)-(fq.lclFreeHours??2))*(fq.lclCustomerDetRate||0))}</span>
+                    </div>`:''}
+                  </div>
+                </div>
+
+                <!-- PALLET EXCHANGE -->
+                <div style="background:var(--gray-50);border-radius:8px;padding:12px 14px">
+                  <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--gray-500);margin-bottom:10px">🔄 Pallet exchange</div>
+                  <div class="field" style="margin-bottom:8px">
+                    <label>Pallets exchanged</label>
+                    <input type="number" value="${fq.lclPalletExchange||0}" min="0"
+                      oninput="S.fq.lclPalletExchange=+this.value;refreshFreightPreview()" onclick="event.stopPropagation()"
+                      placeholder="0" style="padding:5px 8px;font-size:13px;width:80px">
+                    <div style="font-size:10px;color:var(--gray-400);margin-top:2px">Pallets to exchange</div>
+                  </div>
+                  <div style="border-top:1px solid var(--gray-200);padding-top:8px;margin-top:8px">
+                    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-400);margin-bottom:6px">Rates</div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+                      <div>
+                        <div style="font-size:10px;color:var(--gray-400)">Carrier ($/pallet)</div>
+                        <div style="font-size:12px;font-weight:600;color:var(--navy)">${r.palletExchangeRate?fmtD(r.palletExchangeRate):'—'}</div>
+                      </div>
+                      <div>
+                        <div style="font-size:10px;color:var(--gray-400)">Customer ($/pallet)</div>
+                        <input type="number" value="${fq.lclCustomerPalletRate||r.palletExchangeRate||''}" min="0" step="1"
+                          oninput="S.fq.lclCustomerPalletRate=+this.value;refreshFreightPreview()" onclick="event.stopPropagation()"
+                          placeholder="0" style="padding:3px 6px;font-size:12px;width:70px;font-weight:600">
+                      </div>
+                    </div>
+                    ${(fq.lclPalletExchange||0)>0?`
+                    <div style="margin-top:6px;padding:6px 8px;background:#fff;border-radius:5px;display:flex;justify-content:space-between;font-size:11px">
+                      <span style="color:var(--gray-500)">Total:</span>
+                      <span style="font-weight:700;color:var(--red)">Carrier ${fmtD((fq.lclPalletExchange||0)*(r.palletExchangeRate||0))}</span>
+                      <span style="font-weight:700;color:var(--steel)">Customer ${fmtD((fq.lclPalletExchange||0)*(fq.lclCustomerPalletRate||0))}</span>
+                    </div>`:''}
+                  </div>
+                </div>
+
               </div>
             </div>`:''}
         </div>`;
@@ -2473,8 +2552,11 @@ function buildFreightPreview(){
     const cbmQty=parseFloat(fq.cbm)||0;
     const isCbmRate=lclRate.rateType==='perCbm';
     const base=isCbmRate?cbmQty*lclRate.rate:lclRate.rateType==='perPallet'?pCount*lclRate.rate:lclRate.rate;
-    const det=(fq.lclDetentionHours||0)*(lclRate.detentionRate||0);
+    const billableHours=Math.max(0,(fq.lclDetentionHours||0)-(fq.lclFreeHours??2));
+    const det=billableHours*(lclRate.detentionRate||0);
     const pe=(fq.lclPalletExchange||0)*(lclRate.palletExchangeRate||0);
+    const detCu=billableHours*(fq.lclCustomerDetRate||lclRate.detentionRate||0);
+    const peCu=(fq.lclPalletExchange||0)*(fq.lclCustomerPalletRate||lclRate.palletExchangeRate||0);
     carrierRate=base+det+pe;
   } else {
     const sel=fq.carriers[fq.selCarrierIdx]||{};
@@ -2554,8 +2636,11 @@ async function saveFqQuote(){
     const cbmQty=parseFloat(fq.cbm)||0;
     const isCbm=lclRate.rateType==='perCbm';
     const base=isCbm?cbmQty*lclRate.rate:lclRate.rateType==='perPallet'?pCount*lclRate.rate:lclRate.rate;
-    const det=(fq.lclDetentionHours||0)*(lclRate.detentionRate||0);
+    const billableHours=Math.max(0,(fq.lclDetentionHours||0)-(fq.lclFreeHours??2));
+    const det=billableHours*(lclRate.detentionRate||0);
     const pe=(fq.lclPalletExchange||0)*(lclRate.palletExchangeRate||0);
+    const detCu=billableHours*(fq.lclCustomerDetRate||lclRate.detentionRate||0);
+    const peCu=(fq.lclPalletExchange||0)*(fq.lclCustomerPalletRate||lclRate.palletExchangeRate||0);
     carrierRate=base+det+pe;
     customerRate=fqCustomerRate(carrierRate);
   } else {
