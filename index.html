@@ -2691,7 +2691,7 @@ function renderFqDashboard(){
   const won=all.filter(q=>['Booked','Delivered','Invoiced','Paid'].includes(q.status));
   const rev=booked.reduce((s,q)=>s+(q.customerRate||0),0);
   const prof=booked.reduce((s,q)=>s+(q.profit||0),0);
-  const winRate=decided.length>0?booked.length/decided.length:0;
+  const winRate=all.length>0?won.length/all.length:0;
 
   // Mode breakdown
   const modes=['FTL','LTL','LCL'];
@@ -2719,7 +2719,7 @@ function renderFqDashboard(){
     <!-- KPIs -->
     <div class="kpi-grid" style="margin-bottom:16px">
       <div class="kpi"><div class="kpi-lbl">Total quotes</div><div class="kpi-val">${all.length}</div><div style="font-size:11px;color:var(--gray-400);margin-top:4px">${booked.length} booked</div></div>
-      <div class="kpi"><div class="kpi-lbl">Win rate</div><div class="kpi-val b">${decided.length>0?pct(winRate):'—'}</div><div style="font-size:11px;color:var(--gray-400);margin-top:4px">of decided quotes</div></div>
+      <div class="kpi"><div class="kpi-lbl">Win rate</div><div class="kpi-val b">${all.length>0?pct(winRate):'—'}</div><div style="font-size:11px;color:var(--gray-400);margin-top:4px">of all quotes</div></div>
       <div class="kpi"><div class="kpi-lbl">Revenue</div><div class="kpi-val g">${rev>0?fmtD(rev):'—'}</div><div style="font-size:11px;color:var(--gray-400);margin-top:4px">booked only</div></div>
       <div class="kpi"><div class="kpi-lbl">Profit</div><div class="kpi-val g">${prof>0?fmtD(prof):'—'}</div><div style="font-size:11px;color:${prof>0?'var(--green)':'var(--gray-400)'};margin-top:4px">${booked.length>0?'avg '+pct(booked.reduce((s,q)=>s+(q.profitPct||0),0)/booked.length)+' margin':'—'}</div></div>
     </div>
@@ -4604,7 +4604,7 @@ function renderTlDashboard(){
   $('page').innerHTML=`
     <div class="kpi-grid" style="margin-bottom:16px">
       <div class="kpi"><div class="kpi-lbl">Total quotes</div><div class="kpi-val">${all.length}</div><div style="font-size:11px;color:var(--gray-400);margin-top:4px">${booked.length} booked</div></div>
-      <div class="kpi"><div class="kpi-lbl">Win rate</div><div class="kpi-val b">${decided.length>0?pct(winRate):'—'}</div><div style="font-size:11px;color:var(--gray-400);margin-top:4px">of decided quotes</div></div>
+      <div class="kpi"><div class="kpi-lbl">Win rate</div><div class="kpi-val b">${all.length>0?pct(winRate):'—'}</div><div style="font-size:11px;color:var(--gray-400);margin-top:4px">of all quotes</div></div>
       <div class="kpi"><div class="kpi-lbl">Revenue</div><div class="kpi-val g">${rev>0?fmtD(rev):'—'}</div><div style="font-size:11px;color:var(--gray-400);margin-top:4px">booked only</div></div>
       <div class="kpi"><div class="kpi-lbl">Profit</div><div class="kpi-val g">${prof>0?fmtD(prof):'—'}</div></div>
     </div>
