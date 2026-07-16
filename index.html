@@ -7677,7 +7677,7 @@ function renderFqInvoicing(){
         '<td class="muted">'+escH(l.date||'—')+'</td>'+
         '<td><span style="color:'+(waitDays>30?'var(--red)':waitDays>14?'var(--amber)':'var(--green)')+';font-weight:700">'+waitDays+' days</span></td>'+
         '<td onclick="event.stopPropagation()">'+
-          '<button onclick="openFqCarrierInvById(''+l.id+'')" style="font-size:11px;padding:4px 10px;border:1px solid '+(cinv?'#fbbf24':'var(--gray-200)')+';border-radius:4px;background:'+(cinv?'#fffbeb':'transparent')+';cursor:pointer;font-family:inherit;color:'+(cinv?'#d97706':'var(--gray-600)')+'">'+
+          '<button data-lid="'+l.id+'" onclick="openFqCarrierInvById(this.dataset.lid)" style="font-size:11px;padding:4px 10px;border:1px solid '+(cinv?'#fbbf24':'var(--gray-200)')+';border-radius:4px;background:'+(cinv?'#fffbeb':'transparent')+';cursor:pointer;font-family:inherit;color:'+(cinv?'#d97706':'var(--gray-600)')+'">'+
           '🚛 '+(cinv?'Edit':'Enter')+'</button>'+
         '</td></tr>';
     }).join('');
