@@ -12460,7 +12460,7 @@ function buildTMSLoadRow(l){
   const prev=sIdx>0?TMS_STATUSES[sIdx-1]:null;
   const next=nextTMSStatus(l.status);
   const pc=p.isActual?'var(--green)':p.margin>=0.08?'var(--amber)':'var(--red)';
-  return '<tr onclick="openTMSLoadDetail(''+l.id+'')" style="cursor:pointer;border-left:3px solid '+tmsStatusColor(l.status)+'" onmouseenter="this.style.background='var(--blue-bg)'" onmouseleave="this.style.background=''">'+
+  return '<tr class="tms-row" data-lid="'+l.id+'" onclick="openTMSLoadDetail(this.dataset.lid)" style="cursor:pointer;border-left:3px solid '+tmsStatusColor(l.status)+'">'+
     '<td onclick="event.stopPropagation()"><div style="font-size:13px;font-weight:700;color:var(--navy)">'+escH(l.customer||'—')+'</div>'+(meta.bookingNum?'<div style="font-size:10px;font-weight:700;color:var(--steel)">'+escH(meta.bookingNum)+'</div>':'')+'</td>'+
     '<td><span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px;background:'+tmsStatusColor(l.status)+'18;color:'+tmsStatusColor(l.status)+'">'+l.fqMode+'</span></td>'+
     '<td class="muted" style="font-size:12px">'+(l.pickupZip||'—')+' → '+(l.deliveryZip||'—')+'</td>'+
