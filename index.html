@@ -532,6 +532,7 @@ if('caches' in window){
           <button class="sub-link" id="nav-admin" onclick="goTo('admin')">⚙️ Admin panel</button>
           <button class="sub-link" id="nav-profit-monitor" onclick="renderProfitMonitor()" style="${_currentUser?.role==='super_admin'?'':'display:none'}">💰 Profit monitor</button>
           <button class="sub-link" id="nav-achievements" onclick="renderAchievementsPage()">🏆 Achievements</button>
+          <button class="sub-link" id="nav-leaderboard" onclick="renderLeaderboard()">🥇 Leaderboard</button>
           <button class="sub-link" id="nav-us-map" onclick="renderShiflAchievements()">🗺️ Load map</button>
           <button class="sub-link" id="nav-reports" onclick="goTo('reports')">📈 Reports</button>
           <button class="sub-link" id="nav-activity" onclick="goTo('activity')">📊 Activity log</button>
@@ -781,7 +782,8 @@ async function connectSupabase(){
     await initApp();
   }catch(e){
     db=null;
-    $('loading-screen').style.display='none';
+    setLiquidProgress(100);
+  setTimeout(()=>{ $('loading-screen').style.display='none';
     $('setup-screen').style.display='flex';
     const errEl=$('setup-error');
     if(errEl){errEl.style.display='block';errEl.textContent='Connection failed: '+(e.message||'Check your URL and key, and make sure you ran the setup SQL.');}
@@ -971,16 +973,19 @@ let _importRows=[];
 // INIT
 // ═══════════════════════════════════════════════════════
 async function initApp(){
+  try{showLiquidLoader('Starting…');setLiquidProgress(10);
   try{
     $('loading-msg').textContent='Starting…';
     try{const r=JSON.parse(localStorage.getItem('shifl_rates_cache')||'[]');S.rates=r.length?r:SEED.map((s,i)=>({...s,id:s.id||'seed'+i,active:true}));}catch(e){S.rates=[];}
     setTimeout(async()=>{try{const r=await withTimeout(dbLoadRates(),10000,null);if(r&&r.length>0){S.rates=r;localStorage.setItem('shifl_rates_cache',JSON.stringify(r));if(S.view==='rates')renderRates();if($('carriers-body'))refreshCarriersAndPreview();}}catch(e){}},1200);
     try{S.quotes=JSON.parse(localStorage.getItem('shifl_quotes_cache')||'[]');}catch(e){S.quotes=[];}
     try{S.customers=JSON.parse(localStorage.getItem('shifl_customers_cache')||'[]');}catch(e){S.customers=[];}
-    try{window._fqHistory=JSON.parse(localStorage.getItem('fq_history')||'[]');}catch(e){window._fqHistory=[];}
+    setLiquidProgress(30);
+  try{window._fqHistory=JSON.parse(localStorage.getItem('fq_history')||'[]');}catch(e){window._fqHistory=[];}
     try{window._fqRates=JSON.parse(localStorage.getItem('fq_rates')||'[]');}catch(e){window._fqRates=[];}
     try{window._aqHistory=JSON.parse(localStorage.getItem('aq_history')||'[]');}catch(e){window._aqHistory=[];}
-    try{window._tlHistory=JSON.parse(localStorage.getItem('tl_history')||'[]');}catch(e){window._tlHistory=[];}
+    setLiquidProgress(60);
+  try{window._tlHistory=JSON.parse(localStorage.getItem('tl_history')||'[]');}catch(e){window._tlHistory=[];}
     try{window._tlWarehouses=JSON.parse(localStorage.getItem('tl_warehouses')||'[]');}catch(e){window._tlWarehouses=[];}
     try{loadSpecialZips();}catch(e){}
     try{loadCustomCFS();}catch(e){}
@@ -1008,8 +1013,11 @@ async function initApp(){
   try{updateInvNavBadge();}catch(e){}
   try{updateActiveBadge();}catch(e){}
   setTimeout(()=>{try{checkAchievements();}catch(e){}},3000);
+  try{updateStreak();}catch(e){}
+  try{checkBossMode();}catch(e){}
+  try{buildFridayBar();}catch(e){}
   S.view='home';
-  try{render();}catch(e){console.error('render:',e);}
+  try{render();}catch(e){console.error('render:',e);} },300);
 }
 
 
@@ -2907,6 +2915,7 @@ async function migrateLocalStorageToSupabase(){
 
 async function loadFqHistory(){
   // Load from localStorage immediately (fast)
+  setLiquidProgress(30);
   try{window._fqHistory=JSON.parse(localStorage.getItem('fq_history')||'[]');}catch(e){window._fqHistory=[];}
   loadFqRates();
   // Sync from Supabase in background (non-blocking)
@@ -3773,7 +3782,8 @@ async function loadTlHistory(){
     localStorage.setItem('tl_history',JSON.stringify(window._tlHistory));
   }catch(e){
     console.log('Supabase tl load failed, using localStorage:',e.message);
-    try{window._tlHistory=JSON.parse(localStorage.getItem('tl_history')||'[]');}catch(e2){window._tlHistory=[];}
+    setLiquidProgress(60);
+  try{window._tlHistory=JSON.parse(localStorage.getItem('tl_history')||'[]');}catch(e2){window._tlHistory=[];}
   }
 }
 function saveTlWarehouses(){try{localStorage.setItem('tl_warehouses',JSON.stringify(window._tlWarehouses));}catch(e){}}
@@ -8316,7 +8326,10 @@ function renderHome(){
       <div style="font-size:11px;font-weight:700;letter-spacing:.14em;color:#8898aa;text-transform:uppercase;margin-bottom:12px">Shifl Logistics</div>
       <div style="font-size:36px;font-weight:900;color:#1a2e4a;margin-bottom:4px;line-height:1.1">${getGreeting()}, ${greetName}! 👋</div>
       <div style="font-size:14px;color:#8898aa">What are we moving today?</div>
+      <div style="margin-top:14px;font-size:13px;color:#4b6584;font-style:italic;background:rgba(255,255,255,.6);border-radius:8px;padding:8px 16px;max-width:380px;margin:14px auto 0">"${getDailyCompliment()}"</div>
     </div>
+    <div style="max-width:600px;margin:0 auto 4px">${getStreakBadge()}</div>
+    <div style="max-width:600px;margin:0 auto">${buildQuestWidget()}</div>
 
     <!-- Mode cards -->
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:40px">
@@ -11571,6 +11584,247 @@ function withTimeout(promise, ms=8000, fallback=null){
     new Promise(resolve=>setTimeout(()=>resolve(fallback),ms))
   ]);
 }
+// ════════════════════════════════════════════════════════════════════
+// STREAK COUNTER
+// ════════════════════════════════════════════════════════════════════
+function updateStreak(){
+  const today=localDateStr();
+  const last=localStorage.getItem('shifl_last_login')||'';
+  let streak=parseInt(localStorage.getItem('shifl_streak')||'0');
+  const yesterday=new Date(Date.now()-864e5).toISOString().slice(0,10);
+  if(last===today) return streak; // already counted today
+  if(last===yesterday) streak++;  // consecutive
+  else if(last!==today) streak=1; // broke streak or first time
+  localStorage.setItem('shifl_streak',streak);
+  localStorage.setItem('shifl_last_login',today);
+  return streak;
+}
+function getStreakBadge(){
+  const s=parseInt(localStorage.getItem('shifl_streak')||'0');
+  if(s<=0) return '';
+  const fire=s>=30?'🏆':s>=14?'💎':s>=7?'🔥':'⚡';
+  return `<div id="streak-badge" title="${s} day streak!" style="display:flex;align-items:center;gap:5px;background:${s>=7?'linear-gradient(135deg,#f97316,#dc2626)':'linear-gradient(135deg,#f59e0b,#f97316)'};color:#fff;border-radius:99px;padding:5px 12px;font-size:12px;font-weight:700;cursor:default;box-shadow:0 2px 8px rgba(249,115,22,.35)">${fire} ${s} day streak</div>`;
+}
+
+// ════════════════════════════════════════════════════════════════════
+// COMPLIMENT GENERATOR
+// ════════════════════════════════════════════════════════════════════
+const COMPLIMENTS=[
+  "You're moving mountains one container at a time. 🏔️",
+  "Every lane you quote is one step closer to the goal. 💪",
+  "Your carriers are lucky to work with someone this organized.",
+  "The freight doesn't move itself — good thing you're here. 🚛",
+  "Another day, another load conquered. You've got this.",
+  "Margins looking good? That's because YOU are.",
+  "Somewhere a container is on a truck because of you. 🎯",
+  "Top-tier broker energy today. Let's get it.",
+  "Your hustle is showing. Keep going.",
+  "The logistics industry needs more people like you. Facts.",
+  "You turned complexity into a rate sheet. Impressive.",
+  "Not all heroes wear capes — some send rate confirmations. 📧",
+  "Port Newark doesn't run without people like you.",
+  "Your attention to detail is someone else's peace of mind.",
+  "Every shipment you move is a promise kept. 🤝",
+];
+function getDailyCompliment(){
+  const day=new Date().getDay()+new Date().getDate();
+  return COMPLIMENTS[day%COMPLIMENTS.length];
+}
+
+// ════════════════════════════════════════════════════════════════════
+// DAILY QUESTS — per user
+// ════════════════════════════════════════════════════════════════════
+const ALL_QUESTS=[
+  {id:'quote3',label:'Quote 3 loads today',icon:'📋',target:3,metric:'quotes_today'},
+  {id:'book1',label:'Book 1 load today',icon:'✅',target:1,metric:'bookings_today'},
+  {id:'invoice1',label:'Send 1 invoice today',icon:'🧾',target:1,metric:'invoices_today'},
+  {id:'quote5',label:'Quote 5 loads today',icon:'🔥',target:5,metric:'quotes_today'},
+  {id:'deliver1',label:'Mark 1 shipment delivered',icon:'📦',target:1,metric:'delivered_today'},
+  {id:'carrier_check',label:'Check in with a carrier',icon:'📱',target:1,metric:'checkins_today'},
+  {id:'book2',label:'Book 2 loads today',icon:'🏆',target:2,metric:'bookings_today'},
+  {id:'margin20',label:'Quote a load with 20%+ margin',icon:'💰',target:1,metric:'high_margin_today'},
+];
+function getDailyQuest(){
+  const seed=new Date().toDateString()+((_currentUser?.id)||'guest');
+  let hash=0;for(let i=0;i<seed.length;i++){hash=(hash*31+seed.charCodeAt(i))&0xffffffff;}
+  return ALL_QUESTS[Math.abs(hash)%ALL_QUESTS.length];
+}
+function getDailyQuestProgress(quest){
+  const key='shifl_quest_'+localDateStr()+'_'+(_currentUser?.id||'guest');
+  const data=JSON.parse(localStorage.getItem(key)||'{}');
+  return data[quest.metric]||0;
+}
+function incrementQuestMetric(metric){
+  const key='shifl_quest_'+localDateStr()+'_'+(_currentUser?.id||'guest');
+  const data=JSON.parse(localStorage.getItem(key)||'{}');
+  data[metric]=(data[metric]||0)+1;
+  localStorage.setItem(key,JSON.stringify(data));
+  const quest=getDailyQuest();
+  if(quest.metric===metric&&getDailyQuestProgress(quest)>=quest.target){
+    showQuestComplete(quest);
+  }
+}
+function showQuestComplete(quest){
+  const alreadyShown=localStorage.getItem('quest_shown_'+localDateStr()+'_'+quest.id);
+  if(alreadyShown) return;
+  localStorage.setItem('quest_shown_'+localDateStr()+'_'+quest.id,'1');
+  const el=document.createElement('div');
+  el.style.cssText='position:fixed;top:70px;right:24px;z-index:99999;background:linear-gradient(135deg,#16a34a,#15803d);color:#fff;border-radius:12px;padding:18px 22px;box-shadow:0 8px 32px rgba(0,0,0,.25);display:flex;align-items:center;gap:14px;animation:fadeInPreview .3s ease;max-width:320px';
+  el.innerHTML=`<div style="font-size:36px">${quest.icon}</div><div><div style="font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;opacity:.8">Quest Complete!</div><div style="font-size:16px;font-weight:800;margin-top:3px">${quest.label}</div><div style="font-size:12px;opacity:.8;margin-top:3px">🏆 Daily goal achieved!</div></div>`;
+  document.body.appendChild(el);
+  setTimeout(()=>el.remove(),5000);
+  if(typeof fireConfetti==='function') fireConfetti();
+}
+function buildQuestWidget(){
+  const quest=getDailyQuest();
+  const progress=getDailyQuestProgress(quest);
+  const done=progress>=quest.target;
+  const pct=Math.min(100,progress/quest.target*100);
+  return `<div style="background:${done?'linear-gradient(135deg,#f0fdf4,#dcfce7)':'linear-gradient(135deg,#eff6ff,#dbeafe)'};border:1.5px solid ${done?'#86efac':'#93c5fd'};border-radius:10px;padding:12px 16px;margin-bottom:14px">
+    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:${done?'#15803d':'#1d4ed8'};margin-bottom:6px">⚡ Daily Quest</div>
+    <div style="display:flex;align-items:center;gap:10px">
+      <span style="font-size:22px">${quest.icon}</span>
+      <div style="flex:1">
+        <div style="font-size:13px;font-weight:700;color:var(--navy)">${quest.label}</div>
+        <div style="margin-top:5px;height:6px;background:rgba(0,0,0,.08);border-radius:3px;overflow:hidden">
+          <div style="height:6px;width:${pct}%;background:${done?'#16a34a':'#2563eb'};border-radius:3px;transition:width .6s ease"></div>
+        </div>
+        <div style="font-size:11px;color:${done?'#15803d':'var(--gray-500)'};margin-top:3px">${done?'✅ Completed!':progress+' / '+quest.target+' done'}</div>
+      </div>
+    </div>
+  </div>`;
+}
+
+// ════════════════════════════════════════════════════════════════════
+// BOSS MODE — unlocked after 100 loads booked
+// ════════════════════════════════════════════════════════════════════
+function checkBossMode(){
+  const totalBooked=(S.quotes||[]).filter(q=>['Booked','Delivered','Invoiced','Paid'].includes(q.status)).length
+    +(window._fqHistory||[]).filter(q=>['Booked','Delivered','Invoiced','Paid'].includes(q.status)).length;
+  const isBoss=totalBooked>=100;
+  const wasUnlocked=localStorage.getItem('shifl_boss_mode_unlocked');
+  if(isBoss&&!wasUnlocked){
+    localStorage.setItem('shifl_boss_mode_unlocked','1');
+    setTimeout(()=>{
+      const el=document.createElement('div');
+      el.style.cssText='position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);display:flex;align-items:center;justify-content:center;flex-direction:column;animation:fadeInPreview .5s ease';
+      el.innerHTML=`<div style="text-align:center;color:#fff"><div style="font-size:80px;margin-bottom:20px;animation:boat-rock 1s ease-in-out infinite">👑</div><div style="font-size:36px;font-weight:900;background:linear-gradient(135deg,#fbbf24,#f59e0b,#d97706);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:8px">BOSS MODE UNLOCKED</div><div style="font-size:18px;color:rgba(255,255,255,.8);margin-bottom:24px">100 loads booked. You're running this port.</div><button onclick="this.closest('div[style*=inset]').remove();activateBossMode()" style="background:linear-gradient(135deg,#fbbf24,#d97706);color:#fff;border:none;padding:14px 32px;border-radius:99px;font-size:16px;font-weight:800;cursor:pointer;font-family:inherit">🚀 Enter Boss Mode</button></div>`;
+      document.body.appendChild(el);
+      if(typeof fireConfetti==='function'){fireConfetti();setTimeout(fireConfetti,500);setTimeout(fireConfetti,1000);}
+    },1000);
+  }
+  if(isBoss&&localStorage.getItem('shifl_boss_active')==='1') activateBossMode(false);
+  return isBoss;
+}
+function activateBossMode(save=true){
+  if(save) localStorage.setItem('shifl_boss_active','1');
+  document.documentElement.style.setProperty('--navy','#92400e');
+  document.documentElement.style.setProperty('--steel','#b45309');
+  document.documentElement.style.setProperty('--blue-bg','#fffbeb');
+  // Gold sidebar
+  const sidebar=document.querySelector('.sidebar');
+  if(sidebar) sidebar.style.background='linear-gradient(180deg,#92400e 0%,#78350f 100%)';
+  // Gold crown on user name
+  const userEl=document.getElementById('sidebar-username');
+  if(userEl&&!userEl.textContent.includes('👑')) userEl.textContent='👑 '+userEl.textContent;
+  showToast('👑 Boss Mode active — gold theme enabled','info',3000);
+}
+
+// ════════════════════════════════════════════════════════════════════
+// FRIDAY ENERGY BAR
+// ════════════════════════════════════════════════════════════════════
+function buildFridayBar(){
+  const isFriday=new Date().toLocaleString('en-US',{timeZone:'America/New_York',weekday:'long'})==='Friday';
+  if(!isFriday) return;
+  const existing=document.getElementById('friday-bar');
+  if(existing) return;
+  const bar=document.createElement('div');
+  bar.id='friday-bar';
+  bar.style.cssText='position:fixed;top:0;left:0;right:0;height:4px;z-index:99999;background:linear-gradient(90deg,#fbbf24,#f97316,#ef4444,#8b5cf6,#06b6d4);background-size:200% 100%;animation:fridayBar 3s linear infinite';
+  document.body.prepend(bar);
+  // Add Friday banner
+  const banner=document.createElement('div');
+  banner.id='friday-banner';
+  banner.style.cssText='position:fixed;bottom:80px;right:24px;z-index:9999;background:linear-gradient(135deg,#f97316,#dc2626);color:#fff;border-radius:12px;padding:12px 18px;font-size:13px;font-weight:700;box-shadow:0 4px 16px rgba(249,115,22,.4);cursor:pointer';
+  banner.innerHTML='🎉 It\'s Friday! Finish strong.';
+  banner.onclick=()=>banner.remove();
+  document.body.appendChild(banner);
+  setTimeout(()=>banner.remove(),8000);
+}
+// Add CSS for friday bar animation
+const fridayStyle=document.createElement('style');
+fridayStyle.textContent='@keyframes fridayBar{0%{background-position:0% 50%}100%{background-position:200% 50%}}';
+document.head.appendChild(fridayStyle);
+
+// ════════════════════════════════════════════════════════════════════
+// LEADERBOARD
+// ════════════════════════════════════════════════════════════════════
+async function renderLeaderboard(){
+  $('topbar-right').innerHTML='';
+  const weekAgo=new Date(Date.now()-7*864e5).toISOString().slice(0,10);
+  // Count from local data since we don't have per-user tracking in quotes
+  const allBooked=[...(S.quotes||[]).filter(q=>['Booked','Delivered','Invoiced','Paid'].includes(q.status)&&q.date>=weekAgo)];
+  const byUser={};
+  allBooked.forEach(q=>{const u=q.created_by_name||q.created_by||'Unknown';byUser[u]=(byUser[u]||0)+1;});
+  const sorted=Object.entries(byUser).sort((a,b)=>b[1]-a[1]);
+  const medals=['🥇','🥈','🥉'];
+  $('page').innerHTML=`
+  <div style="max-width:600px;margin:0 auto">
+    <div style="font-size:22px;font-weight:900;color:var(--navy);margin-bottom:4px">🏆 Weekly Leaderboard</div>
+    <div style="font-size:13px;color:var(--gray-500);margin-bottom:24px">Loads booked this week · resets every Monday</div>
+    ${sorted.length===0?`<div class="empty"><div class="empty-ico">🏆</div><p>No loads booked this week yet — be the first!</p></div>`:`
+    <div style="display:flex;flex-direction:column;gap:8px">
+      ${sorted.map(([name,count],i)=>{
+        const isMe=name===(_currentUser?.name||_currentUser?.email?.split('@')[0]);
+        return`<div style="display:flex;align-items:center;gap:14px;background:${isMe?'linear-gradient(135deg,#eff6ff,#dbeafe)':'var(--white)'};border:${isMe?'2px solid var(--steel)':'1px solid var(--gray-100)'};border-radius:12px;padding:14px 18px">
+          <div style="font-size:28px;min-width:36px;text-align:center">${medals[i]||'#'+(i+1)}</div>
+          <div style="flex:1">
+            <div style="font-size:15px;font-weight:800;color:var(--navy)">${name}${isMe?' (you)':''}</div>
+            <div style="height:8px;background:var(--gray-100);border-radius:4px;margin-top:6px;overflow:hidden">
+              <div style="height:8px;width:${Math.round(count/sorted[0][1]*100)}%;background:${i===0?'linear-gradient(90deg,#fbbf24,#f59e0b)':i===1?'linear-gradient(90deg,#94a3b8,#64748b)':'linear-gradient(90deg,#f97316,#ea580c)'};border-radius:4px;transition:width 1s ease"></div>
+            </div>
+          </div>
+          <div style="font-size:24px;font-weight:900;color:${i===0?'#d97706':i===1?'#64748b':'#ea580c'}">${count}</div>
+        </div>`;}).join('')}
+    </div>`}
+  </div>`;
+}
+
+// ════════════════════════════════════════════════════════════════════
+// LIQUID LOADING BAR
+// ════════════════════════════════════════════════════════════════════
+function showLiquidLoader(msg='Loading…'){
+  const ls=$('loading-screen');
+  if(!ls) return;
+  ls.style.display='flex';
+  $('loading-msg').textContent=msg;
+  // Replace spinner with liquid glass
+  const existing=document.getElementById('liquid-loader');
+  if(existing) return;
+  const spinner=ls.querySelector('.spinner');
+  if(spinner){spinner.style.display='none';}
+  const loader=document.createElement('div');
+  loader.id='liquid-loader';
+  loader.style.cssText='position:relative;width:60px;height:80px;border:3px solid #1a2e4a;border-radius:8px 8px 6px 6px;overflow:hidden;margin-bottom:20px;background:#f8fafc';
+  loader.innerHTML=`
+    <div id="liquid-fill" style="position:absolute;bottom:0;left:0;right:0;height:0%;background:linear-gradient(180deg,#2e75b6,#1a2e4a);transition:height .3s;border-radius:0 0 4px 4px">
+      <div style="position:absolute;top:-8px;left:0;right:0;height:16px;background:rgba(255,255,255,.3);border-radius:50%;animation:liquidWave 1s ease-in-out infinite"></div>
+    </div>
+    <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;color:var(--navy);z-index:1" id="liquid-pct">0%</div>`;
+  const style=document.createElement('style');
+  style.textContent='@keyframes liquidWave{0%,100%{transform:scaleX(1.1) translateY(0)}50%{transform:scaleX(.9) translateY(-4px)}}';
+  document.head.appendChild(style);
+  if(spinner) spinner.parentNode.insertBefore(loader,spinner);
+  else ls.prepend(loader);
+}
+function setLiquidProgress(pct){
+  const fill=document.getElementById('liquid-fill');
+  const label=document.getElementById('liquid-pct');
+  if(fill) fill.style.height=pct+'%';
+  if(label) label.textContent=Math.round(pct)+'%';
+}
+
+
 boot().catch(e=>{$('loading-screen').style.display='none';$('setup-screen').style.display='flex';});
 </script>
 <script>
