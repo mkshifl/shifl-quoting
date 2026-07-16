@@ -523,7 +523,7 @@ body.screenshot-mode .money::after,body.screenshot-mode .kpi-val::after{content:
     <div class="sidebar-foot" style="display:flex;flex-direction:column;gap:8px">
       <button id="dark-toggle" onclick="toggleDarkMode()" style="background:rgba(255,255,255,.07);border:none;border-radius:6px;color:rgba(255,255,255,.6);font-size:12px;font-weight:600;padding:7px 12px;cursor:pointer;font-family:inherit;text-align:left;width:100%">🌙 Dark mode</button>
       <button onclick="toggleScreenshotMode()" style="background:rgba(255,255,255,.07);border:none;border-radius:6px;color:rgba(255,255,255,.6);font-size:12px;font-weight:600;padding:7px 12px;cursor:pointer;font-family:inherit;text-align:left;width:100%">📷 Screenshot mode</button>
-      <button id="chat-nav-btn" onclick="toggleChat()" style="background:rgba(255,255,255,.07);border:none;border-radius:6px;color:rgba(255,255,255,.6);font-size:12px;font-weight:600;padding:7px 12px;cursor:pointer;font-family:inherit;text-align:left;width:100%;display:flex;align-items:center;justify-content:space-between">💬 Team Chat <span id="chat-badge" style="display:none;background:#dc2626;color:#fff;border-radius:99px;font-size:10px;font-weight:700;padding:1px 7px">0</span></button>
+      <button id="chat-nav-btn" onclick="toggleChat()" style="background:rgba(255,255,255,.07);border:none;border-left:3px solid transparent;border-radius:6px;color:rgba(255,255,255,.6);font-size:12px;font-weight:600;padding:7px 12px;cursor:pointer;font-family:inherit;text-align:left;width:100%;display:flex;align-items:center;justify-content:space-between">💬 Team Chat <span id="chat-badge" style="display:none;background:#dc2626;color:#fff;border-radius:99px;font-size:10px;font-weight:700;padding:1px 7px">0</span></button>
       <!-- User info block -->
       <div id="user-info" style="display:none;margin-bottom:10px;padding:9px 11px;background:rgba(255,255,255,.07);border-radius:var(--radius);cursor:pointer" onclick="showEditMyProfile()" title="Edit your profile">
         <div style="display:flex;align-items:center;justify-content:space-between">
@@ -10909,7 +10909,7 @@ function toggleChat(){
   const panel=$('chat-panel');
   panel.style.transform=_chatOpen?'translateX(0)':'translateX(100%)';
   const btn=$('chat-nav-btn');
-  if(btn) btn.style.background=_chatOpen?'rgba(255,255,255,.15)':'';
+  if(btn){btn.style.background=_chatOpen?'rgba(255,255,255,.12)':'rgba(255,255,255,.07)';btn.style.borderLeft=_chatOpen?'3px solid #2e75b6':'3px solid transparent';}
   if(_chatOpen){loadChatMessages();subscribeToChat();}
   else if(_chatSub){_chatSub.unsubscribe();_chatSub=null;}
 }
