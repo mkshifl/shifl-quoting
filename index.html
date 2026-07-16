@@ -301,6 +301,21 @@ body.dark .acc-sub{background:rgba(0,0,0,.25)}
 body.dark #notif-dropdown,body.dark #quote-preview{background:#1a2533!important;border-color:#243447!important;color:#e8f0f8}
 body.dark .page{background:#0f1723}
 @keyframes fadeInPreview{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+
+/* Screenshot mode */
+body.screenshot-mode .money,body.screenshot-mode .kpi-val,body.screenshot-mode .amt,
+body.screenshot-mode td.money,body.screenshot-mode [class*="profit"],
+body.screenshot-mode [style*="fmtD"],body.screenshot-mode .bold{
+  filter:blur(8px);user-select:none;
+}
+body.screenshot-mode .money::after,body.screenshot-mode .kpi-val::after{content:'●●●●●';filter:none;}
+/* Animated logo */
+@keyframes boat-rock{0%,100%{transform:rotate(-3deg)}50%{transform:rotate(3deg)}}
+.brand-icon{display:inline-block;animation:boat-rock 3s ease-in-out infinite;transform-origin:center bottom}
+/* Tooltip */
+[data-tip]{position:relative}
+[data-tip]:hover::after{content:attr(data-tip);position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);background:#1a2e4a;color:#fff;font-size:11px;font-weight:600;padding:4px 8px;border-radius:5px;white-space:nowrap;z-index:9999;pointer-events:none}
+[data-tip]:hover::before{content:'';position:absolute;bottom:calc(100% + 1px);left:50%;transform:translateX(-50%);border:4px solid transparent;border-top-color:#1a2e4a;z-index:9999}
 </style>
 </head>
 <body>
@@ -496,6 +511,8 @@ body.dark .page{background:#0f1723}
         <div class="acc-sub" id="acc-sub-admin">
           <button class="sub-link" id="nav-admin" onclick="goTo('admin')">⚙️ Admin panel</button>
           <button class="sub-link" id="nav-profit-monitor" onclick="renderProfitMonitor()" style="${_currentUser?.role==='super_admin'?'':'display:none'}">💰 Profit monitor</button>
+          <button class="sub-link" id="nav-achievements" onclick="renderAchievementsPage()">🏆 Achievements</button>
+          <button class="sub-link" id="nav-us-map" onclick="renderShiflAchievements()">🗺️ Load map</button>
           <button class="sub-link" id="nav-reports" onclick="goTo('reports')">📈 Reports</button>
           <button class="sub-link" id="nav-activity" onclick="goTo('activity')">📊 Activity log</button>
           <button class="sub-link" id="nav-auditlog" onclick="goTo('auditlog')">📋 Audit log</button>
@@ -505,6 +522,8 @@ body.dark .page{background:#0f1723}
     </nav>
     <div class="sidebar-foot" style="display:flex;flex-direction:column;gap:8px">
       <button id="dark-toggle" onclick="toggleDarkMode()" style="background:rgba(255,255,255,.07);border:none;border-radius:6px;color:rgba(255,255,255,.6);font-size:12px;font-weight:600;padding:7px 12px;cursor:pointer;font-family:inherit;text-align:left;width:100%">🌙 Dark mode</button>
+      <button onclick="toggleScreenshotMode()" style="background:rgba(255,255,255,.07);border:none;border-radius:6px;color:rgba(255,255,255,.6);font-size:12px;font-weight:600;padding:7px 12px;cursor:pointer;font-family:inherit;text-align:left;width:100%">📷 Screenshot mode</button>
+      <button id="chat-nav-btn" onclick="toggleChat()" style="background:rgba(255,255,255,.07);border:none;border-radius:6px;color:rgba(255,255,255,.6);font-size:12px;font-weight:600;padding:7px 12px;cursor:pointer;font-family:inherit;text-align:left;width:100%;display:flex;align-items:center;justify-content:space-between">💬 Team Chat <span id="chat-badge" style="display:none;background:#dc2626;color:#fff;border-radius:99px;font-size:10px;font-weight:700;padding:1px 7px">0</span></button>
       <!-- User info block -->
       <div id="user-info" style="display:none;margin-bottom:10px;padding:9px 11px;background:rgba(255,255,255,.07);border-radius:var(--radius);cursor:pointer" onclick="showEditMyProfile()" title="Edit your profile">
         <div style="display:flex;align-items:center;justify-content:space-between">
@@ -1054,6 +1073,8 @@ function render(){
   else if(S.view==='air')         renderAirFreight();
   else if(S.view==='home')        renderHome();
   else if(S.view==='profit')      renderProfitMonitor();
+  else if(S.view==='achievements')  renderAchievementsPage();
+  else if(S.view==='usmap')         renderShiflAchievements();
   else if(S.view==='invoicing')    renderFullInvoicing();
   else if(S.view==='reports')    renderReports();
   else if(S.view==='auditlog')   renderAuditLog();
@@ -5672,7 +5693,7 @@ function buildLogRows(){
       <td onclick="event.stopPropagation()">${can('update_status')?`<select onchange="updateStatus('${q.id}',this.value)" style="font-size:12px;padding:4px 7px;width:120px"><option${q.status==='Quoted'?' selected':''}>Quoted</option><option${q.status==='Booked'?' selected':''}>Booked</option><option${q.status==='Lost'?' selected':''}>Lost</option><option${q.status==='Cancelled'?' selected':''}>Cancelled</option><option${q.status==='Expired'?' selected':''}>Expired</option><option${q.status==='Delivered'?' selected':''}>Delivered</option></select>`:`<span class="badge a">${q.status}</span>`}</td>
       <td onclick="event.stopPropagation()" style="white-space:nowrap">
         ${q.status==='Booked'?`<button class="btn sm ico-btn" onclick="downloadCarrierRateSheet(S.quotes.find(q=>q.id==='${q.id}'),null)" title="Carrier rate sheet" style="color:var(--green)">📋</button>`:''}
-        <button class="btn sm ico-btn" onclick="downloadSavedPDF('${q.id}')" title="Customer PDF" style="margin-left:3px">📄</button>
+        <button class="btn sm ico-btn" onclick="downloadSavedPDF('${q.id}')" data-tip="Customer PDF" style="margin-left:3px">📄</button>
         ${can('email_carrier')?`<button class="btn sm ico-btn" onclick="sendQuoteToCarrier('${q.id}')" title="Send to carrier" style="margin-left:3px">📧</button>`:''}
         <button class="btn sm ico-btn" onclick="repeatDrayageQuote('${q.id}')" title="Repeat shipment" style="margin-left:3px">🔁</button>
         ${can('delete_quotes')?`<button class="btn sm ico-btn" onclick="delQuote('${q.id}')" title="Delete" style="margin-left:3px">🗑️</button>`:''}
@@ -10839,6 +10860,492 @@ function buildPillBar(filterKey, searchKey, counts, searchPlaceholder){
     </div>
   </div>`;
 }
+// ════════════════════════════════════════════════════════════════════
+// TEAM CHAT — Supabase real-time
+// ════════════════════════════════════════════════════════════════════
+let _chatOpen=false,_chatChannel='general',_chatSub=null,_chatMsgs=[];
+
+function buildChatPanel(){
+  if($('chat-panel')) return;
+  const panel=document.createElement('div');
+  panel.id='chat-panel';
+  panel.style.cssText='position:fixed;top:0;right:0;width:340px;height:100vh;background:var(--white);border-left:1px solid var(--gray-200);z-index:8888;display:flex;flex-direction:column;transform:translateX(100%);transition:transform .25s ease;box-shadow:-4px 0 24px rgba(0,0,0,.12)';
+  panel.innerHTML=`
+    <div style="background:var(--navy);padding:14px 16px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
+      <div>
+        <div style="color:#fff;font-size:14px;font-weight:800">💬 Team Chat</div>
+        <div id="chat-status" style="font-size:10px;color:rgba(255,255,255,.5);margin-top:2px">Connecting…</div>
+      </div>
+      <button onclick="toggleChat()" style="background:none;border:none;color:rgba(255,255,255,.7);font-size:20px;cursor:pointer;line-height:1">×</button>
+    </div>
+    <!-- Channel tabs -->
+    <div style="display:flex;border-bottom:1px solid var(--gray-100);flex-shrink:0">
+      <button id="ch-btn-general" onclick="switchChannel('general')" style="flex:1;padding:8px;font-size:12px;font-weight:700;border:none;cursor:pointer;font-family:inherit;background:var(--blue-bg);color:var(--steel);border-bottom:2px solid var(--steel)">
+        # general
+      </button>
+      <button id="ch-btn-ops" onclick="switchChannel('ops')" style="flex:1;padding:8px;font-size:12px;font-weight:600;border:none;cursor:pointer;font-family:inherit;background:transparent;color:var(--gray-500);border-bottom:2px solid transparent">
+        # ops
+      </button>
+      <button id="ch-btn-rates" onclick="switchChannel('rates')" style="flex:1;padding:8px;font-size:12px;font-weight:600;border:none;cursor:pointer;font-family:inherit;background:transparent;color:var(--gray-500);border-bottom:2px solid transparent">
+        # rates
+      </button>
+    </div>
+    <!-- Messages -->
+    <div id="chat-messages" style="flex:1;overflow-y:auto;padding:14px 16px;display:flex;flex-direction:column;gap:10px"></div>
+    <!-- Input -->
+    <div style="padding:12px 14px;border-top:1px solid var(--gray-100);flex-shrink:0;display:flex;gap:8px">
+      <input type="text" id="chat-input" placeholder="Message #${_chatChannel}…"
+        style="flex:1;padding:8px 12px;border:1.5px solid var(--gray-200);border-radius:20px;font-size:13px;outline:none"
+        onfocus="this.style.borderColor='var(--steel)'" onblur="this.style.borderColor='var(--gray-200)'"
+        onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChatMessage();}">
+      <button onclick="sendChatMessage()" style="width:36px;height:36px;border-radius:50%;background:var(--steel);border:none;cursor:pointer;font-size:16px;color:#fff;flex-shrink:0">↑</button>
+    </div>`;
+  document.body.appendChild(panel);
+}
+
+function toggleChat(){
+  buildChatPanel();
+  _chatOpen=!_chatOpen;
+  const panel=$('chat-panel');
+  panel.style.transform=_chatOpen?'translateX(0)':'translateX(100%)';
+  const btn=$('chat-nav-btn');
+  if(btn) btn.style.background=_chatOpen?'rgba(255,255,255,.15)':'';
+  if(_chatOpen){loadChatMessages();subscribeToChat();}
+  else if(_chatSub){_chatSub.unsubscribe();_chatSub=null;}
+}
+
+function switchChannel(ch){
+  _chatChannel=ch;
+  const p=$('chat-input');if(p) p.placeholder='Message #'+ch+'…';
+  ['general','ops','rates'].forEach(c=>{
+    const btn=$('ch-btn-'+c);if(!btn) return;
+    const active=c===ch;
+    btn.style.background=active?'var(--blue-bg)':'transparent';
+    btn.style.color=active?'var(--steel)':'var(--gray-500)';
+    btn.style.borderBottom=active?'2px solid var(--steel)':'2px solid transparent';
+    btn.style.fontWeight=active?'700':'600';
+  });
+  _chatMsgs=[];
+  loadChatMessages();
+  if(_chatSub){_chatSub.unsubscribe();_chatSub=null;}
+  subscribeToChat();
+}
+
+async function loadChatMessages(){
+  const el=$('chat-messages');if(!el) return;
+  el.innerHTML='<div style="text-align:center;color:var(--gray-400);font-size:12px;padding:20px">Loading…</div>';
+  try{
+    const{data,error}=await db.from('chat_messages').select('*').eq('channel',_chatChannel).order('created_at',{ascending:true}).limit(100);
+    if(error) throw error;
+    _chatMsgs=data||[];
+    renderChatMessages();
+    const status=$('chat-status');if(status) status.textContent='🟢 Connected';
+  }catch(e){
+    const el=$('chat-messages');if(el) el.innerHTML='<div style="color:var(--red);font-size:12px;padding:16px">⚠ Could not load messages. Run the SQL below in Supabase first.</div>';
+    const s=$('chat-status');if(s) s.textContent='⚠ Setup needed';
+  }
+}
+
+function subscribeToChat(){
+  if(_chatSub) _chatSub.unsubscribe();
+  _chatSub=db.channel('public:chat_messages:'+_chatChannel)
+    .on('postgres_changes',{event:'INSERT',schema:'public',table:'chat_messages',filter:`channel=eq.${_chatChannel}`},payload=>{
+      _chatMsgs.push(payload.new);renderChatMessages();
+    }).subscribe();
+}
+
+function renderChatMessages(){
+  const el=$('chat-messages');if(!el) return;
+  if(!_chatMsgs.length){el.innerHTML='<div style="text-align:center;color:var(--gray-400);font-size:13px;padding:40px 20px"><div style="font-size:32px;margin-bottom:10px">💬</div><div style="font-weight:700;margin-bottom:4px">No messages yet</div><div style="font-size:11px">Be the first to say something in #'+_chatChannel+'</div></div>';return;}
+  let prev='';
+  el.innerHTML=_chatMsgs.map(m=>{
+    const d=new Date(m.created_at);
+    const time=d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',timeZone:'America/New_York'});
+    const dateStr=d.toLocaleDateString('en-US',{month:'short',day:'numeric',timeZone:'America/New_York'});
+    const isMe=m.user_id===_currentUser?.id;
+    const showDate=dateStr!==prev;prev=dateStr;
+    const initials=(m.user_name||'?').slice(0,2).toUpperCase();
+    const colors=['#1a2e4a','#2e75b6','#16a34a','#7c3aed','#d97706','#dc2626'];
+    const color=colors[m.user_name?.charCodeAt(0)%colors.length||0];
+    return `${showDate?`<div style="text-align:center;font-size:10px;color:var(--gray-400);margin:8px 0;font-weight:600">${dateStr}</div>`:''}
+    <div style="display:flex;gap:8px;align-items:flex-start;${isMe?'flex-direction:row-reverse':''}">
+      <div style="width:28px;height:28px;border-radius:50%;background:${color};color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;flex-shrink:0">${initials}</div>
+      <div style="max-width:75%">
+        <div style="display:flex;align-items:baseline;gap:6px;${isMe?'flex-direction:row-reverse':''}">
+          <span style="font-size:11px;font-weight:700;color:${color}">${isMe?'You':m.user_name}</span>
+          <span style="font-size:10px;color:var(--gray-400)">${time}</span>
+        </div>
+        <div style="margin-top:3px;padding:8px 12px;border-radius:${isMe?'16px 4px 16px 16px':'4px 16px 16px 16px'};background:${isMe?'var(--steel)':'var(--gray-50)'};color:${isMe?'#fff':'var(--gray-700)'};font-size:13px;line-height:1.45;word-break:break-word">${m.message}</div>
+      </div>
+    </div>`;}).join('');
+  el.scrollTop=el.scrollHeight;
+  // Clear unread badge
+  const badge=$('chat-badge');if(badge) badge.style.display='none';
+}
+
+async function sendChatMessage(){
+  const input=$('chat-input');if(!input) return;
+  const msg=input.value.trim();if(!msg) return;
+  input.value='';
+  try{
+    await db.from('chat_messages').insert({
+      user_id:_currentUser?.id||null,
+      user_name:_currentUser?.name||_currentUser?.email?.split('@')[0]||'Unknown',
+      user_role:_currentUser?.role||'team_member',
+      channel:_chatChannel,
+      message:msg
+    });
+  }catch(e){input.value=msg;showToast('Could not send message','error');}
+}
+
+
+// ════════════════════════════════════════════════════════════════════
+// SHIFL ACHIEVEMENTS — US STATE TILE MAP
+// ════════════════════════════════════════════════════════════════════
+
+// ZIP prefix → state lookup
+function zipToState(zip){
+  const z=parseInt((zip||'').toString().padStart(5,'0').slice(0,3));
+  if(z>=0&&z<=9) return 'PR';
+  if(z>=10&&z<=49) return 'NY';
+  if(z>=50&&z<=89) return 'NY';
+  if(z>=100&&z<=149) return 'NY';
+  if(z>=150&&z<=196) return 'PA';
+  if(z>=197&&z<=199) return 'DE';
+  if(z>=200&&z<=205) return 'DC';
+  if(z>=206&&z<=212) return 'MD';
+  if(z>=214&&z<=219) return 'MD';
+  if(z>=220&&z<=246) return 'VA';
+  if(z>=247&&z<=268) return 'WV';
+  if(z>=270&&z<=289) return 'NC';
+  if(z>=290&&z<=299) return 'SC';
+  if(z>=300&&z<=319) return 'GA';
+  if(z>=320&&z<=349) return 'FL';
+  if(z>=350&&z<=369) return 'AL';
+  if(z>=370&&z<=385) return 'TN';
+  if(z>=386&&z<=397) return 'MS';
+  if(z>=398&&z<=399) return 'GA';
+  if(z>=400&&z<=427) return 'KY';
+  if(z>=428&&z<=459) return 'OH';
+  if(z>=460&&z<=479) return 'IN';
+  if(z>=480&&z<=499) return 'MI';
+  if(z>=500&&z<=528) return 'IA';
+  if(z>=530&&z<=549) return 'WI';
+  if(z>=550&&z<=567) return 'MN';
+  if(z>=570&&z<=577) return 'SD';
+  if(z>=580&&z<=588) return 'ND';
+  if(z>=590&&z<=599) return 'MT';
+  if(z>=600&&z<=629) return 'IL';
+  if(z>=630&&z<=658) return 'MO';
+  if(z>=660&&z<=679) return 'KS';
+  if(z>=680&&z<=693) return 'NE';
+  if(z>=700&&z<=714) return 'LA';
+  if(z>=716&&z<=729) return 'AR';
+  if(z>=730&&z<=749) return 'OK';
+  if(z>=750&&z<=799) return 'TX';
+  if(z>=800&&z<=816) return 'CO';
+  if(z>=820&&z<=831) return 'WY';
+  if(z>=832&&z<=838) return 'ID';
+  if(z>=840&&z<=847) return 'UT';
+  if(z>=850&&z<=865) return 'AZ';
+  if(z>=870&&z<=884) return 'NM';
+  if(z>=885&&z<=885) return 'TX';
+  if(z>=889&&z<=898) return 'NV';
+  if(z>=900&&z<=961) return 'CA';
+  if(z>=970&&z<=979) return 'OR';
+  if(z>=980&&z<=994) return 'WA';
+  if(z>=995&&z<=999) return 'AK';
+  if(z>=967&&z<=968) return 'HI';
+  return null;
+}
+
+// US Tile Grid [col, row]
+const STATE_TILES={
+  ME:[11,0],NH:[11,1],VT:[10,1],MA:[11,2],RI:[11,3],CT:[10,3],
+  NY:[9,2],PA:[8,2],NJ:[10,2],DE:[10,4],MD:[9,3],DC:[10,3],
+  WA:[0,2],OR:[0,3],CA:[0,4],
+  MT:[2,1],ID:[1,3],NV:[1,4],AZ:[2,5],
+  WY:[3,2],UT:[2,4],CO:[3,4],NM:[3,5],
+  ND:[4,1],SD:[4,2],NE:[4,3],KS:[4,4],OK:[4,5],TX:[4,6],
+  MN:[5,1],IA:[5,2],MO:[5,3],AR:[5,4],LA:[5,5],
+  WI:[6,1],IL:[6,2],TN:[6,3],MS:[6,4],AL:[7,4],
+  MI:[7,1],IN:[7,2],KY:[7,3],
+  OH:[8,1],WV:[8,3],VA:[9,3],NC:[9,4],SC:[10,4],GA:[9,5],FL:[9,6],
+  AK:[0,7],HI:[1,7]
+};
+
+function getStateLoadCounts(){
+  const counts={};
+  const addZip=(zip,statField)=>{
+    if(!zip) return;
+    const st=zipToState(zip);
+    if(!st) return;
+    if(!counts[st]) counts[st]={picked:0,delivered:0,total:0};
+    if(statField==='picked') counts[st].picked++;
+    else if(statField==='delivered') counts[st].delivered++;
+    counts[st].total=Math.max(counts[st].picked,counts[st].delivered);
+  };
+  // Drayage
+  (S.quotes||[]).filter(q=>['Booked','Delivered','Invoiced','Paid'].includes(q.status)).forEach(q=>{
+    addZip(q.port?.match(/\d{5}/)?.[0]||'','picked');
+    addZip(q.zip,'delivered');
+  });
+  // Freight
+  (window._fqHistory||[]).filter(q=>['Booked','Delivered','Invoiced','Paid'].includes(q.status)).forEach(q=>{
+    addZip(q.pickupZip,'picked');
+    addZip(q.deliveryZip,'delivered');
+  });
+  // Transload
+  (window._tlHistory||[]).filter(q=>['Booked','Delivered','Invoiced','Paid'].includes(q.status)).forEach(q=>{
+    addZip(q.outDeliveryZip,'delivered');
+  });
+  return counts;
+}
+
+function renderShiflAchievements(){
+  const counts=getStateLoadCounts();
+  const activeStates=Object.keys(counts).length;
+  const totalLoads=Object.values(counts).reduce((s,c)=>s+c.total,0);
+  $('topbar-right').innerHTML='';
+
+  const CELL=52;const GAP=3;
+  const maxCol=Math.max(...Object.values(STATE_TILES).map(([c])=>c))+1;
+  const maxRow=Math.max(...Object.values(STATE_TILES).map(([,r])=>r))+1;
+  const W=maxCol*(CELL+GAP);const H=maxRow*(CELL+GAP);
+
+  const cells=Object.entries(STATE_TILES).map(([st,[col,row]])=>{
+    const c=counts[st];
+    const hasLoad=!!c;
+    const x=col*(CELL+GAP);const y=row*(CELL+GAP);
+    const intensity=hasLoad?Math.min(1,0.4+c.total*0.1):0;
+    const bg=hasLoad?`rgba(220,38,38,${intensity})`:'#f1f5f9';
+    const textColor=hasLoad?'#fff':'#94a3b8';
+    return `<g transform="translate(${x},${y})" style="cursor:${hasLoad?'pointer':'default'}">
+      <rect width="${CELL}" height="${CELL}" rx="6" fill="${bg}" stroke="${hasLoad?'#b91c1c':'#e2e8f0'}" stroke-width="1"/>
+      <text x="${CELL/2}" y="${CELL/2-4}" text-anchor="middle" dominant-baseline="middle" font-size="12" font-weight="800" fill="${textColor}" font-family="inherit">${st}</text>
+      ${hasLoad?`<text x="${CELL/2}" y="${CELL/2+9}" text-anchor="middle" dominant-baseline="middle" font-size="9" fill="rgba(255,255,255,.8)" font-family="inherit">${c.total}</text>`:''}
+      ${hasLoad?`<title>${st}: ${c.picked||0} picked · ${c.delivered||0} delivered · ${c.total} total loads</title>`:''}
+    </g>`;
+  }).join('');
+
+  $('page').innerHTML=`
+  <!-- Header stats -->
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px">
+    <div class="kpi"><div class="kpi-lbl">States covered</div><div class="kpi-val" style="color:var(--red)">${activeStates} / 50</div></div>
+    <div class="kpi"><div class="kpi-lbl">Total loads moved</div><div class="kpi-val" style="color:var(--steel)">${totalLoads}</div></div>
+    <div class="kpi"><div class="kpi-lbl">Coverage</div><div class="kpi-val">${Math.round(activeStates/50*100)}%</div><div style="margin-top:6px;height:6px;background:var(--gray-100);border-radius:3px"><div style="height:6px;width:${Math.round(activeStates/50*100)}%;background:var(--red);border-radius:3px;transition:width .8s"></div></div></div>
+    <div class="kpi"><div class="kpi-lbl">Next goal</div><div class="kpi-val">${activeStates<10?'10':activeStates<25?'25':activeStates<50?'50':'All 50!'} states</div></div>
+  </div>
+
+  <!-- Map -->
+  <div class="card" style="padding:24px">
+    <div style="font-size:16px;font-weight:800;color:var(--navy);margin-bottom:4px">🗺️ Shifl Load Coverage Map</div>
+    <div style="font-size:13px;color:var(--gray-500);margin-bottom:20px">States turn red when you move a load there. Hover for details.</div>
+    <div style="overflow-x:auto">
+      <svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:${W}px;height:auto;display:block">
+        ${cells}
+      </svg>
+    </div>
+    <div style="display:flex;align-items:center;gap:16px;margin-top:16px;font-size:12px;color:var(--gray-500)">
+      <div style="display:flex;align-items:center;gap:6px"><div style="width:16px;height:16px;border-radius:3px;background:#f1f5f9;border:1px solid #e2e8f0"></div> No loads yet</div>
+      <div style="display:flex;align-items:center;gap:6px"><div style="width:16px;height:16px;border-radius:3px;background:rgba(220,38,38,.5)"></div> Active</div>
+      <div style="display:flex;align-items:center;gap:6px"><div style="width:16px;height:16px;border-radius:3px;background:rgba(220,38,38,.9)"></div> High volume</div>
+    </div>
+  </div>
+
+  <!-- State breakdown table -->
+  ${activeStates>0?`
+  <div class="card" style="margin-top:16px;padding:0;overflow:hidden">
+    <div style="padding:14px 20px;border-bottom:1px solid var(--gray-100);font-size:14px;font-weight:700;color:var(--navy)">State breakdown</div>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>State</th><th>Picked up</th><th>Delivered</th><th>Total loads</th></tr></thead>
+      <tbody>${Object.entries(counts).sort((a,b)=>b[1].total-a[1].total).map(([st,c])=>`
+        <tr><td><strong style="color:var(--red)">${st}</strong></td><td>${c.picked||0}</td><td>${c.delivered||0}</td><td><strong>${c.total}</strong></td></tr>`).join('')}
+      </tbody>
+    </table></div>
+  </div>`:''}`;
+}
+
+
+// ════════════════════════════════════════════════════════════════════
+// SCREENSHOT MODE
+// ════════════════════════════════════════════════════════════════════
+let _screenshotMode=false;
+function toggleScreenshotMode(){
+  _screenshotMode=!_screenshotMode;
+  document.body.classList.toggle('screenshot-mode',_screenshotMode);
+  showToast(_screenshotMode?'📷 Screenshot mode ON — numbers hidden':'📷 Screenshot mode OFF',_screenshotMode?'info':'success',2500);
+}
+
+// ════════════════════════════════════════════════════════════════════
+// WELCOME BACK MESSAGE (time-of-day)
+// ════════════════════════════════════════════════════════════════════
+function getGreeting(){
+  const h=new Date().toLocaleString('en-US',{timeZone:'America/New_York',hour:'numeric',hour12:false});
+  const hour=parseInt(h);
+  if(hour>=5&&hour<12) return '☀️ Good morning';
+  if(hour>=12&&hour<17) return '🌤 Good afternoon';
+  if(hour>=17&&hour<21) return '🌆 Good evening';
+  return '🌙 Working late';
+}
+
+// ════════════════════════════════════════════════════════════════════
+// ACHIEVEMENT BADGES
+// ════════════════════════════════════════════════════════════════════
+const ACHIEVEMENTS=[
+  {id:'first_quote',  icon:'📋',title:'First quote',   desc:'Created your first quote',      check:()=>(S.quotes?.length||0)+(window._fqHistory?.length||0)>=1},
+  {id:'first_booking',icon:'🎉',title:'First booking', desc:'Booked your first load',         check:()=>S.quotes?.some(q=>['Booked','Delivered','Invoiced','Paid'].includes(q.status))},
+  {id:'ten_loads',    icon:'🚛',title:'10 loads',      desc:'Moved 10 loads',                 check:()=>((S.quotes||[]).filter(q=>['Delivered','Invoiced','Paid'].includes(q.status)).length+(window._fqHistory||[]).filter(q=>['Delivered','Invoiced','Paid'].includes(q.status)).length)>=10},
+  {id:'five_states',  icon:'🗺️',title:'Coast to coast',desc:'Covered 5+ states',              check:()=>Object.keys(getStateLoadCounts()).length>=5},
+  {id:'first_invoice',icon:'🧾',title:'Cash flow',     desc:'Sent your first invoice',        check:()=>Object.keys(S.invoices||{}).length>=1},
+  {id:'perfect_margin',icon:'💰',title:'Big margin',   desc:'Quoted a load over 30% margin',  check:()=>(S.quotes||[]).some(q=>(q.profitPct||0)>=0.30)},
+  {id:'multi_mode',   icon:'✈️',title:'Multi-modal',   desc:'Quoted all 4 modes',             check:()=>{const has=new Set([...(S.quotes||[]).map(()=>'drayage'),...(window._fqHistory||[]).map(q=>q.fqMode),...(window._tlHistory||[]).map(()=>'transload'),...(window._aqHistory||[]).map(()=>'air')]);return has.size>=4;}},
+  {id:'fifty_quotes', icon:'📈',title:'Quote machine',  desc:'Created 50+ quotes',             check:()=>(S.quotes?.length||0)>=50},
+  {id:'all_states',   icon:'🇺🇸',title:'All 50 states', desc:'Moved loads in all 50 states',  check:()=>Object.keys(getStateLoadCounts()).length>=50},
+];
+
+function checkAchievements(){
+  const unlocked=JSON.parse(localStorage.getItem('shifl_achievements')||'[]');
+  const newOnes=ACHIEVEMENTS.filter(a=>!unlocked.includes(a.id)&&a.check());
+  if(newOnes.length){
+    newOnes.forEach(a=>{
+      unlocked.push(a.id);
+      setTimeout(()=>{
+        const el=document.createElement('div');
+        el.style.cssText='position:fixed;top:70px;right:24px;z-index:99999;background:linear-gradient(135deg,#1a2e4a,#2e75b6);color:#fff;border-radius:12px;padding:16px 20px;box-shadow:0 8px 32px rgba(0,0,0,.25);display:flex;align-items:center;gap:12px;animation:fadeInPreview .3s ease;max-width:300px';
+        el.innerHTML=`<div style="font-size:32px">${a.icon}</div><div><div style="font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;opacity:.7">Achievement unlocked!</div><div style="font-size:15px;font-weight:800;margin-top:2px">${a.title}</div><div style="font-size:12px;opacity:.8;margin-top:2px">${a.desc}</div></div>`;
+        document.body.appendChild(el);
+        setTimeout(()=>el.remove(),4000);
+      },500);
+    });
+    localStorage.setItem('shifl_achievements',JSON.stringify(unlocked));
+  }
+  return unlocked;
+}
+
+function renderAchievementsPage(){
+  const unlocked=checkAchievements();
+  $('topbar-right').innerHTML='';
+  $('page').innerHTML=`
+    <div style="margin-bottom:20px">
+      <div style="font-size:18px;font-weight:800;color:var(--navy)">🏆 Shifl Achievements</div>
+      <div style="font-size:13px;color:var(--gray-500);margin-top:4px">${unlocked.length} of ${ACHIEVEMENTS.length} unlocked</div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px">
+      ${ACHIEVEMENTS.map(a=>{
+        const done=unlocked.includes(a.id);
+        return`<div class="card" style="text-align:center;padding:24px;${done?'border-color:#86efac;background:#f0fdf4':'opacity:.55'}">
+          <div style="font-size:40px;margin-bottom:10px">${done?a.icon:'🔒'}</div>
+          <div style="font-size:15px;font-weight:800;color:${done?'var(--navy)':'var(--gray-400)'}">${a.title}</div>
+          <div style="font-size:12px;color:${done?'var(--gray-500)':'var(--gray-300)'};margin-top:6px">${a.desc}</div>
+          ${done?'<div style="margin-top:10px;font-size:11px;font-weight:700;color:#16a34a">✓ Unlocked</div>':''}
+        </div>`;}).join('')}
+    </div>`;
+}
+
+// ════════════════════════════════════════════════════════════════════
+// HEATMAP CALENDAR
+// ════════════════════════════════════════════════════════════════════
+function renderHeatmapCalendar(containerId){
+  const el=$(containerId);if(!el) return;
+  const allQ=[...(S.quotes||[]),...(window._fqHistory||[]),...(window._tlHistory||[])];
+  const byDate={};
+  allQ.forEach(q=>{if(q.date) byDate[q.date]=(byDate[q.date]||0)+1;});
+  const today=new Date();
+  const weeks=[];
+  let d=new Date(today);
+  d.setDate(d.getDate()-363); // ~52 weeks back
+  d.setDate(d.getDate()-d.getDay()); // start on Sunday
+  while(d<=today){
+    const week=[];
+    for(let i=0;i<7;i++){
+      const ds=d.toISOString().slice(0,10);
+      week.push({date:ds,count:byDate[ds]||0,future:d>today});
+      d.setDate(d.getDate()+1);
+    }
+    weeks.push(week);
+  }
+  const max=Math.max(1,...Object.values(byDate));
+  const cellSize=14;const gap=2;
+  const W=weeks.length*(cellSize+gap);const H=7*(cellSize+gap);
+  el.innerHTML=`<svg width="${W}" height="${H}" style="display:block">
+    ${weeks.map((week,wi)=>week.map((day,di)=>{
+      if(day.future) return '';
+      const x=wi*(cellSize+gap);const y=di*(cellSize+gap);
+      const intensity=day.count>0?Math.min(1,0.3+day.count/max*0.7):0;
+      const fill=day.count>0?`rgba(26,46,74,${intensity})`:'#f1f5f9';
+      return`<rect x="${x}" y="${y}" width="${cellSize}" height="${cellSize}" rx="2" fill="${fill}"><title>${day.date}: ${day.count} quote${day.count!==1?'s':''}</title></rect>`;
+    }).join('')).join('')}
+  </svg>`;
+}
+
+// ════════════════════════════════════════════════════════════════════
+// UNDO TOAST (wrap delete functions)
+// ════════════════════════════════════════════════════════════════════
+let _undoQueue=[];
+function withUndo(label, undoFn, commitFn){
+  let committed=false;
+  const container=$('toast-container')||document.createElement('div');
+  if(!$('toast-container')){container.id='toast-container';container.style.cssText='position:fixed;bottom:24px;right:24px;z-index:99999;display:flex;flex-direction:column;gap:8px;pointer-events:none';document.body.appendChild(container);}
+  const toast=document.createElement('div');
+  toast.style.cssText='background:#1a2e4a;color:#fff;padding:12px 18px;border-radius:10px;font-size:13px;font-weight:600;font-family:inherit;box-shadow:0 4px 16px rgba(0,0,0,.25);display:flex;align-items:center;gap:12px;pointer-events:all';
+  toast.innerHTML=`<span>${label}</span><button onclick="this.closest('div').remove();committed=false;undoFn&&undoFn();" style="background:rgba(255,255,255,.2);border:none;color:#fff;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:700;font-family:inherit">Undo</button>`;
+  toast.querySelector('button').onclick=()=>{toast.remove();if(!committed&&undoFn) undoFn();committed=true;};
+  container.appendChild(toast);
+  setTimeout(()=>{if(!committed){committed=true;if(commitFn) commitFn();}toast.remove();},5000);
+}
+
+// ════════════════════════════════════════════════════════════════════
+// AUTO-SAVE INDICATOR
+// ════════════════════════════════════════════════════════════════════
+function showSavingIndicator(text='Saving…'){
+  let ind=$('auto-save-ind');
+  if(!ind){ind=document.createElement('div');ind.id='auto-save-ind';ind.style.cssText='position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:var(--navy);color:#fff;padding:6px 16px;border-radius:99px;font-size:12px;font-weight:600;z-index:99998;transition:opacity .3s';document.body.appendChild(ind);}
+  ind.textContent=text;ind.style.opacity='1';
+}
+function showSavedIndicator(){
+  showSavingIndicator('✓ Saved');
+  setTimeout(()=>{const ind=$('auto-save-ind');if(ind) ind.style.opacity='0';},1500);
+}
+
+// ════════════════════════════════════════════════════════════════════
+// CARRIER CHECK-IN
+// ════════════════════════════════════════════════════════════════════
+function showCarrierCheckIn(quoteId){
+  const q=S.quotes.find(q=>q.id===quoteId);if(!q) return;
+  const carrierEmail=S.rates.find(r=>r.carrier===q.carrier)?.email||'';
+  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-title">📱 Carrier check-in — ${q.carrier||'—'}</div>
+    <div style="background:var(--blue-bg);border-radius:var(--radius);padding:10px 14px;margin-bottom:14px;font-size:13px;color:var(--steel)">
+      ${q.customer||'—'} · ${q.port||'—'} → ${q.zip||'—'} · ${q.date||'—'}
+    </div>
+    <div class="field"><label>Carrier email</label><input type="email" id="checkin-email" value="${carrierEmail}" placeholder="carrier@example.com"></div>
+    <div class="field"><label>Message</label>
+      <textarea id="checkin-msg" rows="4" style="width:100%;box-sizing:border-box;resize:vertical">Hi ${q.carrier||'team'},\n\nThis is a friendly check-in for the upcoming pickup:\n• Customer: ${q.customer||'—'}\n• Lane: ${q.port||'—'} → ${q.zip||'—'}\n• Move: ${q.ld||'—'}\n\nPlease confirm you are available and ready. Reply with any questions.\n\nThank you,\nShifl Logistics</textarea>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn blue" onclick="sendCarrierCheckIn('${quoteId}')">📧 Send check-in</button>
+    </div>
+  </div></div>`;
+}
+
+async function sendCarrierCheckIn(quoteId){
+  const email=($('checkin-email')||{}).value?.trim();
+  const msg=($('checkin-msg')||{}).value?.trim();
+  if(!email){alert('Enter carrier email.');return;}
+  const resendKey=localStorage.getItem('shifl_resend_key')||'';
+  if(!resendKey){alert('Set your Resend API key in Admin Panel → Email Settings first.');return;}
+  try{
+    const r=await fetch('https://api.resend.com/emails',{method:'POST',headers:{'Authorization':'Bearer '+resendKey,'Content-Type':'application/json'},
+      body:JSON.stringify({from:'Shifl Logistics <onboarding@resend.dev>',to:[email],reply_to:_currentUser?.email||'mk@shifl.com',subject:'Shifl Check-in — Upcoming Pickup',text:msg})});
+    if(r.ok){closeModal();showToast('✅ Check-in sent to '+email,'success');}
+    else{const d=await r.json();alert('Failed: '+JSON.stringify(d));}
+  }catch(e){alert('Error: '+e.message);}
+}
+
+
 boot().catch(e=>{$('loading-screen').style.display='none';$('setup-screen').style.display='flex';});
 </script>
 <script>
