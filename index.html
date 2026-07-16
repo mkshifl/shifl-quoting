@@ -6278,7 +6278,7 @@ async function checkAuthAndProceed(){
   const session = getSession();
   if(session){
     try{
-      const{data:user}=await db.from('app_users').select('*').eq('id',session.id).single();
+      const{data:user}=await withTimeout(db.from('app_users').select('*').eq('id',session.id).single(),6000,{data:null}).then(r=>r).catch(()=>({data:null}));
       if(user && user.active){
         // Update last_login silently
         db.from('app_users').update({last_login:new Date().toISOString()}).eq('id',user.id).then(()=>{});
@@ -6298,7 +6298,7 @@ async function showLoginScreen(){
   // Check if first user — do this in background, non-blocking
   // db is confirmed working at this point so this is safe
   try{
-    const{data}=await db.from('app_users').select('id').limit(1);
+    const{data}=await withTimeout(db.from('app_users').select('id').limit(1),6000,{data:[]}).then(r=>r).catch(()=>({data:[]}));
     if(!data||!data.length){
       // Only show first-user setup if truly no users exist
       $('first-user-banner').style.display='';
@@ -6345,7 +6345,7 @@ async function doLogin(){
     }
 
     // Normal login
-    const{data:user,error}=await db.from('app_users').select('*').eq('email',email).single();
+    const{data:user,error}=await withTimeout(db.from('app_users').select('*').eq('email',email).single(),8000,{data:null,error:new Error('timeout')}).then(r=>r).catch(e=>({data:null,error:e}));
     if(error||!user){showLoginErr('No account found with that email.');btn.textContent=origText;btn.disabled=false;return;}
     if(!user.active){showLoginErr('Your account has been deactivated. Contact your admin.');btn.textContent=origText;btn.disabled=false;return;}
     if(user.password_hash!==hash){showLoginErr('Incorrect password. Try again.');btn.textContent=origText;btn.disabled=false;return;}
@@ -6640,7 +6640,7 @@ async function boot(){
   try{const{createClient}=window.supabase;db=createClient(url,key);}catch(e){db=null;$('loading-screen').style.display='none';$('setup-screen').style.display='flex';return;}
   // Step 3: CONFIRM connection — MUST happen before auth to prevent null db bug
   try{
-    await Promise.race([db.from('rates').select('id').limit(1),tmout(8000)]);
+    await Promise.race([db.from('rates').select('id').limit(1),tmout(5000)]);
   }catch(e){
     db=null;$('loading-screen').style.display='none';$('setup-screen').style.display='flex';
     const er=$('setup-error');if(er){er.style.display='block';er.textContent='Could not connect to database. Check your credentials.';}
