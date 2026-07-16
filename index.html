@@ -328,6 +328,15 @@ body.screenshot-mode .money::after,body.screenshot-mode .kpi-val::after{content:
 .active-card.dragging{opacity:.5;cursor:grabbing;transform:scale(1.02)}
 .active-card.drag-over{box-shadow:0 0 0 2px var(--steel)!important}
 </style>
+<script>
+// Force clear service worker and caches
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.getRegistrations().then(regs=>{regs.forEach(r=>r.unregister());});
+}
+if('caches' in window){
+  caches.keys().then(keys=>keys.forEach(k=>caches.delete(k)));
+}
+</script>
 </head>
 <body>
 
