@@ -10314,8 +10314,165 @@ async function saveCarrierInvoiceData(type,id){
 
 function openFqCarrierInvoice(idx){
   const q=(window._fqHistory||[])[idx];
-  if(!q){alert('Not found');return;}
-  showToast('Freight carrier invoice — use the carrier rate + accessorials','info',3000);
+  if(!q){alert('Shipment not found.');return;}
+  const existing=getCarrierInvoice(q.id)||{};
+  const baseCarrier=q.carrierRate||0;
+  const invNum=existing.invNum||'CINV-FQ-'+Date.now().toString().slice(-5);
+  const today=localDateStr();
+  const due30=new Date(Date.now()+30*864e5).toISOString().slice(0,10);
+  const saved=existing.accessorials||{};
+
+  const ACC=[
+    {key:'fuel',label:'Fuel surcharge',note:'% of linehaul'},
+    {key:'liftgate_pu',label:'Liftgate — pickup',note:'Flat'},
+    {key:'liftgate_del',label:'Liftgate — delivery',note:'Flat'},
+    {key:'residential',label:'Residential delivery',note:'Flat'},
+    {key:'detention',label:'Detention',note:'Per hour'},
+    {key:'layover',label:'Layover',note:'Per night'},
+    {key:'redelivery',label:'Re-delivery',note:'Flat'},
+    {key:'inside',label:'Inside delivery',note:'Flat'},
+    {key:'toll',label:'Tolls',note:'Flat'},
+    {key:'other',label:'Other charge',note:'Flat'},
+  ];
+
+  const rows=ACC.map(a=>{
+    const sv=saved[a.key]||{};
+    const isChecked=sv.enabled||false;
+    return`<div style="padding:9px 0;border-bottom:1px solid var(--gray-100)">
+      <div style="display:flex;align-items:center;gap:10px">
+        <input type="checkbox" id="fq-cacc-${a.key}" ${isChecked?'checked':''} onchange="calcFqCarrierTotal(${idx})" style="flex-shrink:0">
+        <div style="flex:1">
+          <label for="fq-cacc-${a.key}" style="font-size:13px;font-weight:600;color:var(--navy);cursor:pointer">${a.label}</label>
+          <div style="font-size:11px;color:var(--gray-400)">${a.note}</div>
+        </div>
+        <input type="number" id="fq-cacc-amt-${a.key}" value="${sv.amount||''}" placeholder="0" min="0"
+          oninput="calcFqCarrierTotal(${idx})"
+          style="width:90px;padding:5px 7px;font-size:13px;text-align:right;${!isChecked?'opacity:.4':''}">
+      </div>
+    </div>`;}).join('');
+
+  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal" style="max-width:580px;max-height:90vh;overflow-y:auto">
+    <!-- Tab header -->
+    <div style="display:flex;gap:0;margin-bottom:18px;border-bottom:2px solid var(--gray-100)">
+      <div style="padding:10px 20px;font-size:14px;font-weight:700;color:var(--gray-400);cursor:pointer" onclick="closeModal();openInvoiceBuilder('freight','${q.id}')">🧾 Customer invoice</div>
+      <div style="padding:10px 20px;font-size:14px;font-weight:700;color:var(--navy);border-bottom:2px solid var(--navy);margin-bottom:-2px">🚛 Carrier invoice (AP)</div>
+    </div>
+
+    <div style="background:#fffbeb;border:1px solid #fbbf24;border-radius:var(--radius);padding:8px 12px;margin-bottom:14px;font-size:12px;color:#92400e;font-weight:600">
+      📤 Accounts Payable — what Shifl owes <strong>${q.carrier||'carrier'}</strong>
+    </div>
+    <div style="background:var(--blue-bg);border-radius:var(--radius);padding:8px 12px;margin-bottom:14px;font-size:12px;color:var(--steel)">
+      ${q.fqMode} · ${q.pickupZip||'—'} → ${q.deliveryZip||'—'} · ${q.date||''}
+    </div>
+
+    <div class="g3" style="margin-bottom:14px">
+      <div class="field"><label>Carrier invoice # *</label><input type="text" id="fqcinv-num" value="${existing.invNum||invNum}"></div>
+      <div class="field"><label>Invoice date</label><input type="date" id="fqcinv-date" value="${existing.invDate||today}"></div>
+      <div class="field"><label>Due date</label><input type="date" id="fqcinv-due" value="${existing.invDue||due30}"></div>
+    </div>
+
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--gray-100);margin-bottom:8px">
+      <span style="font-size:13px;font-weight:600;color:var(--navy)">Base carrier rate <span style="font-size:10px;background:var(--gray-100);padding:1px 6px;border-radius:99px;color:var(--gray-500)">locked</span></span>
+      <span style="font-size:15px;font-weight:800;color:var(--navy)">${fmtD(baseCarrier)}</span>
+    </div>
+
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gray-400);margin-bottom:8px">Carrier accessorials</div>
+    ${rows}
+
+    <!-- Custom charges -->
+    <div id="fq-carrier-custom">
+      ${(existing.customCharges||[]).map((cc,ci)=>`
+        <div style="padding:9px 0;border-bottom:1px solid var(--gray-100)">
+          <div style="display:flex;align-items:center;gap:10px">
+            <input type="checkbox" id="fq-cacc-custom-${ci}" checked onchange="calcFqCarrierTotal(${idx})" style="flex-shrink:0">
+            <input type="text" id="fq-carrier-desc-${ci}" value="${cc.desc||''}" placeholder="Charge description" style="flex:1;padding:5px 8px;font-size:13px;border:1px solid var(--gray-200);border-radius:var(--radius)">
+            <input type="number" id="fq-cacc-amt-custom-${ci}" value="${cc.amount||''}" placeholder="0" oninput="calcFqCarrierTotal(${idx})" style="width:90px;padding:5px 7px;font-size:13px;text-align:right">
+          </div>
+        </div>`).join('')}
+    </div>
+    <button onclick="addFqCarrierCharge(${idx})" style="width:100%;padding:8px;border:1.5px dashed var(--gray-300);background:transparent;border-radius:var(--radius);font-size:13px;color:var(--gray-500);cursor:pointer;margin:6px 0 14px">+ Add carrier charge</button>
+
+    <div style="padding:12px 14px;background:var(--gray-50);border-radius:var(--radius)">
+      <div style="display:flex;justify-content:space-between;margin-bottom:6px;font-size:13px;color:var(--gray-600)">
+        <span>Base carrier rate</span><span>${fmtD(baseCarrier)}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;margin-bottom:10px;font-size:13px;color:var(--gray-600)">
+        <span>Accessorials</span><span id="fqcinv-acc">$0.00</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;padding-top:10px;border-top:1px solid var(--gray-200)">
+        <span style="font-size:16px;font-weight:700;color:var(--navy)">Total payable</span>
+        <span style="font-size:20px;font-weight:800;color:#d97706" id="fqcinv-total">${fmtD(baseCarrier)}</span>
+      </div>
+    </div>
+
+    <div class="field" style="margin-top:14px"><label>Notes</label><input type="text" id="fqcinv-notes" value="${existing.notes||''}" placeholder="Payment terms, check #, etc."></div>
+    ${buildAttachmentSection(q.id,'carrier','freight')}
+
+    <div class="modal-foot">
+      <button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn blue" onclick="saveFqCarrierInvoice(${idx})">📤 Send to SHIFL</button>
+    </div>
+  </div></div>`;
+
+  window._fqCinvBase=baseCarrier;
+  window._fqCinvIdx=idx;
+  setTimeout(()=>calcFqCarrierTotal(idx),50);
+}
+
+function calcFqCarrierTotal(idx){
+  const base=window._fqCinvBase||0;
+  const ACC=['fuel','liftgate_pu','liftgate_del','residential','detention','layover','redelivery','inside','toll','other'];
+  let acc=0;
+  ACC.forEach(k=>{
+    if(document.getElementById('fq-cacc-'+k)?.checked)
+      acc+=parseFloat(document.getElementById('fq-cacc-amt-'+k)?.value)||0;
+  });
+  const cc=document.getElementById('fq-carrier-custom');
+  if(cc) cc.querySelectorAll('[id^="fq-cacc-amt-custom-"]').forEach((el,i)=>{
+    if(document.getElementById('fq-cacc-custom-'+i)?.checked) acc+=parseFloat(el.value)||0;
+  });
+  const at=document.getElementById('fqcinv-acc');if(at) at.textContent=fmtD(acc);
+  const tot=document.getElementById('fqcinv-total');if(tot) tot.textContent=fmtD(base+acc);
+}
+
+function addFqCarrierCharge(idx){
+  const c=document.getElementById('fq-carrier-custom');if(!c) return;
+  const ci=c.querySelectorAll('[id^="fq-cacc-amt-custom-"]').length;
+  const d=document.createElement('div');d.style.cssText='padding:9px 0;border-bottom:1px solid var(--gray-100)';
+  d.innerHTML=`<div style="display:flex;align-items:center;gap:10px">
+    <input type="checkbox" id="fq-cacc-custom-${ci}" checked onchange="calcFqCarrierTotal(${idx})" style="flex-shrink:0">
+    <input type="text" id="fq-carrier-desc-${ci}" placeholder="Charge description" style="flex:1;padding:5px 8px;font-size:13px;border:1px solid var(--gray-200);border-radius:var(--radius)">
+    <input type="number" id="fq-cacc-amt-custom-${ci}" placeholder="0" oninput="calcFqCarrierTotal(${idx})" style="width:90px;padding:5px 7px;font-size:13px;text-align:right">
+  </div>`;
+  c.appendChild(d);
+}
+
+async function saveFqCarrierInvoice(idx){
+  const q=(window._fqHistory||[])[idx];if(!q) return;
+  const num=($('fqcinv-num')||{}).value?.trim();
+  if(!num){alert('Invoice number required.');return;}
+  const base=window._fqCinvBase||0;
+  const ACC=['fuel','liftgate_pu','liftgate_del','residential','detention','layover','redelivery','inside','toll','other'];
+  const accessorials={};let accTotal=0;
+  ACC.forEach(k=>{
+    if(!document.getElementById('fq-cacc-'+k)?.checked) return;
+    const amt=parseFloat(document.getElementById('fq-cacc-amt-'+k)?.value)||0;
+    accessorials[k]={enabled:true,amount:amt};accTotal+=amt;
+  });
+  const customCharges=[];
+  const cc=document.getElementById('fq-carrier-custom');
+  if(cc) cc.querySelectorAll('[id^="fq-cacc-amt-custom-"]').forEach((el,i)=>{
+    if(document.getElementById('fq-cacc-custom-'+i)?.checked&&parseFloat(el.value)>0){
+      const amt=parseFloat(el.value)||0;
+      customCharges.push({desc:document.getElementById('fq-carrier-desc-'+i)?.value?.trim()||'Carrier charge',amount:amt,enabled:true});
+      accTotal+=amt;
+    }
+  });
+  const inv={invNum:num,invDate:($('fqcinv-date')||{}).value||today,invDue:($('fqcinv-due')||{}).value||'',notes:($('fqcinv-notes')||{}).value?.trim()||'',baseTotal:base,accTotal,grandTotal:base+accTotal,accessorials,customCharges,type:'freight',savedAt:localDateStr()};
+  saveCarrierInvoice(q.id,inv);
+  closeModal();
+  showToast('Carrier invoice saved — '+num,'success');
 }
 
 
