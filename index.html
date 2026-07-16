@@ -962,80 +962,47 @@ let _importRows=[];
 // INIT
 // ═══════════════════════════════════════════════════════
 async function initApp(){
-  // ── INSTANT: load everything from localStorage first ──────────────
-  $('loading-msg').textContent='Starting…';
-  try{const r=JSON.parse(localStorage.getItem('shifl_rates_cache')||'[]');S.rates=r.length?r:SEED.map((s,i)=>({...s,id:s.id||'seed'+i,active:true}));}catch(e){S.rates=[];}
-  // ── Background DB sync (non-blocking) ─────────────────────────────
-  setTimeout(async()=>{
+  try{
+    $('loading-msg').textContent='Starting…';
+    try{const r=JSON.parse(localStorage.getItem('shifl_rates_cache')||'[]');S.rates=r.length?r:SEED.map((s,i)=>({...s,id:s.id||'seed'+i,active:true}));}catch(e){S.rates=[];}
+    setTimeout(async()=>{try{const r=await withTimeout(dbLoadRates(),10000,null);if(r&&r.length>0){S.rates=r;localStorage.setItem('shifl_rates_cache',JSON.stringify(r));if(S.view==='rates')renderRates();if($('carriers-body'))refreshCarriersAndPreview();}}catch(e){}},1200);
+    try{S.quotes=JSON.parse(localStorage.getItem('shifl_quotes_cache')||'[]');}catch(e){S.quotes=[];}
+    try{S.customers=JSON.parse(localStorage.getItem('shifl_customers_cache')||'[]');}catch(e){S.customers=[];}
+    try{window._fqHistory=JSON.parse(localStorage.getItem('fq_history')||'[]');}catch(e){window._fqHistory=[];}
+    try{window._fqRates=JSON.parse(localStorage.getItem('fq_rates')||'[]');}catch(e){window._fqRates=[];}
+    try{window._aqHistory=JSON.parse(localStorage.getItem('aq_history')||'[]');}catch(e){window._aqHistory=[];}
+    try{window._tlHistory=JSON.parse(localStorage.getItem('tl_history')||'[]');}catch(e){window._tlHistory=[];}
+    try{window._tlWarehouses=JSON.parse(localStorage.getItem('tl_warehouses')||'[]');}catch(e){window._tlWarehouses=[];}
+    try{loadSpecialZips();}catch(e){}
+    try{loadCustomCFS();}catch(e){}
+    try{loadActiveTracking();}catch(e){}
+    try{loadInvoices();}catch(e){}
+    try{S.tl=defaultTlState();}catch(e){S.tl={};}
+    setTimeout(async()=>{
+      try{const q=await withTimeout(dbLoadQuotes(),10000,null);if(q){S.quotes=q;localStorage.setItem('shifl_quotes_cache',JSON.stringify(q));}}catch(e){}
+      try{const c=await withTimeout(dbLoadCustomers(),8000,null);if(c){S.customers=c;localStorage.setItem('shifl_customers_cache',JSON.stringify(c));}}catch(e){}
+      try{const fq=await withTimeout(dbLoadFqQuotes(),8000,null);if(fq){window._fqHistory=fq;localStorage.setItem('fq_history',JSON.stringify(fq));}}catch(e){}
+    },1000);
     try{
-      const r=await withTimeout(dbLoadRates(),10000,null);
-      if(r&&r.length>0){S.rates=r;localStorage.setItem('shifl_rates_cache',JSON.stringify(r));}
-      else if(!r||r.length===0){await dbBulkSaveRates(SEED);const r2=await dbLoadRates();if(r2){S.rates=r2;localStorage.setItem('shifl_rates_cache',JSON.stringify(r2));}}
-      if(S.view==='rates') renderRates();
-      if($('carriers-body')) refreshCarriersAndPreview();
-    }catch(e){console.log('rates sync:',e.message);}
-  },1200);
-  // ── INSTANT LOAD from localStorage ──────────────────────────────────
-  $('loading-msg').textContent='Almost ready…';
-  try{S.quotes=JSON.parse(localStorage.getItem('shifl_quotes_cache')||'[]');}catch(e){S.quotes=[];}
-  try{S.customers=JSON.parse(localStorage.getItem('shifl_customers_cache')||'[]');}catch(e){S.customers=[];}
-  await loadFqHistory();
-  // Sync from Supabase in background after app shows
-  setTimeout(async()=>{
-    try{const q=await withTimeout(dbLoadQuotes(),10000,null);if(q&&q.length>=0){S.quotes=q;localStorage.setItem('shifl_quotes_cache',JSON.stringify(q));}}catch(e){}
-    try{await autoExpireQuotes();}catch(e){}
-    try{const c=await withTimeout(dbLoadCustomers(),8000,null);if(c){S.customers=c;localStorage.setItem('shifl_customers_cache',JSON.stringify(c));}}catch(e){}
-  },1000);
-  try{window._aqHistory=JSON.parse(localStorage.getItem('aq_history')||'[]');}catch(e){window._aqHistory=[];}
-  setTimeout(async()=>{try{const d=await withTimeout(dbLoadAqQuotes(),8000,null);if(d){window._aqHistory=d;localStorage.setItem('aq_history',JSON.stringify(d));}}catch(e){}},600);
-  try{window._tlHistory=JSON.parse(localStorage.getItem('tl_history')||'[]');}catch(e){window._tlHistory=[];}
-  setTimeout(async()=>{try{if(typeof loadTlHistory==='function') await withTimeout(loadTlHistory(),8000,null);}catch(e){}},700);
-  loadSpecialZips();
-  loadCustomCFS();
-  loadActiveTracking();
-  migrateLocalStorageToSupabase().catch(e=>console.log('Migration:',e.message));
-  updateActiveBadge();
-  S.tl=defaultTlState();
-  // Real-time subscriptions
-  realtimeChannel=db.channel('app-changes')
-    .on('postgres_changes',{event:'*',schema:'public',table:'rates'},async()=>{
-      S.rates=await dbLoadRates();
-      if(S.view==='rates') renderRates();
-      if($('carriers-body')) refreshCarriersAndPreview();
-    })
-    .on('postgres_changes',{event:'*',schema:'public',table:'quotes'},async()=>{
-      S.quotes=await dbLoadQuotes();
-      if(S.view==='log') renderLog();
-      if(S.view==='dash') renderDash();
-      updateActiveBadge();
-    })
-    .on('postgres_changes',{event:'*',schema:'public',table:'customers'},async()=>{
-      S.customers=await dbLoadCustomers();
-      if(S.view==='customers') renderCustomers();
-    })
-    .on('postgres_changes',{event:'*',schema:'public',table:'fq_quotes'},async()=>{
-      await loadFqHistory();
-      if(S.view==='freight'&&S.fqTab==='log') renderFqLog();
-      if(S.view==='freight'&&S.fqTab==='dash') renderFqDashboard();
-      if(S.view==='active') renderActive();
-      updateActiveBadge();
-    })
-    .on('postgres_changes',{event:'*',schema:'public',table:'tl_quotes'},async()=>{
-      await loadTlHistory();
-      if(S.view==='transload'&&S.tlTab==='log') renderTlLog();
-      if(S.view==='transload'&&S.tlTab==='dash') renderTlDashboard();
-      if(S.view==='active') renderActive();
-      updateActiveBadge();
-    })
-    .subscribe(status=>{
-      setSyncStatus(status==='SUBSCRIBED'?'on':status==='CLOSED'?'off':'loading');
-    });
+      realtimeChannel=db.channel('app-changes')
+        .on('postgres_changes',{event:'*',schema:'public',table:'quotes'},async()=>{try{S.quotes=await dbLoadQuotes();if(S.view==='log')renderLog();if(S.view==='dash')renderDash();updateActiveBadge();}catch(e){}})
+        .on('postgres_changes',{event:'*',schema:'public',table:'fq_quotes'},async()=>{try{window._fqHistory=await withTimeout(dbLoadFqQuotes(),5000,window._fqHistory);if(S.view==='freight'&&S.fqTab==='log')renderFqLog();updateActiveBadge();}catch(e){}})
+        .subscribe(status=>{try{setSyncStatus(status==='SUBSCRIBED'?'on':status==='CLOSED'?'off':'loading');}catch(e){}});
+    }catch(e){}
+  }catch(e){console.error('initApp:',e);}
   $('loading-screen').style.display='none';
   $('app').style.display='flex';
-  setSyncStatus('on');
-  startClock();
-  render();
+  try{setSyncStatus('on');}catch(e){}
+  try{startClock();}catch(e){}
+  try{initDarkMode();updateDarkBtn();}catch(e){}
+  try{updateNotifBadge();}catch(e){}
+  try{updateInvNavBadge();}catch(e){}
+  try{updateActiveBadge();}catch(e){}
+  setTimeout(()=>{try{checkAchievements();}catch(e){}},3000);
+  S.view='home';
+  try{render();}catch(e){console.error('render:',e);}
 }
+
 
 // ═══════════════════════════════════════════════════════
 // HELPERS
