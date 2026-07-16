@@ -8793,6 +8793,9 @@ async function deleteShipment(type,id){
   }
   logAction('quote_deleted',`${type} shipment deleted`,'shipment',id);
   updateActiveBadge();updateInvNavBadge();
+  // Show SA-only nav items
+  const pmBtn=$('nav-profit-monitor');
+  if(pmBtn) pmBtn.style.display=_currentUser?.role==='super_admin'?'':'none';
   renderActive();
 }
 // ═══════════════════════════════════════════════════════
