@@ -5333,7 +5333,7 @@ function renderActive(){
           <div><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--gray-400);margin-bottom:2px">From</div><div style="font-weight:500">${s.from?s.from.split(',')[0]:'—'}</div></div>
           <div><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--gray-400);margin-bottom:2px">${s.type==='transload'?'Warehouse':'Delivery'}</div><div style="font-weight:500">${s.type==='transload'?(s.warehouse||'—'):(s.to||'—')}</div></div>
           <div><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--gray-400);margin-bottom:2px">Shifl Ref #</div><div style="font-weight:600;color:var(--steel);min-height:18px">${s.shiflRef||'<span style="color:var(--gray-300)">—</span>'}</div>
-            ${s.bookingNum?`<div style="font-size:10px;color:var(--gray-400);font-weight:600;margin-top:3px">📦 ${s.bookingNum}</div>`:''}
+            ${(s.bookingNum||getMeta(s.id).booking_num)?`<div style="font-size:10px;color:var(--gray-400);font-weight:600;margin-top:3px">📦 ${s.bookingNum||getMeta(s.id).booking_num}</div>`:''}
             ${getTrackingLink(s.id)?`<a href="${getTrackingLink(s.id)}" target="_blank" rel="noopener" style="font-size:10px;color:var(--steel);font-weight:600;margin-top:3px;display:block">📍 Track →</a>`:''}</div>
           ${s.mode?`<div><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--gray-400);margin-bottom:2px">Mode</div><div style="font-weight:500">${s.mode}</div></div>`:''}
           <div><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--gray-400);margin-bottom:2px">Expected delivery</div>
@@ -11406,7 +11406,7 @@ function showTrackingModal(type,id){
     ${existing?`<a href="${existing}" target="_blank" rel="noopener" style="display:inline-block;margin-top:6px;font-size:13px;color:var(--steel);font-weight:600">🔗 Open tracking link →</a>`:''}
     <div class="modal-foot">
       <button class="btn" onclick="closeModal()">Cancel</button>
-      <button class="btn blue" onclick="saveTrackingLink('${id}',$('track-url').value);if(type==='drayage'){const q=S.quotes.find(q=>q.id==='${id}');if(q){q.bookingNum=$('track-ref').value;}}closeModal()">Save</button>
+      <button class="btn blue" onclick="saveTrackingLink('${id}',$('track-url').value);saveMeta('${id}',{booking_num:($('track-ref')||{}).value?.trim()||'',type:'${type}'});if(type==='drayage'){const q=S.quotes.find(q=>q.id==='${id}');if(q){q.bookingNum=$('track-ref').value;try{db.from('quotes').update({booking_num:$('track-ref').value}).eq('id','${id}');}catch(e){}}}closeModal()">Save</button>
     </div>
   </div></div>`;
 }
@@ -11529,14 +11529,17 @@ function buildTransloadMap(port,warehouse,delivery){
 
 
 
-function promptBookingNum(type,id){
+async function promptBookingNum(type,id){
   const q=type==='drayage'?S.quotes.find(q=>q.id===id):null;
-  const current=q?.bookingNum||(window._tlHistory||[]).find(q=>q.id===id)?.bookingNum||'';
-  const val=prompt('Booking / Container / Booking #:',current);
+  const current=q?.bookingNum||(window._tlHistory||[]).find(q=>q.id===id)?.bookingNum||getMeta(id).booking_num||'';
+  const val=prompt('Booking / Container #:',current);
   if(val===null) return;
+  // Save to shared meta (visible to all users)
+  await saveMeta(id,{booking_num:val.trim(),type});
+  // Also save to quotes table for drayage
   if(type==='drayage'){
     const q=S.quotes.find(q=>q.id===id);
-    if(q){q.bookingNum=val.trim();try{db.from('quotes').update({booking_num:val.trim()}).eq('id',id);}catch(e){}}
+    if(q){q.bookingNum=val.trim();try{await db.from('quotes').update({booking_num:val.trim()}).eq('id',id);}catch(e){}}
   } else if(type==='transload'){
     const q=(window._tlHistory||[]).find(q=>q.id===id);
     if(q){q.bookingNum=val.trim();try{localStorage.setItem('tl_history',JSON.stringify(window._tlHistory));}catch(e){}}
@@ -12066,7 +12069,7 @@ async function saveMeta(id, updates){
 async function toggleFlag(type,id){
   const meta=getMeta(id);
   if(meta.is_flagged){
-    await saveMeta(id,{is_flagged:false,flag_note:'',flagged_by:''});
+    await saveMeta(id,{is_flagged:false,flag_note:'',flagged_by:'',type});
     showToast('Flag removed','info',2000);
   } else {
     const note=prompt('🚨 Flag this shipment — add a note (optional):');
@@ -12075,7 +12078,8 @@ async function toggleFlag(type,id){
       is_flagged:true,
       flag_note:note.trim(),
       flagged_by:_currentUser?.name||_currentUser?.email?.split('@')[0]||'Unknown',
-      flagged_at:new Date().toISOString()
+      flagged_at:new Date().toISOString(),
+      type
     });
     showToast('🚨 Shipment flagged','warning',3000);
   }
@@ -12092,9 +12096,10 @@ async function saveTrackingLink(id,url){
 function getTrackingLink(id){ return getMeta(id).tracking_url||''; }
 
 // ── Appointments use shared meta ──────────────────────────────────
-async function saveAppointment(id,field,val){
+async function saveAppointment(id,type,field,val){
   const updates={};
   updates[field==='pickup'?'pickup_appt':'delivery_appt']=val;
+  updates.type=type;
   await saveMeta(id,updates);
   showSavedIndicator();
 }
