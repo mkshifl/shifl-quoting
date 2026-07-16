@@ -11974,11 +11974,12 @@ const DAILY_THEMES = {
 };
 
 function getTodayTheme(){
-  const now = new Date();
+  // Use Eastern time (NJ) for date/day calculation
+  const etStr = new Date().toLocaleString('en-US',{timeZone:'America/New_York'});
+  const now = new Date(etStr);
   const month = String(now.getMonth()+1).padStart(2,'0');
   const day   = String(now.getDate()).padStart(2,'0');
   const key   = `${month}-${day}`;
-  // Special date overrides day-of-week
   return DAILY_THEMES.special[key] || DAILY_THEMES.weekday[now.getDay()];
 }
 
