@@ -986,6 +986,7 @@ async function initApp(){
     setLiquidProgress(60);
   try{window._tlHistory=JSON.parse(localStorage.getItem('tl_history')||'[]');}catch(e){window._tlHistory=[];}
     try{window._tlWarehouses=JSON.parse(localStorage.getItem('tl_warehouses')||'[]');}catch(e){window._tlWarehouses=[];}
+    try{await withTimeout(loadShipmentMeta(),8000,null);}catch(e){}
     try{loadSpecialZips();}catch(e){}
     try{loadCustomCFS();}catch(e){}
     try{loadActiveTracking();}catch(e){}
@@ -11383,46 +11384,9 @@ async function sendCarrierCheckIn(quoteId){
 }
 
 
-// ════════════════════════════════════════════════════════════════════
-// EXCEPTION FLAGGING
-// ════════════════════════════════════════════════════════════════════
-function toggleFlag(type,id){
-  const flags=JSON.parse(localStorage.getItem('shifl_flags')||'{}');
-  if(flags[id]){delete flags[id];showToast('Flag removed','info',2000);}
-  else{
-    const note=prompt('🚨 Flag this shipment — add a note (optional):');
-    if(note===null) return;
-    flags[id]={type,flaggedBy:_currentUser?.name||'Unknown',note:note.trim(),flaggedAt:new Date().toISOString()};
-    showToast('🚨 Shipment flagged','warning',3000);
-  }
-  localStorage.setItem('shifl_flags',JSON.stringify(flags));
-  renderActive();
-}
-function isFlagged(id){return !!(JSON.parse(localStorage.getItem('shifl_flags')||'{}')?.[id]);}
-function getFlag(id){return JSON.parse(localStorage.getItem('shifl_flags')||'{}')?.[id]||null;}
+// flags replaced by shared_flags module below
 
-// ════════════════════════════════════════════════════════════════════
-// APPOINTMENT SCHEDULING
-// ════════════════════════════════════════════════════════════════════
-function saveAppointment(id,field,val){
-  const appts=JSON.parse(localStorage.getItem('shifl_appts')||'{}');
-  if(!appts[id]) appts[id]={};
-  appts[id][field]=val;
-  localStorage.setItem('shifl_appts',JSON.stringify(appts));
-  showSavedIndicator();
-}
-function getAppointments(id){return JSON.parse(localStorage.getItem('shifl_appts')||'{}')?.[id]||{};}
-
-// ════════════════════════════════════════════════════════════════════
-// LOAD TRACKING INTEGRATION
-// ════════════════════════════════════════════════════════════════════
-function saveTrackingLink(id,url){
-  const links=JSON.parse(localStorage.getItem('shifl_tracking')||'{}');
-  links[id]=url;
-  localStorage.setItem('shifl_tracking',JSON.stringify(links));
-  showToast('Tracking link saved','success',2000);
-}
-function getTrackingLink(id){return JSON.parse(localStorage.getItem('shifl_tracking')||'{}')?.[id]||'';}
+// tracking/appts replaced by shared_flags module below
 
 function showTrackingModal(type,id){
   const q=type==='drayage'?S.quotes.find(q=>q.id===id):null;
@@ -12035,6 +11999,119 @@ function refreshAqPreview(){
   const costEl=document.getElementById('aq-preview-cost');
   if(costEl) costEl.textContent=fmtD(totalCost);
 }
+// ════════════════════════════════════════════════════════════════════
+// SHARED FLAGS + APPOINTMENTS — stored in Supabase, visible to all users
+// ════════════════════════════════════════════════════════════════════
+
+// In-memory cache
+window._shipmentMeta = {};
+
+async function loadShipmentMeta(){
+  try{
+    const{data,error}=await db.from('shipment_metadata').select('*');
+    if(error) throw error;
+    window._shipmentMeta={};
+    (data||[]).forEach(r=>{window._shipmentMeta[r.id]=r;});
+    // Also merge localStorage fallback for any not in DB
+    try{const local=JSON.parse(localStorage.getItem('shifl_flags')||'{}');Object.entries(local).forEach(([id,f])=>{if(!window._shipmentMeta[id]) window._shipmentMeta[id]={id,is_flagged:true,flag_note:f.note||'',flagged_by:f.flaggedBy||'',pickup_appt:'',delivery_appt:'',tracking_url:''};});}catch(e){}
+  }catch(e){
+    // Fallback: use localStorage only
+    console.log('shipment_metadata table not set up yet — using localStorage');
+    try{const local=JSON.parse(localStorage.getItem('shifl_flags')||'{}');Object.entries(local).forEach(([id,f])=>{window._shipmentMeta[id]={id,is_flagged:true,flag_note:f.note||'',flagged_by:f.flaggedBy||'',pickup_appt:'',delivery_appt:'',tracking_url:''};});}catch(e2){}
+  }
+}
+
+function getMeta(id){ return window._shipmentMeta?.[id]||{}; }
+
+async function saveMeta(id, updates){
+  if(!window._shipmentMeta) window._shipmentMeta={};
+  const existing=window._shipmentMeta[id]||{id};
+  const merged={...existing,...updates,id,updated_at:new Date().toISOString()};
+  window._shipmentMeta[id]=merged;
+  try{
+    const{error}=await db.from('shipment_metadata').upsert(merged,{onConflict:'id'});
+    if(error) throw error;
+  }catch(e){
+    console.log('Meta save fallback to localStorage:', e.message);
+    // Fallback: save flags to localStorage
+    if('is_flagged' in updates){
+      const flags=JSON.parse(localStorage.getItem('shifl_flags')||'{}');
+      if(updates.is_flagged) flags[id]={note:updates.flag_note||'',flaggedBy:updates.flagged_by||''};
+      else delete flags[id];
+      localStorage.setItem('shifl_flags',JSON.stringify(flags));
+    }
+    if('tracking_url' in updates){
+      const links=JSON.parse(localStorage.getItem('shifl_tracking')||'{}');
+      links[id]=updates.tracking_url||'';
+      localStorage.setItem('shifl_tracking',JSON.stringify(links));
+    }
+    if('pickup_appt' in updates||'delivery_appt' in updates){
+      const appts=JSON.parse(localStorage.getItem('shifl_appts')||'{}');
+      if(!appts[id]) appts[id]={};
+      if('pickup_appt' in updates) appts[id].pickup=updates.pickup_appt;
+      if('delivery_appt' in updates) appts[id].delivery=updates.delivery_appt;
+      localStorage.setItem('shifl_appts',JSON.stringify(appts));
+    }
+  }
+}
+
+// ── Overwrite flag functions to use shared meta ───────────────────
+async function toggleFlag(type,id){
+  const meta=getMeta(id);
+  if(meta.is_flagged){
+    await saveMeta(id,{is_flagged:false,flag_note:'',flagged_by:''});
+    showToast('Flag removed','info',2000);
+  } else {
+    const note=prompt('🚨 Flag this shipment — add a note (optional):');
+    if(note===null) return;
+    await saveMeta(id,{
+      is_flagged:true,
+      flag_note:note.trim(),
+      flagged_by:_currentUser?.name||_currentUser?.email?.split('@')[0]||'Unknown',
+      flagged_at:new Date().toISOString()
+    });
+    showToast('🚨 Shipment flagged','warning',3000);
+  }
+  renderActive();
+}
+function isFlagged(id){ return !!(getMeta(id).is_flagged); }
+function getFlag(id){ const m=getMeta(id); return m.is_flagged?{note:m.flag_note,flaggedBy:m.flagged_by}:null; }
+
+// ── Tracking link uses shared meta ────────────────────────────────
+async function saveTrackingLink(id,url){
+  await saveMeta(id,{tracking_url:url});
+  showToast('Tracking link saved','success',2000);
+}
+function getTrackingLink(id){ return getMeta(id).tracking_url||''; }
+
+// ── Appointments use shared meta ──────────────────────────────────
+async function saveAppointment(id,field,val){
+  const updates={};
+  updates[field==='pickup'?'pickup_appt':'delivery_appt']=val;
+  await saveMeta(id,updates);
+  showSavedIndicator();
+}
+function getAppointments(id){
+  const m=getMeta(id);
+  return{pickup:m.pickup_appt||'',delivery:m.delivery_appt||''};
+}
+
+// ── Real-time subscription for flags ─────────────────────────────
+function subscribeToMeta(){
+  try{
+    db.channel('shipment_metadata_changes')
+      .on('postgres_changes',{event:'*',schema:'public',table:'shipment_metadata'},payload=>{
+        const r=payload.new||payload.old;
+        if(r?.id){
+          if(payload.eventType==='DELETE') delete window._shipmentMeta[r.id];
+          else window._shipmentMeta[r.id]=r;
+          if(S.view==='active') renderActive();
+        }
+      }).subscribe();
+  }catch(e){}
+}
+
+
 boot().catch(e=>{$('loading-screen').style.display='none';$('setup-screen').style.display='flex';});
 </script>
 <script>
