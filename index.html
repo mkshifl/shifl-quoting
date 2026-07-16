@@ -10464,23 +10464,22 @@ function confirmRepeatDrayage(originalId){
 function repeatFreightQuote(idx){
   const q = (window._fqHistory||[])[idx];
   if(!q){ alert('Quote not found.'); return; }
+  const isLCL=q.fqMode==='LCL';
 
   $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
-  <div class="modal" style="max-width:560px;max-height:90vh;overflow-y:auto">
-    <div class="modal-title">🔁 Repeat freight shipment</div>
+  <div class="modal" style="max-width:580px;max-height:90vh;overflow-y:auto">
+    <div class="modal-title">🔁 Duplicate ${q.fqMode} shipment</div>
     <div style="background:#fffbeb;border:1.5px solid #fbbf24;border-radius:var(--radius);padding:10px 14px;margin-bottom:16px;font-size:13px;color:#92400e;font-weight:600">
-      ⚠️ Review all details below. Make any changes needed before creating.
+      ⚠️ Review all details below — make changes as needed before creating.
+    </div>
+
+    <div style="background:var(--blue-bg);border-radius:var(--radius);padding:8px 12px;margin-bottom:14px;font-size:12px;color:var(--steel);font-weight:600">
+      Mode: <strong>${q.fqMode}</strong>${q.fqEquip?' · '+q.fqEquip:''} · Originally quoted ${q.date||''}
     </div>
 
     <div class="g2">
       <div class="field"><label>Customer *</label><input type="text" id="frpt-customer" value="${q.customer||''}"></div>
-      <div class="field"><label>Mode</label>
-        <select id="frpt-mode">
-          <option${q.fqMode==='FTL'?' selected':''}>FTL</option>
-          <option${q.fqMode==='LTL'?' selected':''}>LTL</option>
-          <option${q.fqMode==='LCL'?' selected':''}>LCL</option>
-        </select>
-      </div>
+      <div class="field"><label>Shifl Ref # (new)</label><input type="text" id="frpt-shiflref" value="" placeholder="Assign new ref #"></div>
     </div>
     <div class="g2">
       <div class="field"><label>Pickup ZIP</label><input type="text" id="frpt-pickup" value="${q.pickupZip||''}"></div>
@@ -10488,7 +10487,7 @@ function repeatFreightQuote(idx){
     </div>
     <div class="g2">
       <div class="field"><label>Carrier</label><input type="text" id="frpt-carrier" value="${q.carrier||''}"></div>
-      <div class="field"><label>Equipment</label><input type="text" id="frpt-equip" value="${q.fqEquip||q.equipment||''}"></div>
+      <div class="field"><label>Equipment</label><input type="text" id="frpt-equip" value="${q.fqEquip||''}"></div>
     </div>
     <div class="g2">
       <div class="field"><label>Carrier rate ($)</label><input type="number" id="frpt-carr-rate" value="${q.carrierRate||0}" min="0"></div>
@@ -10498,16 +10497,28 @@ function repeatFreightQuote(idx){
       <div class="field"><label>Weight (lbs)</label><input type="number" id="frpt-weight" value="${q.weight||''}"></div>
       <div class="field"><label>Pallets</label><input type="number" id="frpt-pallets" value="${q.palletCount||''}"></div>
     </div>
+
+    ${isLCL?`
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gray-400);margin:12px 0 8px">LCL Details</div>
+    <div class="g3">
+      <div class="field"><label>CBM</label><input type="number" id="frpt-cbm" value="${q.cbm||''}" placeholder="0.00" step="0.01"></div>
+      <div class="field"><label>Free time (hrs)</label><input type="number" id="frpt-free-hrs" value="${q.lclFreeHours??2}" min="0"></div>
+      <div class="field"><label>Pallet count *</label><input type="number" id="frpt-lcl-pallets" value="${q.lclPalletCount||''}" placeholder="Required"></div>
+    </div>
+    <div class="g2">
+      <div class="field"><label>Customer detention ($/hr)</label><input type="number" id="frpt-cust-det" value="${q.lclCustomerDetRate||0}" min="0"></div>
+      <div class="field"><label>Customer pallet rate ($/plt)</label><input type="number" id="frpt-cust-plt" value="${q.lclCustomerPalletRate||0}" min="0"></div>
+    </div>`:''}
+
     <div class="field"><label>Notes</label><input type="text" id="frpt-notes" value="${q.notes||''}"></div>
-    <div class="field"><label>Shifl Ref # <span style="font-size:10px;color:var(--gray-400)">(new)</span></label><input type="text" id="frpt-shiflref" value="" placeholder="Assign new ref #"></div>
 
     <div style="background:var(--gray-50);border-radius:var(--radius);padding:10px 14px;font-size:12px;color:var(--gray-600);margin-bottom:16px">
-      A <strong>new quote</strong> will be created with today's date and status "Quoted".
+      Creates a <strong>new quote</strong> with today's date · Status: Quoted · Original is preserved
     </div>
 
     <div class="modal-foot">
       <button class="btn" onclick="closeModal()">Cancel</button>
-      <button class="btn blue" onclick="confirmRepeatFreight(${idx})">✅ Create repeated quote</button>
+      <button class="btn blue" onclick="confirmRepeatFreight(${idx})">✅ Create duplicate</button>
     </div>
   </div></div>`;
 }
@@ -10518,12 +10529,13 @@ function confirmRepeatFreight(origIdx){
   const customer=($('frpt-customer')||{}).value?.trim()||orig.customer;
   if(!customer){alert('Customer required.');return;}
 
-  // Load into S.fq
-  S.fq.mode=$('frpt-mode')?.value||orig.fqMode;
+  S.fq.mode=orig.fqMode; // keep same mode
   S.fq.equipment=($('frpt-equip')||{}).value?.trim()||orig.fqEquip||'';
   S.fq.pickupZip=($('frpt-pickup')||{}).value?.trim()||orig.pickupZip;
   S.fq.deliveryZip=($('frpt-delivery')||{}).value?.trim()||orig.deliveryZip;
   S.fq.customer=customer;
+  S.fq.customerEmail=orig.customerEmail||'';
+  S.fq.customerId=orig.customerId||null;
   S.fq.carrier=($('frpt-carrier')||{}).value?.trim()||orig.carrier;
   S.fq.carrierRate=parseFloat($('frpt-carr-rate')?.value)||orig.carrierRate||0;
   S.fq.customerRate=parseFloat($('frpt-cust-rate')?.value)||orig.customerRate||0;
@@ -10531,11 +10543,22 @@ function confirmRepeatFreight(origIdx){
   S.fq.palletCount=($('frpt-pallets')||{}).value||orig.palletCount||'';
   S.fq.notes=($('frpt-notes')||{}).value?.trim()||orig.notes||'';
   S.fq.shiflRef=($('frpt-shiflref')||{}).value?.trim()||'';
+  S.fq.transitTime=orig.transitTime||'';
+  // LCL-specific fields
+  if(orig.fqMode==='LCL'){
+    S.fq.cbm=($('frpt-cbm')||{}).value||orig.cbm||'';
+    S.fq.lclFreeHours=parseFloat($('frpt-free-hrs')?.value)??orig.lclFreeHours??2;
+    S.fq.lclPalletCount=parseFloat($('frpt-lcl-pallets')?.value)||orig.lclPalletCount||0;
+    S.fq.lclCustomerDetRate=parseFloat($('frpt-cust-det')?.value)||orig.lclCustomerDetRate||0;
+    S.fq.lclCustomerPalletRate=parseFloat($('frpt-cust-plt')?.value)||orig.lclCustomerPalletRate||0;
+    S.fq.lclDetentionHours=0;
+    S.fq.lclPalletExchange=0;
+  }
 
   closeModal();
   goTo('freight','builder');
   openAccFor('freight');
-  showToast('Repeat freight quote loaded — review and save','info',4000);
+  showToast(`${orig.fqMode} quote duplicated — review and save`,'info',4000);
 }
 
 
