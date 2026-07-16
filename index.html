@@ -912,7 +912,7 @@ let S={
       bobtailEnabled:false,bobtailScope:'both',bobtailCarrierRate:0,bobtailCustomerRate:0,
       triaxleScope:'both',
       triaxleEnabled:false,triaxleScope:'both',triaxleCarrierRate:0,triaxleCustomerRate:0},
-  selId:null,rSearch:'',logFilter:'all',logSearch:'',dashFilter:'month',cSearch:'',
+  selId:null,rSearch:'',logFilter:'all',logSearch:'',fqLogFilter:'all',fqLogSearch:'',tlLogFilter:'all',tlLogSearch:'',dashFilter:'month',cSearch:'',
   fq:{mode:null,equipment:null,pickupZip:'',deliveryZip:'',weight:'',palletCount:'',
       pallets:[{w:'',l:'',h:''}],sameDims:true,singleW:'',singleL:'',singleH:'',
       notes:'',customer:'',customerEmail:'',customerId:null,shiflRef:'',
@@ -2134,30 +2134,67 @@ function renderFqLog(){
       </td>
     </tr>`).join('');
 
-  // Topbar — show batch download when items selected
   const selCount=sel.size;
-  $('topbar-right').innerHTML=`
-    <div style="display:flex;align-items:center;gap:10px">
-      <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;color:var(--gray-500)">
-        <input type="checkbox" id="fq-select-all" ${selCount===history.length&&selCount>0?'checked':''} onchange="toggleFqSelectAll(this.checked)" style="width:auto">
-        ${selCount>0?`<span style="font-weight:600;color:var(--navy)">${selCount} selected</span>`:' Select all'}
-      </label>
-      ${selCount>0?`
-        <button class="btn blue" onclick="downloadSelectedFqPDFs()">📄 Download ${selCount} as 1 PDF</button>
-        <button class="btn" onclick="window._fqSelected=new Set();renderFqLog()">Clear</button>
-      `:''}
-      <button class="btn" onclick="syncQuotesToTeam()" title="Push all your browser quotes to Supabase so everyone can see them">🔄 Sync to team</button>
-    </div>`;
+  $('topbar-right').innerHTML=`<div style="display:flex;gap:8px">
+    ${selCount>0?`<button class="btn blue" onclick="downloadSelectedFqPDFs()">📄 ${selCount} PDF</button><button class="btn" onclick="window._fqSelected=new Set();renderFqLog()">Clear</button>`:''}
+    <button class="btn" onclick="syncQuotesToTeam()">🔄 Sync</button>
+  </div>`;
 
-  $('page').innerHTML=`
-    <div class="tbl-wrap"><table>
-      <thead><tr>
-        <th style="width:32px"></th>
-        <th>Date</th><th>Customer</th><th style="color:var(--steel)">Ref #</th><th>Type</th><th>Lane</th><th>Carrier</th>
-        <th>Carrier rate</th><th>Customer rate</th><th>Base Profit</th><th>By</th><th>Status</th><th></th>
-      </tr></thead>
-      <tbody>${rows}</tbody>
-    </table></div>`;
+  // Status counts
+  const fqCounts={all:history.length};
+  ['Quoted','Booked','Delivered','Invoiced','Lost','Cancelled','Expired'].forEach(s=>{fqCounts[s]=history.filter(q=>q.status===s).length;});
+  const fqSrch=(S.fqLogSearch||'').toLowerCase();
+  const fqFiltered=history.map((q,i)=>({q,i})).filter(({q})=>{
+    if((S.fqLogFilter||'all')!=='all'&&q.status!==S.fqLogFilter) return false;
+    if(!fqSrch) return true;
+    return (q.customer||'').toLowerCase().includes(fqSrch)||(q.shiflRef||'').toLowerCase().includes(fqSrch)||(q.pickupZip||'').includes(fqSrch)||(q.deliveryZip||'').includes(fqSrch)||(q.carrier||'').toLowerCase().includes(fqSrch);
+  });
+  const fqPillBar=buildPillBar('fqLogFilter','fqLogSearch',fqCounts,'Customer, ref #, ZIP, carrier…');
+  const filteredRows=fqFiltered.map(({q,i})=>`
+    <tr style="cursor:pointer" onclick="showFqQuoteModal(${i})" title="Click to view" onmouseenter="showQuotePreview(event,{customer:'${q.customer||''}',lane:'${q.pickupZip||''} → ${q.deliveryZip||''}',carrier:'${q.carrier||''}',carrierRate:${q.carrierRate||0},customerRate:${q.customerRate||0},profit:${q.profit||0},margin:${q.profitPct||0},status:'${q.status}',statusBadge:'${q.status==='Booked'?'g':q.status==='Lost'?'r':'a'}',date:'${q.date||''}'  })" onmouseleave="hideQuotePreview()">
+      <td onclick="event.stopPropagation()" style="width:32px;text-align:center"><input type="checkbox" ${sel.has(i)?'checked':''} onchange="toggleFqSelect(${i},this.checked)" style="width:auto;cursor:pointer"></td>
+      <td class="muted small">${q.date}</td>
+      <td class="bold">${q.customer||'—'}</td>
+      <td onclick="event.stopPropagation()" style="min-width:100px">
+        <input type="text" value="${q.shiflRef||''}" onclick="event.stopPropagation()" onchange="saveFqRef(${i},this.value)" placeholder="Add ref #"
+          style="border:none;background:${q.shiflRef?'var(--blue-bg)':'transparent'};color:${q.shiflRef?'var(--steel)':'var(--gray-300)'};font-weight:${q.shiflRef?'700':'400'};font-size:12px;padding:3px 6px;border-radius:4px;width:90px;cursor:text;outline:none"
+          onfocus="this.style.background='var(--blue-bg)';this.style.border='1px solid var(--steel)'" onblur="this.style.border='none';this.style.background=this.value?'var(--blue-bg)':'transparent'">
+      </td>
+      <td>${modeBadge(q.fqMode)}${q.fqEquip?`<span class="badge gr" style="margin-left:4px">${q.fqEquip}</span>`:''}</td>
+      <td class="bold">${q.pickupZip} → ${q.deliveryZip}</td>
+      <td>${q.carrier}</td>
+      <td class="muted">${fmtD(q.carrierRate)}</td>
+      <td class="bold" style="color:var(--steel)">${fmtD(q.customerRate)}</td>
+      <td style="white-space:nowrap">${(p=>{const c=p.isActual?'var(--green)':p.margin>=0.08?'var(--amber)':'var(--red)';return`<span style="font-weight:700;color:${c}">+${fmtD(p.profit)}</span> ${profitBadge(p.isActual)}`;})(getShipmentProfit(q,'freight'))}</td>
+      <td><span class="badge ${(p=>p.margin>=0.10?'g':'r')(getShipmentProfit(q,'freight'))}">${pct(getShipmentProfit(q,'freight').margin)}</span></td>
+      <td style="font-size:11px;color:var(--gray-400);white-space:nowrap">${q.created_by_name||'—'}</td>
+      <td onclick="event.stopPropagation()">
+        <select onchange="updateFqStatus(${i},this.value)" style="font-size:12px;padding:4px 7px;width:120px">
+          <option${q.status==='Quoted'?' selected':''}>Quoted</option>
+          <option${q.status==='Booked'?' selected':''}>Booked</option>
+          <option${q.status==='Lost'?' selected':''}>Lost</option>
+          <option${q.status==='Cancelled'?' selected':''}>Cancelled</option>
+          <option${q.status==='Delivered'?' selected':''}>Delivered</option>
+          <option${q.status==='Invoiced'?' selected':''}>Invoiced</option>
+          <option${q.status==='Paid'?' selected':''}>Paid</option>
+        </select>
+      </td>
+      <td onclick="event.stopPropagation()" style="white-space:nowrap">
+        ${q.status==='Booked'?`<button class="btn sm ico-btn" onclick="downloadFqCarrierPDF(${i})" style="color:var(--green)">📋</button>`:''}
+        ${q.status==='Delivered'?`<button class="btn sm ico-btn" onclick="fqSendInvoice(${i})" style="color:var(--amber)">🧾</button>`:''}
+        <button class="btn sm ico-btn" onclick="repeatFreightQuote(${i})" title="Repeat">🔁</button>
+        <button class="btn sm ico-btn" onclick="deleteFqQuote(${i})">🗑️</button>
+      </td>
+    </tr>`).join('');
+
+  $('page').innerHTML=fqPillBar+`<div class="tbl-wrap"><table>
+    <thead><tr>
+      <th style="width:32px"><input type="checkbox" ${selCount===history.length&&selCount>0?'checked':''} onchange="toggleFqSelectAll(this.checked)" style="width:auto"></th>
+      <th>Date</th><th>Customer</th><th style="color:var(--steel)">Ref #</th><th>Type</th><th>Lane</th><th>Carrier</th>
+      <th>Carrier rate</th><th>Customer rate</th><th>Base Profit</th><th>By</th><th>Status</th><th></th>
+    </tr></thead>
+    <tbody>${filteredRows}</tbody>
+  </table></div>`;
 }
 
 async function syncQuotesToTeam(){
@@ -4409,17 +4446,20 @@ function renderTlLog(){
   if(!window._tlSelected) window._tlSelected=new Set();
   const sel=window._tlSelected;
   const selCount=sel.size;
-  $('topbar-right').innerHTML=`
-    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-      <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;color:var(--gray-500)">
-        <input type="checkbox" ${selCount===history.length&&selCount>0?'checked':''} onchange="if(this.checked){window._tlSelected=new Set(Array.from({length:${history.length}},(_,i)=>i));}else{window._tlSelected=new Set();}renderTlLog()" style="width:auto">
-        ${selCount>0?`<span style="font-weight:600;color:var(--navy)">${selCount} selected</span>`:'Select all'}
-      </label>
-      ${selCount>0?`<button class="btn blue" onclick="downloadSelectedTlPDFs()">📄 Download ${selCount} as 1 PDF</button>
-        <button class="btn" onclick="window._tlSelected=new Set();renderTlLog()">Clear</button>`:''}
-      <button class="btn" onclick="syncQuotesToTeam()">🔄 Sync to team</button>
-    </div>`;
-  const rows=history.map((q,i)=>`<tr onclick="showTlQuoteModal(${i})" style="cursor:pointer">
+  $('topbar-right').innerHTML=`<div style="display:flex;gap:8px">
+    ${selCount>0?`<button class="btn blue" onclick="downloadSelectedTlPDFs()">📄 ${selCount} PDF</button><button class="btn" onclick="window._tlSelected=new Set();renderTlLog()">Clear</button>`:''}
+    <button class="btn" onclick="syncQuotesToTeam()">🔄 Sync</button>
+  </div>`;
+  const tlCounts={all:history.length};
+  ['Quoted','Booked','Delivered','Invoiced','Lost','Cancelled'].forEach(s=>{tlCounts[s]=history.filter(q=>q.status===s).length;});
+  const tlSrch=(S.tlLogSearch||'').toLowerCase();
+  const tlFiltered=history.map((q,i)=>({q,i})).filter(({q})=>{
+    if((S.tlLogFilter||'all')!=='all'&&q.status!==S.tlLogFilter) return false;
+    if(!tlSrch) return true;
+    return (q.customer||'').toLowerCase().includes(tlSrch)||(q.shiflRef||'').toLowerCase().includes(tlSrch)||(q.drayPort||'').toLowerCase().includes(tlSrch)||(q.outDeliveryZip||'').includes(tlSrch)||(q.warehouseName||'').toLowerCase().includes(tlSrch);
+  });
+  const tlPillBar=buildPillBar('tlLogFilter','tlLogSearch',tlCounts,'Customer, ref #, ZIP, warehouse…');
+  const rows=tlFiltered.map(({q,i})=>`<tr onclick="showTlQuoteModal(${i})" style="cursor:pointer">
     <td onclick="event.stopPropagation()" style="width:32px;text-align:center">
       <input type="checkbox" ${sel.has(i)?'checked':''} onchange="toggleTlSelect(${i},this.checked)" style="width:auto;cursor:pointer"></td>
     <td class="muted small">${q.date}</td>
@@ -4445,8 +4485,8 @@ function renderTlLog(){
       <button class="btn sm ico-btn" onclick="deleteTlQuote(${i})" title="Delete" style="margin-left:3px">🗑️</button>
     </td>
   </tr>`).join('');
-  $('page').innerHTML=`<div class="tbl-wrap"><table>
-    <thead><tr><th style="width:32px"></th><th>Date</th><th>Customer</th><th>Origin</th><th>Warehouse</th><th>Delivery</th><th>Pallets</th><th>Total</th><th>Base Profit</th><th>By</th><th>Status</th><th></th></tr></thead>
+  $('page').innerHTML=tlPillBar+`<div class="tbl-wrap"><table>
+    <thead><tr><th style="width:32px"><input type="checkbox" ${selCount===history.length&&selCount>0?'checked':''} onchange="if(this.checked){window._tlSelected=new Set(Array.from({length:${history.length}},(_,i)=>i));}else{window._tlSelected=new Set();}renderTlLog()" style="width:auto"></th><th>Date</th><th>Customer</th><th>Origin</th><th>Warehouse</th><th>Delivery</th><th>Pallets</th><th>Total</th><th>Base Profit</th><th>By</th><th>Status</th><th></th></tr></thead>
     <tbody>${rows}</tbody>
   </table></div>`;
 }
@@ -10748,6 +10788,34 @@ function profitBadge(isActual) {
 }
 
 
+
+function buildPillBar(filterKey, searchKey, counts, searchPlaceholder){
+  const f=S[filterKey]||'all';
+  const pills=[
+    {s:'all',label:'All',color:'#1a2e4a',bg:'#1a2e4a'},
+    {s:'Quoted',label:'Quoted',color:'#1a2e4a',bg:'#1a2e4a'},
+    {s:'Booked',label:'Booked',color:'#16a34a',bg:'#16a34a'},
+    {s:'Delivered',label:'Delivered',color:'#2e75b6',bg:'#2e75b6'},
+    {s:'Invoiced',label:'Invoiced',color:'#7c3aed',bg:'#7c3aed'},
+    {s:'Lost',label:'Lost',color:'#dc2626',bg:'#dc2626'},
+    {s:'Cancelled',label:'Cancelled',color:'#6b7280',bg:'#6b7280'},
+    {s:'Expired',label:'Expired',color:'#d97706',bg:'#d97706'},
+  ].filter(p=>p.s==='all'||(counts[p.s]||0)>0||(f===p.s));
+  return `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:14px">
+    <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;flex:1">
+      ${pills.map(p=>`<button onclick="S.${filterKey}='${p.s}';S.${searchKey}=S.${searchKey}||'';render()"
+        style="padding:5px 13px;border-radius:99px;border:1.5px solid;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .12s;${f===p.s?`background:${p.bg};color:#fff;border-color:${p.bg};`:`color:${p.color};border-color:${p.color};background:transparent;`}">
+        ${p.label} <span style="font-size:10px;opacity:${f===p.s?'1':'.7'}">${counts[p.s]||0}</span>
+      </button>`).join('')}
+    </div>
+    <div style="position:relative;min-width:200px">
+      <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:13px;pointer-events:none">🔍</span>
+      <input type="text" placeholder="${searchPlaceholder}" value="${S[searchKey]||''}"
+        oninput="S.${searchKey}=this.value;render()"
+        style="padding:7px 12px 7px 32px;border-radius:99px;border:1.5px solid var(--gray-200);font-size:12px;width:100%;box-sizing:border-box">
+    </div>
+  </div>`;
+}
 boot().catch(e=>{$('loading-screen').style.display='none';$('setup-screen').style.display='flex';});
 </script>
 <script>
