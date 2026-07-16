@@ -12012,6 +12012,7 @@ async function loadShipmentMeta(){
     if(error) throw error;
     window._shipmentMeta={};
     (data||[]).forEach(r=>{window._shipmentMeta[r.id]=r;});
+    console.log('Loaded '+Object.keys(window._shipmentMeta).length+' shipment meta records from Supabase');
     // Also merge localStorage fallback for any not in DB
     try{const local=JSON.parse(localStorage.getItem('shifl_flags')||'{}');Object.entries(local).forEach(([id,f])=>{if(!window._shipmentMeta[id]) window._shipmentMeta[id]={id,is_flagged:true,flag_note:f.note||'',flagged_by:f.flaggedBy||'',pickup_appt:'',delivery_appt:'',tracking_url:''};});}catch(e){}
   }catch(e){
@@ -12029,9 +12030,12 @@ async function saveMeta(id, updates){
   const merged={...existing,...updates,id,updated_at:new Date().toISOString()};
   window._shipmentMeta[id]=merged;
   try{
-    const{error}=await db.from('shipment_metadata').upsert(merged,{onConflict:'id'});
+    // Try upsert without onConflict for broader Supabase version support
+    const{error}=await db.from('shipment_metadata').upsert([merged]);
     if(error) throw error;
+    console.log('Meta saved to Supabase OK:', id);
   }catch(e){
+    showToast('⚠️ Sync error: '+e.message,'error',4000);
     console.log('Meta save fallback to localStorage:', e.message);
     // Fallback: save flags to localStorage
     if('is_flagged' in updates){
