@@ -962,15 +962,19 @@ let _importRows=[];
 // INIT
 // ═══════════════════════════════════════════════════════
 async function initApp(){
-  $('loading-msg').textContent='Loading carrier rates…';
-  try{
-    S.rates=await dbLoadRates();
-    if(S.rates.length===0){
-      $('loading-msg').textContent='Setting up initial data…';
-      await dbBulkSaveRates(SEED);
-      S.rates=await dbLoadRates();
-    }
-  }catch(e){S.rates=[];console.log('rates error:',e.message);}
+  // ── INSTANT: load everything from localStorage first ──────────────
+  $('loading-msg').textContent='Starting…';
+  try{const r=JSON.parse(localStorage.getItem('shifl_rates_cache')||'[]');S.rates=r.length?r:SEED.map((s,i)=>({...s,id:s.id||'seed'+i,active:true}));}catch(e){S.rates=[];}
+  // ── Background DB sync (non-blocking) ─────────────────────────────
+  setTimeout(async()=>{
+    try{
+      const r=await withTimeout(dbLoadRates(),10000,null);
+      if(r&&r.length>0){S.rates=r;localStorage.setItem('shifl_rates_cache',JSON.stringify(r));}
+      else if(!r||r.length===0){await dbBulkSaveRates(SEED);const r2=await dbLoadRates();if(r2){S.rates=r2;localStorage.setItem('shifl_rates_cache',JSON.stringify(r2));}}
+      if(S.view==='rates') renderRates();
+      if($('carriers-body')) refreshCarriersAndPreview();
+    }catch(e){console.log('rates sync:',e.message);}
+  },1200);
   // ── INSTANT LOAD from localStorage ──────────────────────────────────
   $('loading-msg').textContent='Almost ready…';
   try{S.quotes=JSON.parse(localStorage.getItem('shifl_quotes_cache')||'[]');}catch(e){S.quotes=[];}
