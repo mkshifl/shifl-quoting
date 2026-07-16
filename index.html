@@ -286,7 +286,11 @@ body.dark .modal{background:#1a2533;border-color:#243447}
 body.dark .overlay{background:rgba(0,0,0,.7)}
 body.dark .tbl-wrap table{background:#1a2533}
 body.dark .tbl-wrap table thead tr{background:#0f1723}
-body.dark .tbl-wrap table thead th{border-color:#243447;color:#8fa3b8}
+body.dark .tbl-wrap table th:nth-child(2){position:sticky;left:32px;background:inherit;z-index:2}
+.tbl-wrap table td:nth-child(2){position:sticky;left:32px;background:var(--white);z-index:1}
+.tbl-wrap table th:nth-child(3){position:sticky;left:100px;background:inherit;z-index:2}
+.tbl-wrap table td:nth-child(3){position:sticky;left:100px;background:var(--white);z-index:1}
+.tbl-wrap table thead th{border-color:#243447;color:#8fa3b8}
 body.dark .tbl-wrap table tbody tr{border-color:#243447}
 body.dark .tbl-wrap table tbody tr:hover{background:#1e3050!important;border-left-color:#2e75b6}
 body.dark .tbl-wrap table tbody td{border-color:#1e2d3d;color:#c5d4e4}
@@ -927,6 +931,7 @@ let S={
   view:'home',rates:[],quotes:[],customers:[],
   qi:{customer:'',customerEmail:'',customerId:null,port:'New York / Newark, NJ',zip:'',ld:'Live',drayType:'import',commodity:'',pickupZip:'',containerCount:1,perContainerFlags:{base:true,chassis:false,prepull:true,det_port:true,det_cust:true,storage:false,ovw43:true,ovw48:true,bobtail:false,toll:false,genset:true,triaxle:true},
       baseMarkup:{...DEFAULT_BASE_MARKUP},flatRates:{...DEFAULT_FLAT_RATES},notes:'',shiflRef:'',
+      bookingNum:'',trackingUrl:'',pickupAppt:'',deliveryAppt:'',flagged:false,
       gensetEnabled:false,gensetScope:'both',gensetCarrierRate:0,gensetCustomerRate:0,
       bobtailEnabled:false,bobtailScope:'both',bobtailCarrierRate:0,bobtailCustomerRate:0,
       triaxleScope:'both',
@@ -1315,6 +1320,10 @@ function renderQuote(){
           <div class="field" style="width:110px;flex-shrink:0;margin-bottom:0">
             <label>Live or Drop</label>
             <select onchange="onLd(this.value)" style="width:110px"><option${qi.ld==='Live'?' selected':''}>Live</option><option${qi.ld==='Drop'?' selected':''}>Drop</option><option${qi.ld==='Both'?' selected':''}>Both</option></select>
+          </div>
+          <div class="field" style="width:130px;flex-shrink:0;margin-bottom:0">
+            <label>Booking / Container #</label>
+            <input type="text" value="${qi.bookingNum||''}" oninput="S.qi.bookingNum=this.value" placeholder="e.g. MAEU123…" style="width:130px;font-size:12px">
           </div>
           <div class="field" style="width:90px;flex-shrink:0;margin-bottom:0">
             <label># Containers</label>
@@ -2768,6 +2777,7 @@ function renderFqDashboard(){
   const prof=booked.reduce((s,q)=>s+getShipmentProfit(q,'drayage').profit,0);
   const winRate=all.length>0?won.length/all.length:0;
 
+  // Bar chart race section added below
   // Mode breakdown
   const modes=['FTL','LTL','LCL'];
   const modeStats=modes.map(m=>({
@@ -5341,6 +5351,7 @@ function renderActive(){
           </div>
           ${autoUrl&&!tracking.trackingUrl?`<div style="font-size:11px;color:#22c55e;margin-top:6px;font-weight:600">${s.carrier} tracking detected - enter PRO# to activate</div>`:''}
         </div>`:''}
+        ${(()=>{const flag=getFlag(s.id);return flag?`<div style="background:#fef2f2;border:1px solid #fca5a5;border-radius:6px;padding:6px 10px;margin-bottom:8px;font-size:12px;color:#dc2626;display:flex;align-items:center;gap:6px"><span style="font-weight:700">🚨 Flagged</span>${flag.note?`<span>— ${flag.note}</span>`:''}<span style="color:#9ca3af;margin-left:auto">${flag.flaggedBy}</span></div>`:'';})()}
         ${statusTimeline(s.status)}
         <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-top:12px">
           <div style="display:flex;gap:6px;flex-wrap:wrap">
@@ -5761,9 +5772,9 @@ function renderLog(){
         style="padding:7px 12px 7px 32px;border-radius:99px;border:1.5px solid var(--gray-200);font-size:12px;width:100%;box-sizing:border-box">
     </div>
   </div>`;
-  $('page').innerHTML=pillBar+`<div class="tbl-wrap"><table><thead><tr><th style="width:32px"><input type="checkbox" ${selCount===S.quotes.length&&selCount>0?'checked':''} onchange="if(this.checked){window._draySelected=new Set(S.quotes.map(q=>q.id));}else{window._draySelected=new Set();}renderLog()" style="width:auto"></th><th>#</th><th>Ref #</th><th>Date</th><th>Customer</th><th>Lane</th><th>Carrier</th><th>Carrier total</th><th>Customer total</th><th>Base Profit</th><th>By</th><th>Status</th><th></th></tr></thead><tbody id="log-tbody">${buildLogRows()}</tbody></table></div>`;
+  $('page').innerHTML=pillBar+`<div class="tbl-wrap" id="dray-log-wrap"><table><thead><tr><th style="width:32px"><span data-tip="Drag rows to reorder">☰</span><input type="checkbox" ${selCount===S.quotes.length&&selCount>0?'checked':''} onchange="if(this.checked){window._draySelected=new Set(S.quotes.map(q=>q.id));}else{window._draySelected=new Set();}renderLog()" style="width:auto"></th><th>#</th><th>Ref #</th><th>Date</th><th>Customer</th><th>Lane</th><th>Carrier</th><th>Carrier total</th><th>Customer total</th><th>Base Profit</th><th>By</th><th>Status</th><th></th></tr></thead><tbody id="log-tbody">${buildLogRows()}</tbody></table></div>`;
 }
-function onLogFilter(v){S.logFilter=v;const t=$('log-tbody');if(t) t.innerHTML=buildLogRows();}
+function onLogFilter(v){S.logFilter=v;const t=$('log-tbody');if(t){t.innerHTML=buildLogRows();setTimeout(()=>setupDragReorder('log-tbody'),100);}}
 async function updateStatus(id,status){
   // Intercept Booked — show carrier confirmation modal first
   if(status==='Booked'){showBookingModal(id);return;}
@@ -11343,6 +11354,184 @@ async function sendCarrierCheckIn(quoteId){
     if(r.ok){closeModal();showToast('✅ Check-in sent to '+email,'success');}
     else{const d=await r.json();alert('Failed: '+JSON.stringify(d));}
   }catch(e){alert('Error: '+e.message);}
+}
+
+
+// ════════════════════════════════════════════════════════════════════
+// EXCEPTION FLAGGING
+// ════════════════════════════════════════════════════════════════════
+function toggleFlag(type,id){
+  const flags=JSON.parse(localStorage.getItem('shifl_flags')||'{}');
+  if(flags[id]){delete flags[id];showToast('Flag removed','info',2000);}
+  else{
+    const note=prompt('🚨 Flag this shipment — add a note (optional):');
+    if(note===null) return;
+    flags[id]={type,flaggedBy:_currentUser?.name||'Unknown',note:note.trim(),flaggedAt:new Date().toISOString()};
+    showToast('🚨 Shipment flagged','warning',3000);
+  }
+  localStorage.setItem('shifl_flags',JSON.stringify(flags));
+  renderActive();
+}
+function isFlagged(id){return !!(JSON.parse(localStorage.getItem('shifl_flags')||'{}')?.[id]);}
+function getFlag(id){return JSON.parse(localStorage.getItem('shifl_flags')||'{}')?.[id]||null;}
+
+// ════════════════════════════════════════════════════════════════════
+// APPOINTMENT SCHEDULING
+// ════════════════════════════════════════════════════════════════════
+function saveAppointment(id,field,val){
+  const appts=JSON.parse(localStorage.getItem('shifl_appts')||'{}');
+  if(!appts[id]) appts[id]={};
+  appts[id][field]=val;
+  localStorage.setItem('shifl_appts',JSON.stringify(appts));
+  showSavedIndicator();
+}
+function getAppointments(id){return JSON.parse(localStorage.getItem('shifl_appts')||'{}')?.[id]||{};}
+
+// ════════════════════════════════════════════════════════════════════
+// LOAD TRACKING INTEGRATION
+// ════════════════════════════════════════════════════════════════════
+function saveTrackingLink(id,url){
+  const links=JSON.parse(localStorage.getItem('shifl_tracking')||'{}');
+  links[id]=url;
+  localStorage.setItem('shifl_tracking',JSON.stringify(links));
+  showToast('Tracking link saved','success',2000);
+}
+function getTrackingLink(id){return JSON.parse(localStorage.getItem('shifl_tracking')||'{}')?.[id]||'';}
+
+function showTrackingModal(type,id){
+  const q=type==='drayage'?S.quotes.find(q=>q.id===id):null;
+  const existing=getTrackingLink(id);
+  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal" style="max-width:460px">
+    <div class="modal-title">📍 Load tracking — ${q?.customer||'Shipment'}</div>
+    <div class="field"><label>Tracking URL</label>
+      <input type="url" id="track-url" value="${existing}" placeholder="https://www.carrier-tracking.com/track/ABC123">
+    </div>
+    <div class="field"><label>Carrier booking / PRO #</label>
+      <input type="text" id="track-ref" value="${q?.bookingNum||''}" placeholder="e.g. MAEU123456789">
+    </div>
+    ${existing?`<a href="${existing}" target="_blank" rel="noopener" style="display:inline-block;margin-top:6px;font-size:13px;color:var(--steel);font-weight:600">🔗 Open tracking link →</a>`:''}
+    <div class="modal-foot">
+      <button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn blue" onclick="saveTrackingLink('${id}',$('track-url').value);if(type==='drayage'){const q=S.quotes.find(q=>q.id==='${id}');if(q){q.bookingNum=$('track-ref').value;}}closeModal()">Save</button>
+    </div>
+  </div></div>`;
+}
+
+// ════════════════════════════════════════════════════════════════════
+// GAUGE CHART FOR WIN RATE
+// ════════════════════════════════════════════════════════════════════
+function buildGaugeChart(winRate,size=140){
+  const r=(size/2)-10;const cx=size/2;const cy=size/2+10;
+  const startAngle=-Math.PI;const endAngle=0;
+  const angle=startAngle+(endAngle-startAngle)*Math.min(1,winRate);
+  const toXY=(ang,rad)=>({x:cx+rad*Math.cos(ang),y:cy+rad*Math.sin(ang)});
+  const bgStart=toXY(startAngle,r);const bgEnd=toXY(endAngle,r);
+  const fgEnd=toXY(angle,r);
+  const needle=toXY(angle,r*0.75);
+  const color=winRate>=0.5?'#16a34a':winRate>=0.25?'#d97706':'#dc2626';
+  return `<svg width="${size}" height="${size/2+20}" viewBox="0 0 ${size} ${size/2+20}" style="display:block;margin:0 auto">
+    <path d="M${bgStart.x},${bgStart.y} A${r},${r} 0 0,1 ${bgEnd.x},${bgEnd.y}" fill="none" stroke="#e5e7eb" stroke-width="12" stroke-linecap="round"/>
+    <path d="M${bgStart.x},${bgStart.y} A${r},${r} 0 ${winRate>0.5?1:0},1 ${fgEnd.x},${fgEnd.y}" fill="none" stroke="${color}" stroke-width="12" stroke-linecap="round" style="transition:all 1s ease"/>
+    <line x1="${cx}" y1="${cy}" x2="${needle.x}" y2="${needle.y}" stroke="#1a2e4a" stroke-width="2.5" stroke-linecap="round"/>
+    <circle cx="${cx}" cy="${cy}" r="5" fill="#1a2e4a"/>
+    <text x="${cx}" y="${cy+18}" text-anchor="middle" font-size="16" font-weight="800" fill="${color}" font-family="inherit">${Math.round(winRate*100)}%</text>
+  </svg>`;
+}
+
+// ════════════════════════════════════════════════════════════════════
+// BAR CHART RACE — Customer revenue animated
+// ════════════════════════════════════════════════════════════════════
+function buildBarChartRace(containerId){
+  const el=$(containerId);if(!el) return;
+  const allQ=[...(S.quotes||[]).map(q=>({customer:q.customer,revenue:q.customerRates?.total||0})),
+    ...(window._fqHistory||[]).map(q=>({customer:q.customer,revenue:q.customerRate||0})),
+    ...(window._tlHistory||[]).map(q=>({customer:q.customer,revenue:q.totalCustomer||0}))];
+  const byCustomer={};
+  allQ.filter(q=>q.customer).forEach(q=>{byCustomer[q.customer]=(byCustomer[q.customer]||0)+q.revenue;});
+  const entries=Object.entries(byCustomer).sort((a,b)=>b[1]-a[1]).slice(0,8);
+  if(!entries.length){el.innerHTML='<div style="text-align:center;color:var(--gray-400);padding:20px;font-size:13px">No data yet</div>';return;}
+  const max=entries[0][1];
+  const colors=['#1a2e4a','#2e75b6','#16a34a','#7c3aed','#d97706','#dc2626','#0891b2','#059669'];
+  let html='';
+  entries.forEach(([name,rev],i)=>{
+    const pct=rev/max*100;
+    const color=colors[i%colors.length];
+    html+=`<div style="margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">
+        <span style="font-size:12px;font-weight:600;color:var(--navy);max-width:55%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${name}</span>
+        <span style="font-size:12px;font-weight:700;color:${color}">${fmtD(rev)}</span>
+      </div>
+      <div style="height:24px;background:var(--gray-100);border-radius:4px;overflow:hidden">
+        <div style="height:24px;width:0%;background:${color};border-radius:4px;transition:width 1s ease;display:flex;align-items:center;padding-left:8px" data-target="${pct}">
+          <span style="font-size:10px;font-weight:700;color:#fff;white-space:nowrap">#${i+1}</span>
+        </div>
+      </div>
+    </div>`;
+  });
+  el.innerHTML=html;
+  // Animate bars
+  setTimeout(()=>{
+    el.querySelectorAll('[data-target]').forEach(bar=>{
+      bar.style.width=bar.dataset.target+'%';
+    });
+  },100);
+}
+
+// ════════════════════════════════════════════════════════════════════
+// DRAG TO REORDER QUOTE LOG
+// ════════════════════════════════════════════════════════════════════
+let _dragIdx=null;
+function setupDragReorder(tbodyId){
+  const tbody=$(tbodyId);if(!tbody) return;
+  tbody.querySelectorAll('tr').forEach((row,i)=>{
+    row.draggable=true;
+    row.style.cursor='grab';
+    row.addEventListener('dragstart',e=>{_dragIdx=i;row.style.opacity='.5';e.dataTransfer.effectAllowed='move';});
+    row.addEventListener('dragend',()=>{row.style.opacity='1';});
+    row.addEventListener('dragover',e=>{e.preventDefault();e.dataTransfer.dropEffect='move';row.style.background='var(--blue-bg)';});
+    row.addEventListener('dragleave',()=>{row.style.background='';});
+    row.addEventListener('drop',e=>{
+      e.preventDefault();row.style.background='';
+      if(_dragIdx===null||_dragIdx===i) return;
+      // Reorder quotes array
+      const moved=S.quotes.splice(_dragIdx,1)[0];
+      S.quotes.splice(i,0,moved);
+      _dragIdx=null;
+      renderLog();
+    });
+  });
+}
+
+// ════════════════════════════════════════════════════════════════════
+// ANIMATED TRANSLOAD MAP
+// ════════════════════════════════════════════════════════════════════
+function buildTransloadMap(port,warehouse,delivery){
+  const id='tl-map-'+Date.now();
+  const map=`<div class="card" style="margin-bottom:14px;padding:16px 20px">
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gray-400);margin-bottom:14px">Route overview</div>
+    <svg id="${id}" viewBox="0 0 500 80" style="width:100%;display:block">
+      <!-- Line -->
+      <line x1="60" y1="40" x2="440" y2="40" stroke="#e2e8f0" stroke-width="3" stroke-dasharray="6,4"/>
+      <!-- Port -->
+      <circle cx="60" cy="40" r="18" fill="#1a2e4a"/>
+      <text x="60" y="44" text-anchor="middle" font-size="9" fill="#fff" font-weight="700" font-family="sans-serif">PORT</text>
+      <text x="60" y="68" text-anchor="middle" font-size="9" fill="#6b7280" font-family="sans-serif">${(port||'').split(',')[0].slice(0,12)}</text>
+      <!-- Warehouse -->
+      <circle cx="250" cy="40" r="18" fill="#d97706"/>
+      <text x="250" y="44" text-anchor="middle" font-size="9" fill="#fff" font-weight="700" font-family="sans-serif">WH</text>
+      <text x="250" y="68" text-anchor="middle" font-size="9" fill="#6b7280" font-family="sans-serif">${(warehouse||'').slice(0,12)}</text>
+      <!-- Delivery -->
+      <circle cx="440" cy="40" r="18" fill="#16a34a"/>
+      <text x="440" y="44" text-anchor="middle" font-size="9" fill="#fff" font-weight="700" font-family="sans-serif">DEST</text>
+      <text x="440" y="68" text-anchor="middle" font-size="9" fill="#6b7280" font-family="sans-serif">${(delivery||'').slice(0,12)}</text>
+      <!-- Animated truck -->
+      <circle id="${id}-dot" cx="60" cy="40" r="7" fill="#2e75b6">
+        <animate attributeName="cx" values="60;240;440" keyTimes="0;0.45;1" dur="3s" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.6 1; 0.4 0 0.6 1"/>
+      </circle>
+    </svg>
+  </div>`;
+  return map;
 }
 
 
