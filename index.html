@@ -2285,7 +2285,13 @@ async function downloadSelectedFqPDFs(){
 async function updateFqStatus(idx,status){
   const _fqq=(window._fqHistory||[])[idx];
   if(status==='Booked'&&_fqq&&(_fqq.fqMode==='FTL'||_fqq.fqMode==='LTL')){
-    setTimeout(()=>showToast('🚚 Load moved to TMS Dispatch Board','info',4000),800);
+    // Auto-generate booking number from quote number
+    const qNum=_fqq.id?.slice(-6)||Math.random().toString(36).slice(-4).toUpperCase();
+    const bkNum='BK-'+qNum.toUpperCase();
+    if(!getTMSMeta(_fqq.id).bookingNum){
+      saveTMSMeta(_fqq.id,{bookingNum:bkNum,quoteRef:_fqq.id,mode:_fqq.fqMode,bookedAt:new Date().toISOString()});
+    }
+    setTimeout(()=>showToast('🚚 Load #'+bkNum+' added to TMS','info',4000),800);
   }
   // Auto-flow booked FTL/LTL to TMS
   if(status==='Booked'){
@@ -12227,6 +12233,7 @@ function renderTMSDispatch(tabBar,kpis,loads){
     const colLoads=loads.filter(l=>l.status===s);
     const cards=colLoads.length?colLoads.map(l=>{
       const next=nextTMSStatus(s);
+      const sIdx=TMS_STATUSES.indexOf(s);const prev=sIdx>0?TMS_STATUSES[sIdx-1]:null;
       const meta=l.tmsMeta||{};
       return`<div style="background:#fff;border:1px solid var(--gray-100);border-radius:10px;padding:12px;margin-bottom:8px;box-shadow:0 1px 4px rgba(0,0,0,.06)">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
@@ -12240,10 +12247,11 @@ function renderTMSDispatch(tabBar,kpis,loads){
           ${l.weight?` · ${Number(l.weight).toLocaleString()} lbs`:''}
           ${l.customerRate?` · <span style="color:var(--steel);font-weight:700">${fmtD(l.customerRate)}</span>`:''}
         </div>
-        ${meta.bolNum?`<div style="font-size:10px;color:var(--steel);font-weight:600;margin-bottom:6px">BOL: ${meta.bolNum}</div>`:''}
+        ${meta.bookingNum?`<div style="font-size:10px;color:var(--steel);font-weight:700;margin-bottom:2px">${meta.bookingNum}</div>`:''}        ${meta.bolNum?`<div style="font-size:10px;color:var(--gray-500);margin-bottom:6px">BOL: ${meta.bolNum}</div>`:''}
         ${meta.pickupAppt?`<div style="font-size:10px;color:var(--amber);font-weight:600">PU: ${meta.pickupAppt}</div>`:''}
         <div style="display:flex;gap:4px;margin-top:8px;flex-wrap:wrap">
           ${next?`<button onclick="advanceTMSLoad('${l.id}','${next}')" style="font-size:10px;font-weight:700;padding:4px 8px;border:none;border-radius:5px;background:${tmsStatusColor(next)};color:#fff;cursor:pointer;font-family:inherit">→ ${next}</button>`:''}
+          ${prev?`<button onclick="advanceTMSLoad('${l.id}','${prev}')" style="font-size:10px;font-weight:600;padding:4px 8px;border:1px solid var(--gray-300);border-radius:5px;background:transparent;cursor:pointer;font-family:inherit;color:var(--gray-500)">← ${prev}</button>`:''}
           <button onclick="openTMSLoadDetail('${l.id}')" style="font-size:10px;font-weight:600;padding:4px 8px;border:1px solid var(--gray-200);border-radius:5px;background:transparent;cursor:pointer;font-family:inherit;color:var(--gray-600)">Details</button>
           <button onclick="openBOLBuilder('${l.id}')" style="font-size:10px;font-weight:600;padding:4px 8px;border:1px solid var(--gray-200);border-radius:5px;background:transparent;cursor:pointer;font-family:inherit;color:var(--gray-600)">BOL</button>
         </div>
@@ -12283,31 +12291,35 @@ function renderTMSLoads(tabBar,kpis,loads){
 }
 
 // ── ADVANCE LOAD STATUS ────────────────────────────────────────────
-function advanceTMSLoad(id,newStatus){
+async function advanceTMSLoad(id,newStatus){
   const idx=(window._fqHistory||[]).findIndex(q=>q.id===id);
   if(idx<0) return;
   const prevStatus=window._fqHistory[idx].status;
   window._fqHistory[idx].status=newStatus;
   try{localStorage.setItem('fq_history',JSON.stringify(window._fqHistory));}catch(e){}
+  // ★ FIX: Save to Supabase so refresh doesn't revert
+  try{await dbUpdateFqStatus(id,newStatus);}catch(e){console.warn('TMS status sync:',e.message);}
   saveTMSMeta(id,{[newStatus.toLowerCase().replace(/ /g,'_')+'_at']:new Date().toISOString()});
   incrementQuestMetric(newStatus==='Delivered'?'delivered_today':'bookings_today');
-
-  // Undo toast — 6 seconds to go back
-  let undone=false;
+  // Undo toast
   const container=$('toast-container')||document.createElement('div');
   if(!$('toast-container')){container.id='toast-container';container.style.cssText='position:fixed;bottom:24px;right:24px;z-index:99999;display:flex;flex-direction:column;gap:8px;pointer-events:none';document.body.appendChild(container);}
   const toast=document.createElement('div');
   toast.style.cssText='background:#1a2e4a;color:#fff;padding:12px 18px;border-radius:10px;font-size:13px;font-weight:600;font-family:inherit;box-shadow:0 4px 16px rgba(0,0,0,.25);display:flex;align-items:center;gap:12px;pointer-events:all;min-width:260px';
-  toast.innerHTML=`<span>Moved to <strong>${newStatus}</strong></span><button style="background:rgba(255,255,255,.2);border:none;color:#fff;padding:4px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:700;font-family:inherit;white-space:nowrap">↩ Undo</button>`;
-  toast.querySelector('button').onclick=()=>{
-    undone=true;toast.remove();
+  toast.innerHTML=`<span>→ <strong>${newStatus}</strong></span><button style="background:rgba(255,255,255,.2);border:none;color:#fff;padding:4px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:700;font-family:inherit;white-space:nowrap">↩ Undo</button>`;
+  toast.querySelector('button').onclick=async()=>{
+    toast.remove();
     const q=(window._fqHistory||[])[idx];
-    if(q){q.status=prevStatus;try{localStorage.setItem('fq_history',JSON.stringify(window._fqHistory));}catch(e){}}
-    showToast(`Reverted to ${prevStatus}`,'info',2000);
+    if(q){
+      q.status=prevStatus;
+      try{localStorage.setItem('fq_history',JSON.stringify(window._fqHistory));}catch(e){}
+      try{await dbUpdateFqStatus(id,prevStatus);}catch(e){}
+    }
+    showToast('↩ Reverted to '+prevStatus,'info',2000);
     renderTMS();
   };
   container.appendChild(toast);
-  setTimeout(()=>{toast.remove();},6000);
+  setTimeout(()=>toast.remove(),6000);
   renderTMS();
 }
 
