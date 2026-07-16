@@ -12108,19 +12108,24 @@ function getAppointments(id){
   return{pickup:m.pickup_appt||'',delivery:m.delivery_appt||''};
 }
 
-// ── Real-time subscription for flags ─────────────────────────────
+// ── Poll shipment_metadata every 8 seconds — no real-time config needed ──
+let _metaPollInterval=null;
 function subscribeToMeta(){
-  try{
-    db.channel('shipment_metadata_changes')
-      .on('postgres_changes',{event:'*',schema:'public',table:'shipment_metadata'},payload=>{
-        const r=payload.new||payload.old;
-        if(r?.id){
-          if(payload.eventType==='DELETE') delete window._shipmentMeta[r.id];
-          else window._shipmentMeta[r.id]=r;
-          if(S.view==='active') renderActive();
-        }
-      }).subscribe();
-  }catch(e){}
+  if(_metaPollInterval) clearInterval(_metaPollInterval);
+  _metaPollInterval=setInterval(async()=>{
+    try{
+      const{data,error}=await db.from('shipment_metadata').select('*');
+      if(error||!data) return;
+      let changed=false;
+      data.forEach(r=>{
+        const existing=window._shipmentMeta?.[r.id];
+        const existingStr=JSON.stringify(existing);
+        const newStr=JSON.stringify(r);
+        if(existingStr!==newStr){changed=true;window._shipmentMeta[r.id]=r;}
+      });
+      if(changed&&S.view==='active') renderActive();
+    }catch(e){}
+  },8000);
 }
 
 
