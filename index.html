@@ -969,14 +969,14 @@ async function initApp(){
     }
   }catch(e){S.rates=[];console.log('rates error:',e.message);}
   $('loading-msg').textContent='Loading quotes…';
-  try{S.quotes=await dbLoadQuotes();}catch(e){S.quotes=[];console.log('quotes error:',e.message);}
+  try{S.quotes=await withTimeout(dbLoadQuotes(),8000,[])||[];}catch(e){S.quotes=[];}
   try{await autoExpireQuotes();}catch(e){}
   $('loading-msg').textContent='Loading customers…';
-  try{S.customers=await dbLoadCustomers();}catch(e){S.customers=[];console.log('customers table:',e.message);}
+  try{S.customers=await withTimeout(dbLoadCustomers(),6000,[])||[];}catch(e){S.customers=[];}
   $('loading-msg').textContent='Loading freight history…';
-  try{await loadFqHistory();}catch(e){window._fqHistory=[];console.log('fq history:',e.message);}
-  try{window._aqHistory=await dbLoadAqQuotes();}catch(e){window._aqHistory=JSON.parse(localStorage.getItem('aq_history')||'[]');}
-  try{await loadTlHistory();}catch(e){window._tlHistory=[];console.log('tl history:',e.message);}
+  try{await withTimeout(loadFqHistory(),8000,null);}catch(e){}; if(!window._fqHistory){try{window._fqHistory=JSON.parse(localStorage.getItem('fq_history')||'[]');}catch(e){window._fqHistory=[];}}
+  try{window._aqHistory=await withTimeout(dbLoadAqQuotes(),6000,null)||JSON.parse(localStorage.getItem('aq_history')||'[]');}catch(e){window._aqHistory=JSON.parse(localStorage.getItem('aq_history')||'[]');}
+  try{await withTimeout(loadTlHistory(),8000,null);}catch(e){};if(!window._tlHistory){try{window._tlHistory=JSON.parse(localStorage.getItem('tl_history')||'[]');}catch(e){window._tlHistory=[];}}
   loadSpecialZips();
   loadCustomCFS();
   loadActiveTracking();
@@ -11574,6 +11574,13 @@ function promptBookingNum(type,id){
   }
   showToast('Booking # saved','success',2000);
   renderActive();
+}
+
+function withTimeout(promise, ms=8000, fallback=null){
+  return Promise.race([
+    promise,
+    new Promise(resolve=>setTimeout(()=>resolve(fallback),ms))
+  ]);
 }
 boot().catch(e=>{$('loading-screen').style.display='none';$('setup-screen').style.display='flex';});
 </script>
