@@ -11824,6 +11824,201 @@ function setLiquidProgress(pct){
 }
 
 
+// ════════════════════════════════════════════════════════════════════
+// DAILY THEMES — Day of week + Special dates (like Google)
+// ════════════════════════════════════════════════════════════════════
+
+const DAILY_THEMES = {
+  // ── Day of week (0=Sun, 1=Mon, ..., 6=Sat) ──────────────────────
+  weekday: {
+    0: { // Sunday
+      name: 'Sunday Recharge', emoji: '☀️',
+      sidebar: 'linear-gradient(180deg,#0c4a6e 0%,#075985 100%)',
+      accent: '#0369a1', accentBg: '#e0f2fe', accentText: '#0c4a6e',
+      topbarMsg: '☀️ Take it easy — recharge for the week ahead'
+    },
+    1: { // Monday
+      name: 'Monday Grind', emoji: '💪',
+      sidebar: 'linear-gradient(180deg,#1a2e4a 0%,#0f1f35 100%)',
+      accent: '#1a2e4a', accentBg: '#eff6ff', accentText: '#1a2e4a',
+      topbarMsg: '💪 New week, new loads. Let\'s get it.'
+    },
+    2: { // Tuesday
+      name: 'Teal Tuesday', emoji: '🌊',
+      sidebar: 'linear-gradient(180deg,#134e4a 0%,#0f3d3a 100%)',
+      accent: '#0d9488', accentBg: '#f0fdfa', accentText: '#134e4a',
+      topbarMsg: '🌊 Riding the wave — Teal Tuesday'
+    },
+    3: { // Wednesday
+      name: 'Purple Wednesday', emoji: '🔮',
+      sidebar: 'linear-gradient(180deg,#3b0764 0%,#2d0a4e 100%)',
+      accent: '#7c3aed', accentBg: '#faf5ff', accentText: '#3b0764',
+      topbarMsg: '🔮 Hump day magic — keep pushing through'
+    },
+    4: { // Thursday
+      name: 'Golden Thursday', emoji: '✨',
+      sidebar: 'linear-gradient(180deg,#78350f 0%,#5c2a0c 100%)',
+      accent: '#d97706', accentBg: '#fffbeb', accentText: '#78350f',
+      topbarMsg: '✨ Almost there — golden Thursday energy'
+    },
+    5: { // Friday
+      name: 'TGIF', emoji: '🎉',
+      sidebar: 'linear-gradient(180deg,#14532d 0%,#0f3d20 100%)',
+      accent: '#16a34a', accentBg: '#f0fdf4', accentText: '#14532d',
+      topbarMsg: '🎉 IT\'S FRIDAY! Let\'s close the week strong'
+    },
+    6: { // Saturday
+      name: 'Weekend Mode', emoji: '🌸',
+      sidebar: 'linear-gradient(180deg,#831843 0%,#6b1535 100%)',
+      accent: '#be185d', accentBg: '#fdf2f8', accentText: '#831843',
+      topbarMsg: '🌸 Saturday hustle — extra credit loads'
+    }
+  },
+
+  // ── Special dates (MM-DD format) ─────────────────────────────────
+  special: {
+    '01-01': {
+      name: 'New Year\'s Day 🎆', emoji: '🎆',
+      sidebar: 'linear-gradient(180deg,#1a1a2e 0%,#16213e 100%)',
+      accent: '#fbbf24', accentBg: '#fffbeb', accentText: '#92400e',
+      topbarMsg: '🎆 Happy New Year! New year, new loads, new PBs.',
+      decoration: '🎆🎇✨'
+    },
+    '01-15': {
+      name: 'MLK Day 🕊️', emoji: '🕊️',
+      sidebar: 'linear-gradient(180deg,#1a2e4a 0%,#2e75b6 100%)',
+      accent: '#2e75b6', accentBg: '#eff6ff', accentText: '#1a2e4a',
+      topbarMsg: '🕊️ "Injustice anywhere is a threat to justice everywhere." — MLK',
+      decoration: '🕊️'
+    },
+    '02-14': {
+      name: 'Valentine\'s Day 💕', emoji: '💕',
+      sidebar: 'linear-gradient(180deg,#881337 0%,#9f1239 100%)',
+      accent: '#e11d48', accentBg: '#fff1f2', accentText: '#881337',
+      topbarMsg: '💕 Happy Valentine\'s Day — we love logistics!',
+      decoration: '💕❤️🌹'
+    },
+    '03-17': {
+      name: 'St. Patrick\'s Day ☘️', emoji: '☘️',
+      sidebar: 'linear-gradient(180deg,#14532d 0%,#166534 100%)',
+      accent: '#16a34a', accentBg: '#f0fdf4', accentText: '#14532d',
+      topbarMsg: '☘️ Luck of the Irish — may your margins be green today',
+      decoration: '☘️🍀🌈'
+    },
+    '04-01': {
+      name: 'April Fools 🃏', emoji: '🃏',
+      sidebar: 'linear-gradient(180deg,#7e22ce 0%,#dc2626 100%)',
+      accent: '#dc2626', accentBg: '#fff5f5', accentText: '#7e22ce',
+      topbarMsg: '🃏 April Fools! (Your quotes are still real though)',
+      decoration: '🃏🎭'
+    },
+    '05-05': {
+      name: 'Cinco de Mayo 🎉', emoji: '🎉',
+      sidebar: 'linear-gradient(180deg,#1a6b2a 0%,#7c2d12 100%)',
+      accent: '#dc2626', accentBg: '#fff5f5', accentText: '#7c2d12',
+      topbarMsg: '🎉 Cinco de Mayo — fiesta mode activated',
+      decoration: '🌮🎉💃'
+    },
+    '07-04': {
+      name: 'Independence Day 🇺🇸', emoji: '🇺🇸',
+      sidebar: 'linear-gradient(180deg,#1e3a8a 0%,#b91c1c 100%)',
+      accent: '#dc2626', accentBg: '#fff5f5', accentText: '#1e3a8a',
+      topbarMsg: '🇺🇸 Happy 4th of July! Land of the free, home of the freight.',
+      decoration: '🎆🇺🇸🎇'
+    },
+    '09-01': {
+      name: 'Labor Day 🛠️', emoji: '🛠️',
+      sidebar: 'linear-gradient(180deg,#1a2e4a 0%,#374151 100%)',
+      accent: '#374151', accentBg: '#f9fafb', accentText: '#1a2e4a',
+      topbarMsg: '🛠️ Happy Labor Day — you\'ve earned it.',
+      decoration: '🛠️💪'
+    },
+    '10-31': {
+      name: 'Halloween 🎃', emoji: '🎃',
+      sidebar: 'linear-gradient(180deg,#431407 0%,#1c1917 100%)',
+      accent: '#ea580c', accentBg: '#fff7ed', accentText: '#431407',
+      topbarMsg: '🎃 BOO! Your freight costs are scary good today.',
+      decoration: '🎃👻🕷️🕸️'
+    },
+    '11-11': {
+      name: 'Veterans Day 🎖️', emoji: '🎖️',
+      sidebar: 'linear-gradient(180deg,#1e3a8a 0%,#1a2e4a 100%)',
+      accent: '#1e3a8a', accentBg: '#eff6ff', accentText: '#1e3a8a',
+      topbarMsg: '🎖️ Thank you to all who served.',
+      decoration: '🎖️🇺🇸'
+    },
+    '11-27': { name: 'Thanksgiving 🦃', emoji: '🦃', sidebar: 'linear-gradient(180deg,#78350f 0%,#451a03 100%)', accent: '#b45309', accentBg: '#fffbeb', accentText: '#78350f', topbarMsg: '🦃 Grateful for every load we move together. Happy Thanksgiving!', decoration: '🦃🍂🍁' },
+    '11-28': { name: 'Thanksgiving 🦃', emoji: '🦃', sidebar: 'linear-gradient(180deg,#78350f 0%,#451a03 100%)', accent: '#b45309', accentBg: '#fffbeb', accentText: '#78350f', topbarMsg: '🦃 Happy Thanksgiving!', decoration: '🦃🍂' },
+    '12-24': {
+      name: 'Christmas Eve 🎄', emoji: '🎄',
+      sidebar: 'linear-gradient(180deg,#14532d 0%,#7f1d1d 100%)',
+      accent: '#16a34a', accentBg: '#f0fdf4', accentText: '#14532d',
+      topbarMsg: '🎄 Christmas Eve — Santa\'s supply chain never stops!',
+      decoration: '🎄⭐🎅'
+    },
+    '12-25': {
+      name: 'Christmas Day 🎅', emoji: '🎅',
+      sidebar: 'linear-gradient(180deg,#7f1d1d 0%,#14532d 100%)',
+      accent: '#dc2626', accentBg: '#fff5f5', accentText: '#7f1d1d',
+      topbarMsg: '🎅 Merry Christmas! May your margins be merry and bright.',
+      decoration: '🎅🎁🎄⭐'
+    },
+    '12-31': {
+      name: 'New Year\'s Eve 🥂', emoji: '🥂',
+      sidebar: 'linear-gradient(180deg,#1a1a2e 0%,#7c3aed 100%)',
+      accent: '#fbbf24', accentBg: '#fffbeb', accentText: '#92400e',
+      topbarMsg: '🥂 Last day of the year — let\'s finish with a bang!',
+      decoration: '🥂🎆✨🎇'
+    }
+  }
+};
+
+function getTodayTheme(){
+  const now = new Date();
+  const month = String(now.getMonth()+1).padStart(2,'0');
+  const day   = String(now.getDate()).padStart(2,'0');
+  const key   = `${month}-${day}`;
+  // Special date overrides day-of-week
+  return DAILY_THEMES.special[key] || DAILY_THEMES.weekday[now.getDay()];
+}
+
+function applyDailyTheme(){
+  const theme = getTodayTheme();
+  if(!theme) return;
+  // Sidebar background
+  const sidebar = document.querySelector('.sidebar');
+  if(sidebar) sidebar.style.background = theme.sidebar;
+  // CSS variable overrides
+  document.documentElement.style.setProperty('--steel', theme.accent);
+  document.documentElement.style.setProperty('--blue-bg', theme.accentBg);
+  // Topbar theme message
+  const existing = document.getElementById('theme-msg');
+  if(existing) existing.remove();
+  const msg = document.createElement('div');
+  msg.id = 'theme-msg';
+  msg.style.cssText = `position:fixed;top:0;left:0;right:0;height:26px;background:${theme.accent}18;border-bottom:1px solid ${theme.accent}30;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:${theme.accentText};z-index:100;letter-spacing:.01em;pointer-events:none`;
+  msg.textContent = theme.topbarMsg;
+  document.body.prepend(msg);
+  // Adjust app/sidebar top margin to account for banner
+  const app = document.querySelector('.app-shell') || document.querySelector('.app');
+  if(app) app.style.paddingTop='26px';
+  // Decorations in topbar on special days
+  if(theme.decoration){
+    const dec = document.createElement('div');
+    dec.style.cssText = 'position:fixed;top:26px;right:16px;font-size:18px;letter-spacing:4px;z-index:99;pointer-events:none;opacity:.6;animation:boat-rock 4s ease-in-out infinite';
+    dec.textContent = theme.decoration;
+    document.body.appendChild(dec);
+    setTimeout(()=>dec.remove(), 12000);
+  }
+  // Show theme toast only once per day
+  const shownKey = 'theme_shown_'+new Date().toDateString();
+  if(!localStorage.getItem(shownKey)){
+    localStorage.setItem(shownKey,'1');
+    setTimeout(()=>showToast(`${theme.emoji} Today\'s theme: ${theme.name}`,'info',3500),2000);
+  }
+}
+
+
 boot().catch(e=>{$('loading-screen').style.display='none';$('setup-screen').style.display='flex';});
 </script>
 <script>
