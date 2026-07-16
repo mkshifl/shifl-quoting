@@ -2,6 +2,9 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <!-- PWA -->
 <link rel="manifest" href="manifest.json">
@@ -968,13 +971,17 @@ async function initApp(){
       S.rates=await dbLoadRates();
     }
   }catch(e){S.rates=[];console.log('rates error:',e.message);}
-  $('loading-msg').textContent='Loading quotes…';
-  try{S.quotes=await withTimeout(dbLoadQuotes(),8000,[])||[];}catch(e){S.quotes=[];}
-  try{await autoExpireQuotes();}catch(e){}
-  $('loading-msg').textContent='Loading customers…';
-  try{S.customers=await withTimeout(dbLoadCustomers(),6000,[])||[];}catch(e){S.customers=[];}
-  $('loading-msg').textContent='Loading data…';
-  await loadFqHistory(); // now instant - uses localStorage
+  // ── INSTANT LOAD from localStorage ──────────────────────────────────
+  $('loading-msg').textContent='Almost ready…';
+  try{S.quotes=JSON.parse(localStorage.getItem('shifl_quotes_cache')||'[]');}catch(e){S.quotes=[];}
+  try{S.customers=JSON.parse(localStorage.getItem('shifl_customers_cache')||'[]');}catch(e){S.customers=[];}
+  await loadFqHistory();
+  // Sync from Supabase in background after app shows
+  setTimeout(async()=>{
+    try{const q=await withTimeout(dbLoadQuotes(),10000,null);if(q&&q.length>=0){S.quotes=q;localStorage.setItem('shifl_quotes_cache',JSON.stringify(q));}}catch(e){}
+    try{await autoExpireQuotes();}catch(e){}
+    try{const c=await withTimeout(dbLoadCustomers(),8000,null);if(c){S.customers=c;localStorage.setItem('shifl_customers_cache',JSON.stringify(c));}}catch(e){}
+  },1000);
   try{window._aqHistory=JSON.parse(localStorage.getItem('aq_history')||'[]');}catch(e){window._aqHistory=[];}
   setTimeout(async()=>{try{const d=await withTimeout(dbLoadAqQuotes(),8000,null);if(d){window._aqHistory=d;localStorage.setItem('aq_history',JSON.stringify(d));}}catch(e){}},600);
   try{window._tlHistory=JSON.parse(localStorage.getItem('tl_history')||'[]');}catch(e){window._tlHistory=[];}
