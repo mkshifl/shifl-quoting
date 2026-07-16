@@ -912,7 +912,7 @@ let S={
       bobtailEnabled:false,bobtailScope:'both',bobtailCarrierRate:0,bobtailCustomerRate:0,
       triaxleScope:'both',
       triaxleEnabled:false,triaxleScope:'both',triaxleCarrierRate:0,triaxleCustomerRate:0},
-  selId:null,rSearch:'',logFilter:'all',dashFilter:'month',cSearch:'',
+  selId:null,rSearch:'',logFilter:'all',logSearch:'',dashFilter:'month',cSearch:'',
   fq:{mode:null,equipment:null,pickupZip:'',deliveryZip:'',weight:'',palletCount:'',
       pallets:[{w:'',l:'',h:''}],sameDims:true,singleW:'',singleL:'',singleH:'',
       notes:'',customer:'',customerEmail:'',customerId:null,shiflRef:'',
@@ -5590,7 +5590,18 @@ async function confirmImport(){
 // QUOTE LOG
 // ═══════════════════════════════════════════════════════
 function buildLogRows(){
-  const f=S.logFilter;const filtered=S.quotes.filter(q=>f==='all'||q.status===f);
+  const f=S.logFilter;const srch=(S.logSearch||'').toLowerCase();
+  const filtered=S.quotes.filter(q=>{
+    if(f!=='all'&&q.status!==f) return false;
+    if(!srch) return true;
+    return (q.customer||'').toLowerCase().includes(srch)
+      ||(q.shiflRef||'').toLowerCase().includes(srch)
+      ||(q.zip||'').includes(srch)
+      ||(q.port||'').toLowerCase().includes(srch)
+      ||(q.carrier||'').toLowerCase().includes(srch)
+      ||(q.destination||'').toLowerCase().includes(srch)
+      ||('#'+(q.quoteNum||'')).includes(srch);
+  });
   if(!filtered.length) return `<tr><td colspan="13" style="text-align:center;padding:40px;color:var(--gray-400)">No quotes${f!=='all'?' with status "'+f+'"':''}</td></tr>`;
   if(!window._draySelected) window._draySelected=new Set();
   const sel=window._draySelected;
@@ -5651,19 +5662,45 @@ async function downloadSelectedDrayPDFs(){
 function renderLog(){
   if(!window._draySelected) window._draySelected=new Set();
   const selCount=window._draySelected.size;
+  // Count by status
+  const statCounts={all:S.quotes.length};
+  ['Quoted','Booked','Delivered','Invoiced','Lost','Cancelled','Expired'].forEach(s=>{statCounts[s]=S.quotes.filter(q=>q.status===s).length;});
+  const pillStyle=(s,color,bg)=>S.logFilter===s
+    ?`background:${bg};color:#fff;border-color:${bg};`
+    :`color:${color};border-color:${color};background:transparent;`;
   $('topbar-right').innerHTML=`
-    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-      <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;color:var(--gray-500)">
-        <input type="checkbox" ${selCount===S.quotes.length&&selCount>0?'checked':''} onchange="if(this.checked){window._draySelected=new Set(S.quotes.map(q=>q.id));}else{window._draySelected=new Set();}renderLog()" style="width:auto">
-        ${selCount>0?`<span style="font-weight:600;color:var(--navy)">${selCount} selected</span>`:'Select all'}
-      </label>
-      ${selCount>0?`<button class="btn blue" onclick="downloadSelectedDrayPDFs()">📄 Download ${selCount} as 1 PDF</button>
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      ${selCount>0?`<button class="btn blue" onclick="downloadSelectedDrayPDFs()">📄 Download ${selCount} PDF</button>
         <button class="btn" onclick="window._draySelected=new Set();renderLog()">Clear</button>`:''}
-      <select id="log-filter" onchange="onLogFilter(this.value)" style="width:150px"><option value="all"${S.logFilter==='all'?' selected':''}>All statuses</option><option value="Quoted"${S.logFilter==='Quoted'?' selected':''}>Quoted</option><option value="Booked"${S.logFilter==='Booked'?' selected':''}>Booked</option><option value="Lost"${S.logFilter==='Lost'?' selected':''}>Lost</option><option value="Expired"${S.logFilter==='Expired'?' selected':''}>Expired</option></select>
-      <button class="btn" onclick="exportQuoteLog()">📥 Export CSV</button>
-      <button class="btn" onclick="syncQuotesToTeam()">🔄 Sync to team</button>
+      <button class="btn" onclick="exportQuoteLog()">📥 CSV</button>
+      <button class="btn" onclick="syncQuotesToTeam()">🔄 Sync</button>
     </div>`;
-  $('page').innerHTML=`<div class="tbl-wrap"><table><thead><tr><th style="width:32px"></th><th>#</th><th>Ref #</th><th>Date</th><th>Customer</th><th>Lane</th><th>Carrier</th><th>Carrier total</th><th>Customer total</th><th>Base Profit</th><th>By</th><th>Status</th><th></th></tr></thead><tbody id="log-tbody">${buildLogRows()}</tbody></table></div>`;
+
+  // Build pill filter bar above the table
+  const pillBar=`<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:14px">
+    <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;flex:1">
+      ${[
+        {s:'all',    label:'All',       color:'#1a2e4a', bg:'#1a2e4a'},
+        {s:'Quoted', label:'Quoted',    color:'#1a2e4a', bg:'#1a2e4a'},
+        {s:'Booked', label:'Booked',    color:'#16a34a', bg:'#16a34a'},
+        {s:'Delivered',label:'Delivered',color:'#2e75b6',bg:'#2e75b6'},
+        {s:'Invoiced',label:'Invoiced', color:'#7c3aed', bg:'#7c3aed'},
+        {s:'Lost',   label:'Lost',      color:'#dc2626', bg:'#dc2626'},
+        {s:'Cancelled',label:'Cancelled',color:'#6b7280',bg:'#6b7280'},
+        {s:'Expired',label:'Expired',   color:'#d97706', bg:'#d97706'},
+      ].map(p=>`<button onclick="onLogFilter('${p.s}')"
+        style="padding:5px 13px;border-radius:99px;border:1.5px solid;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .12s;${S.logFilter===p.s?`background:${p.bg};color:#fff;border-color:${p.bg};`:`color:${p.color};border-color:${p.color};background:transparent;`}">
+        ${p.label} <span style="font-size:10px;opacity:.75">${statCounts[p.s]||0}</span>
+      </button>`).join('')}
+    </div>
+    <div style="position:relative;min-width:200px">
+      <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:13px;pointer-events:none">🔍</span>
+      <input type="text" id="log-search" placeholder="Customer, ref #, ZIP, carrier…" value="${S.logSearch||''}"
+        oninput="S.logSearch=this.value;const t=$('log-tbody');if(t) t.innerHTML=buildLogRows()"
+        style="padding:7px 12px 7px 32px;border-radius:99px;border:1.5px solid var(--gray-200);font-size:12px;width:100%;box-sizing:border-box">
+    </div>
+  </div>`;
+  $('page').innerHTML=pillBar+`<div class="tbl-wrap"><table><thead><tr><th style="width:32px"><input type="checkbox" ${selCount===S.quotes.length&&selCount>0?'checked':''} onchange="if(this.checked){window._draySelected=new Set(S.quotes.map(q=>q.id));}else{window._draySelected=new Set();}renderLog()" style="width:auto"></th><th>#</th><th>Ref #</th><th>Date</th><th>Customer</th><th>Lane</th><th>Carrier</th><th>Carrier total</th><th>Customer total</th><th>Base Profit</th><th>By</th><th>Status</th><th></th></tr></thead><tbody id="log-tbody">${buildLogRows()}</tbody></table></div>`;
 }
 function onLogFilter(v){S.logFilter=v;const t=$('log-tbody');if(t) t.innerHTML=buildLogRows();}
 async function updateStatus(id,status){
