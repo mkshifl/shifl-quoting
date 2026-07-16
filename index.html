@@ -7968,7 +7968,7 @@ function renderAqBuilder(){
           <input type="text" value="${aq.awbNumber}" oninput="S.aq.awbNumber=this.value" placeholder="123-12345678"></div>
       </div>
       <div class="field"><label>Air freight cost ($) * <span style="font-weight:400;color:var(--gray-400)">— what you paid the airline / forwarder</span></label>
-        <input type="number" value="${aq.airFreightCost}" oninput="S.aq.airFreightCost=this.value;renderAqBuilder()"
+        <input type="number" value="${aq.airFreightCost}" oninput="S.aq.airFreightCost=this.value;refreshAqPreview()"
           placeholder="0.00" step="0.01" min="0" style="max-width:220px;font-size:15px;font-weight:700">
       </div>
     </div>
@@ -8006,7 +8006,7 @@ function renderAqBuilder(){
           <input type="text" value="${aq.groundCarrierName}" oninput="S.aq.groundCarrierName=this.value"
             placeholder="${groundMatches.length?'Or type manually':'e.g. XPO, UPS Freight'}"></div>
         <div class="field"><label>Ground rate ($)</label>
-          <input type="number" value="${aq.groundRate}" oninput="S.aq.groundRate=this.value;renderAqBuilder()"
+          <input type="number" value="${aq.groundRate}" oninput="S.aq.groundRate=this.value;refreshAqPreview()"
             placeholder="0.00" step="0.01" min="0"></div>
       </div>
     </div>
@@ -8049,7 +8049,7 @@ function renderAqBuilder(){
       </div>
 
       <div class="field"><label>Customer rate ($) *</label>
-        <input type="number" value="${aq.customerRate}" oninput="S.aq.customerRate=this.value;renderAqBuilder()"
+        <input type="number" value="${aq.customerRate}" oninput="S.aq.customerRate=this.value;refreshAqPreview()"
           placeholder="0.00" step="0.01" min="0" style="font-size:18px;font-weight:700;border-color:var(--steel)"></div>
 
       ${custRate>0&&totalCost>0?`
@@ -12021,6 +12021,20 @@ function applyDailyTheme(){
 }
 
 
+
+function refreshAqPreview(){
+  const aq=S.aq;
+  const airCost=parseFloat(aq.airFreightCost)||0;
+  const groundRate=parseFloat(aq.groundRate)||0;
+  const custRate=parseFloat(aq.customerRate)||0;
+  const totalCost=airCost+groundRate;
+  const profit=custRate-totalCost;
+  const margin=custRate>0?profit/custRate:0;
+  const el=document.getElementById('aq-preview-profit');
+  if(el) el.innerHTML=`<span style="color:${profit>=0?'var(--green)':'var(--red)'}">+${fmtD(profit)}</span> <span style="color:var(--gray-500);font-size:11px">(${pct(margin)})</span>`;
+  const costEl=document.getElementById('aq-preview-cost');
+  if(costEl) costEl.textContent=fmtD(totalCost);
+}
 boot().catch(e=>{$('loading-screen').style.display='none';$('setup-screen').style.display='flex';});
 </script>
 <script>
