@@ -506,6 +506,16 @@ if('caches' in window){
       <div class="acc-sep"></div>
 
       <!-- TRANSLOADING -->
+      <!-- TMS -->
+      <button class="acc-btn" id="acc-tms" onclick="toggleAcc('tms')" style="color:#93c5fd;background:rgba(46,117,182,.12);font-weight:700">🚚 TMS <span style="font-size:10px;background:rgba(46,117,182,.25);padding:1px 7px;border-radius:99px;margin-left:4px">FTL / LTL</span></button>
+      <div class="acc-body" id="body-tms">
+        <button class="sub-link" id="nav-tms-dispatch" onclick="S.tmsTab='dispatch';goTo('tms')">📋 Dispatch board</button>
+        <button class="sub-link" id="nav-tms-loads" onclick="S.tmsTab='loads';goTo('tms')">🚚 All loads</button>
+        <button class="sub-link" id="nav-tms-bol" onclick="S.tmsTab='bol';goTo('tms')">📄 BOL & Docs</button>
+        <button class="sub-link" id="nav-tms-scorecard" onclick="S.tmsTab='scorecard';goTo('tms')">📊 Carrier scorecards</button>
+        <button class="sub-link" id="nav-tms-tools" onclick="S.tmsTab='tools';goTo('tms')">🔧 Tools</button>
+        <button class="sub-link" id="nav-tms-reports" onclick="S.tmsTab='reports';goTo('tms')">📈 Reports</button>
+      </div>
       <button class="acc-btn" id="acc-transload" onclick="toggleAcc('transload')">
         <span style="display:flex;align-items:center;gap:10px">
           <span style="font-size:16px">🔄</span>Transloading
@@ -962,7 +972,7 @@ let S={
       lclPriceBy:'pallets', cbm:0, transitTime:'',
       calc:{l:'',w:'',h:'',pieces:'',weightLbs:'',unit:'in'}},
   fqTab:'builder',
-  activeFilter:'all',activeView:'active',allInvTab:'pending',invMainTab:'customer',rateTab:'import',invoices:{},pmFilter:'all',pmDate:'all',reportTab:'lanes',reportMode:'All',fqInvTab:'pending',aqTab:'builder',aqFilter:'all',_auditDate:'all',
+  activeFilter:'all',activeView:'active',tmsTab:'dispatch',allInvTab:'pending',invMainTab:'customer',rateTab:'import',invoices:{},pmFilter:'all',pmDate:'all',reportTab:'lanes',reportMode:'All',fqInvTab:'pending',aqTab:'builder',aqFilter:'all',_auditDate:'all',
   tl:null, // initialized in boot via defaultTlState()
   tlTab:'builder',
 };
@@ -1061,7 +1071,7 @@ function setView(v){
   S.view=v;
   document.querySelectorAll('.nav-btn,.sub-link').forEach(b=>b.classList.remove('active'));
   const navEl=$('nav-'+v);if(navEl) navEl.classList.add('active');
-  const titles={quote:'Quote builder',customers:'Customers',rates:'Carrier rates',log:'Quote log',dash:'Dashboard',freight:'Freight Quoting',transload:'Transload Quoting',active:'Active Shipments',admin:'Admin Panel',reports:'Reports',activity:'Activity Log',auditlog:'Audit Log',carriers:'Carrier Network',air:'Air Freight',home:'Home',invoicing:'Invoicing'};
+  const titles={tms:'TMS — FTL/LTL Operations',quote:'Quote builder',customers:'Customers',rates:'Carrier rates',log:'Quote log',dash:'Dashboard',freight:'Freight Quoting',transload:'Transload Quoting',active:'Active Shipments',admin:'Admin Panel',reports:'Reports',activity:'Activity Log',auditlog:'Audit Log',carriers:'Carrier Network',air:'Air Freight',home:'Home',invoicing:'Invoicing'};
   $('view-title').textContent=titles[v]||v;
   openAccFor(v);
   updateSubActive(v);
@@ -1082,11 +1092,13 @@ function render(){
   else if(S.view==='profit')      renderProfitMonitor();
   else if(S.view==='achievements')  renderAchievementsPage();
   else if(S.view==='usmap')         renderShiflAchievements();
+  else if(S.view==='tms')           renderTMS();
   else if(S.view==='invoicing')    renderFullInvoicing();
   else if(S.view==='reports')    renderReports();
   else if(S.view==='auditlog')   renderAuditLog();
   else if(S.view==='freight')    renderFreight();
   else if(S.view==='transload')  renderTransload();
+  else if(S.view==='tms')         renderTMS();
   else                           renderDash();
 }
 
@@ -2279,6 +2291,17 @@ async function downloadSelectedFqPDFs(){
 }
 
 async function updateFqStatus(idx,status){
+  const _fqq=(window._fqHistory||[])[idx];
+  if(status==='Booked'&&_fqq&&(_fqq.fqMode==='FTL'||_fqq.fqMode==='LTL')){
+    setTimeout(()=>showToast('🚚 Load moved to TMS Dispatch Board','info',4000),800);
+  }
+  // Auto-flow booked FTL/LTL to TMS
+  if(status==='Booked'){
+    const q=(window._fqHistory||[])[idx];
+    if(q&&(q.fqMode==='FTL'||q.fqMode==='LTL')){
+      setTimeout(()=>showToast('🚚 Load added to TMS — check Dispatch Board','info',4000),500);
+    }
+  }
   if(status==='Booked'){if(!requireCan('book_quotes','You do not have permission to book quotes.')) return;}
   else if(!requireCan('update_status','Only Admins can change quote status.')) return;
   if(status==='Booked'){setTimeout(fireConfetti,200);showToast('🎉 Quote booked!','success',4000);}
@@ -8200,6 +8223,7 @@ const VIEW_TO_ACC={
   freight:'freight',
   air:'air',
   transload:'transload',
+  tms:'tms',
   admin:'admin',reports:'admin',activity:'admin',auditlog:'admin',invoicing:null
 };
 
@@ -12126,6 +12150,454 @@ function subscribeToMeta(){
       if(changed&&S.view==='active') renderActive();
     }catch(e){}
   },8000);
+}
+
+
+// ════════════════════════════════════════════════════════════════════
+// TMS — Full FTL/LTL Transportation Management System
+// Booked FTL/LTL quotes auto-flow in from freight log
+// ════════════════════════════════════════════════════════════════════
+
+// TMS-specific metadata stored per load
+function getTMSMeta(id){ return JSON.parse(localStorage.getItem('tms_meta_'+id)||'{}'); }
+function saveTMSMeta(id, data){
+  const existing=getTMSMeta(id);
+  const merged={...existing,...data,updatedAt:new Date().toISOString()};
+  localStorage.setItem('tms_meta_'+id,JSON.stringify(merged));
+  try{db.from('shipment_metadata').upsert([{id:'tms_'+id,...merged}]);}catch(e){}
+  return merged;
+}
+
+// Get all TMS loads — FTL/LTL quotes that are Booked or further
+function getTMSLoads(){
+  return (window._fqHistory||[]).filter(q=>
+    (q.fqMode==='FTL'||q.fqMode==='LTL')&&
+    ['Booked','Dispatched','In Transit','Out for Delivery','Delivered','Invoiced','Paid'].includes(q.status)
+  ).map(q=>({...q,tmsMeta:getTMSMeta(q.id)}));
+}
+
+// TMS STATUS progression
+const TMS_STATUSES=['Booked','Dispatched','In Transit','Out for Delivery','Delivered'];
+function nextTMSStatus(current){
+  const idx=TMS_STATUSES.indexOf(current);
+  return idx>=0&&idx<TMS_STATUSES.length-1?TMS_STATUSES[idx+1]:null;
+}
+function tmsStatusColor(s){
+  return s==='Booked'?'#1a2e4a':s==='Dispatched'?'#7c3aed':s==='In Transit'?'#d97706':s==='Out for Delivery'?'#2e75b6':s==='Delivered'?'#16a34a':'#6b7280';
+}
+
+// ── MAIN TMS RENDER ────────────────────────────────────────────────
+function renderTMS(){
+  const sub=S.tmsTab||'dispatch';
+  const loads=getTMSLoads();
+  $('topbar-right').innerHTML='';
+
+  const tabs=[
+    {id:'dispatch',icon:'ti-layout-kanban',label:'Dispatch board'},
+    {id:'loads',icon:'ti-list',label:'All loads'},
+    {id:'bol',icon:'ti-file-text',label:'BOL & Docs'},
+    {id:'scorecard',icon:'ti-chart-bar',label:'Carrier scorecards'},
+    {id:'tools',icon:'ti-calculator',label:'Tools'},
+    {id:'reports',icon:'ti-report-analytics',label:'Reports'},
+  ];
+
+  const tabBar=`<div style="display:flex;gap:2px;background:var(--gray-100);padding:3px;border-radius:var(--radius);flex-wrap:wrap;margin-bottom:18px">
+    ${tabs.map(t=>`<button onclick="S.tmsTab='${t.id}';renderTMS()"
+      style="display:flex;align-items:center;gap:6px;padding:7px 14px;border-radius:5px;border:none;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;background:${sub===t.id?'#fff':'none'};color:${sub===t.id?'var(--navy)':'var(--gray-500)'};box-shadow:${sub===t.id?'0 1px 3px rgba(0,0,0,.08)':'none'}">
+      <i class="ti ${t.icon}" style="font-size:14px"></i>${t.label}</button>`).join('')}
+  </div>`;
+
+  const kpis=`<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:20px">
+    ${TMS_STATUSES.map(s=>{const c=loads.filter(l=>l.status===s).length;return`<div class="kpi" style="border-left:3px solid ${tmsStatusColor(s)}"><div class="kpi-lbl">${s}</div><div class="kpi-val" style="color:${tmsStatusColor(s)};font-size:20px">${c}</div></div>`;}).join('')}
+  </div>`;
+
+  if(sub==='dispatch') renderTMSDispatch(tabBar,kpis,loads);
+  else if(sub==='loads') renderTMSLoads(tabBar,kpis,loads);
+  else if(sub==='bol') renderTMSBol(tabBar,loads);
+  else if(sub==='scorecard') renderTMSScorecard(tabBar,loads);
+  else if(sub==='tools') renderTMSTools(tabBar);
+  else if(sub==='reports') renderTMSReports(tabBar,loads);
+}
+
+// ── DISPATCH BOARD (KANBAN) ────────────────────────────────────────
+function renderTMSDispatch(tabBar,kpis,loads){
+  const cols=TMS_STATUSES.map(s=>{
+    const colLoads=loads.filter(l=>l.status===s);
+    const cards=colLoads.length?colLoads.map(l=>{
+      const next=nextTMSStatus(s);
+      const meta=l.tmsMeta||{};
+      return`<div style="background:#fff;border:1px solid var(--gray-100);border-radius:10px;padding:12px;margin-bottom:8px;box-shadow:0 1px 4px rgba(0,0,0,.06)">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+          <span style="font-size:10px;font-weight:700;background:${tmsStatusColor(s)}18;color:${tmsStatusColor(s)};padding:2px 8px;border-radius:99px">${l.fqMode}</span>
+          <span style="font-size:10px;color:var(--gray-400)">${l.date}</span>
+        </div>
+        <div style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:2px">${l.customer||'—'}</div>
+        <div style="font-size:11px;color:var(--gray-500);margin-bottom:6px">${l.pickupZip||'—'} → ${l.deliveryZip||'—'}</div>
+        <div style="font-size:11px;color:var(--gray-600);margin-bottom:8px">
+          <span style="font-weight:600">${l.carrier||'Unassigned'}</span>
+          ${l.weight?` · ${Number(l.weight).toLocaleString()} lbs`:''}
+          ${l.customerRate?` · <span style="color:var(--steel);font-weight:700">${fmtD(l.customerRate)}</span>`:''}
+        </div>
+        ${meta.bolNum?`<div style="font-size:10px;color:var(--steel);font-weight:600;margin-bottom:6px">BOL: ${meta.bolNum}</div>`:''}
+        ${meta.pickupAppt?`<div style="font-size:10px;color:var(--amber);font-weight:600">PU: ${meta.pickupAppt}</div>`:''}
+        <div style="display:flex;gap:4px;margin-top:8px;flex-wrap:wrap">
+          ${next?`<button onclick="advanceTMSLoad('${l.id}','${next}')" style="font-size:10px;font-weight:700;padding:4px 8px;border:none;border-radius:5px;background:${tmsStatusColor(next)};color:#fff;cursor:pointer;font-family:inherit">→ ${next}</button>`:''}
+          <button onclick="openTMSLoadDetail('${l.id}')" style="font-size:10px;font-weight:600;padding:4px 8px;border:1px solid var(--gray-200);border-radius:5px;background:transparent;cursor:pointer;font-family:inherit;color:var(--gray-600)">Details</button>
+          <button onclick="openBOLBuilder('${l.id}')" style="font-size:10px;font-weight:600;padding:4px 8px;border:1px solid var(--gray-200);border-radius:5px;background:transparent;cursor:pointer;font-family:inherit;color:var(--gray-600)">BOL</button>
+        </div>
+      </div>`;}).join(''):`<div style="padding:20px;text-align:center;color:var(--gray-300);font-size:12px">No loads</div>`;
+    return`<div style="flex:1;min-width:180px">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:${tmsStatusColor(s)};margin-bottom:10px;padding-bottom:6px;border-bottom:2px solid ${tmsStatusColor(s)}">${s} (${colLoads.length})</div>
+      ${cards}
+    </div>`;}).join('');
+
+  $('page').innerHTML=tabBar+kpis+(loads.length?
+    `<div style="display:flex;gap:12px;overflow-x:auto;padding-bottom:16px">${cols}</div>`:
+    `<div class="empty"><div class="empty-ico">🚚</div><p>No FTL/LTL loads yet — book a freight quote to start</p><button class="btn blue" onclick="goTo('freight','builder')">+ New freight quote</button></div>`);
+}
+
+// ── ALL LOADS TABLE ────────────────────────────────────────────────
+function renderTMSLoads(tabBar,kpis,loads){
+  if(!loads.length){$('page').innerHTML=tabBar+`<div class="empty"><div class="empty-ico">🚚</div><p>No loads yet</p></div>`;return;}
+  const rows=loads.sort((a,b)=>b.date.localeCompare(a.date)).map(l=>{
+    const meta=l.tmsMeta||{};
+    const p=getShipmentProfit(l,'freight');
+    return`<tr onclick="openTMSLoadDetail('${l.id}')" style="cursor:pointer">
+      <td class="bold">${l.customer||'—'}</td>
+      <td><span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px;background:${tmsStatusColor(l.status)}18;color:${tmsStatusColor(l.status)}">${l.fqMode}</span></td>
+      <td class="muted">${l.pickupZip||'—'} → ${l.deliveryZip||'—'}</td>
+      <td>${l.carrier||'—'}</td>
+      <td style="font-family:monospace;font-size:12px;color:var(--gray-500)">${meta.bolNum||'—'}</td>
+      <td class="money">${fmtD(l.customerRate||0)}</td>
+      <td style="white-space:nowrap">${(p=>{const c=p.isActual?'var(--green)':p.margin>=0.08?'var(--amber)':'var(--red)';return`<span style="font-weight:700;color:${c}">+${fmtD(p.profit)}</span>`;})(p)}</td>
+      <td><span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px;background:${tmsStatusColor(l.status)}18;color:${tmsStatusColor(l.status)}">${l.status}</span></td>
+      <td onclick="event.stopPropagation()" style="white-space:nowrap">
+        ${nextTMSStatus(l.status)?`<button onclick="advanceTMSLoad('${l.id}','${nextTMSStatus(l.status)}')" style="font-size:11px;padding:3px 8px;border:none;border-radius:4px;background:${tmsStatusColor(nextTMSStatus(l.status))};color:#fff;cursor:pointer;font-family:inherit">→ ${nextTMSStatus(l.status)}</button>`:''}
+      </td>
+    </tr>`;}).join('');
+  $('page').innerHTML=tabBar+kpis+`<div class="tbl-wrap"><table><thead><tr>
+    <th>Customer</th><th>Mode</th><th>Lane</th><th>Carrier</th><th>BOL #</th><th>Revenue</th><th>Profit</th><th>Status</th><th></th>
+  </tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+
+// ── ADVANCE LOAD STATUS ────────────────────────────────────────────
+function advanceTMSLoad(id,newStatus){
+  const idx=(window._fqHistory||[]).findIndex(q=>q.id===id);
+  if(idx<0) return;
+  window._fqHistory[idx].status=newStatus;
+  try{localStorage.setItem('fq_history',JSON.stringify(window._fqHistory));}catch(e){}
+  saveTMSMeta(id,{[newStatus.toLowerCase().replace(/ /g,'_')+'_at']:new Date().toISOString()});
+  incrementQuestMetric(newStatus==='Delivered'?'delivered_today':'bookings_today');
+  showToast(`Load moved to ${newStatus}`,'success',2000);
+  renderTMS();
+}
+
+// ── BOL GENERATOR ─────────────────────────────────────────────────
+function renderTMSBol(tabBar,loads){
+  const bolLoads=loads.filter(l=>['Booked','Dispatched','In Transit'].includes(l.status));
+  $('page').innerHTML=tabBar+`
+  <div style="font-size:14px;font-weight:700;color:var(--navy);margin-bottom:14px">📄 Bill of Lading — generate for booked loads</div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px">
+    ${bolLoads.length?bolLoads.map(l=>{const meta=getTMSMeta(l.id);return`
+      <div class="card">
+        <div style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:4px">${l.customer||'—'}</div>
+        <div style="font-size:11px;color:var(--gray-500);margin-bottom:8px">${l.pickupZip||'—'} → ${l.deliveryZip||'—'} · ${l.fqMode} · ${l.carrier||'—'}</div>
+        ${meta.bolNum?`<div style="font-size:11px;font-weight:700;color:var(--steel);margin-bottom:8px">BOL # ${meta.bolNum}</div>`:'<div style="font-size:11px;color:var(--gray-400);margin-bottom:8px">No BOL generated yet</div>'}
+        <button onclick="openBOLBuilder('${l.id}')" class="btn blue" style="width:100%;font-size:12px">📄 ${meta.bolNum?'Edit':'Create'} BOL</button>
+      </div>`;}).join(''):`<div style="grid-column:1/-1;padding:40px;text-align:center;color:var(--gray-400)">No booked loads needing BOL</div>`}
+  </div>`;
+}
+
+// BOL Builder Modal
+function openBOLBuilder(id){
+  const q=(window._fqHistory||[]).find(q=>q.id===id);
+  if(!q){showToast('Load not found','error');return;}
+  const meta=getTMSMeta(id);
+  const bolNum=meta.bolNum||'BOL-'+Date.now().toString().slice(-6);
+  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal" style="max-width:620px;max-height:90vh;overflow-y:auto">
+    <div class="modal-title">📄 Bill of Lading — ${q.customer||'—'}</div>
+    <div class="g2">
+      <div class="field"><label>BOL Number</label><input type="text" id="bol-num" value="${bolNum}"></div>
+      <div class="field"><label>Ship date</label><input type="date" id="bol-date" value="${localDateStr()}"></div>
+    </div>
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gray-400);margin:10px 0 8px">Shipper</div>
+    <div class="g2">
+      <div class="field"><label>Company name</label><input type="text" id="bol-ship-name" value="" placeholder="Shipper name"></div>
+      <div class="field"><label>Address</label><input type="text" id="bol-ship-addr" value="" placeholder="123 Main St, City, State ZIP"></div>
+    </div>
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gray-400);margin:10px 0 8px">Consignee</div>
+    <div class="g2">
+      <div class="field"><label>Company name</label><input type="text" id="bol-cons-name" value="${q.customer||''}" placeholder="Consignee name"></div>
+      <div class="field"><label>Address</label><input type="text" id="bol-cons-addr" value="" placeholder="456 Oak Ave, City, State ZIP"></div>
+    </div>
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gray-400);margin:10px 0 8px">Carrier</div>
+    <div class="g2">
+      <div class="field"><label>Carrier name</label><input type="text" id="bol-carrier" value="${q.carrier||''}"></div>
+      <div class="field"><label>Pro / Tracking #</label><input type="text" id="bol-pro" value="${meta.proNum||''}" placeholder="PRO number"></div>
+    </div>
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gray-400);margin:10px 0 8px">Freight details</div>
+    <div class="g3">
+      <div class="field"><label>Pieces</label><input type="number" id="bol-pieces" value="${q.palletCount||''}"></div>
+      <div class="field"><label>Weight (lbs)</label><input type="number" id="bol-weight" value="${q.weight||''}"></div>
+      <div class="field"><label>Freight class</label><input type="text" id="bol-class" value="${meta.freightClass||''}" placeholder="e.g. 70"></div>
+    </div>
+    <div class="g2">
+      <div class="field"><label>Commodity description</label><input type="text" id="bol-commodity" value="${q.commodity||''}" placeholder="General freight, no hazmat"></div>
+      <div class="field"><label>NMFC #</label><input type="text" id="bol-nmfc" value="${meta.nmfc||''}" placeholder="Optional"></div>
+    </div>
+    <div class="field"><label>Special instructions</label><textarea id="bol-notes" rows="2" style="width:100%;box-sizing:border-box;resize:vertical" placeholder="Liftgate required, appointment needed, etc.">${meta.bolNotes||''}</textarea></div>
+    <div class="modal-foot">
+      <button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn" onclick="saveBOL('${id}');closeModal()">💾 Save BOL</button>
+      <button class="btn blue" onclick="saveBOL('${id}');generateBOLPDF('${id}')">📄 Save & Download PDF</button>
+    </div>
+  </div></div>`;
+}
+
+function saveBOL(id){
+  saveTMSMeta(id,{
+    bolNum:($('bol-num')||{}).value?.trim()||'',
+    bolDate:($('bol-date')||{}).value||'',
+    shipperName:($('bol-ship-name')||{}).value?.trim()||'',
+    shipperAddr:($('bol-ship-addr')||{}).value?.trim()||'',
+    consigneeName:($('bol-cons-name')||{}).value?.trim()||'',
+    consigneeAddr:($('bol-cons-addr')||{}).value?.trim()||'',
+    carrier:($('bol-carrier')||{}).value?.trim()||'',
+    proNum:($('bol-pro')||{}).value?.trim()||'',
+    pieces:($('bol-pieces')||{}).value||'',
+    weight:($('bol-weight')||{}).value||'',
+    freightClass:($('bol-class')||{}).value?.trim()||'',
+    commodity:($('bol-commodity')||{}).value?.trim()||'',
+    nmfc:($('bol-nmfc')||{}).value?.trim()||'',
+    bolNotes:($('bol-notes')||{}).value?.trim()||''
+  });
+  showToast('BOL saved','success',2000);
+}
+
+async function generateBOLPDF(id){
+  if(!await loadJsPDF()) return;
+  const q=(window._fqHistory||[]).find(q=>q.id===id);
+  const meta=getTMSMeta(id);
+  if(!q||!meta) return;
+  try{
+    const{jsPDF}=window.jspdf;
+    const doc=new jsPDF({unit:'mm',format:'a4'});
+    const W=210,M=14;
+    const navy=[26,46,74];
+    doc.setFillColor(...navy);doc.rect(0,0,W,28,'F');
+    doc.setTextColor(255,255,255);doc.setFont('helvetica','bold');doc.setFontSize(18);
+    doc.text('BILL OF LADING',M,12);
+    doc.setFontSize(10);doc.setFont('helvetica','normal');
+    doc.text('Non-Negotiable',M,20);
+    doc.text('BOL #: '+(meta.bolNum||'—'),W-M,12,{align:'right'});
+    doc.text('Date: '+(meta.bolDate||localDateStr()),W-M,20,{align:'right'});
+    doc.setTextColor(0,0,0);
+    let y=36;
+    const sec=(title)=>{doc.setFillColor(240,244,248);doc.rect(M,y-4,W-M*2,6,'F');doc.setFont('helvetica','bold');doc.setFontSize(9);doc.setTextColor(...navy);doc.text(title,M+2,y);doc.setTextColor(0,0,0);y+=8;};
+    const row=(label,val)=>{doc.setFont('helvetica','bold');doc.setFontSize(9);doc.text(label+':',M,y);doc.setFont('helvetica','normal');doc.text(val||'—',M+40,y);y+=6;};
+    sec('SHIPPER');row('Company',meta.shipperName);row('Address',meta.shipperAddr);y+=2;
+    sec('CONSIGNEE');row('Company',meta.consigneeName||q.customer);row('Address',meta.consigneeAddr);y+=2;
+    sec('CARRIER INFORMATION');row('Carrier',meta.carrier||q.carrier);row('PRO / Tracking #',meta.proNum);y+=2;
+    sec('FREIGHT DETAILS');row('Pieces',meta.pieces);row('Weight',meta.weight?(meta.weight+' lbs'):'—');row('Freight class',meta.freightClass);row('Commodity',meta.commodity);row('NMFC #',meta.nmfc);y+=2;
+    if(meta.bolNotes){sec('SPECIAL INSTRUCTIONS');doc.setFont('helvetica','normal');doc.setFontSize(9);const lines=doc.splitTextToSize(meta.bolNotes,W-M*2);doc.text(lines,M,y);y+=lines.length*5+4;}
+    y+=8;doc.setDrawColor(...navy);doc.setLineWidth(0.5);doc.line(M,y,90,y);doc.line(120,y,W-M,y);
+    doc.setFontSize(8);doc.text('Shipper signature',M,y+4);doc.text('Carrier signature',120,y+4);
+    doc.setFontSize(7);doc.setTextColor(150,150,150);doc.text('Generated by Shifl Logistics TMS · This is a non-negotiable bill of lading',W/2,285,{align:'center'});
+    doc.save('BOL_'+(meta.bolNum||id)+'_'+q.customer?.replace(/\s+/g,'_')+'.pdf');
+    closeModal();showToast('BOL PDF downloaded','success',2000);
+  }catch(e){showToast('PDF error: '+e.message,'error');}
+}
+
+// ── CARRIER SCORECARDS ─────────────────────────────────────────────
+function renderTMSScorecard(tabBar,loads){
+  const carriers={};
+  loads.forEach(l=>{
+    const c=l.carrier||'Unknown';
+    if(!carriers[c]) carriers[c]={name:c,total:0,delivered:0,onTime:0,revenue:0,profit:0};
+    carriers[c].total++;
+    if(['Delivered','Invoiced','Paid'].includes(l.status)){carriers[c].delivered++;carriers[c].onTime++;}
+    carriers[c].revenue+=(l.customerRate||0);
+    carriers[c].profit+=getShipmentProfit(l,'freight').profit;
+  });
+  const sorted=Object.values(carriers).sort((a,b)=>b.total-a.total);
+  $('page').innerHTML=tabBar+`
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px">
+    ${sorted.length?sorted.map(c=>{
+      const onTimeRate=c.delivered>0?Math.round(c.onTime/c.delivered*100):0;
+      const color=onTimeRate>=90?'var(--green)':onTimeRate>=70?'var(--amber)':'var(--red)';
+      return`<div class="card">
+        <div style="font-size:15px;font-weight:800;color:var(--navy);margin-bottom:4px">${c.name}</div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:14px">
+          <div style="text-align:center"><div style="font-size:22px;font-weight:900;color:${color}">${onTimeRate}%</div><div style="font-size:10px;color:var(--gray-400)">On-time</div></div>
+          <div style="text-align:center"><div style="font-size:22px;font-weight:900;color:var(--navy)">${c.total}</div><div style="font-size:10px;color:var(--gray-400)">Loads</div></div>
+          <div style="text-align:center"><div style="font-size:18px;font-weight:800;color:var(--steel)">${fmtD(c.revenue)}</div><div style="font-size:10px;color:var(--gray-400)">Revenue</div></div>
+        </div>
+        <div style="height:6px;background:var(--gray-100);border-radius:3px;overflow:hidden"><div style="height:6px;width:${onTimeRate}%;background:${color};border-radius:3px"></div></div>
+        <div style="font-size:11px;color:var(--gray-500);margin-top:6px">${c.delivered} delivered · avg margin ${c.revenue>0?pct(c.profit/c.revenue):'—'}</div>
+      </div>`;}).join(''):`<div style="padding:40px;text-align:center;color:var(--gray-400)">No carrier data yet</div>`}
+  </div>`;
+}
+
+// ── TOOLS — NMFC + DENSITY CALCULATOR ─────────────────────────────
+function renderTMSTools(tabBar){
+  $('page').innerHTML=tabBar+`
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+    <!-- Density/Class Calculator -->
+    <div class="card">
+      <div style="font-size:15px;font-weight:800;color:var(--navy);margin-bottom:14px">⚖️ Freight class calculator</div>
+      <div class="field"><label>Length (in)</label><input type="number" id="fc-len" placeholder="0" oninput="calcFreightClass()" min="0"></div>
+      <div class="field"><label>Width (in)</label><input type="number" id="fc-wid" placeholder="0" oninput="calcFreightClass()" min="0"></div>
+      <div class="field"><label>Height (in)</label><input type="number" id="fc-hgt" placeholder="0" oninput="calcFreightClass()" min="0"></div>
+      <div class="field"><label>Weight (lbs)</label><input type="number" id="fc-wgt" placeholder="0" oninput="calcFreightClass()" min="0"></div>
+      <div id="fc-result" style="margin-top:12px;padding:14px;background:var(--blue-bg);border-radius:var(--radius);display:none">
+        <div style="font-size:12px;color:var(--gray-500)">Density</div>
+        <div id="fc-density" style="font-size:22px;font-weight:900;color:var(--navy)">—</div>
+        <div style="font-size:12px;color:var(--gray-500);margin-top:6px">Freight class</div>
+        <div id="fc-class" style="font-size:28px;font-weight:900;color:var(--steel)">—</div>
+        <div id="fc-note" style="font-size:11px;color:var(--amber);margin-top:4px"></div>
+      </div>
+    </div>
+    <!-- NMFC Lookup -->
+    <div class="card">
+      <div style="font-size:15px;font-weight:800;color:var(--navy);margin-bottom:14px">🔍 NMFC class reference</div>
+      <div class="field"><label>Search commodity</label><input type="text" id="nmfc-search" placeholder="e.g. furniture, electronics, food..." oninput="searchNMFC(this.value)"></div>
+      <div id="nmfc-results" style="margin-top:10px;max-height:280px;overflow-y:auto"></div>
+    </div>
+  </div>`;
+}
+
+function calcFreightClass(){
+  const l=parseFloat($('fc-len')?.value)||0;
+  const w=parseFloat($('fc-wid')?.value)||0;
+  const h=parseFloat($('fc-hgt')?.value)||0;
+  const wgt=parseFloat($('fc-wgt')?.value)||0;
+  if(!l||!w||!h||!wgt) return;
+  const cubicFt=(l*w*h)/1728;
+  const density=wgt/cubicFt;
+  const cls=densityToClass(density);
+  const el=$('fc-result');if(el) el.style.display='block';
+  const de=$('fc-density');if(de) de.textContent=density.toFixed(2)+' lbs/ft³';
+  const ce=$('fc-class');if(ce) ce.textContent='Class '+cls;
+  const ne=$('fc-note');if(ne) ne.textContent='Verify with carrier tariff — commodity type may affect class';
+}
+
+function densityToClass(d){
+  if(d>=50) return 50;if(d>=35) return 55;if(d>=30) return 60;if(d>=22.5) return 65;
+  if(d>=15) return 70;if(d>=13.5) return 77.5;if(d>=12) return 85;if(d>=10.5) return 92.5;
+  if(d>=9) return 100;if(d>=8) return 110;if(d>=7) return 125;if(d>=6) return 150;
+  if(d>=5) return 175;if(d>=4) return 200;if(d>=3) return 250;if(d>=2) return 300;
+  if(d>=1) return 400; return 500;
+}
+
+const NMFC_TABLE=[
+  {commodity:'Furniture',class:'85–125',nmfc:'40600',note:'Depends on material and packing'},
+  {commodity:'Electronics / computers',class:'70–100',nmfc:'34560',note:'Properly packed in original boxes'},
+  {commodity:'Clothing / apparel',class:'100–150',nmfc:'22500',note:'Boxed or hanging garments'},
+  {commodity:'Auto parts',class:'55–100',nmfc:'10000',note:'Varies by part type'},
+  {commodity:'Beverages / liquids',class:'60–85',nmfc:'16580',note:'Canned or bottled'},
+  {commodity:'Paper / printed matter',class:'50–100',nmfc:'48440',note:'Depends on density'},
+  {commodity:'Food / dry goods',class:'65–85',nmfc:'28520',note:'Canned goods = class 60'},
+  {commodity:'Machinery / equipment',class:'55–85',nmfc:'46000',note:'Varies by weight'},
+  {commodity:'Building materials',class:'50–70',nmfc:'17440',note:'Lumber, brick, stone'},
+  {commodity:'Toys',class:'85–125',nmfc:'54730',note:'Depends on packing'},
+  {commodity:'Pharmaceuticals',class:'85–150',nmfc:'43900',note:'Boxed medications'},
+  {commodity:'Metal / steel',class:'50–70',nmfc:'42260',note:'Depends on form'},
+  {commodity:'Plastic products',class:'85–150',nmfc:'49640',note:'Molded or sheet'},
+  {commodity:'Chemicals',class:'60–100',nmfc:'22000',note:'Non-hazardous only'},
+  {commodity:'Sporting goods',class:'100–150',nmfc:'51500',note:'Varies by item'},
+];
+function searchNMFC(q){
+  const el=$('nmfc-results');if(!el) return;
+  if(!q.trim()){el.innerHTML='';return;}
+  const results=NMFC_TABLE.filter(r=>r.commodity.toLowerCase().includes(q.toLowerCase()));
+  el.innerHTML=results.length?results.map(r=>`
+    <div style="padding:10px;border-bottom:1px solid var(--gray-100)">
+      <div style="font-size:13px;font-weight:700;color:var(--navy)">${r.commodity}</div>
+      <div style="display:flex;gap:16px;margin-top:4px">
+        <span style="font-size:12px;color:var(--gray-500)">Class: <strong style="color:var(--steel)">${r.class}</strong></span>
+        <span style="font-size:12px;color:var(--gray-500)">NMFC: <strong>${r.nmfc}</strong></span>
+      </div>
+      <div style="font-size:11px;color:var(--amber);margin-top:2px">⚠ ${r.note}</div>
+    </div>`).join(''):'<div style="padding:20px;text-align:center;color:var(--gray-400);font-size:13px">No matches — consult your carrier tariff</div>';
+}
+
+// ── TMS REPORTS ────────────────────────────────────────────────────
+function renderTMSReports(tabBar,loads){
+  const today=localDateStr();
+  const AR_30=loads.filter(l=>l.status==='Invoiced'&&l.date>=new Date(Date.now()-30*864e5).toISOString().slice(0,10));
+  const AR_60=loads.filter(l=>l.status==='Invoiced'&&l.date<new Date(Date.now()-30*864e5).toISOString().slice(0,10)&&l.date>=new Date(Date.now()-60*864e5).toISOString().slice(0,10));
+  const AR_90=loads.filter(l=>l.status==='Invoiced'&&l.date<new Date(Date.now()-60*864e5).toISOString().slice(0,10));
+  const totalRev=loads.reduce((s,l)=>s+(l.customerRate||0),0);
+  const totalProfit=loads.reduce((s,l)=>s+getShipmentProfit(l,'freight').profit,0);
+  const laneMap={};loads.forEach(l=>{const k=`${l.pickupZip||'?'} → ${l.deliveryZip||'?'}`;if(!laneMap[k]) laneMap[k]={loads:0,revenue:0,profit:0};laneMap[k].loads++;laneMap[k].revenue+=(l.customerRate||0);laneMap[k].profit+=getShipmentProfit(l,'freight').profit;});
+  const topLanes=Object.entries(laneMap).sort((a,b)=>b[1].revenue-a[1].revenue).slice(0,8);
+  $('page').innerHTML=tabBar+`
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+    <!-- AR Aging -->
+    <div class="card">
+      <div style="font-size:14px;font-weight:800;color:var(--navy);margin-bottom:14px">⏳ AR Aging</div>
+      ${[{label:'0–30 days',loads:AR_30,color:'var(--green)'},{label:'31–60 days',loads:AR_60,color:'var(--amber)'},{label:'61+ days',loads:AR_90,color:'var(--red)'}].map(b=>`
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--gray-100)">
+          <div><div style="font-size:13px;font-weight:600;color:${b.color}">${b.label}</div><div style="font-size:11px;color:var(--gray-400)">${b.loads.length} invoices outstanding</div></div>
+          <div style="font-size:15px;font-weight:800;color:${b.color}">${fmtD(b.loads.reduce((s,l)=>s+(l.customerRate||0),0))}</div>
+        </div>`).join('')}
+    </div>
+    <!-- P&L Summary -->
+    <div class="card">
+      <div style="font-size:14px;font-weight:800;color:var(--navy);margin-bottom:14px">💰 P&L Summary</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div style="text-align:center;padding:12px;background:var(--gray-50);border-radius:var(--radius)"><div style="font-size:11px;color:var(--gray-500)">Total loads</div><div style="font-size:24px;font-weight:900;color:var(--navy)">${loads.length}</div></div>
+        <div style="text-align:center;padding:12px;background:var(--blue-bg);border-radius:var(--radius)"><div style="font-size:11px;color:var(--gray-500)">Total revenue</div><div style="font-size:20px;font-weight:900;color:var(--steel)">${fmtD(totalRev)}</div></div>
+        <div style="text-align:center;padding:12px;background:#f0fdf4;border-radius:var(--radius)"><div style="font-size:11px;color:var(--gray-500)">Net profit</div><div style="font-size:20px;font-weight:900;color:var(--green)">${fmtD(totalProfit)}</div></div>
+        <div style="text-align:center;padding:12px;background:#faf5ff;border-radius:var(--radius)"><div style="font-size:11px;color:var(--gray-500)">Avg margin</div><div style="font-size:20px;font-weight:900;color:#7c3aed">${totalRev>0?pct(totalProfit/totalRev):'—'}</div></div>
+      </div>
+    </div>
+  </div>
+  <!-- Top lanes -->
+  <div class="card">
+    <div style="font-size:14px;font-weight:800;color:var(--navy);margin-bottom:14px">🗺️ Top lanes by revenue</div>
+    ${topLanes.length?topLanes.map(([lane,d],i)=>`
+      <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--gray-100)">
+        <div style="font-size:13px;font-weight:700;color:var(--gray-400);min-width:20px">#${i+1}</div>
+        <div style="flex:1"><div style="font-size:13px;font-weight:700;color:var(--navy)">${lane}</div><div style="height:5px;background:var(--gray-100);border-radius:3px;margin-top:4px;overflow:hidden"><div style="height:5px;width:${Math.round(d.revenue/topLanes[0][1].revenue*100)}%;background:var(--steel);border-radius:3px"></div></div></div>
+        <div style="text-align:right"><div style="font-size:13px;font-weight:700;color:var(--steel)">${fmtD(d.revenue)}</div><div style="font-size:11px;color:var(--gray-400)">${d.loads} loads · ${pct(d.revenue>0?d.profit/d.revenue:0)} margin</div></div>
+      </div>`).join(''):'<div style="text-align:center;color:var(--gray-400);padding:20px">No lane data yet</div>'}
+  </div>`;
+}
+
+// Load detail modal
+function openTMSLoadDetail(id){
+  const q=(window._fqHistory||[]).find(q=>q.id===id);
+  if(!q) return;
+  const meta=getTMSMeta(id);
+  const statusIdx=TMS_STATUSES.indexOf(q.status);
+  const timeline=TMS_STATUSES.map((s,i)=>{
+    const done=i<=statusIdx;
+    const ts=meta[s.toLowerCase().replace(/ /g,'_')+'_at'];
+    return`<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+      <div style="width:20px;height:20px;border-radius:50%;background:${done?tmsStatusColor(s):'var(--gray-100)'};display:flex;align-items:center;justify-content:center;font-size:11px;color:${done?'#fff':'var(--gray-300)'};flex-shrink:0">${done?'✓':'○'}</div>
+      <div style="flex:1"><div style="font-size:12px;font-weight:${done?700:400};color:${done?'var(--navy)':'var(--gray-400)'}">${s}</div>${ts?`<div style="font-size:10px;color:var(--gray-400)">${new Date(ts).toLocaleString('en-US',{timeZone:'America/New_York',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}</div>`:''}</div>
+    </div>`;}).join('');
+  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-title">🚚 ${q.customer||'Load'} — ${q.fqMode}</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px">
+      <div><div style="font-size:11px;color:var(--gray-400)">Lane</div><div style="font-size:13px;font-weight:700;color:var(--navy)">${q.pickupZip||'—'} → ${q.deliveryZip||'—'}</div></div>
+      <div><div style="font-size:11px;color:var(--gray-400)">Carrier</div><div style="font-size:13px;font-weight:700;color:var(--navy)">${q.carrier||'—'}</div></div>
+      <div><div style="font-size:11px;color:var(--gray-400)">Revenue</div><div style="font-size:13px;font-weight:700;color:var(--steel)">${fmtD(q.customerRate||0)}</div></div>
+      <div><div style="font-size:11px;color:var(--gray-400)">BOL #</div><div style="font-size:13px;font-weight:700;color:var(--navy)">${meta.bolNum||'—'}</div></div>
+    </div>
+    <div style="font-size:12px;font-weight:700;color:var(--gray-500);margin-bottom:10px;text-transform:uppercase;letter-spacing:.05em">Status timeline</div>
+    ${timeline}
+    <div class="field" style="margin-top:12px"><label>Pickup appointment</label><input type="datetime-local" id="tms-pu-appt" value="${meta.pickupAppt||''}" onchange="saveTMSMeta('${id}',{pickupAppt:this.value});showSavedIndicator()"></div>
+    <div class="field"><label>Delivery appointment</label><input type="datetime-local" id="tms-del-appt" value="${meta.deliveryAppt||''}" onchange="saveTMSMeta('${id}',{deliveryAppt:this.value});showSavedIndicator()"></div>
+    <div class="modal-foot">
+      <button class="btn" onclick="closeModal()">Close</button>
+      <button class="btn" onclick="closeModal();openBOLBuilder('${id}')">📄 BOL</button>
+      ${TMS_STATUSES.indexOf(q.status)<TMS_STATUSES.length-1?`<button class="btn blue" onclick="closeModal();advanceTMSLoad('${id}','${nextTMSStatus(q.status)}')">→ Move to ${nextTMSStatus(q.status)}</button>`:'<button class="btn" style="color:var(--green);border-color:var(--green)" disabled>✓ Delivered</button>'}
+    </div>
+  </div></div>`;
 }
 
 
