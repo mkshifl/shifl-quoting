@@ -973,10 +973,12 @@ async function initApp(){
   try{await autoExpireQuotes();}catch(e){}
   $('loading-msg').textContent='Loading customers…';
   try{S.customers=await withTimeout(dbLoadCustomers(),6000,[])||[];}catch(e){S.customers=[];}
-  $('loading-msg').textContent='Loading freight history…';
-  try{await withTimeout(loadFqHistory(),8000,null);}catch(e){}; if(!window._fqHistory){try{window._fqHistory=JSON.parse(localStorage.getItem('fq_history')||'[]');}catch(e){window._fqHistory=[];}}
-  try{window._aqHistory=await withTimeout(dbLoadAqQuotes(),6000,null)||JSON.parse(localStorage.getItem('aq_history')||'[]');}catch(e){window._aqHistory=JSON.parse(localStorage.getItem('aq_history')||'[]');}
-  try{await withTimeout(loadTlHistory(),8000,null);}catch(e){};if(!window._tlHistory){try{window._tlHistory=JSON.parse(localStorage.getItem('tl_history')||'[]');}catch(e){window._tlHistory=[];}}
+  $('loading-msg').textContent='Loading data…';
+  await loadFqHistory(); // now instant - uses localStorage
+  try{window._aqHistory=JSON.parse(localStorage.getItem('aq_history')||'[]');}catch(e){window._aqHistory=[];}
+  setTimeout(async()=>{try{const d=await withTimeout(dbLoadAqQuotes(),8000,null);if(d){window._aqHistory=d;localStorage.setItem('aq_history',JSON.stringify(d));}}catch(e){}},600);
+  try{window._tlHistory=JSON.parse(localStorage.getItem('tl_history')||'[]');}catch(e){window._tlHistory=[];}
+  setTimeout(async()=>{try{if(typeof loadTlHistory==='function') await withTimeout(loadTlHistory(),8000,null);}catch(e){}},700);
   loadSpecialZips();
   loadCustomCFS();
   loadActiveTracking();
@@ -2917,15 +2919,16 @@ async function migrateLocalStorageToSupabase(){
 }
 
 async function loadFqHistory(){
+  // Load from localStorage immediately (fast)
+  try{window._fqHistory=JSON.parse(localStorage.getItem('fq_history')||'[]');}catch(e){window._fqHistory=[];}
   loadFqRates();
-  try{
-    window._fqHistory=await dbLoadFqQuotes();
-    // Cache to localStorage
-    localStorage.setItem('fq_history',JSON.stringify(window._fqHistory));
-  }catch(e){
-    console.log('Supabase fq load failed, using localStorage:',e.message);
-    try{window._fqHistory=JSON.parse(localStorage.getItem('fq_history')||'[]');}catch(e2){window._fqHistory=[];}
-  }
+  // Sync from Supabase in background (non-blocking)
+  setTimeout(async()=>{
+    try{
+      const fresh=await withTimeout(dbLoadFqQuotes(),8000,null);
+      if(fresh){window._fqHistory=fresh;localStorage.setItem('fq_history',JSON.stringify(fresh));}
+    }catch(e){console.log('fq sync:',e.message);}
+  },500);
 }
 // ═══════════════════════════════════════════════════════
 function buildCustomerRows(){
