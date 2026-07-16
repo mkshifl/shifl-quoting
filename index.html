@@ -782,8 +782,7 @@ async function connectSupabase(){
     await initApp();
   }catch(e){
     db=null;
-    setLiquidProgress(100);
-  setTimeout(()=>{ $('loading-screen').style.display='none';
+    $('loading-screen').style.display='none';
     $('setup-screen').style.display='flex';
     const errEl=$('setup-error');
     if(errEl){errEl.style.display='block';errEl.textContent='Connection failed: '+(e.message||'Check your URL and key, and make sure you ran the setup SQL.');}
