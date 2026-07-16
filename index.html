@@ -972,7 +972,7 @@ let _importRows=[];
 // INIT
 // ═══════════════════════════════════════════════════════
 async function initApp(){
-  try{showLiquidLoader('Starting…');setLiquidProgress(10);
+  try{showLiquidLoader('Starting…');setLiquidProgress(10);}
   try{
     $('loading-msg').textContent='Starting…';
     try{const r=JSON.parse(localStorage.getItem('shifl_rates_cache')||'[]');S.rates=r.length?r:SEED.map((s,i)=>({...s,id:s.id||'seed'+i,active:true}));}catch(e){S.rates=[];}
@@ -1016,7 +1016,7 @@ async function initApp(){
   try{checkBossMode();}catch(e){}
   try{buildFridayBar();}catch(e){}
   S.view='home';
-  try{render();}catch(e){console.error('render:',e);} },300);
+  try{render();}catch(e){console.error('render:',e);}
 }
 
 
