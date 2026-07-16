@@ -995,6 +995,7 @@ async function initApp(){
       try{const q=await withTimeout(dbLoadQuotes(),10000,null);if(q){S.quotes=q;localStorage.setItem('shifl_quotes_cache',JSON.stringify(q));}}catch(e){}
       try{const c=await withTimeout(dbLoadCustomers(),8000,null);if(c){S.customers=c;localStorage.setItem('shifl_customers_cache',JSON.stringify(c));}}catch(e){}
       try{const fq=await withTimeout(dbLoadFqQuotes(),8000,null);if(fq){window._fqHistory=fq;localStorage.setItem('fq_history',JSON.stringify(fq));}}catch(e){}
+      try{updateActiveBadge();updateInvNavBadge();}catch(e){}
     },1000);
     try{
       realtimeChannel=db.channel('app-changes')
