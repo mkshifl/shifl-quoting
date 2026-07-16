@@ -12435,66 +12435,69 @@ function renderTMSDispatch(tabBar,kpis,loads){
 }
 
 // ── ALL LOADS TABLE ────────────────────────────────────────────────
+function buildTMSLoadRow(l){
+  const meta=getTMSMeta(l.id);
+  const p=getShipmentProfit(l,'freight');
+  const hasCustInv=!!getInvoice(l.id);
+  const hasCarrInv=!!getCarrierInvoice(l.id);
+  const sIdx=TMS_STATUSES.indexOf(l.status);
+  const prev=sIdx>0?TMS_STATUSES[sIdx-1]:null;
+  const next=nextTMSStatus(l.status);
+  const pc=p.isActual?'var(--green)':p.margin>=0.08?'var(--amber)':'var(--red)';
+  return '<tr onclick="openTMSLoadDetail(''+l.id+'')" style="cursor:pointer;border-left:3px solid '+tmsStatusColor(l.status)+'" onmouseenter="this.style.background='var(--blue-bg)'" onmouseleave="this.style.background=''">'+
+    '<td onclick="event.stopPropagation()"><div style="font-size:13px;font-weight:700;color:var(--navy)">'+escH(l.customer||'—')+'</div>'+(meta.bookingNum?'<div style="font-size:10px;font-weight:700;color:var(--steel)">'+escH(meta.bookingNum)+'</div>':'')+'</td>'+
+    '<td><span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px;background:'+tmsStatusColor(l.status)+'18;color:'+tmsStatusColor(l.status)+'">'+l.fqMode+'</span></td>'+
+    '<td class="muted" style="font-size:12px">'+(l.pickupZip||'—')+' → '+(l.deliveryZip||'—')+'</td>'+
+    '<td style="font-weight:600;color:var(--navy)">'+(l.carrier||'<span style="color:var(--gray-300)">—</span>')+'</td>'+
+    '<td style="font-family:monospace;font-size:11px;color:var(--gray-500)">'+(meta.bolNum||'—')+'</td>'+
+    '<td class="money" style="color:var(--steel);font-weight:700">'+fmtD(l.customerRate||0)+'</td>'+
+    '<td style="white-space:nowrap"><span style="font-weight:700;color:'+pc+'">+'+fmtD(p.profit)+'</span> '+profitBadge(p.isActual)+'</td>'+
+    '<td><span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px;background:'+tmsStatusColor(l.status)+'18;color:'+tmsStatusColor(l.status)+'">'+l.status+'</span></td>'+
+    '<td onclick="event.stopPropagation()" style="white-space:nowrap;min-width:280px"><div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center">'+
+      (prev?'<button onclick="event.stopPropagation();advanceTMSLoad(''+l.id+'',''+prev+'')" style="font-size:10px;padding:3px 7px;border:1px solid var(--gray-300);border-radius:4px;background:transparent;cursor:pointer;font-family:inherit;color:var(--gray-600)">← '+prev+'</button>':'')+
+      (next?'<button onclick="event.stopPropagation();advanceTMSLoad(''+l.id+'',''+next+'')" style="font-size:10px;padding:3px 7px;border:none;border-radius:4px;background:'+tmsStatusColor(next)+';color:#fff;cursor:pointer;font-family:inherit;font-weight:700">→ '+next+'</button>':'')+
+      '<button onclick="event.stopPropagation();openInvoiceBuilder('freight',''+l.id+'')" style="font-size:10px;padding:3px 7px;border:1px solid '+(hasCustInv?'#86efac':'var(--gray-200)')+';border-radius:4px;background:'+(hasCustInv?'#f0fdf4':'transparent')+';cursor:pointer;font-family:inherit;color:'+(hasCustInv?'#16a34a':'var(--gray-600)')+'">🧾 '+(hasCustInv?'✓':'Invoice')+'</button>'+
+      '<button onclick="event.stopPropagation();openCarrierInvoiceBuilder('freight',''+l.id+'')" style="font-size:10px;padding:3px 7px;border:1px solid '+(hasCarrInv?'#fbbf24':'var(--gray-200)')+';border-radius:4px;background:'+(hasCarrInv?'#fffbeb':'transparent')+';cursor:pointer;font-family:inherit;color:'+(hasCarrInv?'#d97706':'var(--gray-600)')+'">🚛 '+(hasCarrInv?'✓':'Carrier')+'</button>'+
+      '<button onclick="event.stopPropagation();deleteTMSLoad(''+l.id+'')" style="font-size:10px;padding:3px 7px;border:1px solid #fca5a5;border-radius:4px;background:transparent;cursor:pointer;color:#dc2626;font-family:inherit">🗑️</button>'+
+    '</div></td></tr>';
+}
+function escH(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
 function renderTMSLoads(tabBar,kpis,loads){
-  if(!loads.length){$('page').innerHTML=tabBar+`<div class="empty"><div class="empty-ico">🚚</div><p>No loads yet — book an FTL or LTL freight quote to get started</p><button class="btn blue" onclick="goTo('freight','builder')">+ New freight quote</button></div>`;return;}
-  const rows=loads.sort((a,b)=>b.date.localeCompare(a.date)).map(l=>{
-    const meta=getTMSMeta(l.id);
-    const p=getShipmentProfit(l,'freight');
-    const hasCustInv=!!getInvoice(l.id);
-    const hasCarrInv=!!getCarrierInvoice(l.id);
-    const sIdx=TMS_STATUSES.indexOf(l.status);
-    const prev=sIdx>0?TMS_STATUSES[sIdx-1]:null;
-    const next=nextTMSStatus(l.status);
-    return`<tr onclick="openTMSLoadDetail('${l.id}')" style="cursor:pointer;border-left:3px solid ${tmsStatusColor(l.status)}" onmouseenter="this.style.background='var(--blue-bg)'" onmouseleave="this.style.background=''">
-      <td onclick="event.stopPropagation()">
-        <div style="font-size:13px;font-weight:700;color:var(--navy)">${l.customer||'—'}</div>
-        ${meta.bookingNum?`<div style="font-size:10px;font-weight:700;color:var(--steel)">${meta.bookingNum}</div>`:''}
-      </td>
-      <td><span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px;background:${tmsStatusColor(l.status)}18;color:${tmsStatusColor(l.status)}">${l.fqMode}</span></td>
-      <td class="muted" style="font-size:12px">${l.pickupZip||'—'} → ${l.deliveryZip||'—'}</td>
-      <td style="font-weight:600;color:var(--navy)">${l.carrier||'<span style="color:var(--gray-300)">Unassigned</span>'}</td>
-      <td style="font-family:monospace;font-size:11px;color:var(--gray-500)">${meta.bolNum||'—'}</td>
-      <td class="money" style="color:var(--steel);font-weight:700">${fmtD(l.customerRate||0)}</td>
-      <td style="white-space:nowrap">${(p=>{const c=p.isActual?'var(--green)':p.margin>=0.08?'var(--amber)':'var(--red)';return`<span style="font-weight:700;color:${c}">+${fmtD(p.profit)}</span> ${profitBadge(p.isActual)}`;})(p)}</td>
-      <td><span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px;background:${tmsStatusColor(l.status)}18;color:${tmsStatusColor(l.status)}">${l.status}</span></td>
-      <td onclick="event.stopPropagation()" style="white-space:nowrap;min-width:300px">
-        <div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center">
-          <!-- Status movement -->
-          ${prev?`<button onclick="advanceTMSLoad('${l.id}','${prev}')" style="font-size:10px;padding:3px 7px;border:1px solid var(--gray-300);border-radius:4px;background:transparent;cursor:pointer;font-family:inherit;color:var(--gray-600)">← ${prev}</button>`:''}
-          ${next?`<button onclick="advanceTMSLoad('${l.id}','${next}')" style="font-size:10px;padding:3px 7px;border:none;border-radius:4px;background:${tmsStatusColor(next)};color:#fff;cursor:pointer;font-family:inherit;font-weight:700">→ ${next}</button>`:''}
-          <!-- Invoicing -->
-          <button onclick="openInvoiceBuilder('freight','${l.id}')" title="Customer invoice" style="font-size:10px;padding:3px 7px;border:1px solid ${hasCustInv?'#86efac':'var(--gray-200)'};border-radius:4px;background:${hasCustInv?'#f0fdf4':'transparent'};cursor:pointer;font-family:inherit;color:${hasCustInv?'#16a34a':'var(--gray-600)'}">🧾 ${hasCustInv?'✓':'Invoice'}</button>
-          <button onclick="openCarrierInvoiceBuilder('freight','${l.id}')" title="Carrier invoice" style="font-size:10px;padding:3px 7px;border:1px solid ${hasCarrInv?'#fbbf24':'var(--gray-200)'};border-radius:4px;background:${hasCarrInv?'#fffbeb':'transparent'};cursor:pointer;font-family:inherit;color:${hasCarrInv?'#d97706':'var(--gray-600)'}">🚛 ${hasCarrInv?'✓':'Carrier'}</button>
-          <!-- Delete -->
-          <button onclick="deleteTMSLoad('${l.id}')" title="Delete load" style="font-size:10px;padding:3px 7px;border:1px solid #fca5a5;border-radius:4px;background:transparent;cursor:pointer;color:#dc2626;font-family:inherit">🗑️</button>
-        </div>
-      </td>
-    </tr>`;}).join('');
+  if(!loads.length){
+    $('page').innerHTML=tabBar+'<div class="empty"><div class="empty-ico">🚚</div><p>No FTL/LTL loads yet — book a freight quote to start</p><button class="btn blue" onclick="goTo('freight','builder')">+ New freight quote</button></div>';
+    return;
+  }
   const lSrch=(S.tmsLoadsSearch||'').toLowerCase();
   const lFilt=S.tmsLoadsFilt||'all';
-  const filtLoads=loads.filter(l=>{
+  const sorted=loads.slice().sort((a,b)=>b.date.localeCompare(a.date));
+  const filtLoads=sorted.filter(l=>{
     if(lFilt!=='all'&&l.status!==lFilt) return false;
     if(!lSrch) return true;
     const m=getTMSMeta(l.id);
     return (l.customer||'').toLowerCase().includes(lSrch)||(m.bookingNum||'').toLowerCase().includes(lSrch)||(l.carrier||'').toLowerCase().includes(lSrch)||(l.pickupZip||'').includes(lSrch)||(l.deliveryZip||'').includes(lSrch)||(m.bolNum||'').toLowerCase().includes(lSrch);
   });
-  const filterBar=`<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:14px">
-    <div style="display:flex;gap:4px;flex-wrap:wrap;flex:1">
-      ${['all',...TMS_STATUSES].map(s=>{const cnt=s==='all'?loads.length:loads.filter(l=>l.status===s).length;return`<button onclick="S.tmsLoadsFilt='${s}';renderTMS()" style="padding:4px 12px;border-radius:99px;border:1.5px solid ${s==='all'?'#1a2e4a':tmsStatusColor(s)};font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;background:${lFilt===s?(s==='all'?'#1a2e4a':tmsStatusColor(s)):'transparent'};color:${lFilt===s?'#fff':(s==='all'?'#1a2e4a':tmsStatusColor(s))}">${s==='all'?'All':s} ${cnt}</button>`;}).join('')}
-    </div>
-    <div style="position:relative;min-width:220px">
-      <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:13px">🔍</span>
-      <input type="text" placeholder="Customer, booking#, carrier, ZIP…" value="${S.tmsLoadsSearch||''}"
-        oninput="S.tmsLoadsSearch=this.value;renderTMS()"
-        style="padding:7px 12px 7px 32px;border-radius:99px;border:1.5px solid var(--gray-200);font-size:12px;width:100%;box-sizing:border-box">
-    </div>
-    <button onclick="exportTMSLoads()" style="padding:7px 14px;border:1px solid var(--gray-200);border-radius:var(--radius);background:transparent;font-size:12px;cursor:pointer;font-family:inherit;color:var(--gray-600)">📥 CSV</button>
-    <button onclick="window.print()" style="padding:7px 14px;border:1px solid var(--gray-200);border-radius:var(--radius);background:transparent;font-size:12px;cursor:pointer;font-family:inherit;color:var(--gray-600)">🖨️ Print</button>
-  </div>`;
-  $('page').innerHTML=tabBar+kpis+filterBar+(filtLoads.length?`<div class="tbl-wrap"><table><thead><tr>
-    <th>Customer / Booking #</th><th>Mode</th><th>Lane</th><th>Carrier</th><th>BOL #</th><th>Revenue</th><th>Profit</th><th>Status</th><th>Actions</th>
-  </tr></thead><tbody>${rows}</tbody></table></div>`;
+  const filterBar='<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:14px">'+
+    '<div style="display:flex;gap:4px;flex-wrap:wrap;flex:1">'+
+    ['all',...TMS_STATUSES].map(s=>{
+      const cnt=s==='all'?loads.length:loads.filter(l=>l.status===s).length;
+      const active=lFilt===s;
+      return '<button onclick="S.tmsLoadsFilt=''+s+'';renderTMS()" style="padding:4px 12px;border-radius:99px;border:1.5px solid '+(s==='all'?'#1a2e4a':tmsStatusColor(s))+';font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;background:'+(active?(s==='all'?'#1a2e4a':tmsStatusColor(s)):'transparent')+';color:'+(active?'#fff':(s==='all'?'#1a2e4a':tmsStatusColor(s)))+'">'+( s==='all'?'All':s)+' '+cnt+'</button>';
+    }).join('')+
+    '</div>'+
+    '<div style="position:relative;min-width:220px"><span style="position:absolute;left:10px;top:50%;transform:translateY(-50%)">🔍</span>'+
+    '<input type="text" placeholder="Customer, booking#, carrier, ZIP…" value="'+(S.tmsLoadsSearch||'')+'" oninput="S.tmsLoadsSearch=this.value;renderTMS()" style="padding:7px 12px 7px 32px;border-radius:99px;border:1.5px solid var(--gray-200);font-size:12px;width:100%;box-sizing:border-box"></div>'+
+    '<button onclick="exportTMSLoads()" style="padding:7px 14px;border:1px solid var(--gray-200);border-radius:var(--radius);background:transparent;font-size:12px;cursor:pointer;font-family:inherit;color:var(--gray-600)">📥 CSV</button>'+
+    '<button onclick="window.print()" style="padding:7px 14px;border:1px solid var(--gray-200);border-radius:var(--radius);background:transparent;font-size:12px;cursor:pointer;font-family:inherit;color:var(--gray-600)">🖨️ Print</button></div>';
+
+  const tableHTML='<div class="tbl-wrap"><table><thead><tr>'+
+    '<th>Customer / BK#</th><th>Mode</th><th>Lane</th><th>Carrier</th><th>BOL #</th><th>Revenue</th><th>Profit</th><th>Status</th><th>Actions</th>'+
+    '</tr></thead><tbody>'+filtLoads.map(buildTMSLoadRow).join('')+'</tbody></table></div>';
+
+  const emptyHTML='<div class="empty"><div class="empty-ico">'+(lSrch||lFilt!=='all'?'🔍':'🚚')+'</div><p>'+(lSrch||lFilt!=='all'?'No loads match — try a different filter':'No loads yet')+'</p></div>';
+  $('page').innerHTML=tabBar+kpis+filterBar+(filtLoads.length?tableHTML:emptyHTML);
 }
+
 
 function deleteTMSLoad(id){
   if(!confirm('Remove this load from TMS? This will revert it to Quoted status.')) return;
