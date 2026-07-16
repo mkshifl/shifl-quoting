@@ -506,16 +506,8 @@ if('caches' in window){
       <div class="acc-sep"></div>
 
       <!-- TRANSLOADING -->
-      <!-- TMS -->
-      <button class="acc-btn" id="acc-tms" onclick="toggleAcc('tms')" style="color:#93c5fd;background:rgba(46,117,182,.12);font-weight:700">🚚 TMS <span style="font-size:10px;background:rgba(46,117,182,.25);padding:1px 7px;border-radius:99px;margin-left:4px">FTL / LTL</span></button>
-      <div class="acc-body" id="body-tms">
-        <button class="sub-link" id="nav-tms-dispatch" onclick="S.tmsTab='dispatch';goTo('tms')">📋 Dispatch board</button>
-        <button class="sub-link" id="nav-tms-loads" onclick="S.tmsTab='loads';goTo('tms')">🚚 All loads</button>
-        <button class="sub-link" id="nav-tms-bol" onclick="S.tmsTab='bol';goTo('tms')">📄 BOL & Docs</button>
-        <button class="sub-link" id="nav-tms-scorecard" onclick="S.tmsTab='scorecard';goTo('tms')">📊 Carrier scorecards</button>
-        <button class="sub-link" id="nav-tms-tools" onclick="S.tmsTab='tools';goTo('tms')">🔧 Tools</button>
-        <button class="sub-link" id="nav-tms-reports" onclick="S.tmsTab='reports';goTo('tms')">📈 Reports</button>
-      </div>
+      <!-- TMS — single button, tabs live inside the page -->
+      <button class="acc-btn" id="nav-tms" onclick="goTo('tms')" style="color:#93c5fd;background:rgba(46,117,182,.12);font-weight:700;border-left:3px solid #2e75b6">🚚 TMS <span id="tms-badge" style="font-size:10px;background:rgba(46,117,182,.3);color:#93c5fd;padding:1px 7px;border-radius:99px;margin-left:4px">FTL/LTL</span></button>
       <button class="acc-btn" id="acc-transload" onclick="toggleAcc('transload')">
         <span style="display:flex;align-items:center;gap:10px">
           <span style="font-size:16px">🔄</span>Transloading
@@ -8223,7 +8215,7 @@ const VIEW_TO_ACC={
   freight:'freight',
   air:'air',
   transload:'transload',
-  tms:'tms',
+  tms:null,
   admin:'admin',reports:'admin',activity:'admin',auditlog:'admin',invoicing:null
 };
 
@@ -8302,6 +8294,7 @@ function updateSubActive(view,subtab){
   else if(view==='auditlog') target='nav-auditlog';
   else if(view==='carriers') target='nav-carriers';
   else if(view==='invoicing') target='nav-invoicing';
+  else if(view==='tms') target='nav-tms';
   if(target&&$(target)) $(target).classList.add('active');
 }
 
@@ -12193,18 +12186,25 @@ function renderTMS(){
   $('topbar-right').innerHTML='';
 
   const tabs=[
-    {id:'dispatch',icon:'ti-layout-kanban',label:'Dispatch board'},
+    {id:'dispatch',icon:'ti-layout-kanban',label:'Dispatch'},
     {id:'loads',icon:'ti-list',label:'All loads'},
     {id:'bol',icon:'ti-file-text',label:'BOL & Docs'},
-    {id:'scorecard',icon:'ti-chart-bar',label:'Carrier scorecards'},
+    {id:'scorecard',icon:'ti-chart-bar',label:'Scorecards'},
     {id:'tools',icon:'ti-calculator',label:'Tools'},
     {id:'reports',icon:'ti-report-analytics',label:'Reports'},
   ];
 
-  const tabBar=`<div style="display:flex;gap:2px;background:var(--gray-100);padding:3px;border-radius:var(--radius);flex-wrap:wrap;margin-bottom:18px">
+  // Load count badge
+  const tmsCnt=getTMSLoads().length;
+  const badge=document.getElementById('tms-badge');
+  if(badge) badge.textContent=tmsCnt>0?tmsCnt+' loads':'FTL/LTL';
+
+  $('topbar-right').innerHTML=`<div style="font-size:12px;font-weight:700;color:var(--steel)">🚚 TMS — FTL / LTL Operations</div>`;
+
+  const tabBar=`<div style="display:flex;gap:0;border-bottom:2px solid var(--gray-100);margin-bottom:20px;overflow-x:auto">
     ${tabs.map(t=>`<button onclick="S.tmsTab='${t.id}';renderTMS()"
-      style="display:flex;align-items:center;gap:6px;padding:7px 14px;border-radius:5px;border:none;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;background:${sub===t.id?'#fff':'none'};color:${sub===t.id?'var(--navy)':'var(--gray-500)'};box-shadow:${sub===t.id?'0 1px 3px rgba(0,0,0,.08)':'none'}">
-      <i class="ti ${t.icon}" style="font-size:14px"></i>${t.label}</button>`).join('')}
+      style="display:flex;align-items:center;gap:6px;padding:11px 18px;border:none;border-bottom:2px solid ${sub===t.id?'var(--steel)':'transparent'};margin-bottom:-2px;font-size:13px;font-weight:${sub===t.id?700:500};cursor:pointer;font-family:inherit;background:transparent;color:${sub===t.id?'var(--steel)':'var(--gray-500)'};white-space:nowrap;transition:color .12s">
+      <i class="ti ${t.icon}" style="font-size:15px"></i>${t.label}</button>`).join('')}
   </div>`;
 
   const kpis=`<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:20px">
