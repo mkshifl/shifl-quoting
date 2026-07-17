@@ -535,6 +535,9 @@ if('caches' in window){
           <button class="sub-link" id="nav-profit-monitor" onclick="renderProfitMonitor()" style="${_currentUser?.role==='super_admin'?'':'display:none'}">💰 Profit monitor</button>
           <button class="sub-link" id="nav-achievements" onclick="renderAchievementsPage()">🏆 Achievements</button>
           <button class="sub-link" id="nav-leaderboard" onclick="renderLeaderboard()">🥇 Leaderboard</button>
+          <button class="sub-link" onclick="generateWeeklyReport()">📊 Weekly report</button>
+          <button class="sub-link" onclick="openDailyDispatchReport()">📋 Daily dispatch</button>
+          <button class="sub-link" onclick="S.view='exec-dash';render()">📈 Exec dashboard</button>
           <button class="sub-link" id="nav-us-map" onclick="renderShiflAchievements()">🗺️ Load map</button>
           <button class="sub-link" id="nav-reports" onclick="goTo('reports')">📈 Reports</button>
           <button class="sub-link" id="nav-activity" onclick="goTo('activity')">📊 Activity log</button>
@@ -1017,7 +1020,9 @@ async function initApp(){
   try{updateActiveBadge();}catch(e){}
   setTimeout(()=>{try{checkAchievements();}catch(e){}},3000);
   try{updateStreak();}catch(e){}
-  setInterval(()=>{try{checkEscalations();}catch(e){}},600000); // check every 10min
+  try{checkQuoteReminders();}catch(e){}
+  setInterval(()=>{try{checkEscalations();}catch(e){}},600000);
+  setInterval(()=>{try{checkQuoteReminders();}catch(e){}},60000); // check every 10min
   try{checkBossMode();}catch(e){}
   try{buildFridayBar();}catch(e){}
   S.view='home';
@@ -1092,6 +1097,7 @@ function render(){
   else if(S.view==='freight')    renderFreight();
   else if(S.view==='transload')  renderTransload();
   else if(S.view==='tms')         renderTMS();
+  else if(S.view==='exec-dash')    {$('topbar-right').innerHTML='';$('page').innerHTML=renderExecutiveDashboard()+renderTeamGoals();}
   else                           renderDash();
 }
 
@@ -12528,6 +12534,8 @@ function renderTMSLoads(tabBar,kpis,loads){
     '<div style="position:relative;min-width:220px"><span style="position:absolute;left:10px;top:50%;transform:translateY(-50%)">🔍</span>'+
     '<input type="text" placeholder="Customer, booking#, carrier, ZIP…" value="'+(S.tmsLoadsSearch||'')+'" oninput="S.tmsLoadsSearch=this.value;renderTMS()" style="padding:7px 12px 7px 32px;border-radius:99px;border:1.5px solid var(--gray-200);font-size:12px;width:100%;box-sizing:border-box"></div>'+
     '<button onclick="exportTMSLoads()" style="padding:7px 14px;border:1px solid var(--gray-200);border-radius:var(--radius);background:transparent;font-size:12px;cursor:pointer;font-family:inherit;color:var(--gray-600)">📥 CSV</button>'+
+    '<button onclick="openBulkAdvance()" style="padding:7px 14px;border:1px solid var(--steel);border-radius:var(--radius);background:transparent;font-size:12px;cursor:pointer;font-family:inherit;color:var(--steel)">☑️ Bulk advance</button>'+
+    '<button onclick="openLoadMerge()" style="padding:7px 14px;border:1px solid var(--gray-200);border-radius:var(--radius);background:transparent;font-size:12px;cursor:pointer;font-family:inherit;color:var(--gray-600)">🔀 Merge</button>'+
     '<button onclick="window.print()" style="padding:7px 14px;border:1px solid var(--gray-200);border-radius:var(--radius);background:transparent;font-size:12px;cursor:pointer;font-family:inherit;color:var(--gray-600)">🖨️ Print</button></div>';
 
   const tableHTML='<div class="tbl-wrap"><table><thead><tr>'+
@@ -13046,7 +13054,12 @@ function renderTMS(){
     {id:'bol',icon:'ti-file-text',label:'BOL & Docs'},
     {id:'invoicing',icon:'ti-receipt',label:'Invoicing'},
     {id:'scorecard',icon:'ti-chart-bar',label:'Scorecards'},
+    {id:'dashboard',icon:'ti-home',label:'Dashboard'},
+    {id:'calendar',icon:'ti-calendar',label:'Calendar'},
+    {id:'map',icon:'ti-map',label:'Map'},
     {id:'vault',icon:'ti-shield-check',label:'Carrier vault'},
+    {id:'escalation',icon:'ti-alert-triangle',label:'Late loads'},
+    {id:'templates',icon:'ti-template',label:'Templates'},
     {id:'capacity',icon:'ti-truck',label:'Capacity'},
     {id:'claims',icon:'ti-alert-triangle',label:'Claims'},
     {id:'tools',icon:'ti-calculator',label:'Tools'},
@@ -13078,6 +13091,10 @@ function renderTMS(){
   else if(sub==='bol')        renderTMSBolDocs(tabBar,loads);
   else if(sub==='invoicing')  renderTMSInvoicing(tabBar,loads);
   else if(sub==='scorecard')  renderTMSScorecard(tabBar,loads);
+  else if(sub==='calendar')   renderTMSCalendar(tabBar);
+  else if(sub==='map')        renderTMSMap(tabBar);
+  else if(sub==='escalation') renderLateEscalation(tabBar);
+  else if(sub==='templates')  renderTMSTemplates(tabBar);
   else if(sub==='vault')      renderCarrierVault(tabBar);
   else if(sub==='capacity')   renderTMSCapacity(tabBar);
   else if(sub==='claims')     renderTMSClaims(tabBar,loads);
@@ -14573,6 +14590,1072 @@ function showPayTermsModal(carrierName){
     <button class="btn" onclick="closeModal()">Cancel</button>
   </div></div>`;
 }
+// ════════════════════════════════════════════════════════════════════
+// TMS LOAD MANAGEMENT FEATURES
+// ════════════════════════════════════════════════════════════════════
+
+// ── LOAD CALENDAR VIEW ────────────────────────────────────────────
+function renderTMSCalendar(tabBar){
+  const loads=getTMSLoads();
+  const now=new Date();
+  const year=now.getFullYear(),month=now.getMonth();
+  const firstDay=new Date(year,month,1).getDay();
+  const daysInMonth=new Date(year,month+1,0).getDate();
+  const monthName=now.toLocaleString('en-US',{month:'long',year:'numeric',timeZone:'America/New_York'});
+
+  const byDate={};
+  loads.forEach(l=>{
+    const meta=getTMSMeta(l.id);
+    const d=meta.pickupAppt?meta.pickupAppt.slice(0,10):l.date;
+    if(d&&d.startsWith(String(year)+'-'+String(month+1).padStart(2,'0'))){
+      if(!byDate[d]) byDate[d]=[];byDate[d].push(l);
+    }
+  });
+
+  let cells='';
+  for(let i=0;i<firstDay;i++) cells+='<div></div>';
+  for(let d=1;d<=daysInMonth;d++){
+    const dateStr=year+'-'+String(month+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
+    const dayLoads=byDate[dateStr]||[];
+    const isToday=new Date().toISOString().slice(0,10)===dateStr;
+    cells+=`<div style="min-height:70px;border:1px solid var(--gray-100);border-radius:6px;padding:4px;background:${isToday?'var(--blue-bg)':'var(--white)'}">
+      <div style="font-size:11px;font-weight:700;color:${isToday?'var(--steel)':'var(--gray-400)'};margin-bottom:4px">${d}</div>
+      ${dayLoads.slice(0,3).map(l=>`<div onclick="openTMSLoadDetail('${l.id}')" style="font-size:10px;font-weight:600;padding:2px 5px;border-radius:3px;margin-bottom:2px;cursor:pointer;background:${tmsStatusColor(l.status)}18;color:${tmsStatusColor(l.status)};overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${escH(l.customer||'—')}</div>`).join('')}
+      ${dayLoads.length>3?`<div style="font-size:10px;color:var(--gray-400)">+${dayLoads.length-3} more</div>`:''}
+    </div>`;
+  }
+
+  $('page').innerHTML=tabBar+`
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+    <div style="font-size:18px;font-weight:800;color:var(--navy)">${monthName}</div>
+    <div style="display:flex;gap:6px">
+      <button class="btn" onclick="S.tmsCalMonth=(S.tmsCalMonth||0)-1;renderTMS()">← Prev</button>
+      <button class="btn" onclick="S.tmsCalMonth=0;renderTMS()">Today</button>
+      <button class="btn" onclick="S.tmsCalMonth=(S.tmsCalMonth||0)+1;renderTMS()">Next →</button>
+    </div>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:6px">
+    ${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d=>`<div style="font-size:11px;font-weight:700;color:var(--gray-400);text-align:center;padding:4px">${d}</div>`).join('')}
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px">${cells}</div>`;
+}
+
+// ── LOAD MAP VIEW ─────────────────────────────────────────────────
+function renderTMSMap(tabBar){
+  const loads=getTMSLoads();
+  const stateCounts={};
+  loads.filter(l=>['Dispatched','In Transit','Out for Delivery'].includes(l.status)).forEach(l=>{
+    const state=zipToState(l.pickupZip||'')||zipToState(l.deliveryZip||'');
+    if(state){stateCounts[state]=(stateCounts[state]||0)+1;}
+  });
+  const maxC=Math.max(...Object.values(stateCounts),1);
+
+  // Simple US state grid (abbreviated)
+  const states=['ME','NH','VT','MA','RI','CT','NY','NJ','PA','DE','MD','DC','VA','WV','NC','SC','GA','FL','AL','MS','TN','KY','OH','IN','MI','WI','IL','MO','AR','LA','TX','OK','KS','NE','SD','ND','MN','IA','MO','AK','HI','MT','WY','CO','NM','AZ','UT','NV','ID','OR','WA','CA'];
+  const uniq=[...new Set(states)];
+
+  $('page').innerHTML=tabBar+`
+  <div style="font-size:14px;font-weight:800;color:var(--navy);margin-bottom:12px">🗺️ Active loads by state</div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">
+    ${uniq.map(s=>{const c=stateCounts[s]||0;const intensity=c?Math.round(c/maxC*9)+1:0;const col=c?`rgba(46,117,182,${intensity*0.1})`:' var(--gray-50)';const border=c?'var(--steel)':'var(--gray-200)';return`<div onclick="${c?`tmsFilter('all')`:'()'}" title="${s}: ${c} loads" style="width:44px;height:38px;border:1.5px solid ${border};border-radius:6px;background:${col};display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:${c?'pointer':'default'}"><div style="font-size:10px;font-weight:700;color:${c?'var(--steel)':'var(--gray-400)'}">${s}</div>${c?`<div style="font-size:11px;font-weight:900;color:var(--steel)">${c}</div>`:''}</div>`;}).join('')}
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px">
+    ${loads.filter(l=>['Dispatched','In Transit','Out for Delivery'].includes(l.status)).map(l=>`<div onclick="openTMSLoadDetail('${l.id}')" class="card" style="cursor:pointer;border-left:3px solid ${tmsStatusColor(l.status)}">
+      <div style="font-size:13px;font-weight:700;color:var(--navy)">${escH(l.customer||'—')}</div>
+      <div style="font-size:11px;color:var(--gray-500)">${escH((l.pickupZip||'?')+' → '+(l.deliveryZip||'?'))}</div>
+      <div style="font-size:11px;font-weight:600;color:${tmsStatusColor(l.status)};margin-top:4px">${l.status}</div>
+    </div>`).join('')||'<div class="empty"><div class="empty-ico">🗺️</div><p>No active loads in transit</p></div>'}
+  </div>`;
+}
+
+function zipToState(zip){
+  const z=parseInt(zip);
+  if(!z) return null;
+  if(z>=35004&&z<=36925) return 'AL';if(z>=99501&&z<=99950) return 'AK';if(z>=85001&&z<=86556) return 'AZ';
+  if(z>=71601&&z<=72959) return 'AR';if(z>=90001&&z<=96162) return 'CA';if(z>=80001&&z<=81658) return 'CO';
+  if(z>=6001&&z<=6928) return 'CT';if(z>=19701&&z<=19980) return 'DE';if(z>=32004&&z<=34997) return 'FL';
+  if(z>=30001&&z<=31999) return 'GA';if(z>=96701&&z<=96898) return 'HI';if(z>=83201&&z<=83876) return 'ID';
+  if(z>=60001&&z<=62999) return 'IL';if(z>=46001&&z<=47997) return 'IN';if(z>=50001&&z<=52809) return 'IA';
+  if(z>=66002&&z<=67954) return 'KS';if(z>=40003&&z<=42788) return 'KY';if(z>=70001&&z<=71497) return 'LA';
+  if(z>=3901&&z<=4992) return 'ME';if(z>=20601&&z<=21930) return 'MD';if(z>=1001&&z<=2791) return 'MA';
+  if(z>=48001&&z<=49971) return 'MI';if(z>=55001&&z<=56763) return 'MN';if(z>=38601&&z<=39776) return 'MS';
+  if(z>=63001&&z<=65899) return 'MO';if(z>=59001&&z<=59937) return 'MT';if(z>=68001&&z<=69367) return 'NE';
+  if(z>=88901&&z<=89883) return 'NV';if(z>=3031&&z<=3897) return 'NH';if(z>=7001&&z<=8989) return 'NJ';
+  if(z>=87001&&z<=88441) return 'NM';if(z>=10001&&z<=14975) return 'NY';if(z>=27006&&z<=28909) return 'NC';
+  if(z>=58001&&z<=58856) return 'ND';if(z>=43001&&z<=45999) return 'OH';if(z>=73001&&z<=74966) return 'OK';
+  if(z>=97001&&z<=97920) return 'OR';if(z>=15001&&z<=19640) return 'PA';if(z>=2801&&z<=2940) return 'RI';
+  if(z>=29001&&z<=29948) return 'SC';if(z>=57001&&z<=57799) return 'SD';if(z>=37010&&z<=38589) return 'TN';
+  if(z>=75001&&z<=79999) return 'TX';if(z>=84001&&z<=84784) return 'UT';if(z>=5001&&z<=5907) return 'VT';
+  if(z>=20101&&z<=24658) return 'VA';if(z>=98001&&z<=99403) return 'WA';if(z>=24701&&z<=26886) return 'WV';
+  if(z>=53001&&z<=54990) return 'WI';if(z>=82001&&z<=83128) return 'WY';
+  return null;
+}
+
+// ── LOAD PRIORITY RANKING ─────────────────────────────────────────
+function getPriorityOrder(){return JSON.parse(localStorage.getItem('tms_priority_order')||'[]');}
+function savePriorityOrder(arr){localStorage.setItem('tms_priority_order',JSON.stringify(arr));}
+function getLoadPriority(id){const o=getPriorityOrder();const i=o.indexOf(id);return i>=0?i:9999;}
+function movePriorityUp(id){const o=getPriorityOrder();const allIds=getTMSLoads().map(l=>l.id);const list=allIds.filter(i=>!o.includes(i));const full=[...o,...list];const i=full.indexOf(id);if(i>0){[full[i-1],full[i]]=[full[i],full[i-1]];savePriorityOrder(full);}renderTMS();}
+function movePriorityDown(id){const o=getPriorityOrder();const allIds=getTMSLoads().map(l=>l.id);const list=allIds.filter(i=>!o.includes(i));const full=[...o,...list];const i=full.indexOf(id);if(i<full.length-1){[full[i],full[i+1]]=[full[i+1],full[i]];savePriorityOrder(full);}renderTMS();}
+
+// ── LOAD TEMPLATE LIBRARY ─────────────────────────────────────────
+function getLoadTemplates(){return JSON.parse(localStorage.getItem('load_templates')||'[]');}
+function saveLoadTemplate(tmpl){const t=getLoadTemplates();t.unshift({...tmpl,id:'tmpl-'+Date.now(),createdAt:localDateStr()});localStorage.setItem('load_templates',JSON.stringify(t));return t;}
+function deleteLoadTemplate(id){const t=getLoadTemplates().filter(t=>t.id!==id);localStorage.setItem('load_templates',JSON.stringify(t));renderTMSTemplates();}
+function openSaveTemplate(loadId){
+  const q=(window._fqHistory||[]).find(q=>q.id===loadId);if(!q) return;
+  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal" style="max-width:380px">
+    <div class="modal-title">💾 Save as template</div>
+    <div class="field"><label>Template name</label><input type="text" id="tmpl-name" value="${escH((q.fqMode||'FTL')+' '+q.pickupZip+' → '+q.deliveryZip)}" placeholder="e.g. Weekly Newark to Chicago FTL"></div>
+    <div class="modal-foot"><button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn blue" onclick="saveLoadTemplate({name:$('tmpl-name').value,fqMode:'${q.fqMode}',pickupZip:'${q.pickupZip}',deliveryZip:'${q.deliveryZip}',carrier:'${escH(q.carrier||'')}',customerRate:${q.customerRate||0},carrierRate:${q.carrierRate||0},commodity:'${escH(q.commodity||'')}',weight:'${q.weight||''}'});closeModal();showToast('Template saved','success',2000)">Save</button>
+    </div>
+  </div></div>`;
+}
+function renderTMSTemplates(tabBar){
+  const templates=getLoadTemplates();
+  if(tabBar) $('page').innerHTML=tabBar;
+  const section=`<div style="font-size:16px;font-weight:800;color:var(--navy);margin-bottom:12px">📋 Load templates</div>
+  <button onclick="openAddTemplate()" class="btn blue" style="margin-bottom:14px">+ New template</button>
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px">
+    ${templates.length?templates.map(t=>`<div class="card">
+      <div style="font-size:14px;font-weight:800;color:var(--navy);margin-bottom:6px">${escH(t.name||'Template')}</div>
+      <div style="font-size:12px;color:var(--gray-500);margin-bottom:4px">${t.fqMode||'FTL'} · ${escH(t.pickupZip||'?')} → ${escH(t.deliveryZip||'?')}</div>
+      <div style="font-size:12px;color:var(--gray-500);margin-bottom:10px">Carrier: ${escH(t.carrier||'—')} · Rev: ${fmtD(t.customerRate||0)}</div>
+      <div style="display:flex;gap:6px">
+        <button onclick="applyTemplate('${t.id}')" class="btn blue" style="flex:1;font-size:12px">Use template</button>
+        <button onclick="deleteLoadTemplate('${t.id}')" style="padding:6px 10px;border:1px solid #fca5a5;border-radius:var(--radius);background:transparent;cursor:pointer;color:var(--red)">🗑️</button>
+      </div>
+    </div>`).join(''):'<div class="empty"><div class="empty-ico">📋</div><p>No templates yet — save a load as a template to reuse it quickly</p></div>'}
+  </div>`;
+  if(tabBar) $('page').innerHTML+= section;
+  else{const c=document.createElement('div');c.innerHTML=section;$('page').appendChild(c);}
+}
+function openAddTemplate(){
+  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-title">+ New load template</div>
+    <div class="field"><label>Template name *</label><input type="text" id="ta-name" placeholder="e.g. Weekly Chicago FTL"></div>
+    <div class="g2"><div class="field"><label>Mode</label><select id="ta-mode" style="width:100%;padding:8px;border:1px solid var(--gray-200);border-radius:var(--radius)"><option>FTL</option><option>LTL</option></select></div><div class="field"><label>Carrier</label><input type="text" id="ta-carrier" placeholder="Default carrier"></div></div>
+    <div class="g2"><div class="field"><label>Pickup ZIP</label><input type="text" id="ta-pu" placeholder="07102"></div><div class="field"><label>Delivery ZIP</label><input type="text" id="ta-del" placeholder="60601"></div></div>
+    <div class="g2"><div class="field"><label>Customer rate</label><input type="number" id="ta-crev" placeholder="0"></div><div class="field"><label>Carrier rate</label><input type="number" id="ta-cost" placeholder="0"></div></div>
+    <div class="field"><label>Commodity</label><input type="text" id="ta-com" placeholder="General freight"></div>
+    <div class="modal-foot"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn blue" onclick="saveLoadTemplate({name:($('ta-name')||{}).value,fqMode:($('ta-mode')||{}).value,carrier:($('ta-carrier')||{}).value,pickupZip:($('ta-pu')||{}).value,deliveryZip:($('ta-del')||{}).value,customerRate:parseFloat(($('ta-crev')||{}).value)||0,carrierRate:parseFloat(($('ta-cost')||{}).value)||0,commodity:($('ta-com')||{}).value});closeModal();showToast('Template saved','success');renderTMS()">Save</button></div>
+  </div></div>`;
+}
+function applyTemplate(id){
+  const t=getLoadTemplates().find(t=>t.id===id);if(!t) return;
+  Object.assign(S.fq,{fqMode:t.fqMode,pickupZip:t.pickupZip,deliveryZip:t.deliveryZip,carrier:t.carrier,customerRate:t.customerRate,carrierRate:t.carrierRate,commodity:t.commodity,weight:t.weight||''});
+  S.view='freight';S.fqTab='builder';render();
+  showToast('Template applied — review and save','success',3000);
+}
+
+// ── DAILY DISPATCH REPORT ─────────────────────────────────────────
+function openDailyDispatchReport(){
+  const loads=getTMSLoads();
+  const today=localDateStr();
+  const dispatching=loads.filter(l=>l.status==='Booked');
+  const active=loads.filter(l=>['Dispatched','In Transit','Out for Delivery'].includes(l.status));
+  const delivering=loads.filter(l=>{const m=getTMSMeta(l.id);return m.deliveryAppt&&m.deliveryAppt.startsWith(today);});
+  const overdue=getOverdueLoads();
+  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal" style="max-width:560px;max-height:85vh;overflow-y:auto">
+    <div class="modal-title">📋 Daily dispatch report — ${today}</div>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px">
+      <div class="kpi"><div class="kpi-lbl">To dispatch</div><div class="kpi-val" style="color:var(--amber)">${dispatching.length}</div></div>
+      <div class="kpi"><div class="kpi-lbl">Active loads</div><div class="kpi-val">${active.length}</div></div>
+      <div class="kpi"><div class="kpi-lbl">Delivering today</div><div class="kpi-val" style="color:var(--green)">${delivering.length}</div></div>
+      <div class="kpi"><div class="kpi-lbl">Overdue</div><div class="kpi-val" style="color:${overdue.length?'var(--red)':'var(--green)'}">${overdue.length}</div></div>
+    </div>
+    ${dispatching.length?`<div style="font-size:12px;font-weight:700;color:var(--gray-400);text-transform:uppercase;margin-bottom:8px">Needs dispatch today</div>
+    ${dispatching.map(l=>`<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--gray-100)">
+      <div><div style="font-size:13px;font-weight:700;color:var(--navy)">${escH(l.customer||'—')}</div>
+      <div style="font-size:11px;color:var(--gray-500)">${escH((l.pickupZip||'?')+'→'+(l.deliveryZip||'?'))} · ${l.fqMode} · ${escH(l.carrier||'Unassigned')}</div></div>
+      <span style="font-size:11px;font-weight:700;color:var(--amber)">${getTMSMeta(l.id).bookingNum||''}</span>
+    </div>`).join('')}`:''}
+    ${overdue.length?`<div style="font-size:12px;font-weight:700;color:var(--red);text-transform:uppercase;margin:12px 0 8px">⚠️ Overdue loads</div>
+    ${overdue.map(l=>`<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--gray-100)">
+      <div><div style="font-size:13px;font-weight:700;color:var(--navy)">${escH(l.customer||'—')}</div>
+      <div style="font-size:11px;color:var(--red)">ETA was ${getTMSMeta(l.id).eta||'unknown'}</div></div>
+      <span style="font-size:11px;font-weight:700;color:${tmsStatusColor(l.status)}">${l.status}</span>
+    </div>`).join('')}`:''}
+    <div class="modal-foot"><button class="btn" onclick="closeModal()">Close</button><button class="btn blue" onclick="closeModal();S.tmsTab='dispatch';renderTMS()">Go to dispatch board</button></div>
+  </div></div>`;
+}
+
+// ── BULK LOAD ADVANCE ─────────────────────────────────────────────
+function openBulkAdvance(){
+  const loads=getTMSLoads().filter(l=>nextTMSStatus(l.status));
+  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal" style="max-width:540px">
+    <div class="modal-title">☑️ Bulk status advance</div>
+    <div style="font-size:13px;color:var(--gray-500);margin-bottom:12px">Select loads to move to their next status</div>
+    <div style="max-height:300px;overflow-y:auto;margin-bottom:14px">
+      ${loads.map(l=>`<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--gray-100)">
+        <input type="checkbox" data-lid="${l.id}" class="bulk-adv-cb">
+        <div style="flex:1"><div style="font-size:13px;font-weight:700;color:var(--navy)">${escH(l.customer||'—')}</div>
+        <div style="font-size:11px;color:var(--gray-500)">${l.status} → <strong style="color:${tmsStatusColor(nextTMSStatus(l.status))}">${nextTMSStatus(l.status)}</strong></div></div>
+        <span style="font-size:10px;color:var(--gray-400)">${getTMSMeta(l.id).bookingNum||''}</span>
+      </div>`).join('')}
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:14px">
+      <button onclick="document.querySelectorAll('.bulk-adv-cb').forEach(c=>c.checked=true)" class="btn" style="font-size:12px">Select all</button>
+      <button onclick="document.querySelectorAll('.bulk-adv-cb').forEach(c=>c.checked=false)" class="btn" style="font-size:12px">Clear</button>
+    </div>
+    <div class="modal-foot"><button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn blue" onclick="executeBulkAdvance()">→ Advance selected</button>
+    </div>
+  </div></div>`;
+}
+async function executeBulkAdvance(){
+  const cbs=[...document.querySelectorAll('.bulk-adv-cb:checked')];
+  let count=0;
+  for(const cb of cbs){
+    const id=cb.dataset.lid;
+    const q=(window._fqHistory||[]).find(q=>q.id===id);
+    const next=nextTMSStatus(q?.status||'');
+    if(q&&next){await advanceTMSLoad(id,next);count++;}
+  }
+  closeModal();showToast(`✅ ${count} loads advanced`,'success',3000);
+}
+
+// ── LOAD ARCHIVE ──────────────────────────────────────────────────
+function archiveOldLoads(){
+  const cutoff=new Date(Date.now()-90*864e5).toISOString().slice(0,10);
+  const toArchive=(window._fqHistory||[]).filter(l=>['Delivered','Invoiced','Paid'].includes(l.status)&&l.date&&l.date<cutoff);
+  toArchive.forEach(l=>{saveTMSMeta(l.id,{archived:true});});
+  showToast(`📦 ${toArchive.length} loads archived`,'success',2000);renderTMS();
+}
+function getTMSLoadsActive(){return getTMSLoads().filter(l=>!getTMSMeta(l.id).archived);}
+function getTMSLoadsArchived(){return getTMSLoads().filter(l=>getTMSMeta(l.id).archived);}
+
+// ── LATE ESCALATION DASHBOARD ─────────────────────────────────────
+function renderLateEscalation(tabBar){
+  const loads=getTMSLoads();
+  const late=loads.filter(l=>{
+    const m=getTMSMeta(l.id);if(!m.eta||['Delivered','Paid','Invoiced'].includes(l.status)) return false;
+    return new Date(m.eta)<new Date();
+  }).sort((a,b)=>{const ma=getTMSMeta(a.id),mb=getTMSMeta(b.id);return new Date(ma.eta)-new Date(mb.eta);});
+  $('page').innerHTML=tabBar+`
+  <div style="font-size:16px;font-weight:800;color:var(--red);margin-bottom:12px">⚠️ Late load escalation (${late.length})</div>
+  ${late.length?late.map(l=>{const m=getTMSMeta(l.id);const hrs=Math.round((new Date()-new Date(m.eta))/3600000);return`<div onclick="openTMSLoadDetail('${l.id}')" class="card" style="cursor:pointer;border-left:3px solid var(--red);margin-bottom:8px">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <div><div style="font-size:14px;font-weight:800;color:var(--navy)">${escH(l.customer||'—')}</div>
+      <div style="font-size:12px;color:var(--gray-500)">${escH((l.pickupZip||'?')+'→'+(l.deliveryZip||'?'))} · ${escH(l.carrier||'—')}</div>
+      <div style="font-size:12px;font-weight:700;color:var(--red);margin-top:4px">ETA was ${m.eta} — ${hrs}h overdue</div></div>
+      <div style="text-align:right"><span style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:99px;background:${tmsStatusColor(l.status)}18;color:${tmsStatusColor(l.status)}">${l.status}</span></div>
+    </div>
+  </div>`}).join(''):`<div class="empty"><div class="empty-ico">✅</div><p>No overdue loads — all loads on schedule</p></div>`}`;
+}
+
+// ── CARRIER NO-SHOW TRACKER ───────────────────────────────────────
+function getNoShows(){return JSON.parse(localStorage.getItem('carrier_noshows')||'[]');}
+function logNoShow(loadId,carrier,reason){
+  const ns=getNoShows();
+  ns.unshift({loadId,carrier,reason,date:localDateStr(),ts:new Date().toISOString()});
+  localStorage.setItem('carrier_noshows',JSON.stringify(ns));
+  // Reduce carrier score
+  const scores=JSON.parse(localStorage.getItem('carrier_noshows_count')||'{}');
+  scores[carrier]=(scores[carrier]||0)+1;
+  localStorage.setItem('carrier_noshows_count',JSON.stringify(scores));
+  showToast('No-show logged for '+carrier,'warning');
+}
+function getCarrierNoShows(name){return (JSON.parse(localStorage.getItem('carrier_noshows_count')||'{}')[name]||0);}
+function openNoShowModal(loadId,carrier){
+  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal" style="max-width:380px">
+    <div class="modal-title">🚫 Log carrier no-show</div>
+    <div style="font-size:13px;color:var(--navy);font-weight:700;margin-bottom:12px">${escH(carrier)}</div>
+    <div class="field"><label>Reason</label><select id="ns-reason" style="width:100%;padding:8px;border:1px solid var(--gray-200);border-radius:var(--radius)">
+      <option>Did not show up at pickup</option><option>Cancelled day of</option><option>No communication</option><option>Wrong equipment</option><option>Double brokered</option><option>Other</option>
+    </select></div>
+    <div class="modal-foot"><button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn blue" onclick="logNoShow('${loadId}','${escH(carrier)}',($('ns-reason')||{}).value);closeModal();openLoadRecovery('${loadId}')">Log & find replacement</button>
+    </div>
+  </div></div>`;
+}
+
+// ── LOAD RECOVERY WORKFLOW ────────────────────────────────────────
+function openLoadRecovery(loadId){
+  const q=(window._fqHistory||[]).find(q=>q.id===loadId);if(!q) return;
+  // Find available carriers for this lane
+  const history=(window._fqHistory||[]).filter(l=>l.carrier&&['Delivered','Invoiced','Paid'].includes(l.status)&&l.pickupZip===q.pickupZip&&l.deliveryZip===q.deliveryZip);
+  const carriers=[...new Set(history.map(l=>l.carrier))].filter(c=>c!==q.carrier&&!isBlacklisted(c));
+  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-title">🔄 Load recovery — find replacement carrier</div>
+    <div style="background:#fff5f5;border:1px solid #fca5a5;border-radius:var(--radius);padding:8px 12px;margin-bottom:12px;font-size:12px;color:var(--red);font-weight:600">Original carrier cancelled — ${escH(q.carrier||'Unknown')}</div>
+    <div style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:8px">Carriers who ran this lane before:</div>
+    ${carriers.length?carriers.map(c=>`<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--gray-100)">
+      <div><div style="font-size:13px;font-weight:700">${escH(c)}</div>
+      <div style="font-size:11px;color:var(--gray-400)">${history.filter(l=>l.carrier===c).length} runs · ${getCarrierNoShows(c)} no-shows</div></div>
+      <button onclick="assignCarrierToLoad('${loadId}','${escH(c)}');closeModal();showToast('Carrier reassigned: ${escH(c)}','success')" style="font-size:11px;padding:5px 12px;border:1px solid var(--steel);border-radius:var(--radius);background:transparent;cursor:pointer;color:var(--steel);font-family:inherit">Assign</button>
+    </div>`).join(''):`<div style="color:var(--gray-400);font-size:13px;padding:12px 0">No carrier history on this lane — search your network manually</div>`}
+    <div class="field" style="margin-top:12px"><label>Or assign a different carrier</label>
+      <input type="text" id="recovery-carrier" placeholder="Carrier name">
+    </div>
+    <div class="modal-foot"><button class="btn" onclick="closeModal()">Close</button>
+      <button class="btn blue" onclick="if(($('recovery-carrier')||{}).value){assignCarrierToLoad('${loadId}',($('recovery-carrier')||{}).value);closeModal();}">Assign</button>
+    </div>
+  </div></div>`;
+}
+
+// ── LOAD COMPLETION CHECKLIST ─────────────────────────────────────
+function checkLoadCompletion(id){
+  const meta=getTMSMeta(id);const hasCInv=!!getInvoice(id);const hasCarrI=!!getCarrierInvoice(id);
+  const checks=[
+    {label:'POD uploaded',done:!!meta.podUploaded},
+    {label:'BOL generated',done:!!meta.bolNum},
+    {label:'Customer invoice created',done:hasCInv},
+    {label:'Carrier invoice entered',done:hasCarrI},
+    {label:'Notes complete',done:!!(meta.notes||'').trim()},
+  ];
+  const incomplete=checks.filter(c=>!c.done);
+  if(incomplete.length>0){
+    $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+    <div class="modal" style="max-width:380px">
+      <div class="modal-title">📋 Delivery checklist</div>
+      <div style="font-size:13px;color:var(--gray-500);margin-bottom:12px">Complete these before marking delivered:</div>
+      ${checks.map(c=>`<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--gray-100)">
+        <span style="font-size:16px">${c.done?'✅':'⭕'}</span>
+        <span style="font-size:13px;font-weight:600;color:${c.done?'var(--green)':'var(--navy)'}">${c.label}</span>
+      </div>`).join('')}
+      <div class="modal-foot">
+        <button class="btn" onclick="closeModal()">Go back</button>
+        <button class="btn blue" onclick="closeModal();advanceTMSLoad('${id}','Delivered')">Mark delivered anyway</button>
+      </div>
+    </div></div>`;
+    return false;
+  }
+  return true;
+}
+
+// ── CARRIER REJECTION LOG ─────────────────────────────────────────
+function getRejectionLog(){return JSON.parse(localStorage.getItem('carrier_rejections')||'[]');}
+function logCarrierRejection(loadId,carrier,reason){
+  const rl=getRejectionLog();
+  rl.unshift({loadId,carrier,reason,date:localDateStr(),ts:new Date().toISOString()});
+  if(rl.length>200) rl.pop();
+  localStorage.setItem('carrier_rejections',JSON.stringify(rl));
+}
+function openRejectionModal(loadId){
+  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal" style="max-width:380px">
+    <div class="modal-title">📝 Log carrier rejection</div>
+    <div class="field"><label>Carrier that declined</label><input type="text" id="rej-carrier" placeholder="Carrier name"></div>
+    <div class="field"><label>Reason</label><select id="rej-reason" style="width:100%;padding:8px;border:1px solid var(--gray-200);border-radius:var(--radius)">
+      <option>Rate too low</option><option>No capacity on that date</option><option>Lane not in service area</option><option>Equipment not available</option><option>No response</option><option>Other</option>
+    </select></div>
+    <div class="modal-foot"><button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn blue" onclick="logCarrierRejection('${loadId}',($('rej-carrier')||{}).value,($('rej-reason')||{}).value);closeModal();showToast('Rejection logged','info',2000)">Log</button>
+    </div>
+  </div></div>`;
+}
+
+// ── TIME IN STATUS ────────────────────────────────────────────────
+function timeInStatus(l){
+  const meta=getTMSMeta(l.id);
+  const statusKey=l.status.toLowerCase().replace(/ /g,'_')+'_at';
+  const since=meta[statusKey]||l.date;
+  if(!since) return null;
+  const hrs=Math.round((new Date()-new Date(since))/3600000);
+  const days=Math.floor(hrs/24);
+  return days>0?days+'d '+(hrs%24)+'h':hrs+'h';
+}
+function timeInStatusBadge(l){
+  const t=timeInStatus(l);if(!t) return '';
+  const hrs=Math.round((new Date()-new Date(getTMSMeta(l.id)[l.status.toLowerCase().replace(/ /g,'_')+'_at']||l.date))/3600000);
+  const col=hrs>48?'var(--red)':hrs>24?'var(--amber)':'var(--gray-400)';
+  return `<span style="font-size:10px;color:${col};font-weight:600">⏱ ${t}</span>`;
+}
+
+// ── LOAD RE-ROUTE TOOL ────────────────────────────────────────────
+function openRerouteTool(id){
+  const q=(window._fqHistory||[]).find(q=>q.id===id);if(!q) return;
+  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-title">🔀 Re-route load</div>
+    <div style="background:#fffbeb;border:1px solid #fbbf24;border-radius:var(--radius);padding:8px 12px;margin-bottom:12px;font-size:12px;color:#92400e">⚠️ Original: ${escH(q.pickupZip||'?')} → ${escH(q.deliveryZip||'?')}</div>
+    <div class="g2">
+      <div class="field"><label>New delivery ZIP</label><input type="text" id="rr-zip" value="${escH(q.deliveryZip||'')}" placeholder="New ZIP"></div>
+      <div class="field"><label>New delivery address</label><input type="text" id="rr-addr" placeholder="Street address"></div>
+    </div>
+    <div class="field"><label>Re-route reason</label><input type="text" id="rr-reason" placeholder="e.g. Customer warehouse change"></div>
+    <div class="modal-foot"><button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn blue" onclick="applyReroute('${id}')">Apply re-route</button>
+    </div>
+  </div></div>`;
+}
+function applyReroute(id){
+  const idx=(window._fqHistory||[]).findIndex(q=>q.id===id);if(idx<0) return;
+  const newZip=($('rr-zip')||{}).value?.trim();
+  const reason=($('rr-reason')||{}).value?.trim();
+  if(newZip) window._fqHistory[idx].deliveryZip=newZip;
+  try{localStorage.setItem('fq_history',JSON.stringify(window._fqHistory));}catch(e){}
+  saveTMSMeta(id,{rerouteReason:reason,rerouteDate:localDateStr(),originalDeliveryZip:window._fqHistory[idx].deliveryZip});
+  closeModal();showToast('Load re-routed — update BOL','warning',3000);
+  openTMSLoadDetail(id);
+}
+
+// ── LOAD MERGE ────────────────────────────────────────────────────
+function openLoadMerge(){
+  const bookedLoads=getTMSLoads().filter(l=>l.status==='Booked');
+  if(bookedLoads.length<2){showToast('Need at least 2 booked loads to merge','info');return;}
+  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-title">🔀 Merge loads into one FTL</div>
+    <div style="font-size:13px;color:var(--gray-500);margin-bottom:12px">Select 2 loads on the same lane to consolidate</div>
+    <div style="max-height:260px;overflow-y:auto;margin-bottom:14px">
+      ${bookedLoads.map(l=>`<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--gray-100)">
+        <input type="checkbox" data-mid="${l.id}" class="merge-cb">
+        <div><div style="font-size:13px;font-weight:700;color:var(--navy)">${escH(l.customer||'—')} — ${l.fqMode}</div>
+        <div style="font-size:11px;color:var(--gray-500)">${escH((l.pickupZip||'?')+'→'+(l.deliveryZip||'?'))} · ${fmtD(l.customerRate||0)}</div></div>
+      </div>`).join('')}
+    </div>
+    <div class="modal-foot"><button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn blue" onclick="executeMerge()">Merge selected</button>
+    </div>
+  </div></div>`;
+}
+function executeMerge(){
+  const ids=[...document.querySelectorAll('.merge-cb:checked')].map(c=>c.dataset.mid);
+  if(ids.length<2){showToast('Select at least 2 loads','info');return;}
+  const loads=ids.map(id=>(window._fqHistory||[]).find(q=>q.id===id)).filter(Boolean);
+  const totalRev=loads.reduce((s,l)=>s+(l.customerRate||0),0);
+  const avgCost=loads.reduce((s,l)=>s+(l.carrierRate||0),0)/loads.length;
+  const merged={...loads[0],id:'fq-merge-'+Date.now(),customer:loads.map(l=>l.customer).join(' + '),customerRate:totalRev,carrierRate:avgCost,status:'Booked',date:localDateStr(),isMerged:true,mergedFrom:ids};
+  window._fqHistory=(window._fqHistory||[]);window._fqHistory.unshift(merged);
+  // Archive originals
+  ids.forEach(id=>saveTMSMeta(id,{archived:true,mergedInto:merged.id}));
+  try{localStorage.setItem('fq_history',JSON.stringify(window._fqHistory));}catch(e){}
+  closeModal();showToast('Loads merged — new combined load created','success',3000);renderTMS();
+}
+
+// ── ACCESSORIAL AUDIT LOG ─────────────────────────────────────────
+function logAccessorialChange(loadId,action,item,amount,user){
+  const log=JSON.parse(localStorage.getItem('acc_log_'+loadId)||'[]');
+  log.unshift({action,item,amount,user:user||(_currentUser?.name||'System'),ts:new Date().toISOString()});
+  localStorage.setItem('acc_log_'+loadId,JSON.stringify(log));
+}
+function getAccessorialLog(loadId){return JSON.parse(localStorage.getItem('acc_log_'+loadId)||'[]');}
+
+// ── LOAD DEPENDENCY LINKING ───────────────────────────────────────
+function getLoadDeps(id){return JSON.parse(localStorage.getItem('load_deps_'+id)||'[]');}
+function addLoadDep(id,depId,note){const deps=getLoadDeps(id);if(!deps.find(d=>d.id===depId)){deps.push({id:depId,note:note||'Must complete first',addedAt:localDateStr()});localStorage.setItem('load_deps_'+id,JSON.stringify(deps));}}
+
+// ── LOAD BROKER MARGIN DISPLAY ────────────────────────────────────
+let _showBrokerMargin=false;
+function toggleBrokerMargin(){_showBrokerMargin=!_showBrokerMargin;renderTMS();}
+
+// ── DELIVERY WINDOW TRACKER ───────────────────────────────────────
+function deliveryWindowBadge(l){
+  const m=getTMSMeta(l.id);if(!m.deliveryAppt) return '';
+  const appt=new Date(m.deliveryAppt);const now=new Date();
+  const diff=(appt-now)/3600000;
+  if(diff<0&&!['Delivered','Invoiced','Paid'].includes(l.status)) return '<span style="font-size:10px;background:#fee2e2;color:var(--red);padding:1px 7px;border-radius:99px;font-weight:700">⚠️ Window passed</span>';
+  if(diff<4) return '<span style="font-size:10px;background:#fef3c7;color:#d97706;padding:1px 7px;border-radius:99px;font-weight:700">🕐 Delivering soon</span>';
+  return '';
+}
+
+// ── LOAD BOARD VISIBILITY ─────────────────────────────────────────
+function getPublicLoads(){return getTMSLoads().filter(l=>getTMSMeta(l.id).isPublic);}
+function toggleLoadPublic(id){const m=getTMSMeta(id);saveTMSMeta(id,{isPublic:!m.isPublic});showToast(m.isPublic?'Removed from load board':'Posted to load board','info',2000);}
+
+
+// ════════════════════════════════════════════════════════════════════
+// QUOTING + CARRIER + TEAM + AI + ANALYTICS FEATURES
+// ════════════════════════════════════════════════════════════════════
+
+// ── SPOT VS CONTRACT TOGGLE ───────────────────────────────────────
+function getSpotContractBadge(q){
+  if(!q.rateType) return '';
+  const col=q.rateType==='contract'?'#0369a1':'#d97706';
+  return `<span style="font-size:10px;background:${col}12;color:${col};padding:1px 7px;border-radius:99px;font-weight:700">${q.rateType==='contract'?'📄 Contract':'⚡ Spot'}</span>`;
+}
+
+// ── INSTANT RATE LOOKUP ───────────────────────────────────────────
+function getInstantRate(pickupZip,deliveryZip,mode){
+  const history=[...(window._fqHistory||[]),...(S.quotes||[])].filter(q=>q.pickupZip===pickupZip&&q.deliveryZip===deliveryZip&&(q.fqMode===mode||q.type===mode)&&q.customerRate>0);
+  if(!history.length) return null;
+  const recent=history.slice(-10);
+  const avg=recent.reduce((s,q)=>s+(q.customerRate||0),0)/recent.length;
+  const min=Math.min(...recent.map(q=>q.customerRate||0));
+  const max=Math.max(...recent.map(q=>q.customerRate||0));
+  return{avg:Math.round(avg),min:Math.round(min),max:Math.round(max),count:recent.length};
+}
+function showInstantRate(pickupZip,deliveryZip,mode){
+  const r=getInstantRate(pickupZip,deliveryZip,mode);
+  if(!r) return;
+  const el=document.getElementById('instant-rate-hint');
+  if(el) el.innerHTML=`<div style="font-size:11px;color:var(--gray-500);padding:4px 8px;background:var(--blue-bg);border-radius:var(--radius);margin-top:4px">📊 Your history: avg ${fmtD(r.avg)} · range ${fmtD(r.min)}–${fmtD(r.max)} · ${r.count} loads</div>`;
+}
+
+// ── QUOTE CONFIDENCE SCORE ────────────────────────────────────────
+function calcQuoteConfidence(q){
+  let score=50;
+  const history=[...(window._fqHistory||[])].filter(h=>h.pickupZip===q.pickupZip&&h.deliveryZip===q.deliveryZip&&h.fqMode===q.fqMode&&['Booked','Delivered','Invoiced','Paid'].includes(h.status));
+  if(history.length>5) score+=20; else if(history.length>0) score+=10;
+  const p=getShipmentProfit(q,'freight');
+  if(p.margin>=.15) score+=20; else if(p.margin>=.1) score+=10; else if(p.margin<.05) score-=20;
+  if(q.carrier&&!isBlacklisted(q.carrier)) score+=10;
+  return Math.max(0,Math.min(100,score));
+}
+function confidenceBadge(q){
+  const s=calcQuoteConfidence(q);
+  const col=s>=75?'var(--green)':s>=50?'var(--amber)':'var(--red)';
+  const label=s>=75?'High confidence':s>=50?'Medium':'Low confidence';
+  return`<span style="font-size:10px;background:${col}12;color:${col};padding:1px 7px;border-radius:99px;font-weight:700">🎯 ${label} (${s}%)</span>`;
+}
+
+// ── RATE BAND ALERT ───────────────────────────────────────────────
+function rateBandAlert(q){
+  const r=getInstantRate(q.pickupZip,q.deliveryZip,q.fqMode);
+  if(!r||!q.customerRate) return '';
+  const diff=(q.customerRate-r.avg)/r.avg;
+  if(diff>0.3) return '<span style="font-size:10px;background:#fef3c7;color:#d97706;padding:1px 7px;border-radius:99px;font-weight:700">📈 30%+ above avg</span>';
+  if(diff<-0.2) return '<span style="font-size:10px;background:#fee2e2;color:var(--red);padding:1px 7px;border-radius:99px;font-weight:700">📉 Below avg — check margin</span>';
+  return '';
+}
+
+// ── MINIMUM MARGIN ENFORCER ───────────────────────────────────────
+function getMinMargin(){return parseFloat(localStorage.getItem('min_margin_pct')||'5');}
+function setMinMargin(pct){localStorage.setItem('min_margin_pct',pct);}
+function checkMinMargin(q){
+  const min=getMinMargin();const p=getShipmentProfit(q,'freight');
+  if(p.margin*100<min){
+    showToast(`⚠️ Margin ${pct(p.margin)} is below minimum ${min}% — manager override required`,'warning',5000);
+    return false;
+  }
+  return true;
+}
+
+// ── QUOTE ASSIGNMENT ──────────────────────────────────────────────
+function getQuoteAssignee(id){return localStorage.getItem('qassign_'+id)||'';}
+function setQuoteAssignee(id,name){localStorage.setItem('qassign_'+id,name);}
+function openAssignQuote(type,id){
+  const agents=getAgentWinRates?Object.keys(getAgentWinRates()):[];
+  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal" style="max-width:360px">
+    <div class="modal-title">👤 Assign quote</div>
+    <div class="field"><label>Assign to</label>
+      <select id="assign-agent" style="width:100%;padding:8px;border:1px solid var(--gray-200);border-radius:var(--radius)">
+        <option value="">Unassigned</option>
+        ${agents.map(a=>`<option ${getQuoteAssignee(id)===a?'selected':''}>${escH(a)}</option>`).join('')}
+      </select>
+    </div>
+    <div class="modal-foot"><button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn blue" onclick="setQuoteAssignee('${id}',($('assign-agent')||{}).value);closeModal();showToast('Quote assigned','success',2000)">Assign</button>
+    </div>
+  </div></div>`;
+}
+
+// ── QUOTE REMINDER SCHEDULER ──────────────────────────────────────
+function getQuoteReminders(){return JSON.parse(localStorage.getItem('quote_reminders')||'[]');}
+function addQuoteReminder(id,date,note){
+  const r=getQuoteReminders();
+  r.push({id:'rem-'+Date.now(),quoteId:id,date,note,createdAt:localDateStr()});
+  localStorage.setItem('quote_reminders',JSON.stringify(r));
+}
+function checkQuoteReminders(){
+  const today=localDateStr();
+  const due=getQuoteReminders().filter(r=>r.date===today&&!r.shown);
+  due.forEach(r=>{r.shown=true;showToast('🔔 Reminder: '+escH(r.note||'Follow up on quote'),'info',8000);});
+  if(due.length) localStorage.setItem('quote_reminders',JSON.stringify(getQuoteReminders().map(r=>({...r,shown:r.date===today?true:r.shown}))));
+}
+function openReminderModal(quoteId){
+  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal" style="max-width:360px">
+    <div class="modal-title">🔔 Set follow-up reminder</div>
+    <div class="field"><label>Remind me on</label><input type="date" id="rem-date" value="${localDateStr()}"></div>
+    <div class="field"><label>Note</label><input type="text" id="rem-note" placeholder="e.g. Follow up with customer on FTL quote"></div>
+    <div class="modal-foot"><button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn blue" onclick="addQuoteReminder('${quoteId}',($('rem-date')||{}).value,($('rem-note')||{}).value);closeModal();showToast('Reminder set','success',2000)">Save reminder</button>
+    </div>
+  </div></div>`;
+}
+
+// ── NEGOTIATION MODE ──────────────────────────────────────────────
+function getNegotiationLog(id){return JSON.parse(localStorage.getItem('neg_'+id)||'[]');}
+function addNegotiationEntry(id,party,amount,note){
+  const log=getNegotiationLog(id);
+  log.push({party,amount,note,ts:new Date().toISOString()});
+  localStorage.setItem('neg_'+id,JSON.stringify(log));
+}
+function openNegotiationModal(id){
+  const log=getNegotiationLog(id);
+  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-title">🤝 Negotiation log</div>
+    <div style="max-height:200px;overflow-y:auto;margin-bottom:12px">
+      ${log.length?log.map(e=>`<div style="padding:8px 0;border-bottom:1px solid var(--gray-100)">
+        <div style="display:flex;justify-content:space-between"><span style="font-size:12px;font-weight:700;color:${e.party==='Customer'?'var(--steel)':'var(--green)'}">${e.party}</span><span style="font-size:11px;color:var(--gray-400)">${new Date(e.ts).toLocaleDateString()}</span></div>
+        <div style="font-size:13px;font-weight:800;color:var(--navy)">${fmtD(e.amount)}</div>
+        ${e.note?`<div style="font-size:11px;color:var(--gray-500)">${escH(e.note)}</div>`:''}
+      </div>`).join(''):'<div style="color:var(--gray-400);font-size:12px;padding:8px">No negotiation history yet</div>'}
+    </div>
+    <div class="g3">
+      <div class="field"><label>Party</label><select id="neg-party" style="width:100%;padding:8px;border:1px solid var(--gray-200);border-radius:var(--radius)"><option>Customer</option><option>Us (counter)</option></select></div>
+      <div class="field"><label>Offered rate</label><input type="number" id="neg-amt" placeholder="0"></div>
+      <div class="field"><label>Note</label><input type="text" id="neg-note" placeholder="Optional"></div>
+    </div>
+    <div class="modal-foot"><button class="btn" onclick="closeModal()">Done</button>
+      <button class="btn blue" onclick="addNegotiationEntry('${id}',($('neg-party')||{}).value,parseFloat(($('neg-amt')||{}).value)||0,($('neg-note')||{}).value);openNegotiationModal('${id}')">Add entry</button>
+    </div>
+  </div></div>`;
+}
+
+// ── REBOOKING SHORTCUT ────────────────────────────────────────────
+function rebookLoad(id){
+  const q=[...(S.quotes||[]),...(window._fqHistory||[])].find(q=>q.id===id);if(!q) return;
+  const type=q.fqMode?'freight':'drayage';
+  if(type==='freight'){
+    Object.assign(S.fq,{fqMode:q.fqMode,pickupZip:q.pickupZip,deliveryZip:q.deliveryZip,customer:q.customer,carrier:q.carrier,commodity:q.commodity,weight:q.weight,customerRate:q.customerRate,carrierRate:q.carrierRate});
+    S.view='freight';S.fqTab='builder';render();showToast('Pre-filled from previous load — update rates and save','success',4000);
+  }
+}
+
+// ── AI RATE SUGGESTION ENGINE ─────────────────────────────────────
+async function suggestRate(pickupZip,deliveryZip,mode){
+  const history=[...(window._fqHistory||[])].filter(q=>q.pickupZip===pickupZip&&q.deliveryZip===deliveryZip&&q.fqMode===mode&&q.customerRate>0);
+  const r=getInstantRate(pickupZip,deliveryZip,mode);
+  if(r){
+    const suggestion={customerRate:Math.round(r.avg*1.12),carrierRate:Math.round(r.avg*0.82),confidence:Math.min(95,60+history.length*5)};
+    return suggestion;
+  }
+  // Fallback: estimate based on ZIP distance
+  const miles=estimateMiles(pickupZip,deliveryZip);
+  if(miles){
+    const rpmCust=mode==='FTL'?3.2:2.8;const rpmCarr=mode==='FTL'?2.5:2.1;
+    return{customerRate:Math.round(miles*rpmCust),carrierRate:Math.round(miles*rpmCarr),confidence:40};
+  }
+  return null;
+}
+async function applyRateSuggestion(pickupZip,deliveryZip,mode){
+  const s=await suggestRate(pickupZip,deliveryZip,mode);
+  if(!s){showToast('Not enough data to suggest rates','info');return;}
+  S.fq.customerRate=s.customerRate;S.fq.carrierRate=s.carrierRate;
+  renderFqBuilder&&renderFqBuilder();
+  showToast(`🤖 Rates suggested (${s.confidence}% confidence) — customer ${fmtD(s.customerRate)}, carrier ${fmtD(s.carrierRate)}`,'info',4000);
+}
+
+// ── AI CHAT ASSISTANT ─────────────────────────────────────────────
+function openAIChat(){
+  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-title">🤖 AI Assistant</div>
+    <div id="ai-chat-msgs" style="height:250px;overflow-y:auto;border:1px solid var(--gray-200);border-radius:var(--radius);padding:12px;margin-bottom:12px;background:var(--gray-50)">
+      <div style="font-size:12px;color:var(--gray-400);text-align:center">Ask me anything about your loads, revenue, or carriers</div>
+    </div>
+    <div style="display:flex;gap:8px">
+      <input type="text" id="ai-chat-input" placeholder="e.g. What are my top 5 customers this month?" style="flex:1;padding:9px 12px;border:1px solid var(--gray-200);border-radius:var(--radius);font-size:13px;font-family:inherit" onkeydown="if(event.key==='Enter')sendAIChat()">
+      <button onclick="sendAIChat()" class="btn blue">Ask</button>
+    </div>
+    <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">
+      ${['Top customers this month','Revenue today','Overdue loads','Best margin lane'].map(q=>`<button onclick="$('ai-chat-input').value='${q}';sendAIChat()" style="font-size:11px;padding:3px 10px;border:1px solid var(--gray-200);border-radius:99px;background:transparent;cursor:pointer;font-family:inherit;color:var(--gray-600)">${q}</button>`).join('')}
+    </div>
+    <div class="modal-foot"><button class="btn" onclick="closeModal()">Close</button></div>
+  </div></div>`;
+}
+async function sendAIChat(){
+  const input=$('ai-chat-input');const q=input?.value?.trim();if(!q) return;
+  input.value='';
+  const msgs=$('ai-chat-msgs');
+  if(msgs){msgs.innerHTML+=`<div style="text-align:right;margin-bottom:8px"><span style="background:var(--steel);color:#fff;padding:6px 12px;border-radius:12px 12px 0 12px;font-size:12px;display:inline-block">${escH(q)}</span></div>`;}
+
+  // Build context from data
+  const loads=getTMSLoads();const today=localDateStr();
+  const todayRev=[...(S.quotes||[]),...(window._fqHistory||[])].filter(l=>l.date===today&&['Booked','Delivered','Invoiced','Paid'].includes(l.status)).reduce((s,l)=>s+(l.customerRate||0),0);
+  const context=`Data: ${loads.length} TMS loads, today's revenue: ${fmtD(todayRev)}, overdue loads: ${getOverdueLoads().length}, total quotes: ${(S.quotes||[]).length}`;
+
+  try{
+    const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:500,messages:[{role:'user',content:`You are an AI assistant for Shifl, a freight brokerage TMS. ${context}. Answer this question concisely: ${q}`}]})});
+    const data=await res.json();const text=data.content?.[0]?.text||'Unable to answer';
+    if(msgs){msgs.innerHTML+=`<div style="margin-bottom:8px"><span style="background:#fff;border:1px solid var(--gray-200);padding:6px 12px;border-radius:12px 12px 12px 0;font-size:12px;display:inline-block;color:var(--navy)">${escH(text)}</span></div>`;msgs.scrollTop=msgs.scrollHeight;}
+  }catch(e){if(msgs) msgs.innerHTML+=`<div style="color:var(--red);font-size:12px">Error: ${e.message}</div>`;}
+}
+
+// ── LATE PAYMENT FEE CALCULATOR ───────────────────────────────────
+function calcLateFee(invoiceDate,amount,ratePct=1.5){
+  const days=Math.floor((new Date()-new Date(invoiceDate))/864e5);
+  if(days<=30) return{fee:0,days};
+  const overDays=days-30;const fee=amount*(ratePct/100)*(overDays/30);
+  return{fee:Math.round(fee*100)/100,days,overDays};
+}
+function lateFeeDisplay(invoice){
+  if(!invoice||!invoice.invDate) return '';
+  const l=calcLateFee(invoice.invDate,invoice.grandTotal||0);
+  if(!l.fee) return '';
+  return`<div style="background:#fff5f5;border:1px solid #fca5a5;border-radius:var(--radius);padding:8px 12px;margin-top:8px;font-size:12px"><strong style="color:var(--red)">Late fee: ${fmtD(l.fee)}</strong> · ${l.overDays} days overdue · Total due: ${fmtD((invoice.grandTotal||0)+l.fee)}</div>`;
+}
+
+// ── CARRIER MANAGEMENT FEATURES ───────────────────────────────────
+
+// Carrier rate negotiation log
+function getCarrierNegLog(name){return JSON.parse(localStorage.getItem('carrier_neg_'+name)||'[]');}
+function addCarrierNegEntry(name,lane,rate,note){
+  const log=getCarrierNegLog(name);log.unshift({lane,rate,note,date:localDateStr(),ts:new Date().toISOString()});
+  localStorage.setItem('carrier_neg_'+name,JSON.stringify(log.slice(0,50)));
+}
+
+// Carrier do-not-use dates
+function getCarrierBlockDates(name){return JSON.parse(localStorage.getItem('carrier_block_'+name)||'[]');}
+function addCarrierBlockDate(name,date,reason){
+  const dates=getCarrierBlockDates(name);dates.push({date,reason});
+  localStorage.setItem('carrier_block_'+name,JSON.stringify(dates));
+}
+function isCarrierBlocked(name,date){return getCarrierBlockDates(name).some(d=>d.date===date);}
+
+// Carrier tender acceptance rate
+function getCarrierTenderStats(name){return JSON.parse(localStorage.getItem('carrier_tender_'+name)||'{"tendered":0,"accepted":0}');}
+function recordTenderResponse(name,accepted){
+  const s=getCarrierTenderStats(name);s.tendered++;if(accepted) s.accepted++;
+  localStorage.setItem('carrier_tender_'+name,JSON.stringify(s));
+}
+function tenderAcceptanceBadge(name){
+  const s=getCarrierTenderStats(name);if(!s.tendered) return '';
+  const rate=Math.round(s.accepted/s.tendered*100);
+  const col=rate>=80?'var(--green)':rate>=50?'var(--amber)':'var(--red)';
+  return`<span style="font-size:10px;background:${col}12;color:${col};padding:1px 7px;border-radius:99px;font-weight:700">✉️ ${rate}% acceptance</span>`;
+}
+
+// Carrier age & fleet size
+function getCarrierProfile(name){return JSON.parse(localStorage.getItem('carrier_profile_'+name)||'{}');}
+function saveCarrierProfile(name,data){localStorage.setItem('carrier_profile_'+name,JSON.stringify({...getCarrierProfile(name),...data}));}
+
+// Carrier new authority alert
+function isNewCarrier(name){const p=getCarrierProfile(name);if(!p.authorityDate) return false;const months=(new Date()-new Date(p.authorityDate))/(864e5*30);return months<6;}
+function newCarrierBadge(name){return isNewCarrier(name)?'<span style="font-size:10px;background:#fef3c7;color:#d97706;padding:1px 7px;border-radius:99px;font-weight:700">⚠️ New authority &lt;6mo</span>':'';}
+
+// Carrier safety rating
+function getCarrierSafety(name){return localStorage.getItem('carrier_safety_'+name)||'Unknown';}
+function setCarrierSafety(name,rating){localStorage.setItem('carrier_safety_'+name,rating);}
+function safetyBadge(name){const r=getCarrierSafety(name);const col={'Satisfactory':'var(--green)','Conditional':'var(--amber)','Unsatisfactory':'var(--red)'}[r]||'var(--gray-400)';return r!=='Unknown'?`<span style="font-size:10px;background:${col}12;color:${col};padding:1px 7px;border-radius:99px;font-weight:700">🛡️ ${r}</span>`:'';}
+
+// Carrier DOT number lookup
+async function lookupDOT(dotNumber,targetName){
+  showToast('Looking up DOT '+dotNumber+'...','info',2000);
+  try{
+    const r=await fetch(`https://mobile.fmcsa.dot.gov/qc/services/carriers/${dotNumber}?webKey=your_key`);
+    if(!r.ok) throw new Error('FMCSA lookup unavailable');
+    const data=await r.json();
+    const carrier=data?.content?.carrier;
+    if(carrier) saveCarrierProfile(targetName||carrier.legalName,{dotNumber,legalName:carrier.legalName,state:carrier.phyState,authority:carrier.carrierOperation});
+  }catch(e){
+    showToast('Enter DOT info manually — FMCSA API requires key','info',3000);
+  }
+}
+function openDOTModal(carrierName){
+  const p=getCarrierProfile(carrierName);
+  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-title">🔍 DOT / Authority info — ${escH(carrierName)}</div>
+    <div class="g2">
+      <div class="field"><label>DOT number</label><input type="text" id="dot-num" value="${escH(p.dotNumber||'')}" placeholder="12345678"></div>
+      <div class="field"><label>MC number</label><input type="text" id="mc-num" value="${escH(p.mcNumber||'')}" placeholder="MC-123456"></div>
+    </div>
+    <div class="g2">
+      <div class="field"><label>Authority date</label><input type="date" id="auth-date" value="${p.authorityDate||''}"></div>
+      <div class="field"><label>Safety rating</label><select id="safety-rat" style="width:100%;padding:8px;border:1px solid var(--gray-200);border-radius:var(--radius)"><option ${getCarrierSafety(carrierName)==='Satisfactory'?'selected':''}>Satisfactory</option><option ${getCarrierSafety(carrierName)==='Conditional'?'selected':''}>Conditional</option><option ${getCarrierSafety(carrierName)==='Unsatisfactory'?'selected':''}>Unsatisfactory</option><option>Unknown</option></select></div>
+    </div>
+    <div class="field"><label>Fleet size</label><input type="number" id="fleet-sz" value="${p.fleetSize||''}" placeholder="Number of trucks"></div>
+    <div class="modal-foot"><button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn blue" onclick="saveCarrierProfile('${escH(carrierName)}',{dotNumber:($('dot-num')||{}).value?.trim(),mcNumber:($('mc-num')||{}).value?.trim(),authorityDate:($('auth-date')||{}).value,fleetSize:parseInt(($('fleet-sz')||{}).value)||0});setCarrierSafety('${escH(carrierName)}',($('safety-rat')||{}).value);closeModal();showToast('DOT info saved','success',2000)">Save</button>
+    </div>
+  </div></div>`;
+}
+
+// Carrier incident report
+function getCarrierIncidents(name){return JSON.parse(localStorage.getItem('carrier_incidents_'+name)||'[]');}
+function addCarrierIncident(name,type,description,loadId){
+  const list=getCarrierIncidents(name);
+  list.unshift({type,description,loadId,date:localDateStr(),ts:new Date().toISOString()});
+  localStorage.setItem('carrier_incidents_'+name,JSON.stringify(list.slice(0,50)));
+}
+function incidentBadge(name){const c=getCarrierIncidents(name).length;return c?`<span style="font-size:10px;background:#fee2e2;color:var(--red);padding:1px 7px;border-radius:99px;font-weight:700">⚠️ ${c} incident${c>1?'s':''}</span>`:'';}
+
+// Carrier lane commitment tracker
+function getLaneCommitments(carrier){return JSON.parse(localStorage.getItem('lane_commit_'+carrier)||'[]');}
+function saveLaneCommitment(carrier,pickupZip,deliveryZip,monthlyVol,rate){
+  const list=getLaneCommitments(carrier);
+  const existing=list.findIndex(c=>c.pickupZip===pickupZip&&c.deliveryZip===deliveryZip);
+  const entry={pickupZip,deliveryZip,monthlyVol,rate,updatedAt:localDateStr()};
+  if(existing>=0) list[existing]=entry; else list.push(entry);
+  localStorage.setItem('lane_commit_'+carrier,JSON.stringify(list));
+}
+
+// ── TEAM FEATURES ─────────────────────────────────────────────────
+
+// User availability status
+function getMyStatus(){return localStorage.getItem('my_status_'+(_currentUser?.id||'me'))||'Available';}
+function setMyStatus(status){localStorage.setItem('my_status_'+(_currentUser?.id||'me'),status);}
+const STATUS_OPTS=['Available','In a call','Away','Do not disturb'];
+function statusColor(s){return{'Available':'var(--green)','In a call':'var(--amber)','Away':'var(--gray-400)','Do not disturb':'var(--red)'}[s]||'var(--gray-400)';}
+function statusDot(status){return`<span style="width:8px;height:8px;border-radius:50%;background:${statusColor(status)};display:inline-block;margin-right:4px"></span>`;}
+function openStatusPicker(){
+  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal" style="max-width:280px">
+    <div class="modal-title">Set your status</div>
+    <div style="display:flex;flex-direction:column;gap:8px">
+      ${STATUS_OPTS.map(s=>`<button onclick="setMyStatus('${s}');closeModal();render()" style="display:flex;align-items:center;gap:8px;padding:10px 14px;border:1.5px solid ${getMyStatus()===s?statusColor(s):'var(--gray-200)'};border-radius:var(--radius);background:transparent;cursor:pointer;font-family:inherit;font-size:13px;font-weight:600;color:var(--navy)">${statusDot(s)}${s}</button>`).join('')}
+    </div>
+  </div></div>`;
+}
+
+// Team announcements
+function getAnnouncements(){return JSON.parse(localStorage.getItem('team_announcements')||'[]');}
+function postAnnouncement(text,author){
+  const list=getAnnouncements();list.unshift({id:'ann-'+Date.now(),text,author,ts:new Date().toISOString()});
+  if(list.length>20) list.pop();
+  localStorage.setItem('team_announcements',JSON.stringify(list));
+}
+function dismissAnnouncement(id){
+  const key='ann_dismissed_'+(_currentUser?.id||'me');
+  const d=JSON.parse(localStorage.getItem(key)||'[]');d.push(id);
+  localStorage.setItem(key,JSON.stringify(d));
+}
+function getActiveAnnouncements(){
+  const dismissed=JSON.parse(localStorage.getItem('ann_dismissed_'+(_currentUser?.id||'me'))||'[]');
+  return getAnnouncements().filter(a=>!dismissed.includes(a.id));
+}
+function announcementBanner(){
+  const active=getActiveAnnouncements();if(!active.length) return '';
+  const a=active[0];
+  return`<div style="background:linear-gradient(135deg,var(--navy),var(--steel));color:#fff;padding:10px 16px;border-radius:var(--radius);margin-bottom:12px;display:flex;align-items:center;justify-content:space-between">
+    <div><div style="font-size:11px;opacity:.7">📢 Announcement · ${new Date(a.ts).toLocaleDateString()}</div>
+    <div style="font-size:13px;font-weight:700;margin-top:2px">${escH(a.text)}</div></div>
+    <button onclick="dismissAnnouncement('${a.id}');render()" style="border:none;background:rgba(255,255,255,.2);color:#fff;border-radius:99px;cursor:pointer;padding:4px 10px;font-size:12px">✕</button>
+  </div>`;
+}
+
+// Kudos system
+function getKudos(){return JSON.parse(localStorage.getItem('team_kudos')||'[]');}
+function giveKudos(toUser,loadId,message){
+  const list=getKudos();
+  list.unshift({to:toUser,from:_currentUser?.name||'Team',loadId,message,ts:new Date().toISOString(),id:'kudo-'+Date.now()});
+  localStorage.setItem('team_kudos',JSON.stringify(list.slice(0,100)));
+  showToast('🎉 Kudos given to '+toUser,'success',2000);
+}
+function recentKudos(limit=5){return getKudos().slice(0,limit);}
+
+// Team goals tracker
+function getTeamGoals(){return JSON.parse(localStorage.getItem('team_goals')||JSON.stringify({weeklyRev:0,monthlyRev:0,weeklyLoads:0,monthlyLoads:0}));}
+function saveTeamGoals(goals){localStorage.setItem('team_goals',JSON.stringify(goals));}
+function teamGoalProgress(){
+  const goals=getTeamGoals();const today=localDateStr();
+  const weekAgo=new Date(Date.now()-7*864e5).toISOString().slice(0,10);
+  const monthStart=today.slice(0,7)+'-01';
+  const allLoads=[...(S.quotes||[]),...(window._fqHistory||[])].filter(q=>['Booked','Delivered','Invoiced','Paid'].includes(q.status));
+  const weekLoads=allLoads.filter(q=>q.date>=weekAgo);
+  const monthLoads=allLoads.filter(q=>q.date>=monthStart);
+  return{
+    weeklyRev:{actual:weekLoads.reduce((s,q)=>s+(q.customerRate||0),0),goal:goals.weeklyRev},
+    monthlyRev:{actual:monthLoads.reduce((s,q)=>s+(q.customerRate||0),0),goal:goals.monthlyRev},
+    weeklyLoads:{actual:weekLoads.length,goal:goals.weeklyLoads},
+    monthlyLoads:{actual:monthLoads.length,goal:goals.monthlyLoads},
+  };
+}
+function renderTeamGoals(){
+  const prog=teamGoalProgress();
+  const goals=getTeamGoals();
+  return`<div class="card" style="margin-bottom:14px">
+    <div style="font-size:14px;font-weight:800;color:var(--navy);margin-bottom:12px">🎯 Team goals</div>
+    ${[['Weekly revenue',prog.weeklyRev,'weeklyRev',true],['Monthly revenue',prog.monthlyRev,'monthlyRev',true],['Weekly loads',prog.weeklyLoads,'weeklyLoads',false],['Monthly loads',prog.monthlyLoads,'monthlyLoads',false]].map(([label,p,key,isMoney])=>{
+      const pct2=p.goal>0?Math.min(1,p.actual/p.goal):0;const col=pct2>=1?'var(--green)':pct2>=.7?'var(--amber)':'var(--steel)';
+      return`<div style="margin-bottom:12px">
+        <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+          <span style="font-size:12px;font-weight:600;color:var(--navy)">${label}</span>
+          <span style="font-size:12px;font-weight:700;color:${col}">${isMoney?fmtD(p.actual):p.actual} / ${isMoney?fmtD(p.goal):p.goal}</span>
+        </div>
+        <div style="height:6px;background:var(--gray-100);border-radius:3px;overflow:hidden">
+          <div style="height:6px;width:${Math.round(pct2*100)}%;background:${col};border-radius:3px;transition:width 1s"></div>
+        </div>
+      </div>`;}).join('')}
+    <button onclick="openGoalSetter()" class="btn" style="font-size:12px;width:100%;margin-top:4px">⚙️ Set goals</button>
+  </div>`;
+}
+function openGoalSetter(){
+  const g=getTeamGoals();
+  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal" style="max-width:380px">
+    <div class="modal-title">🎯 Set team goals</div>
+    <div class="g2">
+      <div class="field"><label>Weekly revenue ($)</label><input type="number" id="g-wr" value="${g.weeklyRev||''}"></div>
+      <div class="field"><label>Monthly revenue ($)</label><input type="number" id="g-mr" value="${g.monthlyRev||''}"></div>
+      <div class="field"><label>Weekly loads</label><input type="number" id="g-wl" value="${g.weeklyLoads||''}"></div>
+      <div class="field"><label>Monthly loads</label><input type="number" id="g-ml" value="${g.monthlyLoads||''}"></div>
+    </div>
+    <div class="modal-foot"><button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn blue" onclick="saveTeamGoals({weeklyRev:parseFloat(($('g-wr')||{}).value)||0,monthlyRev:parseFloat(($('g-mr')||{}).value)||0,weeklyLoads:parseInt(($('g-wl')||{}).value)||0,monthlyLoads:parseInt(($('g-ml')||{}).value)||0});closeModal();render()">Save goals</button>
+    </div>
+  </div></div>`;
+}
+
+// Training mode
+function isTrainingMode(){return localStorage.getItem('training_mode')==='1';}
+function toggleTrainingMode(){localStorage.setItem('training_mode',isTrainingMode()?'0':'1');showToast(isTrainingMode()?'🎓 Training mode ON — quotes require approval':'Training mode off','info',3000);}
+
+// Performance review dashboard
+function renderPerformanceReview(){
+  const agents=getAgentWinRates?getAgentWinRates():{};
+  const sorted=Object.entries(agents).sort((a,b)=>b[1].booked-a[1].booked);
+  const month=new Date().toLocaleString('en-US',{month:'long',year:'numeric'});
+  return`<div style="font-size:16px;font-weight:800;color:var(--navy);margin-bottom:4px">📊 Performance review — ${month}</div>
+  <div class="tbl-wrap" style="margin-top:12px"><table><thead><tr><th>Agent</th><th>Quotes</th><th>Booked</th><th>Win rate</th><th>Lost</th><th>Top loss reason</th></tr></thead><tbody>
+    ${sorted.map(([name,d])=>{
+      const topReason=Object.entries(d.lossReasons||{}).sort((a,b)=>b[1]-a[1])[0];
+      return`<tr><td class="bold">${escH(name)}</td><td>${d.total}</td><td style="color:var(--green);font-weight:700">${d.booked}</td>
+      <td style="font-weight:700;color:${d.total>0?d.booked/d.total>=.5?'var(--green)':'var(--amber)':'var(--gray-400)'}">${d.total>0?Math.round(d.booked/d.total*100)+'%':'—'}</td>
+      <td style="color:var(--red)">${d.lost}</td><td style="font-size:12px;color:var(--gray-500)">${topReason?escH(topReason[0]):'—'}</td></tr>`;
+    }).join('')||'<tr><td colspan="6" style="text-align:center;color:var(--gray-400);padding:20px">No data yet</td></tr>'}
+  </tbody></table></div>`;
+}
+
+// ── EXECUTIVE DASHBOARD ───────────────────────────────────────────
+function renderExecutiveDashboard(){
+  const all=[...(S.quotes||[]),...(window._fqHistory||[])];
+  const booked=all.filter(q=>['Booked','Delivered','Invoiced','Paid'].includes(q.status));
+  const today=localDateStr();const monthStart=today.slice(0,7)+'-01';const weekAgo=new Date(Date.now()-7*864e5).toISOString().slice(0,10);
+  const mtd=booked.filter(q=>q.date>=monthStart);const wtd=booked.filter(q=>q.date>=weekAgo);
+  const mtdRev=mtd.reduce((s,q)=>s+(q.customerRate||0),0);const mtdProfit=mtd.reduce((s,q)=>s+getShipmentProfit(q,'freight').profit,0);
+  const wtdRev=wtd.reduce((s,q)=>s+(q.customerRate||0),0);
+  const ar=all.filter(q=>q.status==='Invoiced').reduce((s,q)=>s+(q.customerRate||0),0);
+
+  return`<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px">
+    <div class="kpi" style="background:linear-gradient(135deg,#1a2e4a,#2e75b6);border:none"><div class="kpi-lbl" style="color:rgba(255,255,255,.7)">MTD Revenue</div><div class="kpi-val" style="color:#fff;font-size:20px">${fmtD(mtdRev)}</div><div style="font-size:11px;color:rgba(255,255,255,.6)">${mtd.length} loads</div></div>
+    <div class="kpi" style="background:linear-gradient(135deg,#065f46,#059669);border:none"><div class="kpi-lbl" style="color:rgba(255,255,255,.7)">MTD Profit</div><div class="kpi-val" style="color:#fff;font-size:20px">${fmtD(mtdProfit)}</div><div style="font-size:11px;color:rgba(255,255,255,.6)">${mtdRev>0?pct(mtdProfit/mtdRev):0} margin</div></div>
+    <div class="kpi" style="background:linear-gradient(135deg,#92400e,#d97706);border:none"><div class="kpi-lbl" style="color:rgba(255,255,255,.7)">WTD Revenue</div><div class="kpi-val" style="color:#fff;font-size:20px">${fmtD(wtdRev)}</div><div style="font-size:11px;color:rgba(255,255,255,.6)">${wtd.length} loads</div></div>
+    <div class="kpi" style="background:linear-gradient(135deg,#831843,#be185d);border:none"><div class="kpi-lbl" style="color:rgba(255,255,255,.7)">Outstanding AR</div><div class="kpi-val" style="color:#fff;font-size:20px">${fmtD(ar)}</div></div>
+  </div>`;
+}
+
+// ── WEEKLY PERFORMANCE REVIEW ─────────────────────────────────────
+function generateWeeklyReport(){
+  const weekAgo=new Date(Date.now()-7*864e5).toISOString().slice(0,10);
+  const loads=[...(S.quotes||[]),...(window._fqHistory||[])].filter(q=>q.date>=weekAgo&&['Booked','Delivered','Invoiced','Paid'].includes(q.status));
+  const rev=loads.reduce((s,q)=>s+(q.customerRate||0),0);const profit=loads.reduce((s,q)=>s+getShipmentProfit(q,'freight').profit,0);
+  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal" style="max-width:500px">
+    <div class="modal-title">📊 Weekly performance report</div>
+    <div style="font-size:13px;color:var(--gray-500);margin-bottom:14px">Week of ${weekAgo} to ${localDateStr()}</div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px">
+      <div class="kpi"><div class="kpi-lbl">Loads booked</div><div class="kpi-val" style="font-size:24px">${loads.length}</div></div>
+      <div class="kpi"><div class="kpi-lbl">Revenue</div><div class="kpi-val" style="color:var(--steel);font-size:20px">${fmtD(rev)}</div></div>
+      <div class="kpi"><div class="kpi-lbl">Profit</div><div class="kpi-val" style="color:var(--green);font-size:20px">${fmtD(profit)}</div></div>
+    </div>
+    <div style="font-size:12px;font-weight:700;color:var(--gray-400);margin-bottom:8px;text-transform:uppercase">Top customers this week</div>
+    ${Object.entries(loads.reduce((acc,q)=>{acc[q.customer||'?']=(acc[q.customer||'?']||0)+(q.customerRate||0);return acc;},{})).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([n,r])=>`<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--gray-100);font-size:13px"><span class="bold">${escH(n)}</span><span style="color:var(--steel);font-weight:700">${fmtD(r)}</span></div>`).join('')}
+    <div class="modal-foot"><button class="btn" onclick="closeModal()">Close</button></div>
+  </div></div>`;
+}
+
+// ── DRAYAGE FEATURES ──────────────────────────────────────────────
+
+// Container size tracker
+function containerSizeBadge(q){
+  if(!q.containerSize) return '';
+  const col={'20ft':'#0369a1','40ft':'#16a34a','40HC':'#7c3aed','45ft':'#d97706','53ft':'#dc2626'}[q.containerSize]||'#6b7280';
+  return`<span style="font-size:10px;background:${col}12;color:${col};padding:1px 7px;border-radius:99px;font-weight:700">📦 ${q.containerSize}</span>`;
+}
+
+// Pre-pull tracker
+function getPrePulls(){return JSON.parse(localStorage.getItem('prepulls')||'[]');}
+function addPrePull(containerNum,yard,rate){
+  const list=getPrePulls();list.unshift({containerNum,yard,rate:parseFloat(rate)||0,dateIn:localDateStr(),id:'pp-'+Date.now()});
+  localStorage.setItem('prepulls',JSON.stringify(list));
+  showToast('Pre-pull logged','success',2000);
+}
+function renderPrePulls(){
+  const list=getPrePulls();
+  return list.map(p=>{const days=Math.floor((new Date()-new Date(p.dateIn))/864e5);const cost=days*(p.rate||75);
+  return`<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--gray-100)">
+    <div><div style="font-size:13px;font-weight:700;color:var(--navy)">${escH(p.containerNum)}</div>
+    <div style="font-size:11px;color:var(--gray-500)">${escH(p.yard||'—')} · ${days} days in yard</div></div>
+    <div style="text-align:right"><div style="font-size:13px;font-weight:800;color:var(--red)">${fmtD(cost)}</div>
+    <div style="font-size:10px;color:var(--gray-400)">${fmtD(p.rate||75)}/day</div></div>
+  </div>`;}).join('')||'<div style="color:var(--gray-400);font-size:12px;padding:8px">No pre-pulls logged</div>';
+}
+
+// CFS delivery order tracker
+function getCFSOrders(){return JSON.parse(localStorage.getItem('cfs_orders')||'[]');}
+function addCFSOrder(doNumber,cfs,customer,eta){
+  const list=getCFSOrders();list.unshift({doNumber,cfs,customer,eta,addedAt:localDateStr(),id:'cfs-'+Date.now(),status:'Pending'});
+  localStorage.setItem('cfs_orders',JSON.stringify(list));
+}
+
+// Container tracking log
+function getContainerLog(){return JSON.parse(localStorage.getItem('container_log')||'[]');}
+function logContainer(containerNum,bookingNum,shiflRef,vesselETA,terminal){
+  const list=getContainerLog();const existing=list.findIndex(c=>c.containerNum===containerNum);
+  const entry={containerNum,bookingNum,shiflRef,vesselETA,terminal,updatedAt:localDateStr()};
+  if(existing>=0) list[existing]=entry; else list.unshift(entry);
+  localStorage.setItem('container_log',JSON.stringify(list.slice(0,500)));
+  showToast('Container logged','success',2000);
+}
+
+// ── CUSTOMIZABLE HOME SCREEN ──────────────────────────────────────
+function getHomeWidgets(){return JSON.parse(localStorage.getItem('home_widgets')||JSON.stringify(['realtime','streak','quest','pipeline','quickactions']));}
+function saveHomeWidgets(list){localStorage.setItem('home_widgets',JSON.stringify(list));}
+function openWidgetCustomizer(){
+  const current=getHomeWidgets();
+  const all=[{id:'realtime',label:'💰 Real-time margin'},{id:'streak',label:'🔥 Streak & compliment'},{id:'quest',label:'⚡ Daily quest'},{id:'pipeline',label:'🚚 Pipeline'},{id:'quickactions',label:'⚡ Quick actions'},{id:'goals',label:'🎯 Team goals'},{id:'announcements',label:'📢 Announcements'},{id:'leaderboard',label:'🏆 Leaderboard preview'},{id:'performance',label:'📊 Performance summary'}];
+  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal" style="max-width:400px">
+    <div class="modal-title">🎨 Customize home screen</div>
+    <div style="font-size:12px;color:var(--gray-500);margin-bottom:12px">Choose which widgets appear on your home screen</div>
+    <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:14px">
+      ${all.map(w=>`<label style="display:flex;align-items:center;gap:10px;padding:8px;border:1px solid var(--gray-200);border-radius:var(--radius);cursor:pointer">
+        <input type="checkbox" data-wid="${w.id}" ${current.includes(w.id)?'checked':''}>
+        <span style="font-size:13px;font-weight:600;color:var(--navy)">${w.label}</span>
+      </label>`).join('')}
+    </div>
+    <div class="modal-foot"><button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn blue" onclick="saveHomeWidgets([...document.querySelectorAll('[data-wid]:checked')].map(c=>c.dataset.wid));closeModal();render()">Save layout</button>
+    </div>
+  </div></div>`;
+}
+
+// ── GLOBAL UNDO HISTORY ───────────────────────────────────────────
+const _undoStack=[];function pushUndo(action,undoFn){_undoStack.push({action,undoFn,ts:new Date()});if(_undoStack.length>20)_undoStack.shift();}
+function globalUndo(){if(!_undoStack.length){showToast('Nothing to undo','info',2000);return;}const item=_undoStack.pop();try{item.undoFn();showToast('↩ Undid: '+item.action,'success',2000);}catch(e){showToast('Could not undo','error');}}
+document.addEventListener('keydown',e=>{if((e.metaKey||e.ctrlKey)&&e.key==='k'){e.preventDefault();openCommandPalette&&openCommandPalette();}
+if((e.metaKey||e.ctrlKey)&&e.key==='z'&&!e.shiftKey){e.preventDefault();globalUndo();}});
+
+// ── APP TOUR REPLAY ───────────────────────────────────────────────
+function replayTour(){
+  const steps=[
+    {title:'🏠 Home dashboard',desc:'Your daily overview — streak, quest, revenue, and quick actions all in one place',target:'nav-home'},
+    {title:'🚢 Drayage quoting',desc:'Quote drayage moves — import and export, per-container pricing, chassis, and genset',target:'acc-drayage'},
+    {title:'🚛 Freight quoting',desc:'FTL and LTL freight quotes with AI assistance and rate suggestions',target:'acc-freight'},
+    {title:'🚚 TMS',desc:'Full transportation management — dispatch board, load tracking, BOL, invoicing, and reports',target:'nav-tms'},
+    {title:'🧾 Invoicing',desc:'Customer and carrier invoicing — AR aging, bulk send, and payment tracking',target:'nav-invoicing'},
+    {title:'🤝 Carrier network',desc:'Manage carriers — W-9s, certifications, safety ratings, and performance scores',target:'nav-carriers'},
+    {title:'📊 Reports',desc:'Analytics, P&L, agent performance, and executive dashboard',target:'nav-reports'},
+  ];
+  let current=0;
+  function showStep(){
+    const s=steps[current];
+    const existing=document.getElementById('tour-overlay');if(existing) existing.remove();
+    const el=document.createElement('div');
+    el.id='tour-overlay';
+    el.style.cssText='position:fixed;bottom:80px;right:24px;z-index:99999;background:linear-gradient(135deg,var(--navy),var(--steel));color:#fff;border-radius:14px;padding:18px 22px;box-shadow:0 8px 32px rgba(0,0,0,.3);max-width:300px;animation:fadeInPreview .3s ease';
+    el.innerHTML=`<div style="font-size:10px;opacity:.7;margin-bottom:4px">Step ${current+1} of ${steps.length}</div>
+      <div style="font-size:15px;font-weight:800;margin-bottom:6px">${s.title}</div>
+      <div style="font-size:12px;opacity:.85;line-height:1.5;margin-bottom:14px">${s.desc}</div>
+      <div style="height:3px;background:rgba(255,255,255,.2);border-radius:2px;margin-bottom:14px"><div style="height:3px;width:${Math.round((current+1)/steps.length*100)}%;background:#fff;border-radius:2px"></div></div>
+      <div style="display:flex;justify-content:space-between">
+        <button onclick="document.getElementById('tour-overlay').remove()" style="border:1px solid rgba(255,255,255,.3);background:transparent;color:#fff;padding:6px 14px;border-radius:99px;cursor:pointer;font-family:inherit;font-size:12px">Exit tour</button>
+        <button onclick="window._tourNext()" style="background:#fff;color:var(--navy);border:none;padding:6px 14px;border-radius:99px;cursor:pointer;font-family:inherit;font-size:12px;font-weight:700">${current<steps.length-1?'Next →':'Finish ✓'}</button>
+      </div>`;
+    document.body.appendChild(el);
+    const target=document.getElementById(s.target);if(target){target.scrollIntoView({behavior:'smooth',block:'center'});}
+  }
+  window._tourNext=()=>{current++;if(current>=steps.length){document.getElementById('tour-overlay')?.remove();showToast('Tour complete! 🎉','success',3000);}else showStep();};
+  showStep();
+}
+
+
+
 boot().catch(e=>{$('loading-screen').style.display='none';$('setup-screen').style.display='flex';});
 </script>
 <script>
