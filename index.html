@@ -442,7 +442,7 @@ if('caches' in window){
           <span style="font-size:15px">🤝</span>Carrier Network
         </span>
       </button>
-      <button class="acc-btn" id="nav-tms" onclick="goTo('tms')" style="font-size:13px;font-weight:700;color:#93c5fd;background:rgba(46,117,182,.12);border-left:3px solid #2e75b6">🚚 TMS <span id="tms-badge" style="font-size:10px;background:rgba(46,117,182,.3);color:#93c5fd;padding:1px 7px;border-radius:99px;margin-left:4px">FTL/LTL</span></button>
+      <button class="acc-btn" id="nav-tms" onclick="goTo('tms')" style="font-size:13px;font-weight:700;color:#93c5fd;background:rgba(46,117,182,.12);border-left:3px solid #2e75b6">🚚 TMS <span id="tms-badge" style="font-size:10px;background:rgba(46,117,182,.3);color:#93c5fd;padding:1px 7px;border-radius:99px;margin-left:4px">All modes</span></button>
       <button class="acc-btn" id="nav-invoicing" onclick="S.activeView='active';goTo('invoicing')" style="font-size:13px">
         <span style="display:flex;align-items:center;gap:10px">
           <span style="font-size:15px">🧾</span>Invoicing
@@ -2291,14 +2291,15 @@ async function downloadSelectedFqPDFs(){
 
 async function updateFqStatus(idx,status){
   const _fqq=(window._fqHistory||[])[idx];
-  if(status==='Booked'&&_fqq&&(_fqq.fqMode==='FTL'||_fqq.fqMode==='LTL')){
-    // Auto-generate booking number from quote number
+  const TMS_AUTO_MODES=['FTL','LTL','LCL','Box Truck','Air'];
+  if(status==='Booked'&&_fqq&&(TMS_AUTO_MODES.includes(_fqq.fqMode)||(_fqq.fqEquip&&_fqq.fqEquip.includes('Box Truck')))){
     const qNum=_fqq.id?.slice(-6)||Math.random().toString(36).slice(-4).toUpperCase();
     const bkNum='BK-'+qNum.toUpperCase();
     if(!getTMSMeta(_fqq.id).bookingNum){
       saveTMSMeta(_fqq.id,{bookingNum:bkNum,quoteRef:_fqq.id,mode:_fqq.fqMode,bookedAt:new Date().toISOString()});
     }
-    setTimeout(()=>showToast('🚚 Load #'+bkNum+' added to TMS','info',4000),800);
+    const modeIcon={'FTL':'🚛','LTL':'📦','LCL':'🚢','Box Truck':'📦','Air':'✈️'}[_fqq.fqMode]||'🚚';
+    setTimeout(()=>showToast(modeIcon+' '+(_fqq.fqMode||'Load')+' #'+bkNum+' added to TMS','info',4000),800);
   }
   // Auto-flow booked FTL/LTL to TMS
   if(status==='Booked'){
@@ -8174,6 +8175,8 @@ async function saveAqQuote(){
   if(!window._aqHistory) window._aqHistory=[];
   window._aqHistory.unshift(entry);
   try{localStorage.setItem('aq_history',JSON.stringify(window._aqHistory));}catch(e){}
+  // Auto-flow to TMS
+  if(entry.status==='Booked'){const qNum=entry.id?.slice(-6)||Math.random().toString(36).slice(-4).toUpperCase();const bkNum='BK-'+qNum.toUpperCase();if(!getTMSMeta(entry.id).bookingNum){saveTMSMeta(entry.id,{bookingNum:bkNum,mode:'Air',bookedAt:new Date().toISOString()});}setTimeout(()=>showToast('✈️ Air load #'+bkNum+' added to TMS','info',4000),800);}
   try{await dbSaveAqQuote(entry);}catch(e){console.log('Air quote save:',e.message);}
   logAction('quote_created',`Air — ${aq.customer} | ${aq.originAirportCode} → ${aq.deliveryZip} | ${fmtD(custRate)}`,'air_quote',entry.id);
   S.aq=defaultAqState();
@@ -12363,10 +12366,17 @@ function saveTMSMeta(id, data){
 
 // Get all TMS loads — FTL/LTL quotes that are Booked or further
 function getTMSLoads(){
-  return (window._fqHistory||[]).filter(q=>
-    (q.fqMode==='FTL'||q.fqMode==='LTL')&&
+  const TMS_MODES=['FTL','LTL','LCL','Box Truck','Air'];
+  // FQ history (FTL, LTL, LCL, Box Truck)
+  const fqLoads=(window._fqHistory||[]).filter(q=>
+    (TMS_MODES.includes(q.fqMode)||q.fqEquip==='Box Truck')&&
     ['Booked','Dispatched','In Transit','Out for Delivery','Delivered','Invoiced','Paid'].includes(q.status)
-  ).map(q=>({...q,tmsMeta:getTMSMeta(q.id)}));
+  ).map(q=>({...q,_tmsType:'freight',tmsMeta:getTMSMeta(q.id)}));
+  // Air freight (aqHistory)
+  const airLoads=(window._aqHistory||[]).filter(q=>
+    ['Booked','Dispatched','In Transit','Out for Delivery','Delivered','Invoiced','Paid'].includes(q.status||'')
+  ).map(q=>({...q,fqMode:'Air',_tmsType:'air',pickupZip:q.originAirport||q.pickupZip||'',deliveryZip:q.destAirport||q.deliveryZip||'',carrierRate:q.airFreightCost||q.carrierRate||0,tmsMeta:getTMSMeta(q.id)}));
+  return [...fqLoads,...airLoads];
 }
 
 // TMS STATUS progression
@@ -12377,6 +12387,14 @@ function nextTMSStatus(current){
 }
 function tmsStatusColor(s){
   return s==='Booked'?'#1a2e4a':s==='Dispatched'?'#7c3aed':s==='In Transit'?'#d97706':s==='Out for Delivery'?'#2e75b6':s==='Delivered'?'#16a34a':'#6b7280';
+}
+function tmsModeColor(mode){
+  return mode==='FTL'?'#1d4ed8':mode==='LTL'?'#7c3aed':mode==='LCL'?'#0369a1':mode==='Box Truck'?'#d97706':mode==='Air'?'#dc2626':'#6b7280';
+}
+function tmsModeBadge(mode){
+  const icons={'FTL':'🚛','LTL':'📦','LCL':'🚢','Box Truck':'📦','Air':'✈️'};
+  const col=tmsModeColor(mode);
+  return`<span style="font-size:10px;background:${col}15;color:${col};padding:1px 7px;border-radius:99px;font-weight:700">${icons[mode]||'🚚'} ${mode||'—'}</span>`;
 }
 
 // ── MAIN TMS RENDER ────────────────────────────────────────────────
@@ -13036,7 +13054,7 @@ function updateTMSBadge(){
   const btn=document.getElementById('nav-tms');
   if(!btn)return;
   const badge=document.getElementById('tms-badge');
-  if(badge)badge.textContent=ov>0?'⚠️ '+ov+' overdue':getTMSLoads().length>0?getTMSLoads().length+' loads':'FTL/LTL';
+  if(badge)badge.textContent=ov>0?'⚠️ '+ov+' overdue':getTMSLoads().length>0?getTMSLoads().length+' loads':'All modes';
 }
 
 // ── OVERRIDE renderTMS to add new tabs + dashboard default ─────────
