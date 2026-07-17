@@ -12453,6 +12453,8 @@ function renderTMSDispatch(tabBar,kpis,loads){
 // ── ALL LOADS TABLE ────────────────────────────────────────────────
 function tmsInvOpen(id){openInvoiceBuilder('freight',id);}
 function tmsGoFreight(){goTo('freight','builder');}
+function tmsFilter(s){S.tmsTab='loads';S.tmsLoadsFilt=s||'all';renderTMS();}
+function tmsGo(tab){S.tmsTab=tab;renderTMS();}
 function renderTMSBolDocs(tabBar,loads){renderTMSBol(tabBar,loads);}
 function buildTMSLoadRow(l){
   const id=l.id,meta=getTMSMeta(id);
@@ -13041,11 +13043,11 @@ function renderTMS(){
   const thisWeek=loads.filter(l=>l.date>=weekAgo).length;
 
   const kpis=`<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:16px">
-    <div class="kpi" onclick="S.tmsTab='loads';S.tmsLoadsFilt='In Transit';renderTMS()" style="cursor:pointer" onmouseenter="this.style.transform='translateY(-2px)'" onmouseleave="this.style.transform=''"><div class="kpi-lbl">In transit now</div><div class="kpi-val" style="color:#d97706;font-size:20px">${inTransit.length}</div><div style="font-size:11px;color:var(--gray-400)">${fmtD(inTransit.reduce((s,l)=>s+(l.customerRate||0),0))}</div></div>
-    <div class="kpi" onclick="S.tmsTab='loads';S.tmsLoadsFilt='all';renderTMS()" style="cursor:pointer" onmouseenter="this.style.transform='translateY(-2px)'" onmouseleave="this.style.transform=''"><div class="kpi-lbl">This week</div><div class="kpi-val" style="font-size:20px">${thisWeek}</div></div>
-    <div class="kpi" onclick="S.tmsTab='invoicing';S.tmsInvSubTab='pending';renderTMS()" style="cursor:pointer" onmouseenter="this.style.transform='translateY(-2px)'" onmouseleave="this.style.transform=''"><div class="kpi-lbl">Needs invoice</div><div class="kpi-val" style="color:${needsInvoice.length?'var(--red)':'var(--green)'};font-size:20px">${needsInvoice.length}</div></div>
-    <div class="kpi" onclick="S.tmsTab='loads';S.tmsLoadsFilt='all';renderTMS()" style="cursor:pointer" onmouseenter="this.style.transform='translateY(-2px)'" onmouseleave="this.style.transform=''"><div class="kpi-lbl">Overdue</div><div class="kpi-val" style="color:${getOverdueLoads().length?'#dc2626':'var(--green)'};font-size:20px">${getOverdueLoads().length}</div></div>
-    <div class="kpi" onclick="S.tmsTab='loads';S.tmsLoadsFilt='all';renderTMS()" style="cursor:pointer" onmouseenter="this.style.transform='translateY(-2px)'" onmouseleave="this.style.transform=''"><div class="kpi-lbl">Total loads</div><div class="kpi-val" style="font-size:20px">${loads.length}</div></div>
+    <div class="kpi" onclick="tmsFilter('In Transit')" style="cursor:pointer;transition:transform .1s" onmouseenter="this.style.transform='translateY(-2px)'" onmouseleave="this.style.transform=''"><div class="kpi-lbl">In transit now</div><div class="kpi-val" style="color:#d97706;font-size:20px">${inTransit.length}</div><div style="font-size:11px;color:var(--gray-400)">${fmtD(inTransit.reduce((s,l)=>s+(l.customerRate||0),0))}</div></div>
+    <div class="kpi" onclick="tmsFilter('all')" style="cursor:pointer;transition:transform .1s" onmouseenter="this.style.transform='translateY(-2px)'" onmouseleave="this.style.transform=''"><div class="kpi-lbl">This week</div><div class="kpi-val" style="font-size:20px">${thisWeek}</div></div>
+    <div class="kpi" onclick="S.tmsTab='invoicing';S.tmsInvSubTab='pending';renderTMS()" style="cursor:pointer;transition:transform .1s" onmouseenter="this.style.transform='translateY(-2px)'" onmouseleave="this.style.transform=''"><div class="kpi-lbl">Needs invoice</div><div class="kpi-val" style="color:${needsInvoice.length?'var(--red)':'var(--green)'};font-size:20px">${needsInvoice.length}</div></div>
+    <div class="kpi" onclick="tmsFilter('all')" style="cursor:pointer;transition:transform .1s" onmouseenter="this.style.transform='translateY(-2px)'" onmouseleave="this.style.transform=''"><div class="kpi-lbl">Overdue</div><div class="kpi-val" style="color:${getOverdueLoads().length?'#dc2626':'var(--green)'};font-size:20px">${getOverdueLoads().length}</div></div>
+    <div class="kpi" onclick="tmsFilter('all')" style="cursor:pointer;transition:transform .1s" onmouseenter="this.style.transform='translateY(-2px)'" onmouseleave="this.style.transform=''"><div class="kpi-lbl">Total loads</div><div class="kpi-val" style="font-size:20px">${loads.length}</div></div>
   </div>`;
 
   const tabBar=`<div style="display:flex;gap:0;border-bottom:2px solid var(--gray-100);margin-bottom:20px;overflow-x:auto">
