@@ -13041,11 +13041,11 @@ function renderTMS(){
   const thisWeek=loads.filter(l=>l.date>=weekAgo).length;
 
   const kpis=`<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:16px">
-    <div class="kpi"><div class="kpi-lbl">In transit</div><div class="kpi-val" style="color:#d97706;font-size:20px">${inTransit.length}</div><div style="font-size:11px;color:var(--gray-400)">${fmtD(inTransit.reduce((s,l)=>s+(l.customerRate||0),0))}</div></div>
-    <div class="kpi"><div class="kpi-lbl">This week</div><div class="kpi-val" style="font-size:20px">${thisWeek}</div></div>
-    <div class="kpi"><div class="kpi-lbl">Needs invoice</div><div class="kpi-val" style="color:${needsInvoice.length?'var(--red)':'var(--green)'};font-size:20px">${needsInvoice.length}</div></div>
-    <div class="kpi"><div class="kpi-lbl">Overdue</div><div class="kpi-val" style="color:${getOverdueLoads().length?'#dc2626':'var(--green)'};font-size:20px">${getOverdueLoads().length}</div></div>
-    <div class="kpi"><div class="kpi-lbl">Total loads</div><div class="kpi-val" style="font-size:20px">${loads.length}</div></div>
+    <div class="kpi" onclick="S.tmsTab='loads';S.tmsLoadsFilt='In Transit';renderTMS()" style="cursor:pointer" onmouseenter="this.style.transform='translateY(-2px)'" onmouseleave="this.style.transform=''"><div class="kpi-lbl">In transit now</div><div class="kpi-val" style="color:#d97706;font-size:20px">${inTransit.length}</div><div style="font-size:11px;color:var(--gray-400)">${fmtD(inTransit.reduce((s,l)=>s+(l.customerRate||0),0))}</div></div>
+    <div class="kpi" onclick="S.tmsTab='loads';S.tmsLoadsFilt='all';renderTMS()" style="cursor:pointer" onmouseenter="this.style.transform='translateY(-2px)'" onmouseleave="this.style.transform=''"><div class="kpi-lbl">This week</div><div class="kpi-val" style="font-size:20px">${thisWeek}</div></div>
+    <div class="kpi" onclick="S.tmsTab='invoicing';S.tmsInvSubTab='pending';renderTMS()" style="cursor:pointer" onmouseenter="this.style.transform='translateY(-2px)'" onmouseleave="this.style.transform=''"><div class="kpi-lbl">Needs invoice</div><div class="kpi-val" style="color:${needsInvoice.length?'var(--red)':'var(--green)'};font-size:20px">${needsInvoice.length}</div></div>
+    <div class="kpi" onclick="S.tmsTab='loads';S.tmsLoadsFilt='all';renderTMS()" style="cursor:pointer" onmouseenter="this.style.transform='translateY(-2px)'" onmouseleave="this.style.transform=''"><div class="kpi-lbl">Overdue</div><div class="kpi-val" style="color:${getOverdueLoads().length?'#dc2626':'var(--green)'};font-size:20px">${getOverdueLoads().length}</div></div>
+    <div class="kpi" onclick="S.tmsTab='loads';S.tmsLoadsFilt='all';renderTMS()" style="cursor:pointer" onmouseenter="this.style.transform='translateY(-2px)'" onmouseleave="this.style.transform=''"><div class="kpi-lbl">Total loads</div><div class="kpi-val" style="font-size:20px">${loads.length}</div></div>
   </div>`;
 
   const tabBar=`<div style="display:flex;gap:0;border-bottom:2px solid var(--gray-100);margin-bottom:20px;overflow-x:auto">
@@ -13104,7 +13104,7 @@ function renderTMSDashboard(tabBar,kpis,loads){
   <!-- Status pipeline -->
   <div class="card" style="margin-bottom:16px">
     <div style="font-size:14px;font-weight:800;color:var(--navy);margin-bottom:12px">🚚 Pipeline</div>
-    <div style="display:flex;gap:0;align-items:center">
+    <div style="display:flex;gap:0;align-items:center;border-radius:var(--radius);overflow:hidden">
       ${TMS_STATUSES.map((s,i)=>{const c=loads.filter(l=>l.status===s).length;return`<div style="flex:1;text-align:center;padding:10px 4px;background:${c?tmsStatusColor(s)+'12':'var(--gray-50)'};border-right:${i<TMS_STATUSES.length-1?'1px solid var(--gray-100)':'none'}">
         <div style="font-size:20px;font-weight:900;color:${c?tmsStatusColor(s):'var(--gray-300)'}">${c}</div>
         <div style="font-size:10px;font-weight:600;color:${c?tmsStatusColor(s):'var(--gray-400)'};margin-top:2px">${s}</div>
