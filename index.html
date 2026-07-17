@@ -6708,7 +6708,21 @@ async function renderCarriers(){
       <td style="font-size:13px">${c.contact_name||'<span style="color:var(--gray-400)">—</span>'}</td>
       <td style="font-size:12px;color:var(--gray-500)">${c.phone||'—'}</td>
       <td style="font-size:12px;color:var(--gray-500)">${c.email||'—'}</td>
-      <td style="white-space:nowrap"><button class="btn btn-sm" onclick="event.stopPropagation();showCarrierModal('${c.id}')">✏️ Edit</button> <button class="btn btn-sm" onclick="event.stopPropagation();delCarrier('${c.id}','${c.name.replace(/'/g,'')}')" style="color:var(--red);border-color:#fca5a5;margin-left:4px">🗑️ Delete</button></td>
+      <td onclick="event.stopPropagation()" style="white-space:nowrap">
+        <div style="display:flex;gap:4px;flex-wrap:wrap">
+          ${w9Badge(c.name)}
+          ${certBadges(c.name)}
+          ${payTermsBadge(c.name)}
+          ${blacklistBadge(c.name)}
+        </div>
+        <div style="display:flex;gap:4px;margin-top:4px">
+          <button class="btn btn-sm" onclick="openW9Modal('${c.name.replace(/'/g,"\'")}')">📋 W-9</button>
+          <button class="btn btn-sm" onclick="openCertModal('${c.name.replace(/'/g,"\'")}')">🏆 Certs</button>
+          <button class="btn btn-sm" onclick="showPayTermsModal('${c.name.replace(/'/g,"\'")}')">💳 Terms</button>
+          <button class="btn btn-sm" onclick="event.stopPropagation();showCarrierModal('${c.id}')">✏️</button>
+          <button class="btn btn-sm" onclick="event.stopPropagation();toggleBlacklist('${c.name.replace(/'/g,"\'")}');renderCarriers()" style="color:${isBlacklisted(c.name)?'var(--red)':'var(--gray-500)'}">🚫</button>
+        </div>
+      </td>
     </tr>`).join('');
 
     $('page').innerHTML=`
@@ -13032,6 +13046,7 @@ function renderTMS(){
     {id:'bol',icon:'ti-file-text',label:'BOL & Docs'},
     {id:'invoicing',icon:'ti-receipt',label:'Invoicing'},
     {id:'scorecard',icon:'ti-chart-bar',label:'Scorecards'},
+    {id:'vault',icon:'ti-shield-check',label:'Carrier vault'},
     {id:'capacity',icon:'ti-truck',label:'Capacity'},
     {id:'claims',icon:'ti-alert-triangle',label:'Claims'},
     {id:'tools',icon:'ti-calculator',label:'Tools'},
@@ -13063,6 +13078,7 @@ function renderTMS(){
   else if(sub==='bol')        renderTMSBolDocs(tabBar,loads);
   else if(sub==='invoicing')  renderTMSInvoicing(tabBar,loads);
   else if(sub==='scorecard')  renderTMSScorecard(tabBar,loads);
+  else if(sub==='vault')      renderCarrierVault(tabBar);
   else if(sub==='capacity')   renderTMSCapacity(tabBar);
   else if(sub==='claims')     renderTMSClaims(tabBar,loads);
   else if(sub==='tools')      renderTMSTools(tabBar);
@@ -13366,6 +13382,39 @@ async function openTMSRateCon(id){
 }
 
 // ── 7. CARRIER CAPACITY BOARD ─────────────────────────────────────
+function renderCarrierVault(tabBar){
+  // Pull all carriers from memory
+  const allCarriers=[...new Set([
+    ...(window._fqHistory||[]).map(q=>q.carrier).filter(Boolean),
+    ...(S.quotes||[]).map(q=>q.carrier).filter(Boolean),
+    ...(window._carriers||[]).map(c=>c.name)
+  ])].sort();
+
+  $('page').innerHTML=tabBar+`
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+    <div style="font-size:16px;font-weight:800;color:var(--navy)">📋 Carrier compliance vault</div>
+  </div>
+  <div class="tbl-wrap"><table><thead><tr><th>Carrier</th><th>W-9</th><th>EIN</th><th>Certifications</th><th>Pay terms</th><th>Blacklisted</th><th>Actions</th></tr></thead><tbody>
+    ${allCarriers.map(name=>{
+      const w=getCarrierW9(name);
+      return'<tr>'+
+        '<td class="bold">'+escH(name)+'</td>'+
+        '<td>'+w9Badge(name)+'</td>'+
+        '<td style="font-family:monospace;font-size:12px">'+escH(w.ein||'—')+'</td>'+
+        '<td>'+certBadges(name)+'</td>'+
+        '<td>'+payTermsBadge(name)+'</td>'+
+        '<td>'+(isBlacklisted(name)?'<span style="color:var(--red);font-weight:700">🚫 Yes</span>':'<span style="color:var(--gray-400)">No</span>')+'</td>'+
+        '<td onclick="event.stopPropagation()" style="white-space:nowrap">'+
+          '<button onclick="openW9Modal(''+escH(name)+'')" style="font-size:10px;padding:3px 7px;border:1px solid var(--gray-200);border-radius:4px;background:transparent;cursor:pointer;font-family:inherit">📋 W-9</button> '+
+          '<button onclick="openCertModal(''+escH(name)+'')" style="font-size:10px;padding:3px 7px;border:1px solid var(--gray-200);border-radius:4px;background:transparent;cursor:pointer;font-family:inherit">🏆 Certs</button> '+
+          '<button onclick="showPayTermsModal(''+escH(name)+'')" style="font-size:10px;padding:3px 7px;border:1px solid var(--gray-200);border-radius:4px;background:transparent;cursor:pointer;font-family:inherit">💳 Terms</button>'+
+        '</td>'+
+      '</tr>';
+    }).join('')}
+  </tbody></table></div>
+  `;
+}
+
 function renderTMSCapacity(tabBar){
   const list=getTMSCapacity();
   const today=localDateStr();
@@ -14512,6 +14561,18 @@ function renderAnnualCarrierReview(tabBar,loads){
 }
 
 
+
+function showPayTermsModal(carrierName){
+  const current=getCarrierPayTerms(carrierName);
+  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal" style="max-width:360px">
+    <div class="modal-title">💳 Pay terms — ${escH(carrierName)}</div>
+    <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px">
+      ${['QuickPay (48h)','Net15','Net30','Net45','Net60'].map(t=>`<button onclick="setCarrierPayTerms('${carrierName}','${t}');closeModal();renderCarriers();showToast('Pay terms updated','success',2000)" style="padding:10px 14px;border:1.5px solid ${current===t?'var(--steel)':'var(--gray-200)'};border-radius:var(--radius);background:${current===t?'var(--blue-bg)':'transparent'};cursor:pointer;font-family:inherit;font-size:13px;font-weight:600;color:${current===t?'var(--steel)':'var(--navy)'};text-align:left">${t}${current===t?' ✓':''}</button>`).join('')}
+    </div>
+    <button class="btn" onclick="closeModal()">Cancel</button>
+  </div></div>`;
+}
 boot().catch(e=>{$('loading-screen').style.display='none';$('setup-screen').style.display='flex';});
 </script>
 <script>
