@@ -11209,12 +11209,23 @@ async function loadChatMessages(){
 }
 
 function subscribeToChat(){
-  if(_chatSub) _chatSub.unsubscribe();
-  _chatSub=db.channel('public:chat_messages:'+_chatChannel)
-    .on('postgres_changes',{event:'INSERT',schema:'public',table:'chat_messages',filter:`channel=eq.${_chatChannel}`},payload=>{
-      _chatMsgs.push(payload.new);renderChatMessages();
-    }).subscribe();
+  if(_chatSub) try{_chatSub.unsubscribe();}catch(e){}
+  // Try real-time first, fall back to polling
+  try{
+    _chatSub=db.channel('public:chat_messages:'+_chatChannel)
+      .on('postgres_changes',{event:'INSERT',schema:'public',table:'chat_messages',filter:`channel=eq.${_chatChannel}`},payload=>{
+        if(payload.new&&!_chatMsgs.find(m=>m.id===payload.new.id)){_chatMsgs.push(payload.new);renderChatMessages();}
+      }).subscribe(status=>{
+        if(status==='CHANNEL_ERROR'||status==='CLOSED') startChatPolling();
+      });
+  }catch(e){startChatPolling();}
 }
+let _chatPollInterval=null;
+function startChatPolling(){
+  if(_chatPollInterval) clearInterval(_chatPollInterval);
+  _chatPollInterval=setInterval(async()=>{if(_chatOpen) await loadChatMessages();},5000);
+}
+function stopChatPolling(){if(_chatPollInterval){clearInterval(_chatPollInterval);_chatPollInterval=null;}}
 
 function renderChatMessages(){
   const el=$('chat-messages');if(!el) return;
@@ -15276,22 +15287,100 @@ function openAIChat(){
     <div class="modal-foot"><button class="btn" onclick="closeModal()">Close</button></div>
   </div></div>`;
 }
-async function sendAIChat(){
+function sendAIChat(){
   const input=$('ai-chat-input');const q=input?.value?.trim();if(!q) return;
   input.value='';
   const msgs=$('ai-chat-msgs');
-  if(msgs){msgs.innerHTML+=`<div style="text-align:right;margin-bottom:8px"><span style="background:var(--steel);color:#fff;padding:6px 12px;border-radius:12px 12px 0 12px;font-size:12px;display:inline-block">${escH(q)}</span></div>`;}
+  if(msgs) msgs.innerHTML+=`<div style="text-align:right;margin-bottom:8px"><span style="background:var(--steel);color:#fff;padding:6px 12px;border-radius:12px 12px 0 12px;font-size:12px;display:inline-block">${escH(q)}</span></div>`;
 
-  // Build context from data
-  const loads=getTMSLoads();const today=localDateStr();
-  const todayRev=[...(S.quotes||[]),...(window._fqHistory||[])].filter(l=>l.date===today&&['Booked','Delivered','Invoiced','Paid'].includes(l.status)).reduce((s,l)=>s+(l.customerRate||0),0);
-  const context=`Data: ${loads.length} TMS loads, today's revenue: ${fmtD(todayRev)}, overdue loads: ${getOverdueLoads().length}, total quotes: ${(S.quotes||[]).length}`;
+  // Answer locally from app data — no API call needed
+  const answer=localAIAnswer(q.toLowerCase());
+  setTimeout(()=>{
+    if(msgs){msgs.innerHTML+=`<div style="margin-bottom:8px"><span style="background:#fff;border:1px solid var(--gray-200);padding:6px 12px;border-radius:12px 12px 12px 0;font-size:12px;display:inline-block;color:var(--navy);max-width:90%">${answer}</span></div>`;msgs.scrollTop=msgs.scrollHeight;}
+  },400);
+}
 
-  try{
-    const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:500,messages:[{role:'user',content:`You are an AI assistant for Shifl, a freight brokerage TMS. ${context}. Answer this question concisely: ${q}`}]})});
-    const data=await res.json();const text=data.content?.[0]?.text||'Unable to answer';
-    if(msgs){msgs.innerHTML+=`<div style="margin-bottom:8px"><span style="background:#fff;border:1px solid var(--gray-200);padding:6px 12px;border-radius:12px 12px 12px 0;font-size:12px;display:inline-block;color:var(--navy)">${escH(text)}</span></div>`;msgs.scrollTop=msgs.scrollHeight;}
-  }catch(e){if(msgs) msgs.innerHTML+=`<div style="color:var(--red);font-size:12px">Error: ${e.message}</div>`;}
+function localAIAnswer(q){
+  const all=[...(S.quotes||[]),...(window._fqHistory||[]),...(window._aqHistory||[])];
+  const booked=all.filter(l=>['Booked','Delivered','Invoiced','Paid'].includes(l.status));
+  const today=localDateStr();const monthStart=today.slice(0,7)+'-01';
+  const weekAgo=new Date(Date.now()-7*864e5).toISOString().slice(0,10);
+
+  // Revenue questions
+  if(q.includes('revenue')||q.includes('how much')||q.includes('made')){
+    const period=q.includes('today')?'today':q.includes('week')?'week':q.includes('month')?'month':'all time';
+    const filtered=period==='today'?booked.filter(l=>l.date===today):period==='week'?booked.filter(l=>l.date>=weekAgo):period==='month'?booked.filter(l=>l.date>=monthStart):booked;
+    const rev=filtered.reduce((s,l)=>s+(l.customerRate||0),0);
+    const profit=filtered.reduce((s,l)=>s+getShipmentProfit(l,'freight').profit,0);
+    return`💰 ${period==='today'?'Today':period==='week'?'This week':period==='month'?'This month':'All time'}: <strong>${fmtD(rev)}</strong> revenue · <strong>${fmtD(profit)}</strong> profit · ${filtered.length} loads`;
+  }
+
+  // Customer questions
+  if(q.includes('customer')||q.includes('top client')){
+    const byCustomer={};booked.forEach(l=>{const c=l.customer||'Unknown';byCustomer[c]=(byCustomer[c]||0)+(l.customerRate||0);});
+    const top=Object.entries(byCustomer).sort((a,b)=>b[1]-a[1]).slice(0,5);
+    if(!top.length) return 'No booked loads yet to rank customers.';
+    return'🏆 Top customers:<br>'+top.map(([n,r],i)=>`${i+1}. <strong>${escH(n)}</strong> — ${fmtD(r)}`).join('<br>');
+  }
+
+  // Load count
+  if(q.includes('how many load')||q.includes('load count')||q.includes('total load')){
+    const active=getTMSLoads().filter(l=>['Dispatched','In Transit','Out for Delivery'].includes(l.status));
+    return`📦 Total loads in TMS: <strong>${getTMSLoads().length}</strong> · Active/in transit: <strong>${active.length}</strong> · Delivered: <strong>${booked.filter(l=>['Delivered','Invoiced','Paid'].includes(l.status)).length}</strong>`;
+  }
+
+  // Lane questions
+  if(q.includes('lane')||q.includes('route')||q.includes('quoted')){
+    const lanes=new Set(all.map(l=>(l.pickupZip||'')+'→'+(l.deliveryZip||'')).filter(l=>l!=='→'));
+    const topLane=Object.entries(all.reduce((acc,l)=>{const k=(l.pickupZip||'?')+'→'+(l.deliveryZip||'?');acc[k]=(acc[k]||0)+1;return acc;},{})).sort((a,b)=>b[1]-a[1])[0];
+    return`🗺️ Unique lanes quoted: <strong>${lanes.size}</strong>${topLane?` · Most frequent: <strong>${topLane[0]}</strong> (${topLane[1]} times)`:''}`;
+  }
+
+  // Overdue
+  if(q.includes('overdue')||q.includes('late')||q.includes('behind')){
+    const ov=getOverdueLoads();
+    if(!ov.length) return '✅ No overdue loads — all loads are on schedule!';
+    return`⚠️ <strong>${ov.length}</strong> overdue load${ov.length>1?'s':''}:<br>`+ov.slice(0,5).map(l=>`• ${escH(l.customer||'—')} (ETA was ${getTMSMeta(l.id).eta||'unknown'})`).join('<br>');
+  }
+
+  // Carrier questions
+  if(q.includes('carrier')||q.includes('trucker')){
+    const carriers=new Set(booked.map(l=>l.carrier).filter(Boolean));
+    const topCarrier=Object.entries(booked.reduce((acc,l)=>{if(l.carrier){acc[l.carrier]=(acc[l.carrier]||0)+1;}return acc;},{})).sort((a,b)=>b[1]-a[1])[0];
+    return`🚛 Carriers used: <strong>${carriers.size}</strong>${topCarrier?` · Most used: <strong>${escH(topCarrier[0])}</strong> (${topCarrier[1]} loads)`:''}`;
+  }
+
+  // Margin questions
+  if(q.includes('margin')||q.includes('profit')||q.includes('best lane')){
+    const byLane={};booked.forEach(l=>{const k=(l.pickupZip||'?')+'→'+(l.deliveryZip||'?');if(!byLane[k])byLane[k]={rev:0,profit:0};byLane[k].rev+=(l.customerRate||0);byLane[k].profit+=getShipmentProfit(l,'freight').profit;});
+    const best=Object.entries(byLane).filter(([,d])=>d.rev>0).sort((a,b)=>(b[1].profit/b[1].rev)-(a[1].profit/a[1].rev))[0];
+    if(!best) return 'Not enough data to calculate margins yet.';
+    return`📈 Best margin lane: <strong>${best[0]}</strong> — ${pct(best[1].profit/best[1].rev)} margin (${fmtD(best[1].profit)} profit)`;
+  }
+
+  // AR / invoicing
+  if(q.includes('invoice')||q.includes('unpaid')||q.includes('ar ')||q.includes('outstanding')){
+    const unpaid=all.filter(l=>l.status==='Invoiced').reduce((s,l)=>s+(l.customerRate||0),0);
+    const count=all.filter(l=>l.status==='Invoiced').length;
+    return`🧾 Outstanding AR: <strong>${fmtD(unpaid)}</strong> across <strong>${count}</strong> unpaid invoice${count!==1?'s':''}`;
+  }
+
+  // Active shipments
+  if(q.includes('active')||q.includes('in transit')||q.includes('moving')){
+    const active=getTMSLoads().filter(l=>['Dispatched','In Transit','Out for Delivery'].includes(l.status));
+    if(!active.length) return '📦 No loads currently in transit.';
+    return`🚚 <strong>${active.length}</strong> load${active.length>1?'s':''} currently active:<br>`+active.slice(0,5).map(l=>`• ${escH(l.customer||'—')} — ${l.status}`).join('<br>');
+  }
+
+  // Help
+  if(q.includes('help')||q.includes('what can')){
+    return'🤖 I can answer questions about:<br>• <strong>Revenue</strong> — today, this week, this month<br>• <strong>Top customers</strong> by revenue<br>• <strong>Load counts</strong> and active shipments<br>• <strong>Overdue loads</strong><br>• <strong>Best margin lanes</strong><br>• <strong>Outstanding AR</strong><br>• <strong>Carrier usage</strong><br>• <strong>Lane history</strong>';
+  }
+
+  // Default — try to give something useful
+  const totalRev=booked.reduce((s,l)=>s+(l.customerRate||0),0);
+  const totalProfit=booked.reduce((s,l)=>s+getShipmentProfit(l,'freight').profit,0);
+  return`📊 Quick summary: <strong>${booked.length}</strong> loads booked · <strong>${fmtD(totalRev)}</strong> total revenue · <strong>${fmtD(totalProfit)}</strong> profit · <strong>${getOverdueLoads().length}</strong> overdue<br><br>Try asking: "top customers", "revenue this month", "overdue loads", or "best margin lane"`;
 }
 
 // ── LATE PAYMENT FEE CALCULATOR ───────────────────────────────────
