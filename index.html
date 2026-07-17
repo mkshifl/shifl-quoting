@@ -13405,9 +13405,9 @@ function renderCarrierVault(tabBar){
         '<td>'+payTermsBadge(name)+'</td>'+
         '<td>'+(isBlacklisted(name)?'<span style="color:var(--red);font-weight:700">🚫 Yes</span>':'<span style="color:var(--gray-400)">No</span>')+'</td>'+
         '<td onclick="event.stopPropagation()" style="white-space:nowrap">'+
-          '<button onclick="openW9Modal(''+escH(name)+'')" style="font-size:10px;padding:3px 7px;border:1px solid var(--gray-200);border-radius:4px;background:transparent;cursor:pointer;font-family:inherit">📋 W-9</button> '+
-          '<button onclick="openCertModal(''+escH(name)+'')" style="font-size:10px;padding:3px 7px;border:1px solid var(--gray-200);border-radius:4px;background:transparent;cursor:pointer;font-family:inherit">🏆 Certs</button> '+
-          '<button onclick="showPayTermsModal(''+escH(name)+'')" style="font-size:10px;padding:3px 7px;border:1px solid var(--gray-200);border-radius:4px;background:transparent;cursor:pointer;font-family:inherit">💳 Terms</button>'+
+          '<button data-n="'+escH(name)+'" onclick="openW9Modal(this.dataset.n)"' style="font-size:10px;padding:3px 7px;border:1px solid var(--gray-200);border-radius:4px;background:transparent;cursor:pointer;font-family:inherit">📋 W-9</button> '+
+          '<button data-n="'+escH(name)+'" onclick="openCertModal(this.dataset.n)"' style="font-size:10px;padding:3px 7px;border:1px solid var(--gray-200);border-radius:4px;background:transparent;cursor:pointer;font-family:inherit">🏆 Certs</button> '+
+          '<button data-n="'+escH(name)+'" onclick="showPayTermsModal(this.dataset.n)"' style="font-size:10px;padding:3px 7px;border:1px solid var(--gray-200);border-radius:4px;background:transparent;cursor:pointer;font-family:inherit">💳 Terms</button>'+
         '</td>'+
       '</tr>';
     }).join('')}
