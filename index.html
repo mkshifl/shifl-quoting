@@ -1017,6 +1017,7 @@ async function initApp(){
   try{updateActiveBadge();}catch(e){}
   setTimeout(()=>{try{checkAchievements();}catch(e){}},3000);
   try{updateStreak();}catch(e){}
+  setInterval(()=>{try{checkEscalations();}catch(e){}},600000); // check every 10min
   try{checkBossMode();}catch(e){}
   try{buildFridayBar();}catch(e){}
   S.view='home';
@@ -13114,6 +13115,7 @@ function renderTMSDashboard(tabBar,kpis,loads){
     </div>
   </div>
   <!-- Quick actions -->
+  <div style="margin-bottom:16px">${renderRealTimeMargin()}</div>
   <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">
     <button onclick="S.tmsTab='dispatch';renderTMS()" class="card" style="text-align:center;cursor:pointer;border:none;background:var(--white)"><div style="font-size:24px">📋</div><div style="font-size:12px;font-weight:700;color:var(--navy);margin-top:4px">Dispatch board</div></button>
     <button onclick="S.tmsTab='bol';renderTMS()" class="card" style="text-align:center;cursor:pointer;border:none;background:var(--white)"><div style="font-size:24px">📄</div><div style="font-size:12px;font-weight:700;color:var(--navy);margin-top:4px">BOL & Docs</div></button>
@@ -13216,6 +13218,11 @@ function openTMSLoadDetail(id){
         </div>`).join('')}
         <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px">
           <button onclick="openTMSRateCon('${id}')" style="font-size:11px;padding:5px 10px;border:1px solid var(--gray-200);border-radius:var(--radius);background:transparent;cursor:pointer;font-family:inherit">📧 Rate con</button>
+          <button onclick="openDriverContactModal('${id}')" style="font-size:11px;padding:5px 10px;border:1px solid var(--gray-200);border-radius:var(--radius);background:transparent;cursor:pointer;font-family:inherit">🚛 Driver</button>
+          <button onclick="duplicateTMSLoad('${id}')" style="font-size:11px;padding:5px 10px;border:1px solid var(--gray-200);border-radius:var(--radius);background:transparent;cursor:pointer;font-family:inherit">📋 Duplicate</button>
+          <button onclick="toggleBlindMode('${id}');openTMSLoadDetail('${id}')" style="font-size:11px;padding:5px 10px;border:1px solid ${meta.isBlind?'#7c3aed':'var(--gray-200)'};border-radius:var(--radius);background:${meta.isBlind?'#f5f3ff':'transparent'};cursor:pointer;font-family:inherit;color:${meta.isBlind?'#7c3aed':'inherit'}">🙈 Blind</button>
+          <button onclick="aiMatchCarrier('${id}')" style="font-size:11px;padding:5px 10px;border:1px solid var(--steel);border-radius:var(--radius);background:var(--blue-bg);cursor:pointer;font-family:inherit;color:var(--steel)">🤖 AI match</button>
+          <button onclick="noteTemplateMenu('tms-notes-${id}')" style="font-size:11px;padding:5px 10px;border:1px solid var(--gray-200);border-radius:var(--radius);background:transparent;cursor:pointer;font-family:inherit">📝 Templates</button>
           <button onclick="openBOLBuilder('${id}')" style="font-size:11px;padding:5px 10px;border:1px solid var(--gray-200);border-radius:var(--radius);background:transparent;cursor:pointer;font-family:inherit">📄 BOL</button>
           <button onclick="tmsInvOpen('${id}')" style="font-size:11px;padding:5px 10px;border:1px solid var(--gray-200);border-radius:var(--radius);background:transparent;cursor:pointer;font-family:inherit">🧾 Invoice</button>
           <button onclick="openFqCarrierInvById('${id}')" style="font-size:11px;padding:5px 10px;border:1px solid var(--gray-200);border-radius:var(--radius);background:transparent;cursor:pointer;font-family:inherit">🚛 Carrier inv</button>
@@ -13435,7 +13442,7 @@ function renderTMSClaims(tabBar,loads){
 // ── 9. ENHANCED REPORTS (analytics) ──────────────────────────────
 function renderTMSReports(tabBar,loads){
   const rTab=S.tmsRptTab||'pl';
-  const rTabs=[{id:'pl',label:'P&L'},{id:'ontime',label:'On-time'},{id:'customer',label:'Customer profit'},{id:'lane',label:'Lane trends'},{id:'heatmap',label:'Volume heatmap'}];
+  const rTabs=[{id:'pl',label:'P&L'},{id:'ontime',label:'On-time'},{id:'customer',label:'Customer profit'},{id:'lane',label:'Lane trends'},{id:'heatmap',label:'Volume heatmap'},{id:'annual',label:'Annual review'}];
   const rBar=`<div style="display:flex;gap:4px;background:var(--gray-100);padding:3px;border-radius:var(--radius);width:fit-content;margin-bottom:16px">
     ${rTabs.map(t=>`<button onclick="S.tmsRptTab='${t.id}';renderTMS()" style="padding:6px 14px;border-radius:5px;border:none;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;background:${(S.tmsRptTab||'pl')===t.id?'#fff':'none'};color:${(S.tmsRptTab||'pl')===t.id?'var(--navy)':'var(--gray-500)'};box-shadow:${(S.tmsRptTab||'pl')===t.id?'0 1px 3px rgba(0,0,0,.08)':'none'}">${t.label}</button>`).join('')}
   </div>`;
@@ -13445,6 +13452,7 @@ function renderTMSReports(tabBar,loads){
   else if(rTab==='customer') renderTMSCustomerProfit(tabBar,rBar,loads);
   else if(rTab==='lane') renderTMSLaneTrend(tabBar,rBar,loads);
   else if(rTab==='heatmap') renderTMSHeatmap(tabBar,rBar,loads);
+  else if(rTab==='annual') renderAnnualCarrierReview(tabBar+rBar,loads);
 }
 
 function renderTMSPL(tabBar,rBar,loads){
@@ -13577,6 +13585,942 @@ function renderTMSHeatmap(tabBar,rBar,loads){
   </div>`;
 }
 
+
+
+// ════════════════════════════════════════════════════════════════════
+// BATCH 1: MAIN APP FEATURES
+// ════════════════════════════════════════════════════════════════════
+
+// ── QUOTE EXPIRY COUNTDOWN ────────────────────────────────────────
+function getQuoteExpiry(q){return q.expiryDate||null;}
+function quoteExpiryBadge(q){
+  if(!q.expiryDate) return '';
+  const diff=new Date(q.expiryDate)-new Date();
+  if(diff<0) return '<span style="font-size:10px;background:#fee2e2;color:#dc2626;padding:1px 7px;border-radius:99px;font-weight:700">Expired</span>';
+  const days=Math.floor(diff/864e5);const hrs=Math.floor((diff%864e5)/3600000);
+  const col=days<1?'#dc2626':days<3?'#d97706':'#16a34a';
+  return `<span style="font-size:10px;background:${col}15;color:${col};padding:1px 7px;border-radius:99px;font-weight:700">⏱ ${days>0?days+'d ':''} ${hrs}h left</span>`;
+}
+
+// ── WIN / LOSS REASON TRACKING ────────────────────────────────────
+const LOSS_REASONS=['Price too high','Carrier issue','Transit time','Customer went direct','Competitor','Load cancelled','Other'];
+function openLostReasonModal(type,id){
+  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal" style="max-width:380px">
+    <div class="modal-title">📉 Why was this quote lost?</div>
+    <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px">
+      ${LOSS_REASONS.map(r=>`<button onclick="markLostWithReason('${type}','${id}','${r}')" style="padding:10px 14px;border:1.5px solid var(--gray-200);border-radius:var(--radius);background:transparent;cursor:pointer;font-family:inherit;font-size:13px;font-weight:600;color:var(--navy);text-align:left" onmouseenter="this.style.background='var(--blue-bg)'" onmouseleave="this.style.background='transparent'">${r}</button>`).join('')}
+    </div>
+    <button class="btn" onclick="closeModal()">Cancel</button>
+  </div></div>`;
+}
+function markLostWithReason(type,id,reason){
+  closeModal();
+  if(type==='drayage'){
+    const q=S.quotes.find(q=>q.id===id);
+    if(q){q.status='Lost';q.lossReason=reason;q.lostDate=localDateStr();dbSaveQuote(q);logAction('quote_lost',{id,reason});}
+    renderLog();
+  } else if(type==='freight'){
+    const idx=(window._fqHistory||[]).findIndex(q=>q.id===id);
+    if(idx>=0){window._fqHistory[idx].status='Lost';window._fqHistory[idx].lossReason=reason;localStorage.setItem('fq_history',JSON.stringify(window._fqHistory));renderFqLog();}
+  }
+  showToast('Marked lost: '+reason,'info',2000);
+}
+
+// ── CARRIER BLACKLIST ─────────────────────────────────────────────
+function getBlacklist(){return JSON.parse(localStorage.getItem('carrier_blacklist')||'[]');}
+function toggleBlacklist(name){
+  const bl=getBlacklist();
+  const idx=bl.indexOf(name);
+  if(idx>=0){bl.splice(idx,1);showToast(name+' removed from blacklist','info');}
+  else{bl.push(name);showToast('🚫 '+name+' blacklisted','warning');}
+  localStorage.setItem('carrier_blacklist',JSON.stringify(bl));
+}
+function isBlacklisted(name){return getBlacklist().includes(name);}
+function blacklistBadge(name){return isBlacklisted(name)?'<span style="font-size:10px;background:#fee2e2;color:#dc2626;padding:1px 7px;border-radius:99px;font-weight:700">🚫 Blacklisted</span>':'';}
+
+// ── CUSTOMER TAGS ─────────────────────────────────────────────────
+const CUST_TAGS=['Preferred','Enterprise','Spot','Inactive','New','High Volume','At Risk'];
+function getCustomerTags(name){return JSON.parse(localStorage.getItem('cust_tags_'+name)||'[]');}
+function setCustomerTags(name,tags){localStorage.setItem('cust_tags_'+name,JSON.stringify(tags));}
+function custTagBadges(name){
+  return getCustomerTags(name).map(t=>{
+    const col={Preferred:'#16a34a',Enterprise:'#1d4ed8',Spot:'#d97706',Inactive:'#6b7280','New':'#7c3aed','High Volume':'#0369a1','At Risk':'#dc2626'}[t]||'#6b7280';
+    return `<span style="font-size:10px;background:${col}15;color:${col};padding:1px 7px;border-radius:99px;font-weight:700">${t}</span>`;}).join(' ');
+}
+function openTagModal(customerName){
+  const current=getCustomerTags(customerName);
+  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal" style="max-width:380px">
+    <div class="modal-title">🏷️ Tags — ${escH(customerName)}</div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px">
+      ${CUST_TAGS.map(t=>`<button onclick="this.classList.toggle('tag-on')" class="${current.includes(t)?'tag-on':''}" data-tag="${t}" style="padding:7px 14px;border-radius:99px;border:1.5px solid var(--gray-200);background:transparent;cursor:pointer;font-family:inherit;font-size:12px;font-weight:600" onmouseenter="this.style.background='var(--blue-bg)'" onmouseleave="this.style.background=this.classList.contains('tag-on')?'var(--blue-bg)':'transparent'">${t}</button>`).join('')}
+    </div>
+    <div class="modal-foot">
+      <button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn blue" onclick="saveCustomerTags('${customerName}')">Save tags</button>
+    </div>
+  </div></div>`;
+  document.querySelectorAll('.tag-on').forEach(b=>b.style.background='var(--blue-bg)');
+}
+function saveCustomerTags(name){
+  const tags=[...document.querySelectorAll('[data-tag].tag-on')].map(b=>b.dataset.tag);
+  setCustomerTags(name,tags);closeModal();showToast('Tags saved','success',2000);
+}
+
+// ── SHIPPER / CONSIGNEE ADDRESS BOOK ──────────────────────────────
+function getAddressBook(){return JSON.parse(localStorage.getItem('address_book')||'[]');}
+function saveAddressBook(list){localStorage.setItem('address_book',JSON.stringify(list));}
+function addAddress(addr){const book=getAddressBook();if(!book.find(a=>a.name===addr.name)){book.unshift(addr);saveAddressBook(book);}return book;}
+function openAddressBook(callback){
+  const book=getAddressBook();
+  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-title">📍 Address book</div>
+    <div style="max-height:300px;overflow-y:auto">
+      ${book.length?book.map(a=>`<div onclick="selectAddress(${JSON.stringify(JSON.stringify(a))},${callback})" style="padding:10px;border-bottom:1px solid var(--gray-100);cursor:pointer;border-radius:var(--radius)" onmouseenter="this.style.background='var(--blue-bg)'" onmouseleave="this.style.background=''">
+        <div style="font-size:13px;font-weight:700;color:var(--navy)">${escH(a.name)}</div>
+        <div style="font-size:12px;color:var(--gray-500)">${escH(a.address||'')} ${escH(a.city||'')} ${escH(a.zip||'')}</div>
+      </div>`).join(''):'<div style="padding:20px;text-align:center;color:var(--gray-400)">No saved addresses yet</div>'}
+    </div>
+    <button class="btn" onclick="closeModal()" style="margin-top:12px">Close</button>
+  </div></div>`;
+}
+
+// ── HAZMAT + OVERWEIGHT FLAGS ─────────────────────────────────────
+// These are added as checkboxes on quote forms (applied in renderFqBuilder)
+function hazmatBadge(q){return q.isHazmat?'<span style="font-size:10px;background:#fee2e2;color:#dc2626;padding:1px 7px;border-radius:99px;font-weight:700">☢️ HAZMAT</span>':'';}
+function odBadge(q){return q.isOD?'<span style="font-size:10px;background:#fef3c7;color:#d97706;padding:1px 7px;border-radius:99px;font-weight:700">⚠️ OD/Overweight</span>':'';}
+
+// ── CONTAINER LAST FREE DAY (LFD) ─────────────────────────────────
+function lfdBadge(q){
+  if(!q.lfd) return '';
+  const diff=new Date(q.lfd)-new Date();
+  const days=Math.floor(diff/864e5);
+  if(days<0) return '<span style="font-size:10px;background:#fee2e2;color:#dc2626;padding:1px 7px;border-radius:99px;font-weight:700">🚨 LFD PAST</span>';
+  if(days<=2) return `<span style="font-size:10px;background:#fee2e2;color:#dc2626;padding:1px 7px;border-radius:99px;font-weight:700">⚠️ LFD: ${q.lfd} (${days}d)</span>`;
+  return `<span style="font-size:10px;background:#fef3c7;color:#d97706;padding:1px 7px;border-radius:99px;font-weight:700">📅 LFD: ${q.lfd}</span>`;
+}
+
+// ── DRAYAGE PER-DIEM TRACKER ─────────────────────────────────────
+function calcPerDiem(q){
+  if(!q.freeDays||!q.pickupDate) return 0;
+  const dayOut=Math.max(0,Math.floor((new Date()-new Date(q.pickupDate))/864e5)-parseInt(q.freeDays||0));
+  return dayOut*(parseFloat(q.perDiemRate)||95);
+}
+function perDiemBadge(q){
+  const pd=calcPerDiem(q);
+  if(!pd) return '';
+  return `<span style="font-size:10px;background:#fee2e2;color:#dc2626;padding:1px 7px;border-radius:99px;font-weight:700">💰 Per-diem: ${fmtD(pd)}</span>`;
+}
+
+// ── QUOTE WIN RATE BY AGENT ────────────────────────────────────────
+function getAgentWinRates(){
+  const agents={};
+  (S.quotes||[]).forEach(q=>{
+    const a=q.created_by_name||'Unknown';
+    if(!agents[a]) agents[a]={total:0,booked:0,lost:0,lossReasons:{}};
+    agents[a].total++;
+    if(['Booked','Delivered','Invoiced','Paid'].includes(q.status)){agents[a].booked++;}
+    if(q.status==='Lost'){agents[a].lost++;if(q.lossReason)agents[a].lossReasons[q.lossReason]=(agents[a].lossReasons[q.lossReason]||0)+1;}
+  });
+  return agents;
+}
+
+// ── QUOTE ACTIVITY TIMELINE ────────────────────────────────────────
+function getQuoteActivity(id){return JSON.parse(localStorage.getItem('qact_'+id)||'[]');}
+function addQuoteActivity(id,action,detail){
+  const acts=getQuoteActivity(id);
+  acts.push({action,detail,user:(_currentUser?.name||'System'),ts:new Date().toISOString()});
+  if(acts.length>50) acts.shift();
+  localStorage.setItem('qact_'+id,JSON.stringify(acts));
+}
+function renderQuoteActivity(id){
+  const acts=getQuoteActivity(id);
+  if(!acts.length) return '<div style="color:var(--gray-400);font-size:12px;padding:8px 0">No activity yet</div>';
+  return acts.slice().reverse().map(a=>`<div style="padding:6px 0;border-bottom:1px solid var(--gray-100)">
+    <div style="display:flex;justify-content:space-between">
+      <span style="font-size:12px;font-weight:600;color:var(--navy)">${escH(a.action)}</span>
+      <span style="font-size:11px;color:var(--gray-400)">${new Date(a.ts).toLocaleString('en-US',{timeZone:'America/New_York',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}</span>
+    </div>
+    ${a.detail?`<div style="font-size:11px;color:var(--gray-500)">${escH(a.detail)}</div>`:''}
+    <div style="font-size:10px;color:var(--gray-400)">${escH(a.user)}</div>
+  </div>`).join('');
+}
+
+// ── CUSTOMER CREDIT LIMIT ─────────────────────────────────────────
+function getCreditLimit(name){return parseFloat(localStorage.getItem('credit_limit_'+name)||'0');}
+function setCreditLimit(name,limit){localStorage.setItem('credit_limit_'+name,limit);}
+function getCustomerAR(name){
+  return (S.quotes||[]).filter(q=>q.customer===name&&q.status==='Invoiced').reduce((s,q)=>s+(q.customerRate||0),0)
+        +(window._fqHistory||[]).filter(q=>q.customer===name&&q.status==='Invoiced').reduce((s,q)=>s+(q.customerRate||0),0);
+}
+function creditLimitWarning(name){
+  const limit=getCreditLimit(name);if(!limit) return '';
+  const ar=getCustomerAR(name);const pct2=ar/limit;
+  if(pct2>=1) return '<span style="font-size:10px;background:#fee2e2;color:#dc2626;padding:1px 7px;border-radius:99px;font-weight:700">🚫 Credit limit exceeded</span>';
+  if(pct2>=0.8) return '<span style="font-size:10px;background:#fef3c7;color:#d97706;padding:1px 7px;border-radius:99px;font-weight:700">⚠️ Near credit limit</span>';
+  return '';
+}
+
+// ── GOOGLE MAPS LANE DISTANCE ─────────────────────────────────────
+async function calcLaneDistance(pickupZip,deliveryZip){
+  try{
+    const url=`https://nominatim.openstreetmap.org/search?postalcode=${pickupZip}&country=US&format=json&limit=1`;
+    const url2=`https://nominatim.openstreetmap.org/search?postalcode=${deliveryZip}&country=US&format=json&limit=1`;
+    const [r1,r2]=await Promise.all([fetch(url).then(r=>r.json()),fetch(url2).then(r=>r.json())]);
+    if(!r1[0]||!r2[0]) return null;
+    const lat1=r1[0].lat,lon1=r1[0].lon,lat2=r2[0].lat,lon2=r2[0].lon;
+    // Haversine formula
+    const R=3958.8;const dLat=(lat2-lat1)*Math.PI/180;const dLon=(lon2-lon1)*Math.PI/180;
+    const a=Math.sin(dLat/2)**2+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
+    const miles=R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+    return Math.round(miles*1.15); // road distance ~15% more than straight line
+  }catch(e){return null;}
+}
+
+// ── END OF DAY SUMMARY ────────────────────────────────────────────
+function generateEODSummary(){
+  const today=localDateStr();
+  const todayQ=(S.quotes||[]).filter(q=>q.date===today);
+  const todayFQ=(window._fqHistory||[]).filter(q=>q.date===today);
+  const booked=[...todayQ,...todayFQ].filter(q=>['Booked','Delivered','Invoiced','Paid'].includes(q.status));
+  const rev=booked.reduce((s,q)=>s+(q.customerRate||0),0);
+  const profit=booked.reduce((s,q)=>s+getShipmentProfit(q,'freight').profit,0);
+  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-title">📊 End of day summary — ${today}</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+      <div class="kpi"><div class="kpi-lbl">Quotes created today</div><div class="kpi-val">${todayQ.length+todayFQ.length}</div></div>
+      <div class="kpi"><div class="kpi-lbl">Loads booked today</div><div class="kpi-val" style="color:var(--green)">${booked.length}</div></div>
+      <div class="kpi"><div class="kpi-lbl">Revenue booked</div><div class="kpi-val" style="color:var(--steel);font-size:18px">${fmtD(rev)}</div></div>
+      <div class="kpi"><div class="kpi-lbl">Profit booked</div><div class="kpi-val" style="color:var(--green);font-size:18px">${fmtD(profit)}</div></div>
+    </div>
+    <div style="background:var(--gray-50);border-radius:var(--radius);padding:12px;font-size:13px;color:var(--gray-600)">
+      ${booked.length?'Today\'s loads: '+booked.map(q=>q.customer||'—').join(', '):'No loads booked today — tomorrow\'s a new day!'}
+    </div>
+    <div class="modal-foot"><button class="btn" onclick="closeModal()">Close</button></div>
+  </div></div>`;
+}
+
+// ── BULK INVOICE SEND ─────────────────────────────────────────────
+function openBulkInvoice(){
+  const eligible=[...(S.quotes||[]),...(window._fqHistory||[])].filter(q=>q.status==='Delivered'&&!getInvoice(q.id));
+  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-title">📤 Bulk invoice send</div>
+    <div style="font-size:13px;color:var(--gray-500);margin-bottom:12px">${eligible.length} delivered loads without invoices</div>
+    ${eligible.length?`<div style="max-height:280px;overflow-y:auto;margin-bottom:14px">
+      ${eligible.map(q=>`<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--gray-100)">
+        <input type="checkbox" data-id="${q.id}" class="bulk-inv-cb" checked>
+        <div><div style="font-size:13px;font-weight:700;color:var(--navy)">${escH(q.customer||'—')}</div>
+        <div style="font-size:11px;color:var(--gray-400)">${q.date} · ${fmtD(q.customerRate||0)}</div></div>
+      </div>`).join('')}
+    </div>
+    <div class="modal-foot">
+      <button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn blue" onclick="sendBulkInvoices()">📤 Send selected invoices</button>
+    </div>`:`<div class="empty"><div class="empty-ico">✅</div><p>All delivered loads already invoiced</p></div><button class="btn" onclick="closeModal()">Close</button>`}
+  </div></div>`;
+}
+function sendBulkInvoices(){
+  const ids=[...document.querySelectorAll('.bulk-inv-cb:checked')].map(cb=>cb.dataset.id);
+  ids.forEach(id=>{if(!getInvoice(id)) saveInvoice(id,{invNum:'INV-'+Date.now().toString().slice(-5),invDate:localDateStr(),status:'Invoiced',grandTotal:([...(S.quotes||[]),...(window._fqHistory||[])].find(q=>q.id===id)?.customerRate||0)});});
+  closeModal();showToast(`📤 ${ids.length} invoices queued`,'success',3000);
+}
+
+// ── CUSTOM FIELDS ON QUOTES ───────────────────────────────────────
+function getCustomFields(){return JSON.parse(localStorage.getItem('custom_quote_fields')||'[]');}
+function saveCustomFields(fields){localStorage.setItem('custom_quote_fields',JSON.stringify(fields));}
+function renderCustomFieldsAdmin(){
+  const fields=getCustomFields();
+  return `<div class="card" style="margin-bottom:14px">
+    <div style="font-size:14px;font-weight:800;color:var(--navy);margin-bottom:12px">🔧 Custom quote fields</div>
+    ${fields.map((f,i)=>`<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--gray-100)">
+      <span style="font-size:13px;flex:1;color:var(--navy);font-weight:600">${escH(f.label)}</span>
+      <span style="font-size:11px;color:var(--gray-400)">${f.type}</span>
+      <button onclick="removeCustomField(${i})" style="border:none;background:transparent;cursor:pointer;color:var(--red)">🗑️</button>
+    </div>`).join('')}
+    <div style="display:flex;gap:8px;margin-top:12px">
+      <input type="text" id="cf-label" placeholder="Field name" style="flex:1;padding:7px 10px;border:1px solid var(--gray-200);border-radius:var(--radius);font-size:13px">
+      <select id="cf-type" style="padding:7px;border:1px solid var(--gray-200);border-radius:var(--radius);font-size:13px"><option>text</option><option>number</option><option>checkbox</option></select>
+      <button onclick="addCustomField()" class="btn blue" style="font-size:12px">+ Add</button>
+    </div>
+  </div>`;
+}
+function addCustomField(){const label=($('cf-label')||{}).value?.trim();if(!label) return;const fields=getCustomFields();fields.push({label,type:($('cf-type')||{}).value||'text'});saveCustomFields(fields);if(S.view==='admin') render();}
+function removeCustomField(i){const f=getCustomFields();f.splice(i,1);saveCustomFields(f);if(S.view==='admin') render();}
+function renderCustomFieldsOnQuote(quoteId){
+  const fields=getCustomFields();if(!fields.length) return '';
+  const vals=JSON.parse(localStorage.getItem('cfvals_'+quoteId)||'{}');
+  return `<div class="card"><div style="font-size:12px;font-weight:700;color:var(--gray-400);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Custom fields</div>
+    ${fields.map(f=>`<div class="field"><label style="font-size:12px">${escH(f.label)}</label>
+      ${f.type==='checkbox'?`<input type="checkbox" ${vals[f.label]?'checked':''} onchange="saveCFVal('${quoteId}','${f.label}',this.checked)">`:`<input type="${f.type}" value="${escH(vals[f.label]||'')}" placeholder="${escH(f.label)}" onchange="saveCFVal('${quoteId}','${f.label}',this.value)">`}
+    </div>`).join('')}
+  </div>`;
+}
+function saveCFVal(id,label,val){const v=JSON.parse(localStorage.getItem('cfvals_'+id)||'{}');v[label]=val;localStorage.setItem('cfvals_'+id,JSON.stringify(v));}
+
+// ── REVENUE LEADERBOARD (AGENTS) ──────────────────────────────────
+function renderAgentLeaderboard(){
+  const agents=getAgentWinRates();
+  const weekAgo=new Date(Date.now()-7*864e5).toISOString().slice(0,10);
+  const agentRev={};
+  [...(S.quotes||[]),...(window._fqHistory||[])].filter(q=>q.date>=weekAgo&&['Booked','Delivered','Invoiced','Paid'].includes(q.status)).forEach(q=>{
+    const a=q.created_by_name||'Unknown';agentRev[a]=(agentRev[a]||0)+(q.customerRate||0);
+  });
+  const sorted=Object.entries(agentRev).sort((a,b)=>b[1]-a[1]);
+  const medals=['🥇','🥈','🥉'];
+  return sorted.length?sorted.map(([name,rev],i)=>`<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--gray-100)">
+    <div style="font-size:22px">${medals[i]||'#'+(i+1)}</div>
+    <div style="flex:1"><div style="font-size:14px;font-weight:700;color:var(--navy)">${escH(name)}</div>
+      <div style="height:5px;background:var(--gray-100);border-radius:3px;margin-top:4px;overflow:hidden"><div style="height:5px;width:${Math.round(rev/sorted[0][1]*100)}%;background:var(--steel);border-radius:3px"></div></div>
+    </div>
+    <div style="font-size:15px;font-weight:800;color:var(--steel)">${fmtD(rev)}</div>
+    <div style="font-size:11px;color:var(--gray-400)">${((agents[name]?.booked||0)/Math.max(agents[name]?.total||1,1)*100).toFixed(0)}% win</div>
+  </div>`).join(''):'<div style="color:var(--gray-400);font-size:13px;padding:12px 0">No loads booked this week yet</div>';
+}
+
+// ── AI QUOTE ASSISTANT (uses Anthropic API) ────────────────────────
+async function openAIQuoteAssistant(){
+  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-title">🤖 AI Quote Assistant</div>
+    <div style="font-size:13px;color:var(--gray-500);margin-bottom:12px">Describe the load in plain English — I'll fill in the quote details.</div>
+    <div class="field">
+      <textarea id="ai-prompt" rows="4" style="width:100%;box-sizing:border-box;resize:vertical;font-size:13px" placeholder="e.g. FTL dry van from Newark NJ to Chicago IL, 42000 lbs, tanker trailers, pickup Monday, customer is Advanced Group Corp, we're charging $3800"></textarea>
+    </div>
+    <div id="ai-result" style="display:none;background:var(--blue-bg);border-radius:var(--radius);padding:12px;margin-top:10px;font-size:13px"></div>
+    <div class="modal-foot">
+      <button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn blue" id="ai-btn" onclick="runAIQuote()">🤖 Parse quote</button>
+    </div>
+  </div></div>`;
+}
+async function runAIQuote(){
+  const prompt=($('ai-prompt')||{}).value?.trim();if(!prompt){alert('Describe the load first.');return;}
+  const btn=$('ai-btn');if(btn){btn.textContent='Thinking...';btn.disabled=true;}
+  try{
+    const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:1000,messages:[{role:'user',content:`Extract freight quote details from this description and return ONLY a JSON object with these fields (use null for unknown): {mode, pickupZip, deliveryZip, customer, weight, pieces, commodity, customerRate, carrierRate, notes}. Description: ${prompt}`}]})});
+    const data=await res.json();
+    const text=data.content?.[0]?.text||'';
+    const json=JSON.parse(text.replace(/```json|```/g,'').trim());
+    const result=$('ai-result');
+    if(result){
+      result.style.display='block';
+      result.innerHTML=`<div style="font-weight:700;color:var(--navy);margin-bottom:8px">✅ Parsed — review and apply:</div>`+
+        Object.entries(json).filter(([k,v])=>v!=null).map(([k,v])=>`<div style="font-size:12px;margin-bottom:3px"><strong>${k}:</strong> ${v}</div>`).join('');
+    }
+    window._aiParsed=json;
+    if(btn){btn.textContent='Apply to quote →';btn.disabled=false;btn.onclick=applyAIQuote;}
+  }catch(e){if(btn){btn.textContent='🤖 Parse quote';btn.disabled=false;}showToast('AI error: '+e.message,'error');}
+}
+function applyAIQuote(){
+  const q=window._aiParsed;if(!q) return;
+  if(q.mode) S.fq.fqMode=q.mode;
+  if(q.pickupZip) S.fq.pickupZip=q.pickupZip;
+  if(q.deliveryZip) S.fq.deliveryZip=q.deliveryZip;
+  if(q.customer) S.fq.customer=q.customer;
+  if(q.weight) S.fq.weight=q.weight;
+  if(q.commodity) S.fq.commodity=q.commodity;
+  if(q.customerRate) S.fq.customerRate=q.customerRate;
+  if(q.carrierRate) S.fq.carrierRate=q.carrierRate;
+  closeModal();S.view='freight';S.fqTab='builder';render();
+  showToast('✅ Quote pre-filled by AI — review and save','success',4000);
+}
+
+// ── QUOTE COMPARISON TOOL ─────────────────────────────────────────
+function openQuoteComparison(ids){
+  const quotes=ids.map(id=>[...(S.quotes||[]),...(window._fqHistory||[])].find(q=>q.id===id)).filter(Boolean);
+  if(quotes.length<2){showToast('Select at least 2 quotes to compare','info');return;}
+  const fields=['customer','pickupZip','deliveryZip','carrierRate','customerRate','carrier','weight','status'];
+  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal" style="max-width:620px;overflow-x:auto">
+    <div class="modal-title">📊 Quote comparison</div>
+    <table style="width:100%;border-collapse:collapse;font-size:12px">
+      <thead><tr><th style="text-align:left;padding:8px;color:var(--gray-400);font-weight:600">Field</th>
+        ${quotes.map(q=>`<th style="text-align:left;padding:8px;color:var(--navy);font-weight:800">${escH(q.customer||q.id.slice(-6))}</th>`).join('')}
+      </tr></thead>
+      <tbody>${fields.map(f=>`<tr style="border-top:1px solid var(--gray-100)"><td style="padding:8px;font-weight:600;color:var(--gray-500)">${f}</td>
+        ${quotes.map(q=>`<td style="padding:8px;color:var(--navy)">${escH(String(q[f]||'—'))}</td>`).join('')}
+      </tr>`).join('')}
+      <tr style="border-top:2px solid var(--gray-200);background:var(--blue-bg)"><td style="padding:8px;font-weight:700">Profit</td>
+        ${quotes.map(q=>{const p=getShipmentProfit(q,'freight');return`<td style="padding:8px;font-weight:800;color:${p.profit>=0?'var(--green)':'var(--red)'}">${fmtD(p.profit)} (${pct(p.margin)})</td>`;}).join('')}
+      </tr></tbody>
+    </table>
+    <div class="modal-foot"><button class="btn" onclick="closeModal()">Close</button></div>
+  </div></div>`;
+}
+
+
+
+// ════════════════════════════════════════════════════════════════════
+// BATCH 2: TMS FEATURES
+// ════════════════════════════════════════════════════════════════════
+
+// ── AI LOAD MATCHING ──────────────────────────────────────────────
+async function aiMatchCarrier(loadId){
+  const q=(window._fqHistory||[]).find(q=>q.id===loadId);if(!q) return;
+  const carriers=window._carriers||[];
+  const history=(window._fqHistory||[]).filter(l=>l.carrier&&['Delivered','Invoiced','Paid'].includes(l.status));
+  // Score carriers by lane history + on-time rate
+  const scored=carriers.map(c=>{
+    const laneLoads=history.filter(l=>l.carrier===c.name&&l.pickupZip===q.pickupZip&&l.deliveryZip===q.deliveryZip);
+    const allLoads=history.filter(l=>l.carrier===c.name);
+    const onTimeRate=allLoads.length>0?allLoads.filter(l=>!getTMSMeta(l.id).isLate).length/allLoads.length:0.8;
+    const laneScore=laneLoads.length*2;
+    const score=Math.round((onTimeRate*50)+(laneScore*10));
+    const avgRate=laneLoads.length?laneLoads.reduce((s,l)=>s+(l.carrierRate||0),0)/laneLoads.length:0;
+    return{name:c.name,score,loads:allLoads.length,lanePairs:laneLoads.length,onTimeRate:Math.round(onTimeRate*100),avgRate};
+  }).filter(c=>!isBlacklisted(c.name)).sort((a,b)=>b.score-a.score).slice(0,5);
+
+  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-title">🤖 AI Carrier Match — ${escH(q.pickupZip||'?')} → ${escH(q.deliveryZip||'?')}</div>
+    <div style="font-size:12px;color:var(--gray-500);margin-bottom:12px">Ranked by lane history, on-time rate, and availability</div>
+    ${scored.length?scored.map((c,i)=>`<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--gray-100)">
+      <div style="font-size:20px">${['🥇','🥈','🥉','4️⃣','5️⃣'][i]}</div>
+      <div style="flex:1"><div style="font-size:13px;font-weight:700;color:var(--navy)">${escH(c.name)}</div>
+        <div style="font-size:11px;color:var(--gray-500)">${c.lanePairs} lane runs · ${c.onTimeRate}% on-time · ${c.avgRate?fmtD(c.avgRate)+' avg rate':'New on lane'}</div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:14px;font-weight:800;color:var(--steel)">${c.score}</div>
+        <div style="font-size:10px;color:var(--gray-400)">score</div>
+      </div>
+      <button onclick="assignCarrierToLoad('${loadId}','${escH(c.name)}');closeModal()" style="font-size:11px;padding:5px 10px;border:1px solid var(--steel);border-radius:var(--radius);background:transparent;cursor:pointer;color:var(--steel);font-family:inherit">Assign</button>
+    </div>`).join(''):'<div style="padding:20px;text-align:center;color:var(--gray-400)">No carrier history available — add carriers to your network first</div>'}
+    <div class="modal-foot"><button class="btn" onclick="closeModal()">Close</button></div>
+  </div></div>`;
+}
+function assignCarrierToLoad(id,carrier){
+  const idx=(window._fqHistory||[]).findIndex(q=>q.id===id);
+  if(idx>=0){window._fqHistory[idx].carrier=carrier;try{localStorage.setItem('fq_history',JSON.stringify(window._fqHistory));dbUpdateFqStatus(id,window._fqHistory[idx].status);}catch(e){}}
+  showToast('Carrier assigned: '+carrier,'success');if(S.view==='tms') renderTMS();
+}
+
+// ── PREDICTIVE ETA ────────────────────────────────────────────────
+function calcPredictiveETA(q){
+  const history=(window._fqHistory||[]).filter(l=>l.carrier===q.carrier&&['Delivered','Invoiced','Paid'].includes(l.status)&&getTMSMeta(l.id).delivered_at&&getTMSMeta(l.id).dispatched_at);
+  if(history.length>0){
+    const avgDays=history.slice(-10).reduce((s,l)=>{const m=getTMSMeta(l.id);return s+(new Date(m.delivered_at)-new Date(m.dispatched_at))/(864e5);},0)/Math.min(history.length,10);
+    const baseDate=new Date();baseDate.setDate(baseDate.getDate()+Math.ceil(avgDays));
+    return{eta:baseDate.toISOString().slice(0,10),source:'historical',days:Math.ceil(avgDays)};
+  }
+  // Fallback: estimate by distance
+  const zip1=q.pickupZip,zip2=q.deliveryZip;
+  if(zip1&&zip2){const diff=Math.abs(parseInt(zip1)-parseInt(zip2));const days=diff>200?3:diff>100?2:1;const d=new Date();d.setDate(d.getDate()+days);return{eta:d.toISOString().slice(0,10),source:'estimated',days};}
+  return null;
+}
+function setPredictiveETA(id){
+  const q=(window._fqHistory||[]).find(q=>q.id===id);if(!q) return;
+  const pred=calcPredictiveETA(q);if(!pred){showToast('Not enough data for prediction','info');return;}
+  saveTMSMeta(id,{eta:pred.eta});
+  showToast(`📅 ETA set to ${pred.eta} (${pred.source}, ~${pred.days}d)`,'success',3000);
+  if(S.view==='tms') openTMSLoadDetail(id);
+}
+
+// ── LOAD PROFITABILITY SCORE ──────────────────────────────────────
+function calcLoadScore(l){
+  const p=getShipmentProfit(l,'freight');
+  let score=0;
+  // Margin (0-40pts)
+  if(p.margin>=.2) score+=40; else if(p.margin>=.15) score+=30; else if(p.margin>=.1) score+=20; else if(p.margin>=.05) score+=10;
+  // Carrier reliability (0-30pts)
+  const meta=getTMSMeta(l.id);
+  const history=(window._fqHistory||[]).filter(h=>h.carrier===l.carrier&&['Delivered','Invoiced','Paid'].includes(h.status));
+  const onTime=history.length?history.filter(h=>!getTMSMeta(h.id).isLate).length/history.length:0.8;
+  score+=Math.round(onTime*30);
+  // Lane familiarity (0-30pts)
+  const laneCount=(window._fqHistory||[]).filter(h=>h.pickupZip===l.pickupZip&&h.deliveryZip===l.deliveryZip).length;
+  score+=Math.min(laneCount*5,30);
+  return Math.min(10,Math.round(score/10));
+}
+function scoreColor(s){return s>=8?'#16a34a':s>=5?'#d97706':'#dc2626';}
+function scoreBadge(l){const s=calcLoadScore(l);return`<span style="font-size:11px;background:${scoreColor(s)}15;color:${scoreColor(s)};padding:2px 8px;border-radius:99px;font-weight:800">${s}/10</span>`;}
+
+// ── LOAD COST PER MILE ────────────────────────────────────────────
+function loadCPM(l){
+  const meta=getTMSMeta(l.id);const miles=meta.miles||estimateMiles(l.pickupZip,l.deliveryZip);
+  if(!miles||!l.carrierRate) return null;
+  return {cpm:(l.carrierRate/miles).toFixed(2),miles};
+}
+function estimateMiles(z1,z2){if(!z1||!z2) return 0;const diff=Math.abs(parseInt(z1||0)-parseInt(z2||0));return diff*0.8;}
+function cpmBadge(l){const c=loadCPM(l);return c?`<span style="font-size:10px;color:var(--gray-500)">$${c.cpm}/mi · ~${Math.round(c.miles)}mi</span>`:''}
+
+// ── LOAD DUPLICATION ──────────────────────────────────────────────
+function duplicateTMSLoad(id){
+  const q=(window._fqHistory||[]).find(q=>q.id===id);if(!q) return;
+  const newQ={...q,id:'fq-'+Date.now(),status:'Quoted',date:localDateStr()};
+  delete newQ.tmsMeta;
+  window._fqHistory=(window._fqHistory||[]);
+  window._fqHistory.unshift(newQ);
+  try{localStorage.setItem('fq_history',JSON.stringify(window._fqHistory));}catch(e){}
+  showToast('Load duplicated — new quote created','success',2000);
+  S.tmsTab='loads';renderTMS();
+}
+
+// ── SEAL NUMBER + DRIVER CONTACT + PALLET EXCHANGE ───────────────
+// These are stored in TMS meta and shown on load detail
+function openDriverContactModal(id){
+  const meta=getTMSMeta(id);
+  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal" style="max-width:400px">
+    <div class="modal-title">🚛 Driver details</div>
+    <div class="field"><label>Driver name</label><input type="text" id="drv-name" value="${escH(meta.driverName||'')}" placeholder="Driver full name"></div>
+    <div class="field"><label>Cell number</label><input type="tel" id="drv-phone" value="${escH(meta.driverPhone||'')}" placeholder="+1 (555) 000-0000"></div>
+    <div class="field"><label>CDL #</label><input type="text" id="drv-cdl" value="${escH(meta.driverCDL||'')}" placeholder="CDL number"></div>
+    <div class="field"><label>Truck # / Trailer #</label><input type="text" id="drv-truck" value="${escH(meta.truckNum||'')}" placeholder="e.g. T-1042 / TR-847"></div>
+    <div class="field"><label>Seal #</label><input type="text" id="drv-seal" value="${escH(meta.sealNum||'')}" placeholder="Seal number at pickup"></div>
+    <div class="field"><label>Pallets out</label><input type="number" id="drv-pal-out" value="${meta.palletsOut||''}" placeholder="0"></div>
+    <div class="field"><label>Pallets returned</label><input type="number" id="drv-pal-in" value="${meta.palletsIn||''}" placeholder="0"></div>
+    <div class="modal-foot">
+      <button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn blue" onclick="saveDriverDetails('${id}')">Save</button>
+    </div>
+  </div></div>`;
+}
+function saveDriverDetails(id){
+  saveTMSMeta(id,{
+    driverName:($('drv-name')||{}).value?.trim(),
+    driverPhone:($('drv-phone')||{}).value?.trim(),
+    driverCDL:($('drv-cdl')||{}).value?.trim(),
+    truckNum:($('drv-truck')||{}).value?.trim(),
+    sealNum:($('drv-seal')||{}).value?.trim(),
+    palletsOut:parseInt(($('drv-pal-out')||{}).value)||0,
+    palletsIn:parseInt(($('drv-pal-in')||{}).value)||0,
+  });
+  closeModal();showToast('Driver details saved','success');
+  openTMSLoadDetail(id);
+}
+
+// ── CARRIER PAY TERMS ─────────────────────────────────────────────
+function getCarrierPayTerms(name){return localStorage.getItem('pay_terms_'+name)||'Net30';}
+function setCarrierPayTerms(name,terms){localStorage.setItem('pay_terms_'+name,terms);}
+function payTermsBadge(name){const t=getCarrierPayTerms(name);const col=t==='QuickPay'?'#7c3aed':t==='Net15'?'#0369a1':'#6b7280';return`<span style="font-size:10px;background:${col}12;color:${col};padding:1px 7px;border-radius:99px;font-weight:700">${t}</span>`;}
+
+// ── ACCESSORIAL PRE-APPROVAL ──────────────────────────────────────
+function getAccLimit(id){return parseFloat(localStorage.getItem('acc_limit_'+id)||'0');}
+function setAccLimit(id,limit){localStorage.setItem('acc_limit_'+id,limit);}
+function checkAccPreapproval(id,amount){
+  const limit=getAccLimit(id);if(!limit) return true;
+  if(amount>limit){
+    showToast(`⚠️ Accessorial ${fmtD(amount)} exceeds pre-approved ${fmtD(limit)} — manager approval needed`,'warning',5000);
+    return false;
+  }
+  return true;
+}
+
+// ── BLIND SHIPMENT MODE ───────────────────────────────────────────
+function toggleBlindMode(id){
+  const meta=getTMSMeta(id);
+  saveTMSMeta(id,{isBlind:!meta.isBlind});
+  showToast(meta.isBlind?'Blind mode off':'🙈 Blind shipment mode on','info',2000);
+}
+function blindBadge(id){return getTMSMeta(id).isBlind?'<span style="font-size:10px;background:#f5f3ff;color:#7c3aed;padding:1px 7px;border-radius:99px;font-weight:700">🙈 Blind</span>':'';}
+
+// ── FREIGHT CLASS DISPUTE ─────────────────────────────────────────
+function openFreightClassDispute(id){
+  const meta=getTMSMeta(id);
+  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal" style="max-width:400px">
+    <div class="modal-title">⚠️ Freight class dispute</div>
+    <div class="g2">
+      <div class="field"><label>Quoted class</label><input type="text" id="fc-quoted" value="${escH(meta.freightClass||'')}" placeholder="e.g. 70"></div>
+      <div class="field"><label>Carrier billed class</label><input type="text" id="fc-billed" placeholder="e.g. 85"></div>
+    </div>
+    <div class="field"><label>Dispute note</label><textarea id="fc-note" rows="3" style="width:100%;box-sizing:border-box;resize:vertical" placeholder="Reason for dispute..."></textarea></div>
+    <div class="modal-foot">
+      <button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn blue" onclick="saveClassDispute('${id}')">Flag dispute</button>
+    </div>
+  </div></div>`;
+}
+function saveClassDispute(id){
+  saveTMSMeta(id,{classDispute:true,quotedClass:($('fc-quoted')||{}).value,billedClass:($('fc-billed')||{}).value,disputeNote:($('fc-note')||{}).value?.trim()});
+  closeModal();showToast('⚠️ Freight class dispute flagged','warning');
+}
+
+// ── CARRIER W-9 VAULT ─────────────────────────────────────────────
+function getCarrierW9(name){return JSON.parse(localStorage.getItem('w9_'+name)||'{}');}
+function saveCarrierW9(name,data){localStorage.setItem('w9_'+name,JSON.stringify({...data,updatedAt:localDateStr()}));}
+function w9Badge(name){const w=getCarrierW9(name);return w.onFile?`<span style="font-size:10px;background:#f0fdf4;color:#16a34a;padding:1px 7px;border-radius:99px;font-weight:700">W-9 ✓</span>`:'<span style="font-size:10px;background:#fff5f5;color:#dc2626;padding:1px 7px;border-radius:99px;font-weight:700">W-9 missing</span>';}
+function openW9Modal(carrierName){
+  const w=getCarrierW9(carrierName);
+  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal" style="max-width:400px">
+    <div class="modal-title">📋 W-9 — ${escH(carrierName)}</div>
+    <div class="field"><label>EIN / Tax ID</label><input type="text" id="w9-ein" value="${escH(w.ein||'')}" placeholder="XX-XXXXXXX"></div>
+    <div class="field"><label>Legal business name</label><input type="text" id="w9-name" value="${escH(w.legalName||'')}" placeholder="Legal entity name"></div>
+    <div class="field"><label>Address</label><input type="text" id="w9-addr" value="${escH(w.address||'')}" placeholder="Business address"></div>
+    <div class="field"><label style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="w9-on" ${w.onFile?'checked':''}> W-9 on file</label></div>
+    <div class="modal-foot">
+      <button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn blue" onclick="saveW9('${carrierName}')">Save</button>
+    </div>
+  </div></div>`;
+}
+function saveW9(name){
+  saveCarrierW9(name,{ein:($('w9-ein')||{}).value?.trim(),legalName:($('w9-name')||{}).value?.trim(),address:($('w9-addr')||{}).value?.trim(),onFile:!!($('w9-on')||{}).checked});
+  closeModal();showToast('W-9 saved','success');
+}
+
+// ── CARRIER CERTIFICATIONS ────────────────────────────────────────
+const CERT_TYPES=['CTPAT','FMCSA Active Authority','SmartWay','ISO 9001','Hazmat Certified','TSA Approved'];
+function getCarrierCerts(name){return JSON.parse(localStorage.getItem('certs_'+name)||'[]');}
+function saveCarrierCerts(name,certs){localStorage.setItem('certs_'+name,JSON.stringify(certs));}
+function certBadges(name){
+  return getCarrierCerts(name).map(c=>{
+    const expiring=c.expiry&&new Date(c.expiry)<new Date(Date.now()+30*864e5);
+    const expired=c.expiry&&new Date(c.expiry)<new Date();
+    const col=expired?'#dc2626':expiring?'#d97706':'#16a34a';
+    return`<span style="font-size:10px;background:${col}12;color:${col};padding:1px 7px;border-radius:99px;font-weight:700" title="${c.expiry?'Expires: '+c.expiry:''}">${c.type}${expired?' ⚠️':expiring?' ⏱':' ✓'}</span>`;
+  }).join(' ');
+}
+function openCertModal(carrierName){
+  const certs=getCarrierCerts(carrierName);
+  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-title">🏆 Certifications — ${escH(carrierName)}</div>
+    <div style="margin-bottom:14px">
+      ${certs.map((c,i)=>`<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--gray-100)">
+        <span style="flex:1;font-size:13px;font-weight:600">${escH(c.type)}</span>
+        <span style="font-size:12px;color:var(--gray-500)">${c.expiry||'No expiry'}</span>
+        <button onclick="removeCert('${carrierName}',${i})" style="border:none;background:transparent;cursor:pointer;color:var(--red)">✕</button>
+      </div>`).join('')}
+    </div>
+    <div class="g2">
+      <div class="field"><label>Certification</label><select id="cert-type" style="width:100%;padding:8px;border:1px solid var(--gray-200);border-radius:var(--radius);font-size:13px">${CERT_TYPES.map(t=>`<option>${t}</option>`).join('')}</select></div>
+      <div class="field"><label>Expiry date</label><input type="date" id="cert-exp"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" onclick="closeModal()">Done</button>
+      <button class="btn blue" onclick="addCert('${carrierName}')">+ Add cert</button>
+    </div>
+  </div></div>`;
+}
+function addCert(name){const certs=getCarrierCerts(name);certs.push({type:($('cert-type')||{}).value,expiry:($('cert-exp')||{}).value});saveCarrierCerts(name,certs);openCertModal(name);}
+function removeCert(name,i){const certs=getCarrierCerts(name);certs.splice(i,1);saveCarrierCerts(name,certs);openCertModal(name);}
+
+// ── DEDICATED LANE CONTRACTS ──────────────────────────────────────
+function getLaneContracts(){return JSON.parse(localStorage.getItem('lane_contracts')||'[]');}
+function saveLaneContracts(list){localStorage.setItem('lane_contracts',JSON.stringify(list));}
+function laneContractMatch(pickupZip,deliveryZip,carrier){
+  return getLaneContracts().find(c=>c.pickupZip===pickupZip&&c.deliveryZip===deliveryZip&&(!c.carrier||c.carrier===carrier));
+}
+function openLaneContractsPage(){
+  const contracts=getLaneContracts();
+  $('page').innerHTML=`
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+    <div style="font-size:18px;font-weight:900;color:var(--navy)">📄 Dedicated lane contracts</div>
+    <button onclick="openAddLaneContract()" class="btn blue">+ New contract</button>
+  </div>
+  ${contracts.length?`<div class="tbl-wrap"><table><thead><tr><th>Lane</th><th>Carrier</th><th>Rate</th><th>Volume/mo</th><th>Expiry</th><th></th></tr></thead><tbody>
+    ${contracts.map((c,i)=>`<tr>
+      <td class="bold">${escH(c.pickupZip)} → ${escH(c.deliveryZip)}</td>
+      <td>${escH(c.carrier||'Any')}</td>
+      <td class="money">${fmtD(c.rate||0)}</td>
+      <td>${c.volume||'—'} loads</td>
+      <td style="color:${c.expiry&&new Date(c.expiry)<new Date()?'var(--red)':'var(--navy)'}">${c.expiry||'No expiry'}</td>
+      <td><button onclick="removeLaneContract(${i})" style="border:none;background:transparent;cursor:pointer;color:var(--red)">🗑️</button></td>
+    </tr>`).join('')}
+  </tbody></table></div>`:'<div class="empty"><div class="empty-ico">📄</div><p>No dedicated lane contracts — add contracts to lock in rates and volumes</p></div>'}`;
+}
+function openAddLaneContract(){
+  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-title">+ New lane contract</div>
+    <div class="g2">
+      <div class="field"><label>Pickup ZIP</label><input type="text" id="lc-pu" placeholder="07102"></div>
+      <div class="field"><label>Delivery ZIP</label><input type="text" id="lc-del" placeholder="60601"></div>
+    </div>
+    <div class="g3">
+      <div class="field"><label>Carrier</label><input type="text" id="lc-carrier" placeholder="Any"></div>
+      <div class="field"><label>Rate ($)</label><input type="number" id="lc-rate" placeholder="0"></div>
+      <div class="field"><label>Volume/mo</label><input type="number" id="lc-vol" placeholder="Loads"></div>
+    </div>
+    <div class="field"><label>Contract expiry</label><input type="date" id="lc-exp"></div>
+    <div class="modal-foot"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn blue" onclick="saveLaneContract()">Save</button></div>
+  </div></div>`;
+}
+function saveLaneContract(){
+  const c=getLaneContracts();
+  c.push({pickupZip:($('lc-pu')||{}).value?.trim(),deliveryZip:($('lc-del')||{}).value?.trim(),carrier:($('lc-carrier')||{}).value?.trim(),rate:parseFloat(($('lc-rate')||{}).value)||0,volume:parseInt(($('lc-vol')||{}).value)||0,expiry:($('lc-exp')||{}).value});
+  saveLaneContracts(c);closeModal();showToast('Contract saved','success');openLaneContractsPage();
+}
+function removeLaneContract(i){const c=getLaneContracts();c.splice(i,1);saveLaneContracts(c);openLaneContractsPage();}
+
+// ── TRANSIT TIME BENCHMARKING ─────────────────────────────────────
+function getTransitBenchmark(pickupZip,deliveryZip){
+  const history=(window._fqHistory||[]).filter(l=>l.pickupZip===pickupZip&&l.deliveryZip===deliveryZip&&['Delivered','Invoiced','Paid'].includes(l.status));
+  if(!history.length) return null;
+  const times=history.map(l=>{const m=getTMSMeta(l.id);if(m.dispatched_at&&m.delivered_at) return (new Date(m.delivered_at)-new Date(m.dispatched_at))/864e5;return null;}).filter(Boolean);
+  if(!times.length) return null;
+  const avg=times.reduce((s,t)=>s+t,0)/times.length;
+  return{avgDays:avg.toFixed(1),minDays:Math.min(...times).toFixed(1),maxDays:Math.max(...times).toFixed(1),loads:history.length};
+}
+
+// ── REAL-TIME MARGIN DASHBOARD ────────────────────────────────────
+function renderRealTimeMargin(){
+  const today=localDateStr();
+  const todayLoads=[...(S.quotes||[]),...(window._fqHistory||[])].filter(q=>q.date===today&&['Booked','Delivered','Invoiced','Paid'].includes(q.status));
+  const todayRev=todayLoads.reduce((s,q)=>s+(q.customerRate||0),0);
+  const todayProfit=todayLoads.reduce((s,q)=>s+getShipmentProfit(q,'freight').profit,0);
+  const monthLoads=[...(S.quotes||[]),...(window._fqHistory||[])].filter(q=>q.date&&q.date.startsWith(today.slice(0,7))&&['Booked','Delivered','Invoiced','Paid'].includes(q.status));
+  const monthRev=monthLoads.reduce((s,q)=>s+(q.customerRate||0),0);
+  const monthProfit=monthLoads.reduce((s,q)=>s+getShipmentProfit(q,'freight').profit,0);
+  return `<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+    <div style="background:linear-gradient(135deg,#1a2e4a,#2e75b6);color:#fff;border-radius:12px;padding:16px">
+      <div style="font-size:11px;opacity:.7;margin-bottom:4px">TODAY'S REVENUE</div>
+      <div style="font-size:28px;font-weight:900">${fmtD(todayRev)}</div>
+      <div style="font-size:12px;opacity:.8;margin-top:4px">Profit: ${fmtD(todayProfit)} · ${todayLoads.length} loads</div>
+    </div>
+    <div style="background:linear-gradient(135deg,#065f46,#059669);color:#fff;border-radius:12px;padding:16px">
+      <div style="font-size:11px;opacity:.7;margin-bottom:4px">THIS MONTH</div>
+      <div style="font-size:28px;font-weight:900">${fmtD(monthRev)}</div>
+      <div style="font-size:12px;opacity:.8;margin-top:4px">Profit: ${fmtD(monthProfit)} · ${monthLoads.length} loads · ${monthRev>0?pct(monthProfit/monthRev):'0%'} margin</div>
+    </div>
+  </div>`;
+}
+
+// ── LOAD NOTE TEMPLATES ───────────────────────────────────────────
+const NOTE_TEMPLATES=[
+  'Appointment required — call ahead 24 hours',
+  'Liftgate required at delivery',
+  'Residential delivery — no dock',
+  'Inside delivery required',
+  'Driver must check in at guard gate',
+  'Fragile — handle with care',
+  'Hazmat load — carrier must have hazmat cert',
+  'TEAM required — no stops',
+  'High value load — do not leave unattended',
+  'Time-critical — must deliver by appointment',
+];
+function noteTemplateMenu(targetId){
+  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal" style="max-width:400px">
+    <div class="modal-title">📝 Note templates</div>
+    <div style="display:flex;flex-direction:column;gap:6px">
+      ${NOTE_TEMPLATES.map(t=>`<button onclick="insertNoteTemplate('${targetId}','${t.replace(/'/g,"\\'")}');closeModal()" style="padding:9px 14px;border:1.5px solid var(--gray-200);border-radius:var(--radius);background:transparent;cursor:pointer;font-family:inherit;font-size:12px;text-align:left" onmouseenter="this.style.background='var(--blue-bg)'" onmouseleave="this.style.background='transparent'">${t}</button>`).join('')}
+    </div>
+    <div class="modal-foot"><button class="btn" onclick="closeModal()">Cancel</button></div>
+  </div></div>`;
+}
+function insertNoteTemplate(targetId,text){
+  const el=$(targetId);if(!el) return;
+  el.value=(el.value?el.value+'\n':'')+text;
+  el.dispatchEvent(new Event('change'));
+}
+
+// ── PAYMENT CONFIRMATION TO CARRIER ──────────────────────────────
+async function sendCarrierPaymentConfirmation(id){
+  const q=(window._fqHistory||[]).find(q=>q.id===id);if(!q) return;
+  const meta=getTMSMeta(id);const cinv=getCarrierInvoice(id);
+  if(!await loadJsPDF()){showToast('PDF loading...','info');return;}
+  const{jsPDF}=window.jspdf;const doc=new jsPDF({unit:'mm',format:'letter'});
+  const W=216,M=14,green=[6,95,70];
+  doc.setFillColor(...green);doc.rect(0,0,W,32,'F');
+  doc.setTextColor(255,255,255);doc.setFont('helvetica','bold');doc.setFontSize(18);doc.text('PAYMENT CONFIRMATION',M,14);
+  doc.setFontSize(10);doc.setFont('helvetica','normal');doc.text('Shifl Logistics — Accounts Payable',M,22);
+  doc.text('Date: '+localDateStr(),W-M,14,{align:'right'});
+  doc.setTextColor(0);let y=44;
+  doc.setFont('helvetica','bold');doc.setFontSize(12);doc.text('Payment sent to: '+(q.carrier||'—'),M,y);y+=10;
+  doc.setFont('helvetica','normal');doc.setFontSize(10);
+  const items=[['Booking #',meta.bookingNum||id],['BOL #',meta.bolNum||'—'],['Lane',(q.pickupZip||'?')+' → '+(q.deliveryZip||'?')],['Invoice #',cinv?.invNum||'—'],['Amount paid',fmtD(cinv?.grandTotal||q.carrierRate||0)],['Payment date',localDateStr()],['Payment method','ACH / Check']];
+  items.forEach(([l,v])=>{doc.setFont('helvetica','bold');doc.text(l+':',M,y);doc.setFont('helvetica','normal');doc.text(v,M+50,y);y+=8;});
+  doc.setFillColor(240,253,244);doc.rect(M,y,W-M*2,14,'F');doc.setFont('helvetica','bold');doc.setFontSize(13);doc.setTextColor(...green);doc.text('✓ Payment processed',M+4,y+9);
+  doc.save('PaymentConf_'+(meta.bookingNum||id)+'.pdf');
+  showToast('Payment confirmation PDF downloaded','success');
+}
+
+// ── INVOICE AUTO-MATCH ────────────────────────────────────────────
+function autoMatchCarrierInvoice(id,invoicedAmount){
+  const q=(window._fqHistory||[]).find(q=>q.id===id);if(!q) return null;
+  const agreedRate=q.carrierRate||0;
+  const diff=invoicedAmount-agreedRate;
+  const pctDiff=agreedRate>0?Math.abs(diff)/agreedRate:0;
+  return{matched:Math.abs(diff)<5,diff,pctDiff,agreedRate,invoicedAmount,flag:pctDiff>.05};
+}
+
+// ── CARRIER ONBOARDING PACKET ─────────────────────────────────────
+async function generateCarrierPacket(carrierName){
+  if(!await loadJsPDF()){showToast('PDF loading...','info');return;}
+  const{jsPDF}=window.jspdf;const doc=new jsPDF({unit:'mm',format:'letter'});
+  const W=216,M=14,navy=[26,46,74];
+  doc.setFillColor(...navy);doc.rect(0,0,W,36,'F');
+  doc.setTextColor(255,255,255);doc.setFont('helvetica','bold');doc.setFontSize(18);doc.text('CARRIER ONBOARDING PACKET',M,14);
+  doc.setFontSize(11);doc.setFont('helvetica','normal');doc.text('Shifl Logistics · Freight Brokerage Division',M,24);
+  doc.text(localDateStr(),W-M,14,{align:'right'});
+  doc.setTextColor(0);let y=48;
+  const sections=[
+    ['Welcome','Thank you for partnering with Shifl Logistics. Please complete all required documents before your first load.'],
+    ['Required Documents','1. Signed Carrier Agreement\n2. Certificate of Insurance (COI) — Shifl must be listed as additional insured\n3. W-9 Form\n4. Voided check or ACH authorization form\n5. Operating authority (MC number active)'],
+    ['Insurance Requirements','Auto Liability: $1,000,000 minimum\nCargo Insurance: $100,000 minimum\nGeneral Liability: $1,000,000 minimum'],
+    ['Payment Terms','Standard: Net 30 from receipt of invoice + POD\nQuick Pay available: 2% fee, paid within 48 hours\nInvoices must include: BOL#, Booking#, POD'],
+    ['Dispatch Contact','dispatch@shifl.com\nPhone: (555) 000-0000\nHours: Mon–Fri 8am–6pm ET'],
+  ];
+  sections.forEach(([title,body])=>{
+    doc.setFillColor(240,244,248);doc.rect(M,y-4,W-M*2,8,'F');
+    doc.setFont('helvetica','bold');doc.setFontSize(11);doc.setTextColor(...navy);doc.text(title,M+2,y);
+    doc.setTextColor(0);y+=10;doc.setFont('helvetica','normal');doc.setFontSize(9);
+    const lines=doc.splitTextToSize(body,W-M*2);doc.text(lines,M,y);y+=lines.length*5+8;
+  });
+  doc.save('Carrier_Onboarding_'+(carrierName||'Packet').replace(/\s/g,'_')+'.pdf');
+  showToast('Carrier onboarding packet downloaded','success');
+}
+
+// ── INTERMODAL LOAD SUPPORT ───────────────────────────────────────
+function getIntermodalLegs(id){return JSON.parse(localStorage.getItem('intermodal_'+id)||'[]');}
+function saveIntermodalLegs(id,legs){localStorage.setItem('intermodal_'+id,JSON.stringify(legs));}
+function openIntermodalBuilder(id){
+  const legs=getIntermodalLegs(id);
+  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-title">🔀 Intermodal legs</div>
+    <div id="legs-list" style="margin-bottom:12px">
+      ${legs.map((l,i)=>`<div style="padding:8px;border:1px solid var(--gray-200);border-radius:var(--radius);margin-bottom:6px;display:flex;justify-content:space-between;align-items:center">
+        <div><span style="font-size:11px;background:var(--blue-bg);color:var(--steel);padding:1px 7px;border-radius:99px;font-weight:700">${l.mode}</span> <span style="font-size:12px;font-weight:600;color:var(--navy)"> ${l.from} → ${l.to}</span> <span style="font-size:11px;color:var(--gray-400)">${l.carrier||''} · ${fmtD(l.cost||0)}</span></div>
+        <button onclick="removeLeg(${i})" style="border:none;background:transparent;cursor:pointer;color:var(--red)">✕</button>
+      </div>`).join('')}
+    </div>
+    <div class="g2">
+      <div class="field"><label>Mode</label><select id="leg-mode" style="width:100%;padding:8px;border:1px solid var(--gray-200);border-radius:var(--radius)"><option>Drayage</option><option>Rail</option><option>FTL</option><option>LTL</option><option>Air</option></select></div>
+      <div class="field"><label>Carrier</label><input type="text" id="leg-carrier" placeholder="Carrier name"></div>
+    </div>
+    <div class="g3">
+      <div class="field"><label>From</label><input type="text" id="leg-from" placeholder="Origin ZIP / city"></div>
+      <div class="field"><label>To</label><input type="text" id="leg-to" placeholder="Destination ZIP / city"></div>
+      <div class="field"><label>Cost ($)</label><input type="number" id="leg-cost" placeholder="0"></div>
+    </div>
+    <button onclick="addLeg('${id}')" class="btn" style="width:100%;margin-bottom:14px">+ Add leg</button>
+    <div class="modal-foot"><button class="btn" onclick="closeModal()">Done</button></div>
+  </div></div>`;
+  window._intermodalId=id;
+}
+function addLeg(id){
+  const legs=getIntermodalLegs(id);
+  legs.push({mode:($('leg-mode')||{}).value,carrier:($('leg-carrier')||{}).value?.trim(),from:($('leg-from')||{}).value?.trim(),to:($('leg-to')||{}).value?.trim(),cost:parseFloat(($('leg-cost')||{}).value)||0});
+  saveIntermodalLegs(id,legs);openIntermodalBuilder(id);
+}
+function removeLeg(i){const id=window._intermodalId;const legs=getIntermodalLegs(id);legs.splice(i,1);saveIntermodalLegs(id,legs);openIntermodalBuilder(id);}
+
+// ── EXCEPTION ESCALATION RULES ────────────────────────────────────
+function getEscalationRules(){return JSON.parse(localStorage.getItem('escalation_rules')||JSON.stringify([{hoursLate:2,action:'Notify dispatcher',active:true},{hoursLate:4,action:'Notify manager',active:true},{hoursLate:8,action:'Notify customer',active:true}]));}
+function checkEscalations(){
+  const rules=getEscalationRules().filter(r=>r.active);
+  const loads=getTMSLoads().filter(l=>['Dispatched','In Transit','Out for Delivery'].includes(l.status));
+  loads.forEach(l=>{
+    const meta=getTMSMeta(l.id);if(!meta.eta) return;
+    const hoursLate=Math.max(0,(new Date()-new Date(meta.eta))/(3600000));
+    rules.forEach(r=>{
+      if(hoursLate>=r.hoursLate){
+        const key='esc_'+l.id+'_'+r.hoursLate;
+        if(!localStorage.getItem(key)){localStorage.setItem(key,'1');showToast(`⚠️ ${l.customer||'Load'}: ${r.action} (${Math.round(hoursLate)}h late)`,'warning',8000);}
+      }
+    });
+  });
+}
+
+// ── CLAIMS SETTLEMENT ─────────────────────────────────────────────
+function updateClaimStatus(loadId,claimId,status,settlementAmt){
+  const claims=getTMSClaims(loadId);
+  const c=claims.find(c=>c.id===claimId);
+  if(c){c.status=status;if(settlementAmt!==undefined) c.settlementAmount=settlementAmt;c.resolvedDate=localDateStr();}
+  localStorage.setItem('tms_claims_'+loadId,JSON.stringify(claims));
+}
+
+// ── LANE RFP BUILDER ─────────────────────────────────────────────
+function openLaneRFP(){
+  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal" style="max-width:560px">
+    <div class="modal-title">📋 Lane RFP Builder</div>
+    <div class="field"><label>RFP name / project</label><input type="text" id="rfp-name" placeholder="e.g. Q3 2026 Northeast Lanes RFP"></div>
+    <div class="g2">
+      <div class="field"><label>Valid from</label><input type="date" id="rfp-from" value="${localDateStr()}"></div>
+      <div class="field"><label>Valid to</label><input type="date" id="rfp-to"></div>
+    </div>
+    <div style="font-size:12px;font-weight:700;color:var(--gray-500);margin:10px 0 6px;text-transform:uppercase;letter-spacing:.05em">Lanes to bid</div>
+    <div id="rfp-lanes-list"></div>
+    <button onclick="addRFPLane()" style="width:100%;padding:8px;border:1.5px dashed var(--gray-300);background:transparent;border-radius:var(--radius);cursor:pointer;font-size:12px;color:var(--gray-500);margin-bottom:12px">+ Add lane</button>
+    <div class="modal-foot">
+      <button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn blue" onclick="generateRFP()">📄 Generate RFP PDF</button>
+    </div>
+  </div></div>`;
+  window._rfpLanes=[];addRFPLane();
+}
+function addRFPLane(){
+  const list=$('rfp-lanes-list');if(!list) return;
+  const i=window._rfpLanes.length;window._rfpLanes.push({});
+  const row=document.createElement('div');row.style.cssText='display:flex;gap:6px;margin-bottom:6px';
+  row.innerHTML=`<input id="rfp-pu-${i}" type="text" placeholder="Origin ZIP" style="flex:1;padding:7px;border:1px solid var(--gray-200);border-radius:var(--radius);font-size:12px">
+    <input id="rfp-del-${i}" type="text" placeholder="Dest ZIP" style="flex:1;padding:7px;border:1px solid var(--gray-200);border-radius:var(--radius);font-size:12px">
+    <input id="rfp-vol-${i}" type="text" placeholder="Vol/mo" style="width:70px;padding:7px;border:1px solid var(--gray-200);border-radius:var(--radius);font-size:12px">
+    <input id="rfp-mode-${i}" type="text" placeholder="Mode" style="width:70px;padding:7px;border:1px solid var(--gray-200);border-radius:var(--radius);font-size:12px">`;
+  list.appendChild(row);
+}
+async function generateRFP(){
+  if(!await loadJsPDF()){return;}
+  const{jsPDF}=window.jspdf;const doc=new jsPDF({unit:'mm',format:'letter'});
+  const W=216,M=14,navy=[26,46,74];
+  const name=($('rfp-name')||{}).value||'Lane RFP';
+  doc.setFillColor(...navy);doc.rect(0,0,W,36,'F');
+  doc.setTextColor(255,255,255);doc.setFont('helvetica','bold');doc.setFontSize(18);doc.text('REQUEST FOR PROPOSAL',M,14);
+  doc.setFontSize(11);doc.setFont('helvetica','normal');doc.text(name,M,24);doc.text(localDateStr(),W-M,14,{align:'right'});
+  doc.setTextColor(0);let y=48;
+  doc.setFont('helvetica','bold');doc.setFontSize(10);doc.text('From: Shifl Logistics · Freight Brokerage Division',M,y);y+=12;
+  doc.setFont('helvetica','bold');doc.setFontSize(10);doc.setTextColor(...navy);
+  doc.text('Origin ZIP',M,y);doc.text('Dest ZIP',M+35,y);doc.text('Volume/mo',M+70,y);doc.text('Mode',M+105,y);doc.text('Target Rate',M+130,y);
+  doc.setDrawColor(200);doc.line(M,y+2,W-M,y+2);y+=8;doc.setTextColor(0);doc.setFont('helvetica','normal');
+  for(let i=0;i<window._rfpLanes.length;i++){
+    const pu=($('rfp-pu-'+i)||{}).value||'';const del=($('rfp-del-'+i)||{}).value||'';
+    const vol=($('rfp-vol-'+i)||{}).value||'';const mode=($('rfp-mode-'+i)||{}).value||'';
+    if(!pu&&!del) continue;
+    doc.text(pu,M,y);doc.text(del,M+35,y);doc.text(vol,M+70,y);doc.text(mode,M+105,y);doc.text('$_________',M+130,y);
+    doc.line(M,y+3,W-M,y+3);y+=10;
+  }
+  y+=10;doc.setFont('helvetica','bold');doc.text('Submission Instructions:',M,y);y+=7;
+  doc.setFont('helvetica','normal');doc.text('Please return completed rates to: rates@shifl.com',M,y);y+=6;
+  doc.text('Valid period: '+( ($('rfp-from')||{}).value||'')+' to '+(($('rfp-to')||{}).value||'TBD'),M,y);
+  doc.save(name.replace(/\s/g,'_')+'.pdf');
+  closeModal();showToast('RFP PDF generated','success');
+}
+
+// ── ANNUAL CARRIER REVIEW ─────────────────────────────────────────
+function renderAnnualCarrierReview(tabBar,loads){
+  const year=new Date().getFullYear();
+  const yearLoads=loads.filter(l=>l.date&&l.date.startsWith(year));
+  const carriers={};
+  yearLoads.forEach(l=>{
+    const c=l.carrier||'Unknown';
+    if(!carriers[c])carriers[c]={loads:0,rev:0,cost:0,claims:0,onTime:0,total:0};
+    carriers[c].loads++;carriers[c].rev+=(l.customerRate||0);carriers[c].cost+=(l.carrierRate||0);
+    carriers[c].total++;
+    const m=getTMSMeta(l.id);
+    if(m.eta&&m.delivered_at&&new Date(m.delivered_at)<=new Date(m.eta)) carriers[c].onTime++;
+    carriers[c].claims+=getTMSClaims(l.id).length;
+  });
+  const sorted=Object.entries(carriers).sort((a,b)=>b[1].loads-a[1].loads);
+  if(!tabBar){$('page').innerHTML='';return;}
+  $('page').innerHTML=tabBar+`
+  <div style="font-size:16px;font-weight:900;color:var(--navy);margin-bottom:4px">📊 Annual carrier review — ${year}</div>
+  <div style="font-size:13px;color:var(--gray-400);margin-bottom:16px">Performance summary for contract negotiations</div>
+  ${sorted.length?`<div class="tbl-wrap"><table><thead><tr><th>Carrier</th><th>Loads</th><th>Revenue</th><th>Cost paid</th><th>On-time %</th><th>Claims</th><th>Pay terms</th><th>W-9</th><th>Actions</th></tr></thead><tbody>
+    ${sorted.map(([name,d])=>{
+      const ot=d.total>0?Math.round(d.onTime/d.total*100):0;
+      return`<tr>
+        <td class="bold">${escH(name)}</td><td>${d.loads}</td>
+        <td class="money">${fmtD(d.rev)}</td><td class="money" style="color:#d97706">${fmtD(d.cost)}</td>
+        <td style="font-weight:700;color:${ot>=90?'var(--green)':ot>=70?'var(--amber)':'var(--red)'}">${ot}%</td>
+        <td style="color:${d.claims?'var(--red)':'var(--green)'}">${d.claims||'0'}</td>
+        <td>${payTermsBadge(name)}</td>
+        <td>${w9Badge(name)}</td>
+        <td style="white-space:nowrap">
+          <button onclick="openCertModal('${escH(name)}')" style="font-size:10px;padding:3px 7px;border:1px solid var(--gray-200);border-radius:4px;background:transparent;cursor:pointer;font-family:inherit">🏆 Certs</button>
+          <button onclick="openW9Modal('${escH(name)}')" style="font-size:10px;padding:3px 7px;border:1px solid var(--gray-200);border-radius:4px;background:transparent;cursor:pointer;font-family:inherit">📋 W-9</button>
+        </td>
+      </tr>`;}).join('')}
+  </tbody></table></div>`:'<div class="empty"><div class="empty-ico">📊</div><p>No loads this year yet</p></div>'}`;
+}
 
 
 boot().catch(e=>{$('loading-screen').style.display='none';$('setup-screen').style.display='flex';});
