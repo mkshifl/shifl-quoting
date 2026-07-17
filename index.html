@@ -964,7 +964,7 @@ let S={
       lclPriceBy:'pallets', cbm:0, transitTime:'',
       calc:{l:'',w:'',h:'',pieces:'',weightLbs:'',unit:'in'}},
   fqTab:'builder',
-  activeFilter:'all',activeView:'active',tmsTab:'dispatch',tmsInvTab:'customer',tmsInvSubTab:'pending',tmsLoadsSearch:'',tmsLoadsFilt:'all',allInvTab:'pending',invMainTab:'customer',rateTab:'import',invoices:{},pmFilter:'all',pmDate:'all',reportTab:'lanes',reportMode:'All',fqInvTab:'pending',aqTab:'builder',aqFilter:'all',_auditDate:'all',
+  activeFilter:'all',activeView:'active',tmsTab:'dispatch',tmsInvTab:'customer',tmsInvSubTab:'pending',tmsLoadsSearch:'',tmsLoadsFilt:'all',tmsRptTab:'pl',allInvTab:'pending',invMainTab:'customer',rateTab:'import',invoices:{},pmFilter:'all',pmDate:'all',reportTab:'lanes',reportMode:'All',fqInvTab:'pending',aqTab:'builder',aqFilter:'all',_auditDate:'all',
   tl:null, // initialized in boot via defaultTlState()
   tlTab:'builder',
 };
@@ -12453,6 +12453,7 @@ function renderTMSDispatch(tabBar,kpis,loads){
 // ── ALL LOADS TABLE ────────────────────────────────────────────────
 function tmsInvOpen(id){openInvoiceBuilder('freight',id);}
 function tmsGoFreight(){goTo('freight','builder');}
+function renderTMSBolDocs(tabBar,loads){renderTMSBol(tabBar,loads);}
 function buildTMSLoadRow(l){
   const id=l.id,meta=getTMSMeta(id);
   const p=getShipmentProfit(l,'freight');
@@ -12990,6 +12991,592 @@ function openFqCarrierInvById(id){
   if(idx>=0) openFqCarrierInvoice(idx);
   else showToast('Load not found','error');
 }
+// ════════════════════════════════════════════════════════════════════
+// TMS MEGA BUILD — 19 new features
+// ════════════════════════════════════════════════════════════════════
+
+// ── HELPERS ───────────────────────────────────────────────────────
+function getTMSCheckcalls(id){return JSON.parse(localStorage.getItem('tms_cc_'+id)||'[]');}
+function saveTMSCheckcall(id,entry){const cc=getTMSCheckcalls(id);cc.push({...entry,ts:new Date().toISOString()});localStorage.setItem('tms_cc_'+id,JSON.stringify(cc));}
+function getTMSStops(id){return JSON.parse(localStorage.getItem('tms_stops_'+id)||'[]');}
+function saveTMSStops(id,stops){localStorage.setItem('tms_stops_'+id,JSON.stringify(stops));}
+function getTMSClaims(id){return JSON.parse(localStorage.getItem('tms_claims_'+id)||'[]');}
+function saveTMSClaim(id,claim){const c=getTMSClaims(id);c.push({...claim,id:'CLM-'+Date.now(),ts:new Date().toISOString()});localStorage.setItem('tms_claims_'+id,JSON.stringify(c));return c;}
+function getTMSCapacity(){return JSON.parse(localStorage.getItem('tms_capacity')||'[]');}
+function saveTMSCapacity(list){localStorage.setItem('tms_capacity',JSON.stringify(list));}
+function isOverdue(l){const m=getTMSMeta(l.id);if(!m.eta||['Delivered','Paid','Invoiced'].includes(l.status))return false;return new Date(m.eta)<new Date();}
+function getOverdueLoads(){return getTMSLoads().filter(isOverdue);}
+function updateTMSBadge(){
+  const ov=getOverdueLoads().length;
+  const btn=document.getElementById('nav-tms');
+  if(!btn)return;
+  const badge=document.getElementById('tms-badge');
+  if(badge)badge.textContent=ov>0?'⚠️ '+ov+' overdue':getTMSLoads().length>0?getTMSLoads().length+' loads':'FTL/LTL';
+}
+
+// ── OVERRIDE renderTMS to add new tabs + dashboard default ─────────
+const _origRenderTMS=window.renderTMS;
+function renderTMS(){
+  const sub=S.tmsTab||'dashboard';
+  const loads=getTMSLoads();
+  $('topbar-right').innerHTML=`<div style="font-size:12px;font-weight:700;color:var(--steel)">🚚 TMS — FTL / LTL Operations</div>`;
+  updateTMSBadge();
+
+  const tabs=[
+    {id:'dashboard',icon:'ti-home',label:'Dashboard'},
+    {id:'dispatch',icon:'ti-layout-kanban',label:'Dispatch'},
+    {id:'loads',icon:'ti-list',label:'All loads'},
+    {id:'bol',icon:'ti-file-text',label:'BOL & Docs'},
+    {id:'invoicing',icon:'ti-receipt',label:'Invoicing'},
+    {id:'scorecard',icon:'ti-chart-bar',label:'Scorecards'},
+    {id:'capacity',icon:'ti-truck',label:'Capacity'},
+    {id:'claims',icon:'ti-alert-triangle',label:'Claims'},
+    {id:'tools',icon:'ti-calculator',label:'Tools'},
+    {id:'reports',icon:'ti-report-analytics',label:'Reports'},
+  ];
+
+  const inTransit=loads.filter(l=>['Dispatched','In Transit','Out for Delivery'].includes(l.status));
+  const needsInvoice=loads.filter(l=>['Delivered','Invoiced'].includes(l.status)&&!getInvoice(l.id));
+  const weekAgo=new Date(Date.now()-7*864e5).toISOString().slice(0,10);
+  const thisWeek=loads.filter(l=>l.date>=weekAgo).length;
+
+  const kpis=`<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:16px">
+    <div class="kpi"><div class="kpi-lbl">In transit</div><div class="kpi-val" style="color:#d97706;font-size:20px">${inTransit.length}</div><div style="font-size:11px;color:var(--gray-400)">${fmtD(inTransit.reduce((s,l)=>s+(l.customerRate||0),0))}</div></div>
+    <div class="kpi"><div class="kpi-lbl">This week</div><div class="kpi-val" style="font-size:20px">${thisWeek}</div></div>
+    <div class="kpi"><div class="kpi-lbl">Needs invoice</div><div class="kpi-val" style="color:${needsInvoice.length?'var(--red)':'var(--green)'};font-size:20px">${needsInvoice.length}</div></div>
+    <div class="kpi"><div class="kpi-lbl">Overdue</div><div class="kpi-val" style="color:${getOverdueLoads().length?'#dc2626':'var(--green)'};font-size:20px">${getOverdueLoads().length}</div></div>
+    <div class="kpi"><div class="kpi-lbl">Total loads</div><div class="kpi-val" style="font-size:20px">${loads.length}</div></div>
+  </div>`;
+
+  const tabBar=`<div style="display:flex;gap:0;border-bottom:2px solid var(--gray-100);margin-bottom:20px;overflow-x:auto">
+    ${tabs.map(t=>`<button onclick="S.tmsTab='${t.id}';renderTMS()"
+      style="display:flex;align-items:center;gap:5px;padding:10px 14px;border:none;border-bottom:2px solid ${sub===t.id?'var(--steel)':'transparent'};margin-bottom:-2px;font-size:12px;font-weight:${sub===t.id?700:500};cursor:pointer;font-family:inherit;background:transparent;color:${sub===t.id?'var(--steel)':'var(--gray-500)'};white-space:nowrap">
+      <i class="ti ${t.icon}" style="font-size:14px"></i>${t.label}</button>`).join('')}
+  </div>`;
+
+  if(sub==='dashboard')  renderTMSDashboard(tabBar,kpis,loads);
+  else if(sub==='dispatch')   renderTMSDispatch(tabBar,kpis,loads);
+  else if(sub==='loads')      renderTMSLoads(tabBar,kpis,loads);
+  else if(sub==='bol')        renderTMSBolDocs(tabBar,loads);
+  else if(sub==='invoicing')  renderTMSInvoicing(tabBar,loads);
+  else if(sub==='scorecard')  renderTMSScorecard(tabBar,loads);
+  else if(sub==='capacity')   renderTMSCapacity(tabBar);
+  else if(sub==='claims')     renderTMSClaims(tabBar,loads);
+  else if(sub==='tools')      renderTMSTools(tabBar);
+  else if(sub==='reports')    renderTMSReports(tabBar,loads);
+}
+
+// ── 1. TMS HOME DASHBOARD ─────────────────────────────────────────
+function renderTMSDashboard(tabBar,kpis,loads){
+  const overdue=getOverdueLoads();
+  const needsInv=loads.filter(l=>l.status==='Delivered'&&!getInvoice(l.id));
+  const needsPOD=loads.filter(l=>['Dispatched','In Transit','Out for Delivery'].includes(l.status)&&!getTMSMeta(l.id).podUploaded);
+  const totalRev=loads.reduce((s,l)=>s+(l.customerRate||0),0);
+  const totalProfit=loads.reduce((s,l)=>s+getShipmentProfit(l,'freight').profit,0);
+
+  // Weekly revenue bar
+  const weeks=[];for(let i=3;i>=0;i--){const d=new Date(Date.now()-i*7*864e5);weeks.push({label:'Wk '+(4-i),rev:loads.filter(l=>l.date&&l.date>=d.toISOString().slice(0,10)&&l.date<new Date(d.getTime()+7*864e5).toISOString().slice(0,10)).reduce((s,l)=>s+(l.customerRate||0),0)});}
+  const maxRev=Math.max(...weeks.map(w=>w.rev),1);
+
+  $('page').innerHTML=tabBar+kpis+`
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+    <!-- Urgent items -->
+    <div class="card">
+      <div style="font-size:14px;font-weight:800;color:var(--navy);margin-bottom:12px">🚨 Needs attention</div>
+      ${overdue.length?overdue.map(l=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--gray-100)">
+        <div><div style="font-size:12px;font-weight:700;color:var(--navy)">${escH(l.customer||'—')}</div><div style="font-size:11px;color:var(--red)">Overdue · ETA was ${getTMSMeta(l.id).eta||'?'}</div></div>
+        <button onclick="S.tmsTab='loads';renderTMS()" style="font-size:10px;padding:3px 8px;border:1px solid var(--red);border-radius:4px;background:transparent;cursor:pointer;color:var(--red)">View</button>
+      </div>`).join(''):`<div style="color:var(--gray-400);font-size:13px;padding:12px 0">✅ No overdue loads</div>`}
+      ${needsInv.length?`<div style="padding:8px 0;border-bottom:1px solid var(--gray-100);font-size:12px;color:var(--amber);font-weight:600">🧾 ${needsInv.length} delivered load${needsInv.length>1?'s':''} need${needsInv.length===1?'s':''} invoicing</div>`:''}
+    </div>
+    <!-- Weekly revenue bars -->
+    <div class="card">
+      <div style="font-size:14px;font-weight:800;color:var(--navy);margin-bottom:12px">📊 Weekly revenue</div>
+      <div style="display:flex;align-items:flex-end;gap:8px;height:80px">
+        ${weeks.map(w=>`<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px">
+          <div style="font-size:10px;font-weight:700;color:var(--steel)">${w.rev>0?fmtD(w.rev):''}</div>
+          <div style="width:100%;background:var(--steel);border-radius:3px 3px 0 0;height:${Math.round(w.rev/maxRev*60)+4}px;opacity:.85;min-height:4px"></div>
+          <div style="font-size:10px;color:var(--gray-400)">${w.label}</div>
+        </div>`).join('')}
+      </div>
+    </div>
+  </div>
+  <!-- Status pipeline -->
+  <div class="card" style="margin-bottom:16px">
+    <div style="font-size:14px;font-weight:800;color:var(--navy);margin-bottom:12px">🚚 Pipeline</div>
+    <div style="display:flex;gap:0;align-items:center">
+      ${TMS_STATUSES.map((s,i)=>{const c=loads.filter(l=>l.status===s).length;return`<div style="flex:1;text-align:center;padding:10px 4px;background:${c?tmsStatusColor(s)+'12':'var(--gray-50)'};border-right:${i<TMS_STATUSES.length-1?'1px solid var(--gray-100)':'none'}">
+        <div style="font-size:20px;font-weight:900;color:${c?tmsStatusColor(s):'var(--gray-300)'}">${c}</div>
+        <div style="font-size:10px;font-weight:600;color:${c?tmsStatusColor(s):'var(--gray-400)'};margin-top:2px">${s}</div>
+      </div>`;}).join('')}
+    </div>
+  </div>
+  <!-- Quick actions -->
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">
+    <button onclick="S.tmsTab='dispatch';renderTMS()" class="card" style="text-align:center;cursor:pointer;border:none;background:var(--white)"><div style="font-size:24px">📋</div><div style="font-size:12px;font-weight:700;color:var(--navy);margin-top:4px">Dispatch board</div></button>
+    <button onclick="S.tmsTab='bol';renderTMS()" class="card" style="text-align:center;cursor:pointer;border:none;background:var(--white)"><div style="font-size:24px">📄</div><div style="font-size:12px;font-weight:700;color:var(--navy);margin-top:4px">BOL & Docs</div></button>
+    <button onclick="S.tmsTab='invoicing';renderTMS()" class="card" style="text-align:center;cursor:pointer;border:none;background:var(--white)"><div style="font-size:24px">🧾</div><div style="font-size:12px;font-weight:700;color:var(--navy);margin-top:4px">Invoicing</div><div style="font-size:10px;color:var(--amber)">${needsInv.length?needsInv.length+' pending':''}</div></button>
+    <button onclick="tmsGoFreight()" class="card" style="text-align:center;cursor:pointer;border:none;background:var(--blue-bg)"><div style="font-size:24px">➕</div><div style="font-size:12px;font-weight:700;color:var(--steel);margin-top:4px">New freight quote</div></button>
+  </div>`;
+}
+
+// ── 2. DEDICATED LOAD DETAIL PAGE ────────────────────────────────
+function openTMSLoadDetail(id){
+  const q=(window._fqHistory||[]).find(q=>q.id===id);
+  if(!q){showToast('Load not found','error');return;}
+  const meta=getTMSMeta(id);
+  const checkcalls=getTMSCheckcalls(id);
+  const stops=getTMSStops(id);
+  const claims=getTMSClaims(id);
+  const statusIdx=TMS_STATUSES.indexOf(q.status);
+  const p=getShipmentProfit(q,'freight');
+  const hasCInv=!!getInvoice(id),hasCarrI=!!getCarrierInvoice(id);
+
+  // Doc checklist
+  const docs=[
+    {label:'Rate confirmation',key:'rateCon',icon:'📧'},
+    {label:'BOL',key:'bolNum',check:!!meta.bolNum,icon:'📄'},
+    {label:'POD',key:'podUploaded',check:!!meta.podUploaded,icon:'✅'},
+    {label:'Customer invoice',key:'custInv',check:hasCInv,icon:'🧾'},
+    {label:'Carrier invoice',key:'carrInv',check:hasCarrI,icon:'🚛'},
+  ];
+
+  // Timeline
+  const timeline=TMS_STATUSES.map((s,i)=>{
+    const done=i<=statusIdx;const ts=meta[s.toLowerCase().replace(/ /g,'_')+'_at'];
+    return`<div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:10px">
+      <div style="width:22px;height:22px;border-radius:50%;flex-shrink:0;background:${done?tmsStatusColor(s):'var(--gray-100)'};display:flex;align-items:center;justify-content:center;font-size:11px;color:${done?'#fff':'var(--gray-300)'};">${done?'✓':'○'}</div>
+      <div><div style="font-size:12px;font-weight:${done?700:400};color:${done?'var(--navy)':'var(--gray-400)'}">${s}</div>${ts?`<div style="font-size:10px;color:var(--gray-400)">${new Date(ts).toLocaleString('en-US',{timeZone:'America/New_York',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}</div>`:''}</div>
+    </div>`;}).join('');
+
+  // Check-call log
+  const ccHtml=checkcalls.length?checkcalls.map(c=>`<div style="padding:8px 0;border-bottom:1px solid var(--gray-100)">
+    <div style="display:flex;justify-content:space-between"><span style="font-size:12px;font-weight:600;color:var(--navy)">${escH(c.location||'Check call')}</span><span style="font-size:11px;color:var(--gray-400)">${new Date(c.ts).toLocaleString('en-US',{timeZone:'America/New_York',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}</span></div>
+    ${c.eta?`<div style="font-size:11px;color:var(--amber)">ETA: ${c.eta}</div>`:''}
+    ${c.note?`<div style="font-size:11px;color:var(--gray-600)">${escH(c.note)}</div>`:''}
+  </div>`).join(''):`<div style="color:var(--gray-400);font-size:12px;padding:8px 0">No check calls logged yet</div>`;
+
+  const next=nextTMSStatus(q.status);
+  const prev=statusIdx>0?TMS_STATUSES[statusIdx-1]:null;
+
+  $('page').innerHTML=`
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px">
+    <button onclick="S.tmsTab='loads';renderTMS()" style="border:none;background:transparent;cursor:pointer;font-size:20px;color:var(--gray-400);padding:4px">←</button>
+    <div>
+      <div style="font-size:20px;font-weight:900;color:var(--navy)">${escH(q.customer||'—')}</div>
+      <div style="display:flex;align-items:center;gap:8px;margin-top:2px">
+        ${meta.bookingNum?`<span style="font-size:12px;font-weight:700;color:var(--steel)">${escH(meta.bookingNum)}</span>`:''}
+        <span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px;background:${tmsStatusColor(q.status)}18;color:${tmsStatusColor(q.status)}">${q.status}</span>
+        <span style="font-size:11px;color:var(--gray-400)">${q.fqMode} · ${q.date}</span>
+      </div>
+    </div>
+    <div style="margin-left:auto;display:flex;gap:6px">
+      ${prev?`<button onclick="advanceTMSLoad('${id}','${prev}')" style="padding:7px 14px;border:1px solid var(--gray-300);border-radius:var(--radius);background:transparent;cursor:pointer;font-family:inherit;font-size:12px;font-weight:600;color:var(--gray-600)">← ${escH(prev)}</button>`:''}
+      ${next?`<button onclick="advanceTMSLoad('${id}','${next}')" style="padding:7px 14px;border:none;border-radius:var(--radius);background:${tmsStatusColor(next)};cursor:pointer;font-family:inherit;font-size:12px;font-weight:700;color:#fff">→ ${escH(next)}</button>`:''}
+    </div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-bottom:16px">
+    <!-- Left: Details -->
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div class="card">
+        <div style="font-size:12px;font-weight:700;color:var(--gray-400);text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px">Load details</div>
+        <div class="g2" style="gap:8px">
+          <div><div style="font-size:10px;color:var(--gray-400)">Lane</div><div style="font-size:13px;font-weight:700">${escH((q.pickupZip||'—')+' → '+(q.deliveryZip||'—'))}</div></div>
+          <div><div style="font-size:10px;color:var(--gray-400)">Carrier</div><div style="font-size:13px;font-weight:700">${escH(q.carrier||'—')}</div></div>
+          <div><div style="font-size:10px;color:var(--gray-400)">Mode</div><div style="font-size:13px;font-weight:700">${q.fqMode||'—'}</div></div>
+          <div><div style="font-size:10px;color:var(--gray-400)">Weight</div><div style="font-size:13px;font-weight:700">${q.weight?Number(q.weight).toLocaleString()+' lbs':'—'}</div></div>
+          <div><div style="font-size:10px;color:var(--gray-400)">Revenue</div><div style="font-size:14px;font-weight:800;color:var(--steel)">${fmtD(q.customerRate||0)}</div></div>
+          <div><div style="font-size:10px;color:var(--gray-400)">Profit</div><div style="font-size:14px;font-weight:800;color:${p.profit>=0?'var(--green)':'var(--red)'}">${fmtD(p.profit)}</div></div>
+        </div>
+      </div>
+      <div class="card">
+        <div style="font-size:12px;font-weight:700;color:var(--gray-400);text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px">Appointments</div>
+        <div class="field" style="margin-bottom:8px"><label style="font-size:11px">Pickup</label><input type="datetime-local" value="${meta.pickupAppt||''}" onchange="saveTMSMeta('${id}',{pickupAppt:this.value});showSavedIndicator()"></div>
+        <div class="field" style="margin-bottom:8px"><label style="font-size:11px">Delivery</label><input type="datetime-local" value="${meta.deliveryAppt||''}" onchange="saveTMSMeta('${id}',{deliveryAppt:this.value});showSavedIndicator()"></div>
+        <div class="field" style="margin-bottom:8px"><label style="font-size:11px">ETA</label><input type="date" value="${meta.eta||''}" onchange="saveTMSMeta('${id}',{eta:this.value});showSavedIndicator()"></div>
+        <div class="field"><label style="font-size:11px">PRO / Tracking #</label><input type="text" value="${escH(meta.proNum||'')}" placeholder="PRO number" onchange="saveTMSMeta('${id}',{proNum:this.value});showSavedIndicator()"></div>
+      </div>
+    </div>
+
+    <!-- Middle: Timeline + Checklist -->
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div class="card">
+        <div style="font-size:12px;font-weight:700;color:var(--gray-400);text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px">Status timeline</div>
+        ${timeline}
+      </div>
+      <div class="card">
+        <div style="font-size:12px;font-weight:700;color:var(--gray-400);text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px">📋 Document checklist</div>
+        ${docs.map(d=>`<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--gray-100)">
+          <span style="font-size:14px">${d.icon}</span>
+          <span style="font-size:13px;font-weight:600;flex:1;color:var(--navy)">${d.label}</span>
+          <span style="font-size:12px;font-weight:700;color:${d.check?'#16a34a':'var(--gray-300)'}">${d.check?'✓ Done':'—'}</span>
+        </div>`).join('')}
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px">
+          <button onclick="openTMSRateCon('${id}')" style="font-size:11px;padding:5px 10px;border:1px solid var(--gray-200);border-radius:var(--radius);background:transparent;cursor:pointer;font-family:inherit">📧 Rate con</button>
+          <button onclick="openBOLBuilder('${id}')" style="font-size:11px;padding:5px 10px;border:1px solid var(--gray-200);border-radius:var(--radius);background:transparent;cursor:pointer;font-family:inherit">📄 BOL</button>
+          <button onclick="tmsInvOpen('${id}')" style="font-size:11px;padding:5px 10px;border:1px solid var(--gray-200);border-radius:var(--radius);background:transparent;cursor:pointer;font-family:inherit">🧾 Invoice</button>
+          <button onclick="openFqCarrierInvById('${id}')" style="font-size:11px;padding:5px 10px;border:1px solid var(--gray-200);border-radius:var(--radius);background:transparent;cursor:pointer;font-family:inherit">🚛 Carrier inv</button>
+          <button onclick="openPODUpload('${id}')" style="font-size:11px;padding:5px 10px;border:1px solid ${meta.podUploaded?'#86efac':'var(--gray-200)'};border-radius:var(--radius);background:${meta.podUploaded?'#f0fdf4':'transparent'};cursor:pointer;font-family:inherit;color:${meta.podUploaded?'#16a34a':'inherit'}">📎 ${meta.podUploaded?'POD ✓':'Upload POD'}</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right: Check calls + Notes -->
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div class="card">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+          <div style="font-size:12px;font-weight:700;color:var(--gray-400);text-transform:uppercase;letter-spacing:.05em">📞 Check calls</div>
+          <button onclick="openCheckcallModal('${id}')" style="font-size:11px;padding:4px 10px;border:1px solid var(--steel);border-radius:var(--radius);color:var(--steel);background:transparent;cursor:pointer;font-family:inherit">+ Log</button>
+        </div>
+        <div style="max-height:160px;overflow-y:auto">${ccHtml}</div>
+      </div>
+      <div class="card">
+        <div style="font-size:12px;font-weight:700;color:var(--gray-400);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">📝 Load notes</div>
+        <textarea style="width:100%;box-sizing:border-box;resize:vertical;font-size:12px;min-height:80px;border:1px solid var(--gray-200);border-radius:var(--radius);padding:8px" placeholder="Internal notes visible to all team members..." onchange="saveTMSMeta('${id}',{notes:this.value});showSavedIndicator()">${escH(meta.notes||'')}</textarea>
+      </div>
+      <div class="card">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+          <div style="font-size:12px;font-weight:700;color:var(--gray-400);text-transform:uppercase;letter-spacing:.05em">⚠️ Claims</div>
+          <button onclick="openClaimModal('${id}')" style="font-size:11px;padding:4px 10px;border:1px solid var(--red);border-radius:var(--radius);color:var(--red);background:transparent;cursor:pointer;font-family:inherit">+ File claim</button>
+        </div>
+        ${claims.length?claims.map(c=>`<div style="padding:6px 0;border-bottom:1px solid var(--gray-100);font-size:12px"><span style="font-weight:700;color:var(--navy)">${escH(c.type||'Claim')}</span> · ${fmtD(c.amount||0)} · <span style="color:${c.status==='Resolved'?'var(--green)':'var(--amber)'}">${c.status||'Open'}</span></div>`).join(''):`<div style="color:var(--gray-400);font-size:12px">No claims filed</div>`}
+      </div>
+    </div>
+  </div>`;
+}
+
+// ── 3. CHECK-CALL MODAL ───────────────────────────────────────────
+function openCheckcallModal(id){
+  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-title">📞 Log check call</div>
+    <div class="field"><label>Driver location</label><input type="text" id="cc-loc" placeholder="e.g. Columbus, OH — I-70 westbound"></div>
+    <div class="field"><label>New ETA</label><input type="datetime-local" id="cc-eta"></div>
+    <div class="field"><label>Notes</label><textarea id="cc-note" rows="2" style="width:100%;box-sizing:border-box;resize:vertical" placeholder="Any updates, issues, exceptions..."></textarea></div>
+    <div class="modal-foot">
+      <button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn blue" onclick="logCheckcall('${id}')">Save check call</button>
+    </div>
+  </div></div>`;
+}
+function logCheckcall(id){
+  const loc=($('cc-loc')||{}).value?.trim();
+  const eta=($('cc-eta')||{}).value;
+  const note=($('cc-note')||{}).value?.trim();
+  saveTMSCheckcall(id,{location:loc,eta,note});
+  if(eta) saveTMSMeta(id,{eta:eta.slice(0,10)});
+  closeModal();showToast('Check call logged','success',2000);
+  openTMSLoadDetail(id);
+}
+
+// ── 4. POD UPLOAD ────────────────────────────────────────────────
+function openPODUpload(id){
+  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-title">📎 Upload Proof of Delivery</div>
+    <div style="border:2px dashed var(--gray-200);border-radius:var(--radius);padding:24px;text-align:center;cursor:pointer;margin-bottom:14px" onclick="$('pod-file').click()">
+      <div style="font-size:32px;margin-bottom:8px">📎</div>
+      <div style="font-size:14px;font-weight:600;color:var(--navy)">Click to upload POD</div>
+      <div style="font-size:12px;color:var(--gray-400)">PDF, JPG, or PNG</div>
+      <input type="file" id="pod-file" accept=".pdf,.jpg,.jpeg,.png" style="display:none" onchange="podFileSelected(this,'${id}')">
+    </div>
+    <div id="pod-preview" style="display:none;padding:10px;background:var(--blue-bg);border-radius:var(--radius);font-size:13px;color:var(--steel);font-weight:600;margin-bottom:14px"></div>
+    <div class="modal-foot">
+      <button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn blue" onclick="savePOD('${id}')">✅ Confirm POD received</button>
+    </div>
+  </div></div>`;
+}
+function podFileSelected(input,id){
+  const f=input.files[0];if(!f)return;
+  const prev=$('pod-preview');if(prev){prev.style.display='block';prev.textContent='📎 '+f.name+' ('+Math.round(f.size/1024)+'KB)';}
+  const reader=new FileReader();
+  reader.onload=e=>{window._podData={name:f.name,data:e.target.result};};
+  reader.readAsDataURL(f);
+}
+function savePOD(id){
+  const data=window._podData;
+  saveTMSMeta(id,{podUploaded:true,podName:data?.name||'POD',podDate:localDateStr()});
+  closeModal();showToast('✅ POD uploaded — ready to invoice','success',3000);
+  openTMSLoadDetail(id);
+}
+
+// ── 5. CLAIMS MODAL ───────────────────────────────────────────────
+function openClaimModal(id){
+  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-title">⚠️ File a claim</div>
+    <div class="g2">
+      <div class="field"><label>Claim type</label><select id="clm-type" style="width:100%;padding:8px;border:1px solid var(--gray-200);border-radius:var(--radius)"><option>Damage</option><option>Shortage</option><option>Loss</option><option>Carrier no-show</option><option>Late delivery</option><option>Other</option></select></div>
+      <div class="field"><label>Claim amount ($)</label><input type="number" id="clm-amt" placeholder="0" min="0"></div>
+    </div>
+    <div class="field"><label>Description</label><textarea id="clm-desc" rows="3" style="width:100%;box-sizing:border-box;resize:vertical" placeholder="Describe the issue..."></textarea></div>
+    <div class="field"><label>Status</label><select id="clm-status" style="width:100%;padding:8px;border:1px solid var(--gray-200);border-radius:var(--radius)"><option>Open</option><option>Pending carrier</option><option>Resolved</option></select></div>
+    <div class="modal-foot">
+      <button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn blue" onclick="fileClaim('${id}')">File claim</button>
+    </div>
+  </div></div>`;
+}
+function fileClaim(id){
+  saveTMSClaim(id,{type:($('clm-type')||{}).value,amount:parseFloat(($('clm-amt')||{}).value)||0,description:($('clm-desc')||{}).value?.trim(),status:($('clm-status')||{}).value});
+  saveTMSMeta(id,{hasClaim:true});
+  closeModal();showToast('⚠️ Claim filed','warning',2000);
+  openTMSLoadDetail(id);
+}
+
+// ── 6. RATE CONFIRMATION PDF ──────────────────────────────────────
+async function openTMSRateCon(id){
+  const q=(window._fqHistory||[]).find(q=>q.id===id);
+  if(!q){showToast('Load not found','error');return;}
+  const meta=getTMSMeta(id);
+  if(!await loadJsPDF()){showToast('PDF library loading...','info');return;}
+  const{jsPDF}=window.jspdf;const doc=new jsPDF({unit:'mm',format:'letter'});
+  const W=216,M=14,navy=[26,46,74];
+  doc.setFillColor(...navy);doc.rect(0,0,W,32,'F');
+  doc.setTextColor(255,255,255);doc.setFont('helvetica','bold');doc.setFontSize(20);
+  doc.text('RATE CONFIRMATION',M,14);
+  doc.setFontSize(10);doc.setFont('helvetica','normal');
+  doc.text('Shifl Logistics · Freight Brokerage',M,22);
+  doc.text('Ref: '+(meta.bookingNum||id),W-M,14,{align:'right'});
+  doc.text('Date: '+localDateStr(),W-M,22,{align:'right'});
+  doc.setTextColor(0);let y=42;
+  const sec=t=>{doc.setFillColor(240,244,248);doc.rect(M,y-4,W-M*2,7,'F');doc.setFont('helvetica','bold');doc.setFontSize(9);doc.setTextColor(...navy);doc.text(t,M+2,y);doc.setTextColor(0);y+=10;};
+  const row=(l,v)=>{doc.setFont('helvetica','bold');doc.setFontSize(9);doc.text(l+':',M,y);doc.setFont('helvetica','normal');doc.text(v||'—',M+45,y);y+=7;};
+  sec('CARRIER INFORMATION');row('Carrier',q.carrier);row('Mode',q.fqMode);y+=3;
+  sec('SHIPMENT DETAILS');row('Pickup ZIP',q.pickupZip);row('Delivery ZIP',q.deliveryZip);row('Pickup appointment',meta.pickupAppt||'TBD');row('Delivery appointment',meta.deliveryAppt||'TBD');row('Weight',q.weight?(q.weight+' lbs'):'TBD');row('Commodity',q.commodity||meta.commodity||'General freight, no hazmat');y+=3;
+  sec('RATE');doc.setFont('helvetica','bold');doc.setFontSize(16);doc.setTextColor(...navy);doc.text(fmtD(q.carrierRate||0),M,y);doc.setFontSize(9);doc.setTextColor(100);doc.text('All-in rate · Payment terms: Net 30',M+35,y);doc.setTextColor(0);y+=12;
+  if(meta.bolNotes){sec('SPECIAL INSTRUCTIONS');doc.setFont('helvetica','normal');doc.setFontSize(9);doc.text(doc.splitTextToSize(meta.bolNotes,W-M*2),M,y);y+=doc.splitTextToSize(meta.bolNotes,W-M*2).length*5+6;}
+  y+=8;doc.setDrawColor(...navy);doc.setLineWidth(.5);doc.line(M,y,90,y);doc.line(120,y,W-M,y);
+  doc.setFontSize(8);doc.text('Carrier signature / date',M,y+4);doc.text('Broker signature / date',120,y+4);
+  doc.setFontSize(7);doc.setTextColor(150);doc.text('By accepting this load, carrier agrees to all terms. Contact: dispatch@shifl.com',W/2,270,{align:'center'});
+  doc.save('RateCon_'+(meta.bookingNum||id)+'_'+escH(q.carrier||'carrier').replace(/\s/g,'_')+'.pdf');
+  saveTMSMeta(id,{rateConSent:true});
+  showToast('Rate confirmation PDF downloaded','success',2000);
+}
+
+// ── 7. CARRIER CAPACITY BOARD ─────────────────────────────────────
+function renderTMSCapacity(tabBar){
+  const list=getTMSCapacity();
+  const today=localDateStr();
+  $('page').innerHTML=tabBar+`
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+    <div style="font-size:16px;font-weight:800;color:var(--navy)">🚚 Available carrier capacity</div>
+    <button onclick="openAddCapacity()" class="btn blue">+ Add available truck</button>
+  </div>
+  ${list.length?`<div class="tbl-wrap"><table><thead><tr><th>Carrier</th><th>Equipment</th><th>Available from</th><th>Origin</th><th>Destination</th><th>Rate</th><th>Contact</th><th></th></tr></thead><tbody>
+    ${list.map((c,i)=>`<tr style="opacity:${c.date<today?.5:1}">
+      <td class="bold">${escH(c.carrier||'—')}</td>
+      <td><span style="font-size:11px;background:var(--blue-bg);color:var(--steel);padding:2px 8px;border-radius:99px;font-weight:700">${escH(c.equip||'FTL')}</span></td>
+      <td style="color:${c.date<today?'var(--red)':'var(--navy)';}">${c.date||'—'}${c.date<today?' ⚠️ expired':''}</td>
+      <td class="muted">${escH(c.origin||'—')}</td>
+      <td class="muted">${escH(c.dest||'Anywhere')}</td>
+      <td class="money">${c.rate?fmtD(c.rate):'Negotiable'}</td>
+      <td style="font-size:12px">${escH(c.contact||'—')}</td>
+      <td><button onclick="removeCapacity(${i})" style="border:none;background:transparent;cursor:pointer;color:var(--red);font-size:13px">🗑️</button></td>
+    </tr>`).join('')}
+  </tbody></table></div>`:`<div class="empty"><div class="empty-ico">🚚</div><p>No available trucks logged — add carrier capacity to match with loads</p></div>`}`;
+}
+function openAddCapacity(){
+  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal" style="max-width:460px">
+    <div class="modal-title">+ Add available truck</div>
+    <div class="g2">
+      <div class="field"><label>Carrier name *</label><input type="text" id="cap-carrier" placeholder="Carrier name"></div>
+      <div class="field"><label>Equipment</label><select id="cap-equip" style="width:100%;padding:8px;border:1px solid var(--gray-200);border-radius:var(--radius)"><option>FTL - Dry Van</option><option>FTL - Reefer</option><option>FTL - Flatbed</option><option>LTL</option><option>Box Truck</option><option>Step Deck</option></select></div>
+    </div>
+    <div class="g3">
+      <div class="field"><label>Available date</label><input type="date" id="cap-date" value="${localDateStr()}"></div>
+      <div class="field"><label>Origin ZIP / city</label><input type="text" id="cap-origin" placeholder="e.g. Newark, NJ"></div>
+      <div class="field"><label>Destination</label><input type="text" id="cap-dest" placeholder="e.g. Chicago, IL"></div>
+    </div>
+    <div class="g2">
+      <div class="field"><label>Target rate ($)</label><input type="number" id="cap-rate" placeholder="Optional"></div>
+      <div class="field"><label>Contact / phone</label><input type="text" id="cap-contact" placeholder="Driver or dispatcher"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn blue" onclick="saveCapacity()">Save</button>
+    </div>
+  </div></div>`;
+}
+function saveCapacity(){
+  const carrier=($('cap-carrier')||{}).value?.trim();
+  if(!carrier){alert('Carrier name required');return;}
+  const list=getTMSCapacity();
+  list.unshift({carrier,equip:($('cap-equip')||{}).value,date:($('cap-date')||{}).value,origin:($('cap-origin')||{}).value?.trim(),dest:($('cap-dest')||{}).value?.trim(),rate:parseFloat(($('cap-rate')||{}).value)||0,contact:($('cap-contact')||{}).value?.trim(),addedAt:new Date().toISOString()});
+  saveTMSCapacity(list);closeModal();showToast('Capacity added','success',2000);renderTMS();
+}
+function removeCapacity(i){const list=getTMSCapacity();list.splice(i,1);saveTMSCapacity(list);renderTMS();}
+
+// ── 8. CLAIMS PAGE ────────────────────────────────────────────────
+function renderTMSClaims(tabBar,loads){
+  const allClaims=[];
+  loads.forEach(l=>{getTMSClaims(l.id).forEach(c=>allClaims.push({...c,customer:l.customer,loadId:l.id,bookingNum:getTMSMeta(l.id).bookingNum||''}) );});
+  allClaims.sort((a,b)=>b.ts.localeCompare(a.ts));
+  $('page').innerHTML=tabBar+`
+  <div style="font-size:16px;font-weight:800;color:var(--navy);margin-bottom:16px">⚠️ Claims management</div>
+  ${allClaims.length?`<div class="tbl-wrap"><table><thead><tr><th>Booking #</th><th>Customer</th><th>Type</th><th>Amount</th><th>Status</th><th>Filed</th><th></th></tr></thead><tbody>
+    ${allClaims.map(c=>`<tr>
+      <td style="font-family:monospace;font-weight:700;color:var(--steel)">${escH(c.bookingNum||c.loadId.slice(-6))}</td>
+      <td class="bold">${escH(c.customer||'—')}</td>
+      <td><span style="font-size:11px;background:#fff5f5;color:#dc2626;padding:2px 8px;border-radius:99px;font-weight:700">${escH(c.type||'—')}</span></td>
+      <td class="money" style="color:#dc2626;font-weight:700">${fmtD(c.amount||0)}</td>
+      <td><span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px;background:${c.status==='Resolved'?'#f0fdf4':c.status==='Pending carrier'?'#fffbeb':'#fff5f5'};color:${c.status==='Resolved'?'#16a34a':c.status==='Pending carrier'?'#d97706':'#dc2626'}">${c.status||'Open'}</span></td>
+      <td class="muted">${c.ts?new Date(c.ts).toLocaleDateString():'—'}</td>
+      <td><button onclick="openTMSLoadDetail('${c.loadId}')" style="font-size:11px;padding:3px 8px;border:1px solid var(--gray-200);border-radius:4px;background:transparent;cursor:pointer;font-family:inherit">View load</button></td>
+    </tr>`).join('')}
+  </tbody></table></div>`:`<div class="empty"><div class="empty-ico">✅</div><p>No claims filed — great track record</p></div>`}`;
+}
+
+// ── 9. ENHANCED REPORTS (analytics) ──────────────────────────────
+function renderTMSReports(tabBar,loads){
+  const rTab=S.tmsRptTab||'pl';
+  const rTabs=[{id:'pl',label:'P&L'},{id:'ontime',label:'On-time'},{id:'customer',label:'Customer profit'},{id:'lane',label:'Lane trends'},{id:'heatmap',label:'Volume heatmap'}];
+  const rBar=`<div style="display:flex;gap:4px;background:var(--gray-100);padding:3px;border-radius:var(--radius);width:fit-content;margin-bottom:16px">
+    ${rTabs.map(t=>`<button onclick="S.tmsRptTab='${t.id}';renderTMS()" style="padding:6px 14px;border-radius:5px;border:none;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;background:${(S.tmsRptTab||'pl')===t.id?'#fff':'none'};color:${(S.tmsRptTab||'pl')===t.id?'var(--navy)':'var(--gray-500)'};box-shadow:${(S.tmsRptTab||'pl')===t.id?'0 1px 3px rgba(0,0,0,.08)':'none'}">${t.label}</button>`).join('')}
+  </div>`;
+
+  if(rTab==='pl') renderTMSPL(tabBar,rBar,loads);
+  else if(rTab==='ontime') renderTMSOntime(tabBar,rBar,loads);
+  else if(rTab==='customer') renderTMSCustomerProfit(tabBar,rBar,loads);
+  else if(rTab==='lane') renderTMSLaneTrend(tabBar,rBar,loads);
+  else if(rTab==='heatmap') renderTMSHeatmap(tabBar,rBar,loads);
+}
+
+function renderTMSPL(tabBar,rBar,loads){
+  const today=new Date();const mo=today.getMonth();const yr=today.getFullYear();
+  const months=[];for(let i=5;i>=0;i--){const d=new Date(yr,mo-i,1);months.push({label:d.toLocaleString('en-US',{month:'short',year:'2-digit'}),key:d.toISOString().slice(0,7)});}
+  const byMonth=months.map(m=>{const ml=loads.filter(l=>l.date&&l.date.startsWith(m.key));return{...m,rev:ml.reduce((s,l)=>s+(l.customerRate||0),0),cost:ml.reduce((s,l)=>s+(l.carrierRate||0),0),profit:ml.reduce((s,l)=>s+getShipmentProfit(l,'freight').profit,0),count:ml.length};});
+  const totRev=byMonth.reduce((s,m)=>s+m.rev,0);const totProfit=byMonth.reduce((s,m)=>s+m.profit,0);
+  const maxRev=Math.max(...byMonth.map(m=>m.rev),1);
+  $('page').innerHTML=tabBar+rBar+`
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:16px">
+    <div class="kpi"><div class="kpi-lbl">6-mo revenue</div><div class="kpi-val" style="color:var(--steel);font-size:18px">${fmtD(totRev)}</div></div>
+    <div class="kpi"><div class="kpi-lbl">6-mo profit</div><div class="kpi-val" style="color:var(--green);font-size:18px">${fmtD(totProfit)}</div></div>
+    <div class="kpi"><div class="kpi-lbl">Avg margin</div><div class="kpi-val" style="color:#7c3aed;font-size:18px">${totRev>0?pct(totProfit/totRev):'—'}</div></div>
+  </div>
+  <div class="card" style="margin-bottom:14px">
+    <div style="display:flex;align-items:flex-end;gap:6px;height:100px;margin-bottom:8px">
+      ${byMonth.map(m=>`<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px">
+        <div style="font-size:9px;color:var(--gray-400);font-weight:600">${m.rev>0?fmtD(m.rev):''}</div>
+        <div style="width:70%;background:var(--steel);border-radius:3px 3px 0 0;height:${Math.round(m.rev/maxRev*70)+2}px;opacity:.8;min-height:2px"></div>
+        <div style="width:70%;background:var(--green);border-radius:0;height:${Math.round(m.profit/maxRev*70)+2}px;opacity:.9;min-height:2px;margin-top:1px"></div>
+        <div style="font-size:10px;color:var(--gray-500)">${m.label}</div>
+      </div>`).join('')}
+    </div>
+    <div style="display:flex;gap:12px;font-size:11px"><span style="color:var(--steel)">■ Revenue</span><span style="color:var(--green)">■ Profit</span></div>
+  </div>
+  <div class="tbl-wrap"><table><thead><tr><th>Month</th><th>Loads</th><th>Revenue</th><th>Carrier cost</th><th>Profit</th><th>Margin</th></tr></thead><tbody>
+    ${byMonth.map(m=>`<tr><td class="bold">${m.label}</td><td>${m.count}</td><td class="money">${fmtD(m.rev)}</td><td class="money" style="color:#d97706">${fmtD(m.cost)}</td><td class="money" style="color:var(--green);font-weight:700">${fmtD(m.profit)}</td><td style="font-weight:700;color:#7c3aed">${m.rev>0?pct(m.profit/m.rev):'—'}</td></tr>`).join('')}
+  </tbody></table></div>
+  <div style="margin-top:12px"><button onclick="exportTMSPL()" class="btn">📥 Export monthly P&L (CSV)</button></div>`;
+}
+
+function exportTMSPL(){
+  const loads=getTMSLoads();
+  const rows=[['Date','Booking#','Customer','Mode','Lane','Carrier','Revenue','Carrier Cost','Profit','Margin%','Status'],...loads.map(l=>{const m=getTMSMeta(l.id);const p=getShipmentProfit(l,'freight');return[l.date,m.bookingNum||'',l.customer||'',l.fqMode||'',(l.pickupZip||'')+'→'+(l.deliveryZip||''),l.carrier||'',l.customerRate||0,l.carrierRate||0,p.profit.toFixed(2),(p.margin*100).toFixed(1)+'%',l.status];})];
+  const csv=rows.map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\n');
+  const a=document.createElement('a');a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);a.download='TMS_PL_'+localDateStr()+'.csv';a.click();
+  showToast('P&L exported','success');
+}
+
+function renderTMSOntime(tabBar,rBar,loads){
+  const delivered=loads.filter(l=>['Delivered','Invoiced','Paid'].includes(l.status));
+  const carriers={};
+  delivered.forEach(l=>{
+    const c=l.carrier||'Unknown';if(!carriers[c]) carriers[c]={total:0,onTime:0,late:0};
+    carriers[c].total++;
+    const meta=getTMSMeta(l.id);const eta=meta.eta;const delAt=meta['delivered_at'];
+    if(!eta||!delAt){carriers[c].onTime++;}
+    else if(new Date(delAt)<=new Date(eta)){carriers[c].onTime++;}
+    else{carriers[c].late++;}
+  });
+  const sorted=Object.entries(carriers).sort((a,b)=>b[1].total-a[1].total);
+  $('page').innerHTML=tabBar+rBar+`
+  <div style="font-size:14px;font-weight:800;color:var(--navy);margin-bottom:12px">On-time delivery by carrier</div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px">
+    ${sorted.map(([name,d])=>{const rate=d.total>0?Math.round(d.onTime/d.total*100):0;const col=rate>=90?'var(--green)':rate>=70?'var(--amber)':'var(--red)';
+    return`<div class="card"><div style="font-size:14px;font-weight:800;color:var(--navy);margin-bottom:8px">${escH(name)}</div>
+      <div style="font-size:28px;font-weight:900;color:${col}">${rate}%</div>
+      <div style="font-size:11px;color:var(--gray-400);margin-bottom:8px">on-time · ${d.total} loads</div>
+      <div style="height:6px;background:var(--gray-100);border-radius:3px;overflow:hidden"><div style="height:6px;width:${rate}%;background:${col};border-radius:3px;transition:width 1s"></div></div>
+      <div style="font-size:11px;color:var(--gray-500);margin-top:6px">${d.late} late · ${d.onTime} on time</div>
+    </div>`;}).join('')||'<div class="empty"><div class="empty-ico">📊</div><p>Mark loads as Delivered to see on-time stats</p></div>'}
+  </div>`;
+}
+
+function renderTMSCustomerProfit(tabBar,rBar,loads){
+  const custs={};
+  loads.forEach(l=>{const c=l.customer||'Unknown';if(!custs[c])custs[c]={loads:0,rev:0,profit:0};custs[c].loads++;custs[c].rev+=(l.customerRate||0);custs[c].profit+=getShipmentProfit(l,'freight').profit;});
+  const sorted=Object.entries(custs).sort((a,b)=>b[1].profit-a[1].profit);
+  const maxR=Math.max(...sorted.map(([,d])=>d.rev),1);
+  $('page').innerHTML=tabBar+rBar+`
+  <div style="font-size:14px;font-weight:800;color:var(--navy);margin-bottom:12px">Customer profitability ranking</div>
+  ${sorted.map(([name,d],i)=>{const margin=d.rev>0?d.profit/d.rev:0;const mc=margin>=.15?'var(--green)':margin>=.05?'var(--amber)':'var(--red)';
+  return`<div style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--gray-100)">
+    <div style="font-size:20px;font-weight:900;color:var(--gray-300);min-width:28px">#${i+1}</div>
+    <div style="flex:1">
+      <div style="font-size:14px;font-weight:700;color:var(--navy)">${escH(name)}</div>
+      <div style="height:6px;background:var(--gray-100);border-radius:3px;margin-top:6px;overflow:hidden"><div style="height:6px;width:${Math.round(d.rev/maxR*100)}%;background:var(--steel);border-radius:3px"></div></div>
+    </div>
+    <div style="text-align:right;min-width:120px">
+      <div style="font-size:14px;font-weight:800;color:var(--steel)">${fmtD(d.rev)}</div>
+      <div style="font-size:12px;font-weight:700;color:${mc}">${fmtD(d.profit)} · ${pct(margin)}</div>
+      <div style="font-size:11px;color:var(--gray-400)">${d.loads} load${d.loads>1?'s':''}</div>
+    </div>
+  </div>`;}).join('')||'<div class="empty"><div class="empty-ico">📊</div><p>No load data yet</p></div>'}`;
+}
+
+function renderTMSLaneTrend(tabBar,rBar,loads){
+  const lanes={};
+  loads.forEach(l=>{const k=(l.pickupZip||'?')+'→'+(l.deliveryZip||'?');if(!lanes[k])lanes[k]=[];lanes[k].push(l);});
+  const topLanes=Object.entries(lanes).sort((a,b)=>b[1].length-a[1].length).slice(0,6);
+  $('page').innerHTML=tabBar+rBar+`
+  <div style="font-size:14px;font-weight:800;color:var(--navy);margin-bottom:12px">Top lane performance</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+    ${topLanes.map(([lane,ls])=>{
+      const rev=ls.reduce((s,l)=>s+(l.customerRate||0),0);const profit=ls.reduce((s,l)=>s+getShipmentProfit(l,'freight').profit,0);
+      const margin=rev>0?profit/rev:0;const mc=margin>=.15?'var(--green)':margin>=.05?'var(--amber)':'var(--red)';
+      const byMo={};ls.forEach(l=>{const mo=l.date?.slice(0,7)||'?';if(!byMo[mo])byMo[mo]=0;byMo[mo]+=(l.customerRate||0);});
+      const maxMo=Math.max(...Object.values(byMo),1);
+      return`<div class="card"><div style="font-size:14px;font-weight:800;color:var(--navy);margin-bottom:4px">${escH(lane)}</div>
+        <div style="display:flex;gap:8px;margin-bottom:8px">
+          <span style="font-size:12px;font-weight:700;color:var(--steel)">${fmtD(rev)}</span>
+          <span style="font-size:12px;color:${mc};font-weight:700">${pct(margin)}</span>
+          <span style="font-size:12px;color:var(--gray-400)">${ls.length} loads</span>
+        </div>
+        <div style="display:flex;align-items:flex-end;gap:3px;height:40px">
+          ${Object.entries(byMo).slice(-6).map(([mo,v])=>`<div style="flex:1;background:var(--steel);border-radius:2px 2px 0 0;height:${Math.round(v/maxMo*36)+2}px;opacity:.75;min-height:2px" title="${mo}: ${fmtD(v)}"></div>`).join('')}
+        </div>
+      </div>`;}).join('')||'<div style="padding:40px;text-align:center;color:var(--gray-400)">No lane data yet</div>'}
+  </div>`;
+}
+
+function renderTMSHeatmap(tabBar,rBar,loads){
+  const days=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const counts=Array(7).fill(0);const revs=Array(7).fill(0);
+  loads.forEach(l=>{if(!l.date)return;const d=new Date(l.date+'T12:00:00').getDay();counts[d]++;revs[d]+=(l.customerRate||0);});
+  const maxC=Math.max(...counts,1);
+  $('page').innerHTML=tabBar+rBar+`
+  <div style="font-size:14px;font-weight:800;color:var(--navy);margin-bottom:16px">Load volume by day of week</div>
+  <div class="card" style="margin-bottom:14px">
+    <div style="display:flex;align-items:flex-end;gap:10px;height:120px;margin-bottom:8px">
+      ${days.map((d,i)=>`<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px">
+        <div style="font-size:11px;font-weight:700;color:${counts[i]===Math.max(...counts)?'var(--green)':'var(--gray-500)'};">${counts[i]}</div>
+        <div style="width:80%;background:${counts[i]===Math.max(...counts)?'var(--green)':counts[i]>maxC/2?'var(--steel)':'var(--gray-200)'};border-radius:4px 4px 0 0;height:${Math.round(counts[i]/maxC*90)+4}px;min-height:4px;transition:height .5s"></div>
+        <div style="font-size:12px;font-weight:600;color:var(--gray-500)">${d}</div>
+      </div>`).join('')}
+    </div>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:8px">
+    ${days.map((d,i)=>`<div class="kpi" style="text-align:center"><div class="kpi-lbl">${d}</div><div style="font-size:16px;font-weight:800;color:var(--navy)">${counts[i]}</div><div style="font-size:11px;color:var(--gray-400)">${fmtD(revs[i])}</div></div>`).join('')}
+  </div>`;
+}
+
+
+
 boot().catch(e=>{$('loading-screen').style.display='none';$('setup-screen').style.display='flex';});
 </script>
 <script>
