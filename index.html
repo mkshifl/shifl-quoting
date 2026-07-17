@@ -12504,7 +12504,7 @@ function renderTMSLoads(tabBar,kpis,loads){
     ['all',...TMS_STATUSES].map(s=>{
       const cnt=s==='all'?loads.length:loads.filter(l=>l.status===s).length;
       const active=lFilt===s;
-      return '<button onclick="S.tmsLoadsFilt=''+s+'';renderTMS()" style="padding:4px 12px;border-radius:99px;border:1.5px solid '+(s==='all'?'#1a2e4a':tmsStatusColor(s))+';font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;background:'+(active?(s==='all'?'#1a2e4a':tmsStatusColor(s)):'transparent')+';color:'+(active?'#fff':(s==='all'?'#1a2e4a':tmsStatusColor(s)))+'">'+( s==='all'?'All':s)+' '+cnt+'</button>';
+      return '<button data-sf="'+s+'" onclick="S.tmsLoadsFilt=this.dataset.sf;renderTMS()" style="padding:4px 12px;border-radius:99px;border:1.5px solid '+(s==='all'?'#1a2e4a':tmsStatusColor(s))+';font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;background:'+(active?(s==='all'?'#1a2e4a':tmsStatusColor(s)):'transparent')+';color:'+(active?'#fff':(s==='all'?'#1a2e4a':tmsStatusColor(s)))+'">'+( s==='all'?'All':s)+' '+cnt+'</button>';
     }).join('')+
     '</div>'+
     '<div style="position:relative;min-width:220px"><span style="position:absolute;left:10px;top:50%;transform:translateY(-50%)">🔍</span>'+
