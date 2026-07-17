@@ -327,7 +327,7 @@ body.screenshot-mode .money::after,body.screenshot-mode .kpi-val::after{content:
 .active-card{cursor:grab;transition:transform .15s,box-shadow .15s}
 .active-card.dragging{opacity:.5;cursor:grabbing;transform:scale(1.02)}
 .active-card.drag-over{box-shadow:0 0 0 2px var(--steel)!important}
-</style>
+.tms-row:hover{background:var(--blue-bg)!important}.tms-act-btn{font-size:10px;padding:3px 7px;border:1px solid var(--gray-200);border-radius:4px;background:transparent;cursor:pointer;font-family:inherit;color:var(--gray-600)}</style>
 <script>
 // Force clear service worker and caches
 if('serviceWorker' in navigator){
@@ -12451,6 +12451,8 @@ function renderTMSDispatch(tabBar,kpis,loads){
 }
 
 // ── ALL LOADS TABLE ────────────────────────────────────────────────
+function tmsInvOpen(id){openInvoiceBuilder('freight',id);}
+function tmsGoFreight(){goTo('freight','builder');}
 function buildTMSLoadRow(l){
   const id=l.id,meta=getTMSMeta(id);
   const p=getShipmentProfit(l,'freight');
@@ -12459,23 +12461,25 @@ function buildTMSLoadRow(l){
   const prev=sIdx>0?TMS_STATUSES[sIdx-1]:null;
   const next=nextTMSStatus(l.status);
   const pc=p.isActual?'var(--green)':p.margin>=0.08?'var(--amber)':'var(--red)';
-  const st=l.status,sc=tmsStatusColor(st);
+  const sc=tmsStatusColor(l.status);
   const bk=meta.bookingNum?'<div style="font-size:10px;font-weight:700;color:var(--steel)">'+escH(meta.bookingNum)+'</div>':'';
-  const pb='<button class="tms-btn-prev" data-id="'+id+'" data-s="'+(prev||'')+'" onclick="event.stopPropagation();advanceTMSLoad(this.dataset.id,this.dataset.s)" style="display:'+(prev?'':'none')+';font-size:10px;padding:3px 7px;border:1px solid var(--gray-300);border-radius:4px;background:transparent;cursor:pointer;font-family:inherit;color:var(--gray-600)">← '+(prev||'')+'</button>';
-  const nb='<button class="tms-btn-next" data-id="'+id+'" data-s="'+(next||'')+'" onclick="event.stopPropagation();advanceTMSLoad(this.dataset.id,this.dataset.s)" style="display:'+(next?'':'none')+';font-size:10px;padding:3px 7px;border:none;border-radius:4px;background:'+tmsStatusColor(next||st)+';color:#fff;cursor:pointer;font-family:inherit;font-weight:700">→ '+(next||'')+'</button>';
-  const ib='<button data-id="'+id+'" onclick="event.stopPropagation();openInvoiceBuilder('freight',this.dataset.id)" style="font-size:10px;padding:3px 7px;border:1px solid '+(hasCInv?'#86efac':'var(--gray-200)')+';border-radius:4px;background:'+(hasCInv?'#f0fdf4':'transparent')+';cursor:pointer;font-family:inherit;color:'+(hasCInv?'#16a34a':'var(--gray-600)')+'">🧾 '+(hasCInv?'✓':'Invoice')+'</button>';
-  const cb='<button data-id="'+id+'" onclick="event.stopPropagation();openFqCarrierInvById(this.dataset.id)" style="font-size:10px;padding:3px 7px;border:1px solid '+(hasCarrI?'#fbbf24':'var(--gray-200)')+';border-radius:4px;background:'+(hasCarrI?'#fffbeb':'transparent')+';cursor:pointer;font-family:inherit;color:'+(hasCarrI?'#d97706':'var(--gray-600)')+'">🚛 '+(hasCarrI?'✓':'Carrier')+'</button>';
-  const db='<button data-id="'+id+'" onclick="event.stopPropagation();deleteTMSLoad(this.dataset.id)" style="font-size:10px;padding:3px 7px;border:1px solid #fca5a5;border-radius:4px;background:transparent;cursor:pointer;color:#dc2626;font-family:inherit">🗑️</button>';
+  const acts=[
+    prev?'<button data-id="'+id+'" data-s="'+prev+'" onclick="event.stopPropagation();advanceTMSLoad(this.dataset.id,this.dataset.s)" class="tms-act-btn">← '+escH(prev)+'</button>':'',
+    next?'<button data-id="'+id+'" data-s="'+next+'" onclick="event.stopPropagation();advanceTMSLoad(this.dataset.id,this.dataset.s)" class="tms-act-btn" style="background:'+tmsStatusColor(next)+';color:#fff;border-color:'+tmsStatusColor(next)+'">→ '+escH(next)+'</button>':'',
+    '<button data-id="'+id+'" onclick="event.stopPropagation();tmsInvOpen(this.dataset.id)" class="tms-act-btn" style="border-color:'+(hasCInv?'#86efac':'var(--gray-200)')+';background:'+(hasCInv?'#f0fdf4':'transparent')+';color:'+(hasCInv?'#16a34a':'var(--gray-600)')+'">🧾 '+(hasCInv?'✓':'Invoice')+'</button>',
+    '<button data-id="'+id+'" onclick="event.stopPropagation();openFqCarrierInvById(this.dataset.id)" class="tms-act-btn" style="border-color:'+(hasCarrI?'#fbbf24':'var(--gray-200)')+';background:'+(hasCarrI?'#fffbeb':'transparent')+';color:'+(hasCarrI?'#d97706':'var(--gray-600)')+'">🚛 '+(hasCarrI?'✓':'Carrier')+'</button>',
+    '<button data-id="'+id+'" onclick="event.stopPropagation();deleteTMSLoad(this.dataset.id)" class="tms-act-btn" style="border-color:#fca5a5;color:#dc2626">🗑️</button>'
+  ].join('');
   return '<tr class="tms-row" data-lid="'+id+'" onclick="openTMSLoadDetail(this.dataset.lid)" style="cursor:pointer;border-left:3px solid '+sc+'">'+
     '<td onclick="event.stopPropagation()"><div style="font-size:13px;font-weight:700;color:var(--navy)">'+escH(l.customer||'—')+'</div>'+bk+'</td>'+
     '<td><span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px;background:'+sc+'18;color:'+sc+'">'+escH(l.fqMode||'')+'</span></td>'+
     '<td class="muted" style="font-size:12px">'+escH((l.pickupZip||'—')+' → '+(l.deliveryZip||'—'))+'</td>'+
-    '<td style="font-weight:600;color:var(--navy)">'+escH(l.carrier||'')+'</td>'+
+    '<td style="font-weight:600;color:var(--navy)">'+escH(l.carrier||'—')+'</td>'+
     '<td style="font-family:monospace;font-size:11px;color:var(--gray-500)">'+escH(meta.bolNum||'—')+'</td>'+
     '<td class="money" style="color:var(--steel);font-weight:700">'+fmtD(l.customerRate||0)+'</td>'+
     '<td><span style="font-weight:700;color:'+pc+'">+'+fmtD(p.profit)+'</span> '+profitBadge(p.isActual)+'</td>'+
-    '<td><span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px;background:'+sc+'18;color:'+sc+'">'+escH(st)+'</span></td>'+
-    '<td onclick="event.stopPropagation()" style="min-width:280px"><div style="display:flex;gap:4px;flex-wrap:wrap">'+pb+nb+ib+cb+db+'</div></td>'+
+    '<td><span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px;background:'+sc+'18;color:'+sc+'">'+escH(l.status)+'</span></td>'+
+    '<td onclick="event.stopPropagation()" style="min-width:280px"><div style="display:flex;gap:4px;flex-wrap:wrap">'+acts+'</div></td>'+
     '</tr>';
 }
 
@@ -12483,7 +12487,7 @@ function escH(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').rep
 
 function renderTMSLoads(tabBar,kpis,loads){
   if(!loads.length){
-    $('page').innerHTML=tabBar+'<div class="empty"><div class="empty-ico">🚚</div><p>No FTL/LTL loads yet — book a freight quote to start</p><button class="btn blue" onclick="goTo('freight','builder')">+ New freight quote</button></div>';
+    $('page').innerHTML=tabBar+'<div class="empty"><div class="empty-ico">🚚</div><p>No FTL/LTL loads yet — book a freight quote to start</p><button class="btn blue" onclick="tmsGoFreight()">+ New freight quote</button></div>';
     return;
   }
   const lSrch=(S.tmsLoadsSearch||'').toLowerCase();
