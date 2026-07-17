@@ -13369,7 +13369,7 @@ function renderTMSCapacity(tabBar){
     ${list.map((c,i)=>`<tr style="opacity:${c.date<today?.5:1}">
       <td class="bold">${escH(c.carrier||'—')}</td>
       <td><span style="font-size:11px;background:var(--blue-bg);color:var(--steel);padding:2px 8px;border-radius:99px;font-weight:700">${escH(c.equip||'FTL')}</span></td>
-      <td style="color:${c.date<today?'var(--red)':'var(--navy)';}">${c.date||'—'}${c.date<today?' ⚠️ expired':''}</td>
+      <td style="color:${c.date<today?'var(--red)':'var(--navy)'}">${c.date||'—'}${c.date<today?' ⚠️ expired':''}</td>
       <td class="muted">${escH(c.origin||'—')}</td>
       <td class="muted">${escH(c.dest||'Anywhere')}</td>
       <td class="money">${c.rate?fmtD(c.rate):'Negotiable'}</td>
