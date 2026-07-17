@@ -14283,18 +14283,7 @@ function renderRealTimeMargin(){
 }
 
 // ── LOAD NOTE TEMPLATES ───────────────────────────────────────────
-const NOTE_TEMPLATES=[
-  'Appointment required — call ahead 24 hours',
-  'Liftgate required at delivery',
-  'Residential delivery — no dock',
-  'Inside delivery required',
-  'Driver must check in at guard gate',
-  'Fragile — handle with care',
-  'Hazmat load — carrier must have hazmat cert',
-  'TEAM required — no stops',
-  'High value load — do not leave unattended',
-  'Time-critical — must deliver by appointment',
-];
+
 function noteTemplateMenu(targetId){
   $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
   <div class="modal" style="max-width:400px">
