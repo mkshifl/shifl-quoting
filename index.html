@@ -17087,3 +17087,264 @@ document.addEventListener('DOMContentLoaded',function(){
   }
 });
 </script>
+
+<script>
+/* ── CHAT: UNREAD NOTIFICATIONS + @MENTIONS ── */
+
+// Override getChatLocal/saveChatLocal with notification-aware versions
+const _origGetChatLocal=window.getChatLocal||function(ch){try{return JSON.parse(localStorage.getItem('chat_local_'+ch)||'[]');}catch(e){return[];}};
+const _origSaveChatLocal=window.saveChatLocal||function(ch,msgs){try{localStorage.setItem('chat_local_'+ch,JSON.stringify(msgs.slice(-200)));}catch(e){}};
+
+// ── UNREAD BADGE ──────────────────────────────────────────────
+function getChatLastSeen(ch){return localStorage.getItem('chat_seen_'+ch)||'0';}
+function setChatLastSeen(ch){localStorage.setItem('chat_seen_'+ch,new Date().toISOString());}
+
+function getChatUnreadCount(ch){
+  const seen=getChatLastSeen(ch);
+  const msgs=_origGetChatLocal(ch);
+  const myName=(_currentUser?.name||_currentUser?.email?.split('@')[0]||localStorage.getItem('shifl_user')||'').toLowerCase();
+  return msgs.filter(m=>{
+    if(!m.created_at||m.created_at<=seen) return false;
+    const senderName=(m.user_name||'').toLowerCase();
+    if(senderName===myName||(m.user_id&&m.user_id===(_currentUser?.id||'local'))) return false;
+    return true;
+  }).length;
+}
+
+function updateChatBadge(){
+  const badge=document.getElementById('chat-badge');
+  if(!badge) return;
+  const n=getChatUnreadCount(_chatChannel);
+  if(n>0){badge.style.display='inline';badge.textContent=n>99?'99+':String(n);}
+  else badge.style.display='none';
+}
+
+// Override toggleChat to mark seen when opened
+const _origToggleChat=window.toggleChat;
+window.toggleChat=function(){
+  _origToggleChat&&_origToggleChat.apply(this,arguments);
+  if(_chatOpen){
+    setChatLastSeen(_chatChannel);
+    updateChatBadge();
+  }
+};
+
+// Override renderChatMessages to mark seen + update badge
+const _origRenderChatMsgs=window.renderChatMessages;
+window.renderChatMessages=function(){
+  _origRenderChatMsgs&&_origRenderChatMsgs.apply(this,arguments);
+  if(_chatOpen){
+    setChatLastSeen(_chatChannel);
+    updateChatBadge();
+  }
+  // Re-format messages with @mention highlights
+  const el=document.getElementById('chat-messages');
+  if(!el) return;
+  const myName=_currentUser?.name||_currentUser?.email?.split('@')[0]||localStorage.getItem('shifl_user')||'';
+  el.querySelectorAll('[data-raw-msg]').forEach(span=>{
+    span.innerHTML=formatChatText(span.dataset.rawMsg,myName);
+  });
+};
+
+// Poll for new messages + update badge every 8s when chat is closed
+let _badgePollTimer=null;
+function startBadgePoll(){
+  if(_badgePollTimer) return;
+  _badgePollTimer=setInterval(async()=>{
+    if(typeof _chatOpen!=='undefined'&&_chatOpen) return;
+    try{
+      if(typeof db!=='undefined'&&db){
+        const r=await Promise.race([
+          db.from('chat_messages').select('*').eq('channel',_chatChannel||'general').order('created_at',{ascending:true}).limit(100),
+          new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')),5000))
+        ]);
+        if(r&&r.data) _origSaveChatLocal(_chatChannel||'general',r.data);
+      }
+    }catch(e){}
+    updateChatBadge();
+  },8000);
+}
+setTimeout(()=>{startBadgePoll();updateChatBadge();},4000);
+
+// ── @MENTION AUTOCOMPLETE ─────────────────────────────────────
+let _chatUsers=[];
+
+async function loadChatUsers(){
+  try{
+    if(typeof db!=='undefined'&&db){
+      const r=await Promise.race([
+        db.from('app_users').select('id,name,email').eq('active',true),
+        new Promise((_,rej)=>setTimeout(()=>rej(),4000))
+      ]);
+      if(r&&r.data&&r.data.length){_chatUsers=r.data;return;}
+    }
+  }catch(e){}
+  // Fallback: extract names from recent chat messages
+  const msgs=_origGetChatLocal('general');
+  const seen=new Set();
+  msgs.forEach(m=>{
+    if(m.user_name&&!seen.has(m.user_name)){
+      seen.add(m.user_name);
+      _chatUsers.push({name:m.user_name,id:m.user_id||m.user_name});
+    }
+  });
+}
+setTimeout(loadChatUsers,2000);
+
+function handleChatMentionInput(e){
+  const input=e.target;
+  const val=input.value;
+  const pos=input.selectionStart;
+  const before=val.slice(0,pos);
+  const atIdx=before.lastIndexOf('@');
+  if(atIdx>=0&&!before.slice(atIdx+1).includes(' ')){
+    showMentionDropdown(before.slice(atIdx+1).toLowerCase(),input,atIdx);
+  } else {
+    hideMentionDropdown();
+  }
+}
+
+function showMentionDropdown(query,input,atIdx){
+  hideMentionDropdown();
+  const matches=_chatUsers.filter(u=>(u.name||'').toLowerCase().includes(query)).slice(0,6);
+  if(!matches.length) return;
+  const dd=document.createElement('div');
+  dd.id='mention-dd';
+  const rect=input.getBoundingClientRect();
+  dd.style.cssText='position:fixed;bottom:'+(window.innerHeight-rect.top+6)+'px;left:'+rect.left+'px;background:#fff;border:1px solid #e5e7eb;border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,.15);z-index:99999;min-width:190px;overflow:hidden';
+  dd.innerHTML=matches.map(u=>`
+    <div data-uname="${u.name}" style="padding:8px 14px;cursor:pointer;font-size:13px;display:flex;align-items:center;gap:9px;transition:background .1s"
+      onmouseenter="this.style.background='#eff6ff'" onmouseleave="this.style.background=''"
+      onmousedown="insertMentionName('${u.name.replace(/'/g,"\\'")}',event)">
+      <span style="width:26px;height:26px;border-radius:50%;background:#2e75b6;color:#fff;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;flex-shrink:0">${(u.name||'?').slice(0,2).toUpperCase()}</span>
+      <span style="font-weight:600;color:#1a2e4a">${u.name}</span>
+    </div>`).join('');
+  document.body.appendChild(dd);
+  input._mentionAtIdx=atIdx;
+}
+
+function hideMentionDropdown(){document.getElementById('mention-dd')?.remove();}
+
+function insertMentionName(name,e){
+  if(e) e.preventDefault();
+  const input=document.getElementById('chat-input');
+  if(!input) return;
+  const atIdx=input._mentionAtIdx!=null?input._mentionAtIdx:input.value.lastIndexOf('@');
+  const before=input.value.slice(0,atIdx);
+  const after=input.value.slice(input.selectionStart);
+  input.value=before+'@'+name+' '+after;
+  input.focus();
+  const newPos=before.length+name.length+2;
+  input.setSelectionRange(newPos,newPos);
+  hideMentionDropdown();
+}
+
+document.addEventListener('click',e=>{
+  if(!e.target.closest('#mention-dd')&&!e.target.closest('#chat-input')) hideMentionDropdown();
+});
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape') hideMentionDropdown();
+});
+
+// ── FORMAT MESSAGE WITH @MENTION HIGHLIGHTS ───────────────────
+function formatChatText(text,myName){
+  if(!text) return '';
+  return text.replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/@(\S+)/g,(match,name)=>{
+    const isMe=myName&&name.toLowerCase()===myName.toLowerCase();
+    return '<span style="background:'+(isMe?'#fef3c7':'#dbeafe')+';color:'+(isMe?'#92400e':'#1e40af')+';border-radius:4px;padding:0 4px;font-weight:700">'+match+'</span>';
+  });
+}
+
+// ── PATCH buildChatPanel TO WIRE UP @MENTION INPUT ───────────
+const _origBuildChatPanel=window.buildChatPanel;
+window.buildChatPanel=function(){
+  _origBuildChatPanel&&_origBuildChatPanel.apply(this,arguments);
+  // Wire oninput to @mention handler after panel is built
+  setTimeout(()=>{
+    const inp=document.getElementById('chat-input');
+    if(inp&&!inp._mentionWired){
+      inp._mentionWired=true;
+      inp.addEventListener('input',handleChatMentionInput);
+      inp.addEventListener('keydown',e=>{
+        if(e.key==='Escape') hideMentionDropdown();
+      });
+      // Add @ hint to placeholder
+      inp.placeholder='Message #'+(typeof _chatChannel!=='undefined'?_chatChannel:'general')+'… (@ to mention)';
+    }
+    // Patch message rendering to use formatChatText
+    patchChatMessageRender();
+  },100);
+};
+
+// ── PATCH renderChatMessages TO HIGHLIGHT MENTIONS ────────────
+function patchChatMessageRender(){
+  // We hook into the existing renderChatMessages by post-processing
+  // Find all message bubble divs and apply formatting
+  const el=document.getElementById('chat-messages');
+  if(!el) return;
+  const myName=(_currentUser?.name||_currentUser?.email?.split('@')[0]||localStorage.getItem('shifl_user')||'');
+  el.querySelectorAll('[data-msg-text]').forEach(span=>{
+    span.innerHTML=formatChatText(span.dataset.msgText,myName);
+  });
+  // Also scan for raw text containing @ and highlight inline
+  el.querySelectorAll('div[style*="border-radius"]').forEach(bubble=>{
+    if(bubble.dataset.mentionDone) return;
+    bubble.dataset.mentionDone='1';
+    const raw=bubble.textContent;
+    if(raw.includes('@')){
+      bubble.innerHTML=formatChatText(raw,myName);
+    }
+  });
+}
+
+// Re-run patch after every loadChatMessages
+const _origLoadChatMsgs=window.loadChatMessages;
+if(typeof _origLoadChatMsgs==='function'){
+  window.loadChatMessages=async function(){
+    await _origLoadChatMsgs.apply(this,arguments);
+    setTimeout(patchChatMessageRender,80);
+    if(!_chatOpen) updateChatBadge();
+  };
+}
+
+// Also patch sendChatMessage to notify on @mention
+const _origSendChat=window.sendChatMessage;
+if(typeof _origSendChat==='function'){
+  window.sendChatMessage=async function(){
+    const input=document.getElementById('chat-input');
+    const msg=input?input.value:'';
+    await _origSendChat.apply(this,arguments);
+    hideMentionDropdown();
+    // If message mentions someone, show a toast notification for them
+    const myName=(_currentUser?.name||'').toLowerCase();
+    const mentioned=_chatUsers.filter(u=>u.name&&msg.toLowerCase().includes('@'+u.name.toLowerCase())&&u.name.toLowerCase()!==myName);
+    if(mentioned.length){
+      // Store a notification for each mentioned user (they'll see it on next load)
+      mentioned.forEach(u=>{
+        const notifs=JSON.parse(localStorage.getItem('chat_notifs_'+u.id)||'[]');
+        notifs.push({from:_currentUser?.name||'Someone',msg:msg.slice(0,80),at:new Date().toISOString(),channel:_chatChannel});
+        localStorage.setItem('chat_notifs_'+u.id,JSON.stringify(notifs.slice(-20)));
+      });
+    }
+    // Update badge for others (optimistic — mark current user's last seen so they don't count their own)
+    setChatLastSeen(_chatChannel);
+  };
+}
+
+// Show mention notification toast on load if any pending for current user
+setTimeout(()=>{
+  try{
+    const uid=_currentUser?.id;
+    if(!uid) return;
+    const notifs=JSON.parse(localStorage.getItem('chat_notifs_'+uid)||'[]');
+    if(notifs.length){
+      localStorage.removeItem('chat_notifs_'+uid);
+      notifs.slice(-3).forEach((n,i)=>{
+        setTimeout(()=>{
+          showToast('💬 '+n.from+' mentioned you: "'+n.msg+(n.msg.length>=80?'…':'')+'"','info',6000);
+        },i*1500);
+      });
+    }
+  }catch(e){}
+},5000);
+</script>
