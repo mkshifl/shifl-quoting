@@ -8309,7 +8309,7 @@ async function delAqQuote(idx){
 
 // View → accordion section mapping
 const VIEW_TO_ACC={
-  quote:'drayage',log:'drayage',rates:'drayage',customers:'drayage',dash:'drayage',
+  quote:'drayage',log:'drayage',rates:'drayage',customers:'drayage',dash:'drayage',requests:'drayage',
   freight:'freight',
   air:'air',
   transload:'transload',
@@ -8319,7 +8319,7 @@ const VIEW_TO_ACC={
 
 // Sub-link ID → view mapping for active state
 const SUBLINK_VIEWS={
-  'nav-quote':'quote','nav-log':'log','nav-rates':'rates','nav-customers':'customers',
+  'nav-quote':'quote','nav-log':'log','nav-rates':'rates','nav-requests':'requests','nav-customers':'customers',
   'nav-dash':'dash','nav-active':'active',
   'fqnav-builder':'freight-builder','fqnav-log':'freight-log','fqnav-carriers':'freight-carriers',
   'fqnav-invoicing':'freight-invoicing','fqnav-dash':'freight-dash',
@@ -8376,6 +8376,7 @@ function updateSubActive(view,subtab){
   let target=null;
   if(view==='quote') target='nav-quote';
   else if(view==='log') target='nav-log';
+  else if(view==='requests') target='nav-requests';
   else if(view==='rates') target='nav-rates';
   else if(view==='customers') target='nav-customers';
   else if(view==='dash') target='nav-dash';
