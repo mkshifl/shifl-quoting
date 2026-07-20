@@ -1157,31 +1157,80 @@ function buildCarrierComparison(matches){
 }
 function buildPreviewHTML(sel){
   if(!sel) return `<div class="empty" style="padding:30px"><p>Select a carrier above</p></div>`;
-  const ld=S.qi.ld;const ct=totMode(sel,ld);const cu=cuTot(sel);const profit=cu-ct;const margin=cu>0?profit/cu:0;
+  const ld=S.qi.ld;
+  const ctrs=S.qi.containerCount||1;
+  const flags=S.qi.perContainerFlags||{};
+
+  // Carrier cost — must also scale by containers using same per-container logic as customer price
+  let ctCarrier=0;
+  CHARGES.forEach(c=>{
+    if(!isApplicable(c,ld)) return;
+    const cv=Number(sel[c])||0;
+    const mult=(flags[c]!==false)?ctrs:1;
+    ctCarrier+=cv*mult;
+  });
+  if(S.qi?.gensetEnabled&&S.qi?.gensetScope!=='customer_only') ctCarrier+=Number(S.qi.gensetCarrierRate)||0;
+  if(S.qi?.bobtailEnabled&&S.qi?.bobtailScope!=='customer_only') ctCarrier+=Number(S.qi.bobtailCarrierRate)||0;
+  if(S.qi?.triaxleEnabled&&S.qi?.triaxleScope!=='customer_only') ctCarrier+=Number(S.qi.triaxleCarrierRate)||0;
+
+  const cu=cuTot(sel);
+
+  // ── Guaranteed vs possible profit split ──
+  // Guaranteed = Base markup + chassis day 1 markup (these are always billed)
+  // Possible = everything else (accessorials that may or may not apply)
+  const baseCv=Number(sel.base)||0;
+  const baseCuv=cuRate(baseCv,'base');
+  const baseCt=baseCv*(flags['base']!==false?ctrs:1);
+
+  const chassisCv=Number(sel.chassis)||0;
+  const chassisCuv=cuRate(chassisCv,'chassis');
+  const chassisCt=chassisCv*(flags['chassis']!==false?ctrs:1);
+
+  const guaranteedProfit=(baseCuv-baseCt)+(chassisCuv-chassisCt);
+
+  const possibleProfit=(cu-ctCarrier)-guaranteedProfit;
+  const totalProfit=cu-ctCarrier;
+  const margin=cu>0?totalProfit/cu:0;
+
   const rows=CHARGES.map(c=>{
     if(!isApplicable(c,ld)) return '';
     const cv=Number(sel[c])||0;const cuv=cuRate(cv,c);
     if(!cv&&!cuv) return '';
     const note=c==='ovw43'?'Over 43,000 lb':c==='ovw48'?'Over 48,000 lb':c==='det_port'?'At port':c==='det_cust'?'At customer':'';
-    return `<tr class="prev-row"><td>${LABELS[c]}${note?`<div class="charge-note">${note}</div>`:''}</td><td class="muted">${fmtD(cv)}</td><td>${fmtD(cuv)}</td><td>+${fmtD(cuv-cv)}</td></tr>`;
+    const mult=(flags[c]!==false)?ctrs:1;
+    const ctScaled=cv*mult;
+    const isGuaranteed=c==='base'||(c==='chassis'&&chassisCv>0);
+    return `<tr class="prev-row"><td>${LABELS[c]}${ctrs>1&&mult>1?`<span style="font-size:10px;color:var(--gray-400)"> ×${ctrs}</span>`:''}${note?`<div class="charge-note">${note}</div>`:''}</td><td class="muted">${fmtD(ctScaled)}</td><td>${fmtD(cuv)}</td><td style="color:${isGuaranteed?'var(--green)':'var(--amber)'}">+${fmtD(cuv-ctScaled)}</td></tr>`;
   }).join('');
-  return `<div class="small muted" style="margin-bottom:10px"><strong style="color:var(--navy)">${sel.carrier}</strong> → ${sel.destination}</div>
+
+  return `<div class="small muted" style="margin-bottom:10px"><strong style="color:var(--navy)">${sel.carrier}</strong> → ${sel.destination}${ctrs>1?` <span class="badge" style="background:#f59e0b;color:#fff">×${ctrs} containers</span>`:''}</div>
   <table style="width:100%"><thead><tr>
     <th style="text-align:left;padding:5px 0;width:150px">Charge</th>
     <th style="text-align:left;padding:5px 0;width:80px;color:var(--gray-400)">Carrier</th>
     <th style="text-align:left;padding:5px 0;width:80px;color:var(--steel)">Your price</th>
     <th style="text-align:right;padding:5px 0;color:var(--green)">Profit</th>
   </tr></thead><tbody>${rows}
-    <tr class="prev-total"><td>Total</td><td class="muted">${fmtD(ct)}</td>
+    <tr class="prev-total"><td>Total</td><td class="muted">${fmtD(ctCarrier)}</td>
       <td style="font-size:18px;color:var(--steel)">${fmtD(cu)}</td>
-      <td style="text-align:right"><div style="color:var(--green);font-weight:700">+${fmtD(profit)}</div><span class="badge ${margin>=0.10?'g':'r'}">${pct(margin)}</span></td>
+      <td style="text-align:right"><div style="color:var(--green);font-weight:700">+${fmtD(totalProfit)}</div><span class="badge ${margin>=0.10?'g':'r'}">${pct(margin)}</span></td>
     </tr>
   </tbody></table>
-  <div style="display:flex;gap:8px;margin-top:14px">
+  <div style="margin-top:12px;display:grid;grid-template-columns:1fr 1fr;gap:8px">
+    <div style="background:#f0fdf4;border-radius:8px;padding:10px 12px;border-left:3px solid var(--green)">
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#166534;margin-bottom:3px">✅ Guaranteed profit</div>
+      <div style="font-size:18px;font-weight:800;color:#166534">+${fmtD(guaranteedProfit)}</div>
+      <div style="font-size:10px;color:#4ade80;margin-top:2px">Base markup${chassisCv>0?' + chassis day 1':''}</div>
+    </div>
+    <div style="background:#fffbeb;border-radius:8px;padding:10px 12px;border-left:3px solid var(--amber)">
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#92400e;margin-bottom:3px">⚡ Possible profit</div>
+      <div style="font-size:18px;font-weight:800;color:#d97706">+${fmtD(Math.max(0,possibleProfit))}</div>
+      <div style="font-size:10px;color:#f59e0b;margin-top:2px">If all accessorials apply</div>
+    </div>
+  </div>
+  <div style="display:flex;gap:8px;margin-top:12px">
     <button class="btn blue" onclick="saveQuote()" style="flex:1;justify-content:center">💾 Save</button>
     <button class="btn" onclick="printQuote()">🖨️</button>
     <button class="btn" onclick="downloadPDF()">📄 PDF</button>
-
   </div>`;
 }
 function buildPricingSection(){
@@ -17347,4 +17396,322 @@ setTimeout(()=>{
     }
   }catch(e){}
 },5000);
+</script>
+
+<script>
+/* ── PRE-QUOTE REQUEST TRACKER ──────────────────────────────── */
+// Allows entering a rate request BEFORE pricing is received
+// Status flow: Pending → Priced → Quoted → Booked
+
+function getQuoteRequests(){return JSON.parse(localStorage.getItem('quote_requests')||'[]');}
+function saveQuoteRequests(arr){localStorage.setItem('quote_requests',JSON.stringify(arr));}
+
+function openNewQuoteRequest(){
+  openModal(`
+    <div style="min-width:500px">
+      <h3 style="margin:0 0 14px;font-size:15px;color:var(--navy,#1a2e4a)">📋 New rate request</h3>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div>
+          <label style="font-size:11px;font-weight:700;color:#666;display:block;margin-bottom:3px">Customer *</label>
+          <input id="qr-customer" type="text" placeholder="Customer name" style="width:100%;padding:7px 10px;border:1px solid #d1d5db;border-radius:8px;font-size:13px;box-sizing:border-box">
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:700;color:#666;display:block;margin-bottom:3px">Port</label>
+          <select id="qr-port" style="width:100%;padding:7px 10px;border:1px solid #d1d5db;border-radius:8px;font-size:13px;box-sizing:border-box">
+            <option>New York / Newark, NJ</option>
+            <option>Los Angeles, CA</option>
+            <option>Long Beach, CA</option>
+            <option>Savannah, GA</option>
+            <option>Houston, TX</option>
+            <option>Charleston, SC</option>
+            <option>Other</option>
+          </select>
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:700;color:#666;display:block;margin-bottom:3px">Destination ZIP *</label>
+          <input id="qr-zip" type="text" placeholder="e.g. 07002" style="width:100%;padding:7px 10px;border:1px solid #d1d5db;border-radius:8px;font-size:13px;box-sizing:border-box">
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:700;color:#666;display:block;margin-bottom:3px">Destination city</label>
+          <input id="qr-dest" type="text" placeholder="e.g. Bayonne, NJ" style="width:100%;padding:7px 10px;border:1px solid #d1d5db;border-radius:8px;font-size:13px;box-sizing:border-box">
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:700;color:#666;display:block;margin-bottom:3px">Containers</label>
+          <input id="qr-ctrs" type="number" value="1" min="1" max="20" style="width:100%;padding:7px 10px;border:1px solid #d1d5db;border-radius:8px;font-size:13px;box-sizing:border-box">
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:700;color:#666;display:block;margin-bottom:3px">Live / Drop</label>
+          <select id="qr-ld" style="width:100%;padding:7px 10px;border:1px solid #d1d5db;border-radius:8px;font-size:13px;box-sizing:border-box">
+            <option>Live</option><option>Drop</option><option>Both</option>
+          </select>
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:700;color:#666;display:block;margin-bottom:3px">Container size</label>
+          <select id="qr-size" style="width:100%;padding:7px 10px;border:1px solid #d1d5db;border-radius:8px;font-size:13px;box-sizing:border-box">
+            <option>40HC</option><option>40ST</option><option>20ST</option><option>45HC</option>
+          </select>
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:700;color:#666;display:block;margin-bottom:3px">Commodity</label>
+          <input id="qr-commodity" type="text" placeholder="e.g. Furniture" style="width:100%;padding:7px 10px;border:1px solid #d1d5db;border-radius:8px;font-size:13px;box-sizing:border-box">
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:700;color:#666;display:block;margin-bottom:3px">Weight (optional)</label>
+          <input id="qr-weight" type="text" placeholder="e.g. 38,000 lb" style="width:100%;padding:7px 10px;border:1px solid #d1d5db;border-radius:8px;font-size:13px;box-sizing:border-box">
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:700;color:#666;display:block;margin-bottom:3px">ETA / needed by</label>
+          <input id="qr-eta" type="date" style="width:100%;padding:7px 10px;border:1px solid #d1d5db;border-radius:8px;font-size:13px;box-sizing:border-box">
+        </div>
+      </div>
+      <div style="margin-top:10px">
+        <label style="font-size:11px;font-weight:700;color:#666;display:block;margin-bottom:3px">Notes / special requirements</label>
+        <textarea id="qr-notes" rows="2" placeholder="Overweight, genset, hazmat, etc." style="width:100%;padding:7px 10px;border:1px solid #d1d5db;border-radius:8px;font-size:13px;resize:vertical;box-sizing:border-box"></textarea>
+      </div>
+      <div style="margin-top:14px;display:flex;gap:8px;justify-content:flex-end">
+        <button class="btn" onclick="closeModal()">Cancel</button>
+        <button class="btn blue" onclick="submitQuoteRequest()">Save request</button>
+      </div>
+    </div>
+  `);
+}
+
+function submitQuoteRequest(){
+  const customer=document.getElementById('qr-customer')?.value.trim();
+  const zip=document.getElementById('qr-zip')?.value.trim();
+  if(!customer||!zip){showToast('Customer and ZIP are required','error',2500);return;}
+  const req={
+    id:'QR-'+Date.now(),
+    customer,
+    port:document.getElementById('qr-port')?.value||'',
+    zip,
+    destination:document.getElementById('qr-dest')?.value||'',
+    containerCount:parseInt(document.getElementById('qr-ctrs')?.value)||1,
+    ld:document.getElementById('qr-ld')?.value||'Live',
+    size:document.getElementById('qr-size')?.value||'40HC',
+    commodity:document.getElementById('qr-commodity')?.value||'',
+    weight:document.getElementById('qr-weight')?.value||'',
+    eta:document.getElementById('qr-eta')?.value||'',
+    notes:document.getElementById('qr-notes')?.value||'',
+    status:'Pending',
+    createdAt:new Date().toISOString(),
+    createdBy:_currentUser?.name||localStorage.getItem('shifl_user')||'',
+    pricing:null
+  };
+  const all=getQuoteRequests();
+  all.unshift(req);
+  saveQuoteRequests(all);
+  closeModal();
+  showToast('Rate request saved — '+req.id,'success',3000);
+  renderQuoteRequests();
+}
+
+function renderQuoteRequests(){
+  const all=getQuoteRequests();
+  const el=document.getElementById('page');
+  if(!el) return;
+
+  const STATUS_COLORS={
+    Pending:'#f59e0b',Priced:'#2e75b6',Quoted:'#7c3aed',Booked:'#16a34a',Cancelled:'#dc2626'
+  };
+  const counts={Pending:0,Priced:0,Quoted:0,Booked:0};
+  all.forEach(r=>{if(counts[r.status]!==undefined)counts[r.status]++;});
+
+  el.innerHTML=`
+    <div style="padding:0 0 16px">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap">
+        <h3 style="margin:0;font-size:16px;color:var(--navy,#1a2e4a)">📋 Rate requests</h3>
+        ${Object.entries(counts).map(([s,n])=>`<span style="font-size:12px;background:${STATUS_COLORS[s]}20;color:${STATUS_COLORS[s]};padding:2px 10px;border-radius:99px;font-weight:700">${n} ${s}</span>`).join('')}
+        <button class="btn blue" style="margin-left:auto" onclick="openNewQuoteRequest()">+ New request</button>
+      </div>
+      ${all.length===0?`<div class="empty"><div class="empty-ico">📋</div><p>No rate requests yet</p><small>Click "New request" to enter a quote request before you have pricing</small></div>`:`
+      <div class="tbl-wrap"><table>
+        <thead><tr>
+          <th>Request ID</th><th>Customer</th><th>Port</th><th>Destination</th>
+          <th>Ctrs</th><th>Size</th><th>ETA</th><th>Status</th><th>Actions</th>
+        </tr></thead>
+        <tbody>${all.map(r=>`
+          <tr>
+            <td style="font-weight:700;font-size:12px;color:var(--steel,#2e75b6)">${r.id}</td>
+            <td style="font-weight:600">${r.customer}</td>
+            <td style="font-size:12px;color:#666">${r.port||'—'}</td>
+            <td>${r.destination||r.zip}</td>
+            <td style="text-align:center">${r.containerCount||1}</td>
+            <td style="font-size:12px">${r.size||'—'}</td>
+            <td style="font-size:12px;color:#666">${r.eta||'—'}</td>
+            <td><span style="background:${STATUS_COLORS[r.status]||'#999'}20;color:${STATUS_COLORS[r.status]||'#999'};padding:2px 9px;border-radius:99px;font-size:11px;font-weight:700">${r.status}</span></td>
+            <td>
+              <div style="display:flex;gap:4px;flex-wrap:wrap">
+                ${r.status==='Pending'?`<button class="btn" style="font-size:11px;padding:3px 8px" onclick="openPricingEntry('${r.id}')">Enter pricing</button>`:''}
+                ${r.status==='Priced'?`<button class="btn blue" style="font-size:11px;padding:3px 8px" onclick="loadRequestIntoQuoteBuilder('${r.id}')">Build quote →</button>`:''}
+                ${r.status==='Quoted'?`<button class="btn" style="font-size:11px;padding:3px 8px;background:#f0fdf4;color:#16a34a;border-color:#16a34a" onclick="markRequestStatus('${r.id}','Booked')">Mark booked</button>`:''}
+                <button class="btn" style="font-size:11px;padding:3px 8px" onclick="viewRequestDetail('${r.id}')">View</button>
+                <button class="btn" style="font-size:11px;padding:3px 8px;color:#dc2626;border-color:#dc2626" onclick="markRequestStatus('${r.id}','Cancelled')">✕</button>
+              </div>
+            </td>
+          </tr>`).join('')}
+        </tbody>
+      </table></div>`}
+    </div>`;
+}
+
+function openPricingEntry(id){
+  const all=getQuoteRequests();
+  const req=all.find(r=>r.id===id);
+  if(!req) return;
+  openModal(`
+    <div style="min-width:480px">
+      <h3 style="margin:0 0 4px;font-size:15px;color:var(--navy,#1a2e4a)">💲 Enter pricing — ${req.id}</h3>
+      <div style="font-size:12px;color:#666;margin-bottom:14px">${req.customer} · ${req.destination||req.zip} · ×${req.containerCount} ${req.size}</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div>
+          <label style="font-size:11px;font-weight:700;color:#666;display:block;margin-bottom:3px">Carrier</label>
+          <input id="pe-carrier" type="text" placeholder="Carrier name" style="width:100%;padding:6px 9px;border:1px solid #d1d5db;border-radius:7px;font-size:13px;box-sizing:border-box">
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:700;color:#666;display:block;margin-bottom:3px">Base rate (carrier cost)</label>
+          <input id="pe-base" type="number" placeholder="$0" style="width:100%;padding:6px 9px;border:1px solid #d1d5db;border-radius:7px;font-size:13px;box-sizing:border-box">
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:700;color:#666;display:block;margin-bottom:3px">Chassis/day</label>
+          <input id="pe-chassis" type="number" placeholder="$0" style="width:100%;padding:6px 9px;border:1px solid #d1d5db;border-radius:7px;font-size:13px;box-sizing:border-box">
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:700;color:#666;display:block;margin-bottom:3px">Customer rate (your sell)</label>
+          <input id="pe-custsell" type="number" placeholder="$0" style="width:100%;padding:6px 9px;border:1px solid #d1d5db;border-radius:7px;font-size:13px;box-sizing:border-box" oninput="calcPEProfit()">
+        </div>
+      </div>
+      <div id="pe-profit-preview" style="margin-top:10px"></div>
+      <div style="margin-top:8px">
+        <label style="font-size:11px;font-weight:700;color:#666;display:block;margin-bottom:3px">Pricing notes</label>
+        <textarea id="pe-notes" rows="2" placeholder="Add any pricing notes…" style="width:100%;padding:6px 9px;border:1px solid #d1d5db;border-radius:7px;font-size:13px;resize:vertical;box-sizing:border-box"></textarea>
+      </div>
+      <div style="margin-top:14px;display:flex;gap:8px;justify-content:flex-end">
+        <button class="btn" onclick="closeModal()">Cancel</button>
+        <button class="btn blue" onclick="savePricingToRequest('${id}')">Save pricing → Priced</button>
+      </div>
+    </div>
+  `);
+}
+
+function calcPEProfit(){
+  const base=parseFloat(document.getElementById('pe-base')?.value)||0;
+  const chassis=parseFloat(document.getElementById('pe-chassis')?.value)||0;
+  const sell=parseFloat(document.getElementById('pe-custsell')?.value)||0;
+  const el=document.getElementById('pe-profit-preview');
+  if(!el||!sell) return;
+  const guaranteed=(sell-base)+(0-chassis); // base markup - 1 day chassis cost
+  const total=sell-base-chassis;
+  el.innerHTML=`
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+      <div style="background:#f0fdf4;border-radius:7px;padding:8px 10px;border-left:3px solid #16a34a">
+        <div style="font-size:10px;font-weight:700;color:#166534">✅ GUARANTEED</div>
+        <div style="font-size:16px;font-weight:800;color:#166534">+${(sell-base).toLocaleString('en-US',{style:'currency',currency:'USD',minimumFractionDigits:0})}</div>
+        <div style="font-size:10px;color:#4ade80">Base markup only</div>
+      </div>
+      <div style="background:#fffbeb;border-radius:7px;padding:8px 10px;border-left:3px solid #f59e0b">
+        <div style="font-size:10px;font-weight:700;color:#92400e">⚡ W/ CHASSIS</div>
+        <div style="font-size:16px;font-weight:800;color:#d97706">+${total.toLocaleString('en-US',{style:'currency',currency:'USD',minimumFractionDigits:0})}</div>
+        <div style="font-size:10px;color:#f59e0b">If chassis billed</div>
+      </div>
+    </div>`;
+}
+
+function savePricingToRequest(id){
+  const all=getQuoteRequests();
+  const idx=all.findIndex(r=>r.id===id);
+  if(idx<0) return;
+  all[idx].pricing={
+    carrier:document.getElementById('pe-carrier')?.value||'',
+    base:parseFloat(document.getElementById('pe-base')?.value)||0,
+    chassis:parseFloat(document.getElementById('pe-chassis')?.value)||0,
+    customerSell:parseFloat(document.getElementById('pe-custsell')?.value)||0,
+    notes:document.getElementById('pe-notes')?.value||'',
+    pricedAt:new Date().toISOString()
+  };
+  all[idx].status='Priced';
+  saveQuoteRequests(all);
+  closeModal();
+  showToast('Pricing saved — status: Priced','success',2500);
+  renderQuoteRequests();
+}
+
+function loadRequestIntoQuoteBuilder(id){
+  const all=getQuoteRequests();
+  const req=all.find(r=>r.id===id);
+  if(!req) return;
+  // Pre-fill quote builder fields from the request
+  S.qi.customer=req.customer;
+  S.qi.port=req.port||S.qi.port;
+  S.qi.zip=req.zip;
+  S.qi.containerCount=req.containerCount||1;
+  S.qi.ld=req.ld||'Live';
+  S.qi.commodity=req.commodity||'';
+  S.qi.notes=(req.notes||'')+(req.pricing?.notes?' | Pricing: '+req.pricing.notes:'');
+  S.qi.shiflRef=req.id;
+  // Mark as Quoted
+  const idx=all.findIndex(r=>r.id===id);
+  if(idx>=0){all[idx].status='Quoted';saveQuoteRequests(all);}
+  closeModal&&closeModal();
+  setView('quote');
+  showToast('Request loaded into quote builder — '+(req.pricing?.carrier||'select a carrier'),'info',3000);
+}
+
+function markRequestStatus(id,status){
+  const all=getQuoteRequests();
+  const idx=all.findIndex(r=>r.id===id);
+  if(idx<0) return;
+  all[idx].status=status;
+  saveQuoteRequests(all);
+  renderQuoteRequests();
+  showToast(id+' → '+status,'success',2000);
+}
+
+function viewRequestDetail(id){
+  const req=getQuoteRequests().find(r=>r.id===id);
+  if(!req) return;
+  openModal(`
+    <div style="min-width:440px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <h3 style="margin:0;font-size:15px;color:var(--navy,#1a2e4a)">${req.id}</h3>
+        <span style="font-size:11px;font-weight:700;padding:2px 10px;border-radius:99px;background:${({Pending:'#fef3c7',Priced:'#dbeafe',Quoted:'#ede9fe',Booked:'#dcfce7',Cancelled:'#fee2e2'}[req.status]||'#f3f4f6')};color:${({Pending:'#92400e',Priced:'#1d4ed8',Quoted:'#6d28d9',Booked:'#166534',Cancelled:'#991b1b'}[req.status]||'#374151')}">${req.status}</span>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:13px;margin-bottom:10px">
+        ${[['Customer',req.customer],['Port',req.port],['Destination',req.destination||req.zip],['Containers',req.containerCount],['Size',req.size],['Live/Drop',req.ld],['Commodity',req.commodity||'—'],['Weight',req.weight||'—'],['ETA',req.eta||'—'],['Created by',req.createdBy||'—']].map(([l,v])=>`
+          <div style="background:var(--gray-50,#f8f9fa);border-radius:6px;padding:7px 10px">
+            <div style="font-size:10px;font-weight:700;color:#666;text-transform:uppercase">${l}</div>
+            <div style="font-weight:600;color:var(--navy,#1a2e4a)">${v||'—'}</div>
+          </div>`).join('')}
+      </div>
+      ${req.notes?`<div style="background:#f8f9fa;border-radius:7px;padding:8px 10px;font-size:12px;color:#444;margin-bottom:8px"><strong>Notes:</strong> ${req.notes}</div>`:''}
+      ${req.pricing?`
+        <div style="background:var(--blue-bg,#eff6ff);border-radius:8px;padding:10px 12px;border-left:3px solid var(--steel,#2e75b6);margin-bottom:8px">
+          <div style="font-size:11px;font-weight:700;color:#1d4ed8;margin-bottom:6px">PRICING</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;font-size:12px">
+            <div><div style="color:#666">Carrier</div><div style="font-weight:700">${req.pricing.carrier||'—'}</div></div>
+            <div><div style="color:#666">Carrier cost</div><div style="font-weight:700">$${(req.pricing.base||0).toLocaleString()}</div></div>
+            <div><div style="color:#666">Your sell</div><div style="font-weight:700;color:var(--steel,#2e75b6)">$${(req.pricing.customerSell||0).toLocaleString()}</div></div>
+          </div>
+          ${req.pricing.notes?`<div style="font-size:11px;color:#666;margin-top:6px">${req.pricing.notes}</div>`:''}
+        </div>`:''}
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        ${req.status==='Pending'?`<button class="btn blue" onclick="closeModal();openPricingEntry('${req.id}')">Enter pricing</button>`:''}
+        ${req.status==='Priced'?`<button class="btn blue" onclick="closeModal();loadRequestIntoQuoteBuilder('${req.id}')">Build quote →</button>`:''}
+        <button class="btn" onclick="closeModal()">Close</button>
+      </div>
+    </div>
+  `);
+}
+
+// Wire to nav — add "Rate Requests" button in sidebar if not present
+document.addEventListener('DOMContentLoaded',function(){
+  // Add badge to sidebar showing pending requests
+  function updateRequestsBadge(){
+    const pending=getQuoteRequests().filter(r=>r.status==='Pending').length;
+    let badge=document.getElementById('qr-nav-badge');
+    if(badge) badge.textContent=pending>0?pending:'';
+  }
+  setInterval(updateRequestsBadge,5000);
+  updateRequestsBadge();
+});
 </script>
