@@ -15781,3 +15781,1285 @@ if(hash === '#freight') window.addEventListener('DOMContentLoaded', () => setTim
 </script>
 </body>
 </html>
+<script>
+/* ============================================================
+   BATCH 1: UX FEATURES
+   - Quick global search
+   - Bulk status update
+   - Load comments thread
+   - Swipe-to-book on quote cards
+   ============================================================ */
+
+// ── QUICK GLOBAL SEARCH ──────────────────────────────────────
+function openGlobalSearch(){
+  const existing=document.getElementById('global-search-overlay');
+  if(existing){existing.remove();return;}
+  const overlay=document.createElement('div');
+  overlay.id='global-search-overlay';
+  overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:flex-start;justify-content:center;padding-top:80px';
+  overlay.innerHTML=`
+    <div style="background:var(--white,#fff);border-radius:12px;width:min(640px,94vw);box-shadow:0 8px 32px rgba(0,0,0,.18);overflow:hidden">
+      <div style="display:flex;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid var(--gray-200,#e5e7eb)">
+        <span style="font-size:18px">🔍</span>
+        <input id="gs-input" type="text" placeholder="Search loads, customers, carriers, quotes…"
+          style="flex:1;border:none;outline:none;font-size:15px;background:transparent;color:var(--navy,#1a2e4a)"
+          oninput="gsSearch(this.value)" onkeydown="gsKey(event)">
+        <button onclick="document.getElementById('global-search-overlay').remove()" style="background:none;border:none;cursor:pointer;font-size:16px;color:#999">✕</button>
+      </div>
+      <div id="gs-results" style="max-height:420px;overflow-y:auto;padding:8px 0"></div>
+      <div style="padding:8px 16px;font-size:11px;color:#999;border-top:1px solid var(--gray-200,#e5e7eb)">↑↓ navigate · Enter to open · Esc to close</div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click',e=>{if(e.target===overlay)overlay.remove();});
+  document.getElementById('gs-input').focus();
+  gsSearch('');
+}
+
+function gsSearch(q){
+  const el=document.getElementById('gs-results');
+  if(!el)return;
+  q=q.toLowerCase().trim();
+  const results=[];
+
+  // TMS loads
+  try{
+    (getTMSLoads()||[]).forEach(l=>{
+      const text=[l.shipper,l.consignee,l.carrier,l.id,l.pickupZip,l.deliveryZip,l.status,l.fqMode].join(' ').toLowerCase();
+      if(!q||text.includes(q)) results.push({icon:'🚚',label:l.id+' — '+(l.shipper||'')+(l.carrier?' · '+l.carrier:''),sub:(l.status||'')+(l.fqMode?' · '+l.fqMode:''),action:'S.view=\'tms\';S.tmsFocus=\''+l.id+'\';render()'});
+    });
+  }catch(e){}
+
+  // Customers
+  try{
+    (window._customers||[]).forEach(c=>{
+      const text=[c.name,c.email,c.phone,c.contact].join(' ').toLowerCase();
+      if(!q||text.includes(q)) results.push({icon:'🏢',label:c.name||'Customer',sub:c.email||c.phone||'',action:'S.view=\'customers\';render()'});
+    });
+  }catch(e){}
+
+  // Carrier network
+  try{
+    (window._fqRates||[]).forEach(r=>{
+      const text=[r.name,r.contact,r.mode].join(' ').toLowerCase();
+      if(!q||text.includes(q)) results.push({icon:'🚛',label:r.name||'Carrier',sub:(r.mode||'')+(r.lanes?' · '+r.lanes:''),action:'S.view=\'carriers\';render()'});
+    });
+  }catch(e){}
+
+  // Drayage quotes
+  try{
+    (S.quotes||[]).forEach(qt=>{
+      const text=[qt.ref,qt.customer,qt.container,qt.destination].join(' ').toLowerCase();
+      if(!q||text.includes(q)) results.push({icon:'⚓',label:(qt.ref||'')+(qt.customer?' — '+qt.customer:''),sub:'Drayage · '+(qt.destination||''),action:'S.view=\'log\';render()'});
+    });
+  }catch(e){}
+
+  if(!results.length){
+    el.innerHTML='<div style="padding:24px;text-align:center;color:#999;font-size:13px">'+(q?'No results for "'+q+'"':'Start typing to search…')+'</div>';
+    return;
+  }
+
+  el.innerHTML=results.slice(0,12).map((r,i)=>`
+    <div class="gs-item" data-action="${r.action}" style="display:flex;align-items:center;gap:10px;padding:10px 16px;cursor:pointer;transition:background .1s" onmouseenter="this.style.background='var(--blue-bg,#eff6ff)'" onmouseleave="this.style.background=''" onclick="eval(this.dataset.action);document.getElementById('global-search-overlay').remove()">
+      <span style="font-size:18px">${r.icon}</span>
+      <div>
+        <div style="font-size:13px;font-weight:600;color:var(--navy,#1a2e4a)">${r.label}</div>
+        <div style="font-size:11px;color:#666">${r.sub}</div>
+      </div>
+    </div>`).join('');
+}
+
+function gsKey(e){
+  if(e.key==='Escape'){document.getElementById('global-search-overlay')?.remove();}
+}
+
+// Keyboard shortcut: Ctrl+K or Cmd+K
+document.addEventListener('keydown',e=>{
+  if((e.ctrlKey||e.metaKey)&&e.key==='k'){e.preventDefault();openGlobalSearch();}
+});
+
+// ── BULK STATUS UPDATE ────────────────────────────────────────
+window._bulkSelected=new Set();
+
+function toggleBulkSelect(id){
+  if(window._bulkSelected.has(id)) window._bulkSelected.delete(id);
+  else window._bulkSelected.add(id);
+  updateBulkBar();
+}
+
+function updateBulkBar(){
+  const n=window._bulkSelected.size;
+  let bar=document.getElementById('bulk-action-bar');
+  if(!bar){
+    bar=document.createElement('div');
+    bar.id='bulk-action-bar';
+    bar.style.cssText='position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--navy,#1a2e4a);color:#fff;border-radius:10px;padding:10px 20px;display:flex;align-items:center;gap:12px;z-index:8000;box-shadow:0 4px 16px rgba(0,0,0,.25);transition:opacity .2s';
+    document.body.appendChild(bar);
+  }
+  if(n===0){bar.style.opacity='0';bar.style.pointerEvents='none';return;}
+  bar.style.opacity='1';bar.style.pointerEvents='auto';
+  const statuses=['Booked','Dispatched','In Transit','Out for Delivery','Delivered','Invoiced','Paid'];
+  bar.innerHTML=`<span style="font-size:13px;font-weight:600">${n} load${n>1?'s':''} selected</span>
+    <select id="bulk-status-sel" style="padding:4px 8px;border-radius:6px;border:1px solid #fff3;background:#ffffff22;color:#fff;font-size:12px">
+      <option value="">Set status…</option>
+      ${statuses.map(s=>`<option value="${s}">${s}</option>`).join('')}
+    </select>
+    <button onclick="applyBulkStatus()" style="padding:4px 12px;background:var(--steel,#2e75b6);border:none;border-radius:6px;color:#fff;cursor:pointer;font-size:12px;font-weight:600">Apply</button>
+    <button onclick="window._bulkSelected.clear();updateBulkBar()" style="padding:4px 10px;background:#ffffff22;border:none;border-radius:6px;color:#fff;cursor:pointer;font-size:12px">✕ Clear</button>`;
+}
+
+function applyBulkStatus(){
+  const sel=document.getElementById('bulk-status-sel');
+  if(!sel||!sel.value)return;
+  const status=sel.value;
+  window._bulkSelected.forEach(id=>{
+    const meta=getTMSMeta(id)||{};
+    saveTMSMeta(id,{...meta,status:status});
+    // also update the actual load object
+    const loads=getTMSLoads();
+    const l=loads.find(x=>x.id===id);
+    if(l){l.status=status;saveTMSLoad(l);}
+  });
+  showToast('Updated '+window._bulkSelected.size+' loads to '+status,'success',2500);
+  window._bulkSelected.clear();
+  updateBulkBar();
+  renderTMS();
+}
+
+function saveTMSLoad(l){
+  try{
+    const all=JSON.parse(localStorage.getItem('tms_loads')||'[]');
+    const idx=all.findIndex(x=>x.id===l.id);
+    if(idx>=0)all[idx]=l; else all.push(l);
+    localStorage.setItem('tms_loads',JSON.stringify(all));
+  }catch(e){}
+}
+
+// ── LOAD COMMENTS THREAD ──────────────────────────────────────
+function getLoadComments(id){return JSON.parse(localStorage.getItem('load_comments_'+id)||'[]');}
+function saveLoadComments(id,arr){localStorage.setItem('load_comments_'+id,JSON.stringify(arr));}
+
+function openLoadComments(id,loadLabel){
+  const comments=getLoadComments(id);
+  const user=localStorage.getItem('shifl_user')||'You';
+  openModal(`
+    <div style="padding:0 4px">
+      <h3 style="margin:0 0 12px;font-size:15px;color:var(--navy,#1a2e4a)">💬 Comments — ${loadLabel||id}</h3>
+      <div id="comments-thread" style="max-height:280px;overflow-y:auto;display:flex;flex-direction:column;gap:8px;margin-bottom:12px">
+        ${comments.length?comments.map(c=>`
+          <div style="background:${c.user===user?'var(--blue-bg,#eff6ff)':'var(--gray-50,#f8f9fa)'};border-radius:8px;padding:8px 12px;border-left:3px solid ${c.user===user?'var(--steel,#2e75b6)':'#d1d5db'}">
+            <div style="font-size:11px;color:#666;margin-bottom:3px">${c.user} · ${c.at}</div>
+            <div style="font-size:13px;color:var(--navy,#1a2e4a)">${c.text}</div>
+          </div>`).join(''):'<p style="text-align:center;color:#999;font-size:13px;padding:16px 0">No comments yet — add one below</p>'}
+      </div>
+      <div style="display:flex;gap:8px">
+        <input id="comment-input" type="text" placeholder="Add a comment…" style="flex:1;padding:8px 12px;border:1px solid var(--gray-200,#e5e7eb);border-radius:8px;font-size:13px" onkeydown="if(event.key==='Enter')addLoadComment('${id}','${loadLabel||id}')">
+        <button class="btn blue" onclick="addLoadComment('${id}','${loadLabel||id}')">Post</button>
+      </div>
+    </div>
+  `);
+}
+
+function addLoadComment(id,loadLabel){
+  const inp=document.getElementById('comment-input');
+  if(!inp||!inp.value.trim())return;
+  const user=localStorage.getItem('shifl_user')||'You';
+  const comments=getLoadComments(id);
+  comments.push({user,text:inp.value.trim(),at:new Date().toLocaleString()});
+  saveLoadComments(id,comments);
+  openLoadComments(id,loadLabel);
+}
+
+// ── SWIPE TO BOOK ─────────────────────────────────────────────
+function initSwipeToBook(){
+  document.querySelectorAll('[data-swipe-id]').forEach(card=>{
+    let startX=0,dx=0,swiping=false;
+    card.addEventListener('touchstart',e=>{startX=e.touches[0].clientX;swiping=true;dx=0;},{passive:true});
+    card.addEventListener('touchmove',e=>{
+      if(!swiping)return;
+      dx=e.touches[0].clientX-startX;
+      if(dx>0&&dx<120){card.style.transform='translateX('+dx+'px)';card.style.transition='none';}
+    },{passive:true});
+    card.addEventListener('touchend',()=>{
+      card.style.transition='transform .25s';
+      card.style.transform='';
+      if(dx>70){
+        const id=card.dataset.swipeId;
+        const type=card.dataset.swipeType||'fq';
+        swipeBook(id,type);
+      }
+      swiping=false;dx=0;
+    });
+  });
+}
+
+function swipeBook(id,type){
+  showToast('👆 Swipe detected — tap to confirm booking','info',3000);
+  if(type==='fq'&&typeof showFqBookingModal==='function'){
+    const idx=window._fqHistory?window._fqHistory.findIndex(q=>q.id===id):-1;
+    if(idx>=0)showFqBookingModal(idx);
+  }
+}
+
+// Re-init swipe listeners after TMS/quote renders
+const _origRenderTMS=window.renderTMS;
+if(typeof _origRenderTMS==='function'){
+  window.renderTMS=function(){_origRenderTMS.apply(this,arguments);setTimeout(initSwipeToBook,200);};
+}
+</script>
+
+<script>
+/* ============================================================
+   BATCH 2: OPERATIONS FEATURES
+   - Multi-stop sequencing
+   - Load board push (public load board)
+   - Driver scorecard
+   - Carrier rate history chart
+   ============================================================ */
+
+// ── MULTI-STOP SEQUENCING ─────────────────────────────────────
+function getLoadStops(id){return JSON.parse(localStorage.getItem('load_stops_'+id)||'[]');}
+function saveLoadStops(id,stops){localStorage.setItem('load_stops_'+id,JSON.stringify(stops));}
+
+function openMultiStopBuilder(loadId,loadLabel){
+  let stops=getLoadStops(loadId);
+  if(!stops.length) stops=[{address:'',type:'Pickup',time:'',notes:''}];
+
+  function renderStops(){
+    const el=document.getElementById('ms-stops');
+    if(!el)return;
+    el.innerHTML=stops.map((s,i)=>`
+      <div style="background:var(--gray-50,#f8f9fa);border-radius:8px;padding:10px 12px;margin-bottom:8px;border-left:3px solid ${s.type==='Pickup'?'var(--steel,#2e75b6)':'var(--green,#16a34a)'}">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <span style="font-size:11px;font-weight:700;color:#666">STOP ${i+1}</span>
+          <select onchange="stops[${i}].type=this.value;renderStops()" style="padding:2px 6px;border-radius:4px;border:1px solid #d1d5db;font-size:11px">
+            ${['Pickup','Delivery','Cross-dock','Drop Trailer'].map(t=>`<option${s.type===t?' selected':''}>${t}</option>`).join('')}
+          </select>
+          ${stops.length>1?`<button onclick="stops.splice(${i},1);renderStops()" style="margin-left:auto;background:none;border:none;cursor:pointer;color:#dc2626;font-size:13px">✕</button>`:''}
+        </div>
+        <input type="text" placeholder="Address / location" value="${s.address||''}" onchange="stops[${i}].address=this.value"
+          style="width:100%;padding:5px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:12px;margin-bottom:4px;box-sizing:border-box">
+        <div style="display:flex;gap:6px">
+          <input type="time" value="${s.time||''}" onchange="stops[${i}].time=this.value" style="flex:1;padding:4px 6px;border:1px solid #d1d5db;border-radius:6px;font-size:12px">
+          <input type="text" placeholder="Notes" value="${s.notes||''}" onchange="stops[${i}].notes=this.value" style="flex:2;padding:4px 6px;border:1px solid #d1d5db;border-radius:6px;font-size:12px">
+        </div>
+      </div>`).join('');
+  }
+
+  openModal(`
+    <div>
+      <h3 style="margin:0 0 12px;font-size:15px;color:var(--navy,#1a2e4a)">📍 Multi-stop sequencing — ${loadLabel||loadId}</h3>
+      <div id="ms-stops"></div>
+      <button onclick="stops.push({address:'',type:'Delivery',time:'',notes:''});(${renderStops.toString()})()" class="btn" style="margin-bottom:12px;width:100%">+ Add stop</button>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button class="btn" onclick="closeModal()">Cancel</button>
+        <button class="btn blue" onclick="saveLoadStops('${loadId}',stops);closeModal();showToast('Stops saved','success',2000)">Save stops</button>
+      </div>
+    </div>
+  `);
+  setTimeout(renderStops,50);
+}
+
+function stopsBadge(id){
+  const n=getLoadStops(id).length;
+  return n>0?`<span style="font-size:10px;background:#f0fdf4;color:#15803d;padding:1px 7px;border-radius:99px;font-weight:700">${n} stops</span>`:'';
+}
+
+// ── LOAD BOARD (PUBLIC) ───────────────────────────────────────
+function renderLoadBoard(){
+  const loads=getTMSLoads().filter(l=>getTMSMeta(l.id)&&getTMSMeta(l.id).isPublic);
+  const tabBar='';
+  const html=`
+    <div style="padding:0 0 12px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+        <h3 style="margin:0;font-size:16px;color:var(--navy,#1a2e4a)">📋 Public Load Board</h3>
+        <span style="font-size:12px;color:#666">${loads.length} load${loads.length!==1?'s':''} posted</span>
+      </div>
+      ${loads.length===0?`<div class="empty"><div class="empty-ico">📋</div><p>No loads posted to board</p><small>Toggle "Post to load board" on any TMS load to make it visible here</small></div>`:`
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>Load ID</th><th>Mode</th><th>Origin</th><th>Destination</th><th>Equipment</th><th>Pick Date</th><th>Rate</th><th>Action</th></tr></thead>
+        <tbody>${loads.map(l=>{
+          const m=getTMSMeta(l.id)||{};
+          return `<tr>
+            <td style="font-weight:600">${l.id}</td>
+            <td>${tmsModeBadge?tmsModeBadge(l.fqMode||'FTL'):l.fqMode||'FTL'}</td>
+            <td>${l.pickupZip||'—'}</td>
+            <td>${l.deliveryZip||'—'}</td>
+            <td>${l.equipment||m.equipment||'Dry Van'}</td>
+            <td>${l.pickupDate||m.pickupDate||'TBD'}</td>
+            <td style="font-weight:700;color:var(--steel,#2e75b6)">${l.customerRate?'$'+Number(l.customerRate).toLocaleString():m.showRate?'$'+Number(m.showRate).toLocaleString():'—'}</td>
+            <td><button class="btn blue" style="padding:4px 10px;font-size:11px" onclick="openLoadDetails('${l.id}')">Details</button></td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table></div>`}
+    </div>`;
+  document.getElementById('page').innerHTML=html;
+}
+
+// ── DRIVER SCORECARD ──────────────────────────────────────────
+function getDriverScores(){return JSON.parse(localStorage.getItem('driver_scores')||'{}');}
+function saveDriverScores(data){localStorage.setItem('driver_scores',JSON.stringify(data));}
+
+function recordDriverEvent(driver,eventType){
+  if(!driver)return;
+  const scores=getDriverScores();
+  if(!scores[driver]) scores[driver]={onTime:0,late:0,damage:0,comms:0,loads:0};
+  scores[driver].loads=(scores[driver].loads||0)+1;
+  if(eventType==='onTime') scores[driver].onTime=(scores[driver].onTime||0)+1;
+  if(eventType==='late') scores[driver].late=(scores[driver].late||0)+1;
+  if(eventType==='damage') scores[driver].damage=(scores[driver].damage||0)+1;
+  if(eventType==='goodComms') scores[driver].comms=(scores[driver].comms||0)+1;
+  saveDriverScores(scores);
+}
+
+function openDriverScorecard(){
+  const scores=getDriverScores();
+  const drivers=Object.keys(scores);
+  openModal(`
+    <div style="min-width:480px">
+      <h3 style="margin:0 0 14px;font-size:15px;color:var(--navy,#1a2e4a)">🏆 Driver Scorecard</h3>
+      ${drivers.length===0?'<p style="color:#999;text-align:center;padding:24px 0">No driver data yet. Events are recorded when loads are updated.</p>':`
+      <table style="width:100%;font-size:12px;border-collapse:collapse">
+        <thead><tr style="background:var(--gray-50,#f8f9fa)">
+          <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e7eb">Driver</th>
+          <th style="padding:6px 8px;text-align:right">Loads</th>
+          <th style="padding:6px 8px;text-align:right">On-time %</th>
+          <th style="padding:6px 8px;text-align:right">Late</th>
+          <th style="padding:6px 8px;text-align:right">Damage</th>
+          <th style="padding:6px 8px;text-align:right">Rating</th>
+        </tr></thead>
+        <tbody>${drivers.map(d=>{
+          const s=scores[d];
+          const otPct=s.loads?Math.round((s.onTime/s.loads)*100):0;
+          const rating=otPct>=95?'⭐⭐⭐⭐⭐':otPct>=85?'⭐⭐⭐⭐':otPct>=70?'⭐⭐⭐':otPct>=50?'⭐⭐':'⭐';
+          return `<tr style="border-bottom:1px solid #f3f4f6">
+            <td style="padding:7px 8px;font-weight:600">${d}</td>
+            <td style="padding:7px 8px;text-align:right">${s.loads}</td>
+            <td style="padding:7px 8px;text-align:right;color:${otPct>=85?'#16a34a':otPct>=70?'#d97706':'#dc2626'};font-weight:700">${otPct}%</td>
+            <td style="padding:7px 8px;text-align:right;color:#dc2626">${s.late||0}</td>
+            <td style="padding:7px 8px;text-align:right;color:#d97706">${s.damage||0}</td>
+            <td style="padding:7px 8px;text-align:right">${rating}</td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table>`}
+      <div style="margin-top:14px">
+        <h4 style="font-size:12px;margin:0 0 6px;color:#666">Log event</h4>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <input id="dsc-driver" type="text" placeholder="Driver name" style="flex:2;padding:5px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:12px">
+          <select id="dsc-event" style="flex:1;padding:5px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:12px">
+            <option value="onTime">On-time delivery</option>
+            <option value="late">Late delivery</option>
+            <option value="damage">Cargo damage</option>
+            <option value="goodComms">Good communication</option>
+          </select>
+          <button class="btn blue" onclick="recordDriverEvent(document.getElementById('dsc-driver').value,document.getElementById('dsc-event').value);openDriverScorecard()">Log</button>
+        </div>
+      </div>
+      <div style="margin-top:12px;text-align:right"><button class="btn" onclick="closeModal()">Close</button></div>
+    </div>
+  `);
+}
+
+// ── CARRIER RATE HISTORY CHART ────────────────────────────────
+function getCarrierRateHistory(name){return JSON.parse(localStorage.getItem('carrier_rate_hist_'+name)||'[]');}
+function recordCarrierRate(name,lane,rate){
+  const hist=getCarrierRateHistory(name);
+  hist.push({date:localDateStr(),lane:lane||'General',rate:parseFloat(rate)||0});
+  if(hist.length>60) hist.shift();
+  localStorage.setItem('carrier_rate_hist_'+name,JSON.stringify(hist));
+}
+
+function openCarrierRateChart(name){
+  const hist=getCarrierRateHistory(name);
+  const lanes=[...new Set(hist.map(h=>h.lane))];
+  const selLane=lanes[0]||'General';
+  const filtered=hist.filter(h=>h.lane===selLane);
+
+  const maxR=filtered.length?Math.max(...filtered.map(h=>h.rate)):1;
+  const minR=filtered.length?Math.min(...filtered.map(h=>h.rate)):0;
+  const range=maxR-minR||1;
+  const W=460,H=160,PAD=36;
+  const pts=filtered.map((h,i)=>{
+    const x=PAD+(i/(Math.max(filtered.length-1,1)))*(W-PAD*2);
+    const y=PAD+((maxR-h.rate)/range)*(H-PAD*2);
+    return {x,y,h};
+  });
+  const path=pts.map((p,i)=>(i===0?'M':'L')+p.x.toFixed(1)+','+p.y.toFixed(1)).join(' ');
+
+  openModal(`
+    <div style="min-width:500px">
+      <h3 style="margin:0 0 6px;font-size:15px;color:var(--navy,#1a2e4a)">📈 Rate history — ${name}</h3>
+      <div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap">
+        ${lanes.map(l=>`<button class="btn${l===selLane?' blue':''}" style="font-size:11px;padding:3px 9px" onclick="openCarrierRateChart('${name}')">${l}</button>`).join('')}
+      </div>
+      ${filtered.length<2?`<p style="color:#999;text-align:center;padding:24px 0">Not enough data to chart. Rates are logged each time you book this carrier.</p>`:`
+      <svg viewBox="0 0 ${W} ${H}" style="width:100%;border-radius:8px;background:var(--gray-50,#f8f9fa)">
+        <path d="${path}" fill="none" stroke="var(--steel,#2e75b6)" stroke-width="2"/>
+        ${pts.map(p=>`<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="4" fill="var(--steel,#2e75b6)"><title>$${p.h.rate} · ${p.h.date}</title></circle>`).join('')}
+        <text x="${PAD}" y="${PAD-6}" font-size="10" fill="#999">$${maxR.toLocaleString()}</text>
+        <text x="${PAD}" y="${H-8}" font-size="10" fill="#999">$${minR.toLocaleString()}</text>
+        ${pts.length>0?`<text x="${pts[pts.length-1].x.toFixed(1)}" y="${H-8}" font-size="10" fill="#999" text-anchor="end">${pts[pts.length-1].h.date}</text>`:''}
+      </svg>
+      <div style="margin-top:8px;font-size:12px;color:#666">Avg: <strong>$${Math.round(filtered.reduce((a,h)=>a+h.rate,0)/filtered.length).toLocaleString()}</strong> · ${filtered.length} data points</div>`}
+      <div style="margin-top:12px;display:flex;gap:6px">
+        <input id="crh-lane" type="text" placeholder="Lane (e.g. NJ→TX)" value="${selLane}" style="flex:2;padding:5px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:12px">
+        <input id="crh-rate" type="number" placeholder="Rate $" style="flex:1;padding:5px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:12px">
+        <button class="btn blue" onclick="recordCarrierRate('${name}',document.getElementById('crh-lane').value,document.getElementById('crh-rate').value);openCarrierRateChart('${name}')">Add</button>
+      </div>
+      <div style="margin-top:10px;text-align:right"><button class="btn" onclick="closeModal()">Close</button></div>
+    </div>
+  `);
+}
+</script>
+
+<script>
+/* ============================================================
+   BATCH 3: CARRIER / CUSTOMER / DRAYAGE FEATURES
+   - Carrier onboarding checklist
+   - Carrier bid ranker
+   - Customer lane history
+   - Customer notes feed
+   - Customer onboarding checklist
+   - Net terms tracker
+   - Port appointment scheduler
+   - Per diem auto-calculator
+   ============================================================ */
+
+// ── CARRIER ONBOARDING CHECKLIST ─────────────────────────────
+function getCarrierOnboarding(name){return JSON.parse(localStorage.getItem('co_onb_'+name)||'{}');}
+function saveCarrierOnboarding(name,data){localStorage.setItem('co_onb_'+name,JSON.stringify(data));}
+
+const CARRIER_OBN_STEPS=[
+  {key:'mc',label:'MC authority verified (FMCSA)'},
+  {key:'insurance',label:'Certificate of insurance on file'},
+  {key:'w9',label:'W-9 received'},
+  {key:'agreement',label:'Carrier agreement signed'},
+  {key:'ach',label:'ACH / payment info collected'},
+  {key:'safety',label:'Safety rating reviewed (CSA scores)'},
+  {key:'contact',label:'Primary dispatch contact confirmed'},
+  {key:'equipment',label:'Equipment types & trailer count logged'},
+  {key:'lanes',label:'Preferred lanes documented'},
+];
+
+function openCarrierOnboardingChecklist(name){
+  let data=getCarrierOnboarding(name);
+  const pct=Math.round(CARRIER_OBN_STEPS.filter(s=>data[s.key]).length/CARRIER_OBN_STEPS.length*100);
+  openModal(`
+    <div style="min-width:400px">
+      <h3 style="margin:0 0 4px;font-size:15px;color:var(--navy,#1a2e4a)">✅ Onboarding — ${name}</h3>
+      <div style="margin-bottom:12px">
+        <div style="display:flex;justify-content:space-between;font-size:12px;color:#666;margin-bottom:4px"><span>Progress</span><span>${pct}% complete</span></div>
+        <div style="background:#e5e7eb;border-radius:4px;height:6px"><div style="width:${pct}%;background:var(--steel,#2e75b6);height:6px;border-radius:4px;transition:width .3s"></div></div>
+      </div>
+      ${CARRIER_OBN_STEPS.map(s=>`
+        <label style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #f3f4f6;cursor:pointer">
+          <input type="checkbox" ${data[s.key]?'checked':''} onchange="
+            const d=getCarrierOnboarding('${name}');
+            d['${s.key}']=this.checked;
+            saveCarrierOnboarding('${name}',d);
+            openCarrierOnboardingChecklist('${name}')
+          " style="width:16px;height:16px">
+          <span style="font-size:13px;color:${data[s.key]?'#16a34a':'var(--navy,#1a2e4a)'};${data[s.key]?'text-decoration:line-through;opacity:.7':''}">${s.label}</span>
+        </label>`).join('')}
+      <div style="margin-top:12px;display:flex;justify-content:space-between;align-items:center">
+        ${pct===100?'<span style="color:#16a34a;font-weight:700;font-size:13px">🎉 Onboarding complete!</span>':'<span></span>'}
+        <button class="btn" onclick="closeModal()">Close</button>
+      </div>
+    </div>
+  `);
+}
+
+function onboardingBadge(name){
+  const data=getCarrierOnboarding(name);
+  const done=CARRIER_OBN_STEPS.filter(s=>data[s.key]).length;
+  const pct=Math.round(done/CARRIER_OBN_STEPS.length*100);
+  const color=pct===100?'#16a34a':pct>=50?'#d97706':'#dc2626';
+  return `<span style="font-size:10px;background:${color}15;color:${color};padding:1px 7px;border-radius:99px;font-weight:700;cursor:pointer" onclick="openCarrierOnboardingChecklist('${name}')">${pct}% onboarded</span>`;
+}
+
+// ── CARRIER BID RANKER ────────────────────────────────────────
+function openCarrierBidRanker(){
+  let bids=[];
+  function renderBids(){
+    const el=document.getElementById('bid-list');
+    if(!el)return;
+    if(!bids.length){el.innerHTML='<p style="color:#999;text-align:center;padding:16px 0;font-size:13px">Add carrier bids below</p>';return;}
+    const scored=bids.map(b=>{
+      const hist=getCarrierRateHistory(b.name);
+      const avgRate=hist.length?hist.reduce((a,h)=>a+h.rate,0)/hist.length:b.rate;
+      const rateScore=b.rate<avgRate?20:b.rate===avgRate?10:0;
+      const onbData=getCarrierOnboarding(b.name);
+      const onbScore=CARRIER_OBN_STEPS.filter(s=>onbData[s.key]).length*2;
+      const total=rateScore+onbScore+(b.experience||0)*5;
+      return {...b,score:total,rateScore,onbScore};
+    }).sort((a,b2)=>b2.score-a.score);
+    el.innerHTML=scored.map((b,i)=>`
+      <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:${i===0?'var(--blue-bg,#eff6ff)':'var(--gray-50,#f8f9fa)'};border-radius:8px;margin-bottom:6px;border-left:3px solid ${i===0?'var(--steel,#2e75b6)':'#d1d5db'}">
+        <span style="font-size:16px;font-weight:800;color:${i===0?'var(--steel,#2e75b6)':'#999'};min-width:20px">#${i+1}</span>
+        <div style="flex:1">
+          <div style="font-size:13px;font-weight:700;color:var(--navy,#1a2e4a)">${b.name}</div>
+          <div style="font-size:11px;color:#666">Rate: $${b.rate.toLocaleString()} · Score: ${b.score}</div>
+        </div>
+        ${i===0?'<span style="font-size:10px;background:#dbeafe;color:#1d4ed8;padding:2px 8px;border-radius:99px;font-weight:700">Best fit</span>':''}
+        <button onclick="bids.splice(${bids.indexOf(b)},1);renderBids()" style="background:none;border:none;cursor:pointer;color:#dc2626;font-size:12px">✕</button>
+      </div>`).join('');
+  }
+
+  openModal(`
+    <div style="min-width:460px">
+      <h3 style="margin:0 0 12px;font-size:15px;color:var(--navy,#1a2e4a)">🏆 Carrier bid ranker</h3>
+      <div id="bid-list"></div>
+      <div style="display:flex;gap:6px;margin-top:10px">
+        <input id="bid-carrier" type="text" placeholder="Carrier name" style="flex:2;padding:5px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:12px">
+        <input id="bid-rate" type="number" placeholder="Rate $" style="flex:1;padding:5px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:12px">
+        <select id="bid-exp" style="flex:1;padding:5px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:12px">
+          <option value="0">New</option><option value="1">Some history</option><option value="2">Established</option><option value="3">Preferred</option>
+        </select>
+        <button class="btn blue" onclick="
+          const n=document.getElementById('bid-carrier').value;
+          const r=parseFloat(document.getElementById('bid-rate').value)||0;
+          const e=parseInt(document.getElementById('bid-exp').value)||0;
+          if(n&&r){bids.push({name:n,rate:r,experience:e});(${renderBids.toString()})();}
+        ">Add</button>
+      </div>
+      <div style="margin-top:12px;text-align:right"><button class="btn" onclick="closeModal()">Done</button></div>
+    </div>
+  `);
+  setTimeout(renderBids,50);
+}
+
+// ── CUSTOMER LANE HISTORY ─────────────────────────────────────
+function openCustomerLaneHistory(customerId,customerName){
+  const loads=getTMSLoads().filter(l=>{
+    const m=getTMSMeta(l.id)||{};
+    return (l.shipper===customerName||l.customerId===customerId||m.customerId===customerId);
+  });
+
+  const laneMap={};
+  loads.forEach(l=>{
+    const lane=(l.pickupZip||'?')+' → '+(l.deliveryZip||'?');
+    if(!laneMap[lane]) laneMap[lane]={count:0,revenue:0,mode:l.fqMode||'FTL'};
+    laneMap[lane].count++;
+    laneMap[lane].revenue+=(parseFloat(l.customerRate)||0);
+  });
+
+  const lanes=Object.entries(laneMap).sort((a,b)=>b[1].count-a[1].count);
+
+  openModal(`
+    <div style="min-width:480px">
+      <h3 style="margin:0 0 14px;font-size:15px;color:var(--navy,#1a2e4a)">🗺️ Lane history — ${customerName||customerId}</h3>
+      ${lanes.length===0?'<p style="color:#999;text-align:center;padding:24px 0">No lane history found for this customer</p>':`
+      <table style="width:100%;font-size:12px;border-collapse:collapse">
+        <thead><tr style="background:var(--gray-50,#f8f9fa)">
+          <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e7eb">Lane</th>
+          <th style="padding:6px 8px;text-align:right">Loads</th>
+          <th style="padding:6px 8px;text-align:right">Total revenue</th>
+          <th style="padding:6px 8px;text-align:right">Avg/load</th>
+        </tr></thead>
+        <tbody>${lanes.map(([lane,d])=>`
+          <tr style="border-bottom:1px solid #f3f4f6">
+            <td style="padding:7px 8px;font-weight:600">${lane}</td>
+            <td style="padding:7px 8px;text-align:right">${d.count}</td>
+            <td style="padding:7px 8px;text-align:right;color:var(--steel,#2e75b6)">$${d.revenue.toLocaleString(undefined,{maximumFractionDigits:0})}</td>
+            <td style="padding:7px 8px;text-align:right">$${Math.round(d.revenue/d.count).toLocaleString()}</td>
+          </tr>`).join('')}</tbody>
+        <tfoot><tr style="background:var(--gray-50,#f8f9fa);font-weight:700">
+          <td style="padding:7px 8px">Total</td>
+          <td style="padding:7px 8px;text-align:right">${loads.length}</td>
+          <td style="padding:7px 8px;text-align:right;color:var(--steel,#2e75b6)">$${loads.reduce((a,l)=>a+(parseFloat(l.customerRate)||0),0).toLocaleString(undefined,{maximumFractionDigits:0})}</td>
+          <td></td>
+        </tr></tfoot>
+      </table>`}
+      <div style="margin-top:12px;text-align:right"><button class="btn" onclick="closeModal()">Close</button></div>
+    </div>
+  `);
+}
+
+// ── CUSTOMER NOTES FEED ───────────────────────────────────────
+function getCustomerNotes(id){return JSON.parse(localStorage.getItem('cust_notes_'+id)||'[]');}
+function saveCustomerNotes(id,arr){localStorage.setItem('cust_notes_'+id,JSON.stringify(arr));}
+
+function openCustomerNotes(customerId,customerName){
+  const notes=getCustomerNotes(customerId);
+  const user=localStorage.getItem('shifl_user')||'You';
+  openModal(`
+    <div style="min-width:420px">
+      <h3 style="margin:0 0 12px;font-size:15px;color:var(--navy,#1a2e4a)">📝 Notes — ${customerName||customerId}</h3>
+      <div style="max-height:260px;overflow-y:auto;margin-bottom:12px">
+        ${notes.length===0?'<p style="color:#999;text-align:center;padding:16px 0;font-size:13px">No notes yet</p>':notes.slice().reverse().map(n=>`
+          <div style="padding:8px 12px;background:var(--gray-50,#f8f9fa);border-radius:8px;margin-bottom:6px;border-left:3px solid var(--steel,#2e75b6)">
+            <div style="font-size:11px;color:#888;margin-bottom:3px">${n.user} · ${n.at}${n.pinned?' 📌':''}</div>
+            <div style="font-size:13px;color:var(--navy,#1a2e4a)">${n.text}</div>
+          </div>`).join('')}
+      </div>
+      <div style="display:flex;gap:6px">
+        <input id="cn-input" type="text" placeholder="Add a note…" style="flex:1;padding:7px 10px;border:1px solid #d1d5db;border-radius:8px;font-size:13px" onkeydown="if(event.key==='Enter')addCustomerNote('${customerId}','${customerName}')">
+        <button class="btn blue" onclick="addCustomerNote('${customerId}','${customerName}')">Post</button>
+      </div>
+      <div style="margin-top:10px;text-align:right"><button class="btn" onclick="closeModal()">Close</button></div>
+    </div>
+  `);
+}
+
+function addCustomerNote(id,name){
+  const inp=document.getElementById('cn-input');
+  if(!inp||!inp.value.trim())return;
+  const user=localStorage.getItem('shifl_user')||'You';
+  const notes=getCustomerNotes(id);
+  notes.push({user,text:inp.value.trim(),at:new Date().toLocaleString(),pinned:false});
+  saveCustomerNotes(id,notes);
+  openCustomerNotes(id,name);
+}
+
+// ── CUSTOMER ONBOARDING CHECKLIST ────────────────────────────
+const CUSTOMER_ONB_STEPS=[
+  {key:'creditApp',label:'Credit application received'},
+  {key:'w9',label:'W-9 / tax ID on file'},
+  {key:'agreement',label:'Rate/service agreement signed'},
+  {key:'billing',label:'Billing contact & AP email confirmed'},
+  {key:'lanes',label:'Primary lanes documented'},
+  {key:'portal',label:'Customer portal access set up'},
+  {key:'shipper',label:'Shipper details & commodity profile completed'},
+  {key:'intro',label:'Intro call / welcome email sent'},
+];
+
+function getCustomerOnboarding(id){return JSON.parse(localStorage.getItem('cust_onb_'+id)||'{}');}
+function saveCustomerOnboarding(id,data){localStorage.setItem('cust_onb_'+id,JSON.stringify(data));}
+
+function openCustomerOnboarding(customerId,customerName){
+  let data=getCustomerOnboarding(customerId);
+  const pct=Math.round(CUSTOMER_ONB_STEPS.filter(s=>data[s.key]).length/CUSTOMER_ONB_STEPS.length*100);
+  openModal(`
+    <div style="min-width:400px">
+      <h3 style="margin:0 0 4px;font-size:15px;color:var(--navy,#1a2e4a)">🚀 Onboarding — ${customerName||customerId}</h3>
+      <div style="margin-bottom:12px">
+        <div style="display:flex;justify-content:space-between;font-size:12px;color:#666;margin-bottom:4px"><span>Progress</span><span>${pct}% complete</span></div>
+        <div style="background:#e5e7eb;border-radius:4px;height:6px"><div style="width:${pct}%;background:var(--steel,#2e75b6);height:6px;border-radius:4px"></div></div>
+      </div>
+      ${CUSTOMER_ONB_STEPS.map(s=>`
+        <label style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #f3f4f6;cursor:pointer">
+          <input type="checkbox" ${data[s.key]?'checked':''} onchange="
+            const d=getCustomerOnboarding('${customerId}');
+            d['${s.key}']=this.checked;
+            saveCustomerOnboarding('${customerId}',d);
+            openCustomerOnboarding('${customerId}','${customerName}')
+          " style="width:16px;height:16px">
+          <span style="font-size:13px;color:${data[s.key]?'#16a34a':'var(--navy,#1a2e4a)'};${data[s.key]?'text-decoration:line-through;opacity:.7':''}">${s.label}</span>
+        </label>`).join('')}
+      <div style="margin-top:12px;display:flex;justify-content:space-between;align-items:center">
+        ${pct===100?'<span style="color:#16a34a;font-weight:700;font-size:13px">🎉 Customer fully onboarded!</span>':'<span></span>'}
+        <button class="btn" onclick="closeModal()">Close</button>
+      </div>
+    </div>
+  `);
+}
+
+// ── NET TERMS TRACKER ─────────────────────────────────────────
+function getNetTerms(customerId){return JSON.parse(localStorage.getItem('net_terms_'+customerId)||'{"terms":"Net30","invoices":[]}');}
+function saveNetTerms(customerId,data){localStorage.setItem('net_terms_'+customerId,JSON.stringify(data));}
+
+function openNetTermsTracker(customerId,customerName){
+  const data=getNetTerms(customerId);
+  const today=new Date();
+
+  function daysUntilDue(inv){
+    if(!inv.invoiceDate) return null;
+    const issued=new Date(inv.invoiceDate);
+    const termsDays=parseInt((data.terms||'Net30').replace('Net',''))||30;
+    const due=new Date(issued.getTime()+termsDays*86400000);
+    return Math.round((due-today)/86400000);
+  }
+
+  openModal(`
+    <div style="min-width:500px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+        <h3 style="margin:0;font-size:15px;color:var(--navy,#1a2e4a)">💰 Net terms — ${customerName||customerId}</h3>
+        <select onchange="const d=getNetTerms('${customerId}');d.terms=this.value;saveNetTerms('${customerId}',d);openNetTermsTracker('${customerId}','${customerName}')" style="padding:4px 8px;border-radius:6px;border:1px solid #d1d5db;font-size:12px">
+          ${['Net15','Net30','Net45','Net60','Net90'].map(t=>`<option${data.terms===t?' selected':''}>${t}</option>`).join('')}
+        </select>
+      </div>
+      ${data.invoices.length===0?'<p style="color:#999;text-align:center;padding:16px 0;font-size:13px">No invoices tracked yet</p>':`
+      <table style="width:100%;font-size:12px;border-collapse:collapse">
+        <thead><tr style="background:var(--gray-50,#f8f9fa)"><th style="padding:5px 8px;text-align:left;border-bottom:1px solid #e5e7eb">Invoice #</th><th style="padding:5px 8px;text-align:right">Amount</th><th style="padding:5px 8px;text-align:right">Issued</th><th style="padding:5px 8px;text-align:right">Status</th><th style="padding:5px 8px;text-align:right">Days left</th></tr></thead>
+        <tbody>${data.invoices.map((inv,i)=>{
+          const days=daysUntilDue(inv);
+          const status=inv.paid?'Paid':days===null?'—':days<0?'Overdue':days<=7?'Due soon':'Open';
+          const statusColor=inv.paid?'#16a34a':days<0?'#dc2626':days<=7?'#d97706':'#2e75b6';
+          return `<tr style="border-bottom:1px solid #f3f4f6">
+            <td style="padding:6px 8px;font-weight:600">${inv.ref||('INV-'+(i+1))}</td>
+            <td style="padding:6px 8px;text-align:right">$${(inv.amount||0).toLocaleString()}</td>
+            <td style="padding:6px 8px;text-align:right">${inv.invoiceDate||'—'}</td>
+            <td style="padding:6px 8px;text-align:right"><span style="background:${statusColor}15;color:${statusColor};padding:1px 7px;border-radius:99px;font-size:10px;font-weight:700">${status}</span></td>
+            <td style="padding:6px 8px;text-align:right;${!inv.paid&&days<0?'color:#dc2626;font-weight:700':''}">${inv.paid?'—':days!==null?Math.abs(days)+(days<0?' overdue':' days'):'—'}</td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table>`}
+      <div style="margin-top:10px;display:flex;gap:6px">
+        <input id="nt-ref" type="text" placeholder="Invoice #" style="flex:1;padding:5px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:12px">
+        <input id="nt-amt" type="number" placeholder="Amount" style="flex:1;padding:5px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:12px">
+        <input id="nt-date" type="date" style="flex:1;padding:5px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:12px">
+        <button class="btn blue" onclick="
+          const d=getNetTerms('${customerId}');
+          d.invoices.push({ref:document.getElementById('nt-ref').value,amount:parseFloat(document.getElementById('nt-amt').value)||0,invoiceDate:document.getElementById('nt-date').value,paid:false});
+          saveNetTerms('${customerId}',d);
+          openNetTermsTracker('${customerId}','${customerName}')
+        ">Add</button>
+      </div>
+      <div style="margin-top:10px;text-align:right"><button class="btn" onclick="closeModal()">Close</button></div>
+    </div>
+  `);
+}
+
+function netTermsAlertBadge(customerId){
+  const data=getNetTerms(customerId);
+  const today=new Date();
+  const termsDays=parseInt((data.terms||'Net30').replace('Net',''))||30;
+  const overdue=data.invoices.filter(inv=>{
+    if(inv.paid||!inv.invoiceDate) return false;
+    const due=new Date(new Date(inv.invoiceDate).getTime()+termsDays*86400000);
+    return due<today;
+  }).length;
+  return overdue>0?`<span style="font-size:10px;background:#fef2f2;color:#dc2626;padding:1px 7px;border-radius:99px;font-weight:700">${overdue} overdue</span>`:'';
+}
+
+// ── PORT APPOINTMENT SCHEDULER ────────────────────────────────
+function getPortAppointments(){return JSON.parse(localStorage.getItem('port_appointments')||'[]');}
+function savePortAppointments(arr){localStorage.setItem('port_appointments',JSON.stringify(arr));}
+
+function openPortAppointmentScheduler(){
+  let appts=getPortAppointments();
+
+  function renderAppts(){
+    const el=document.getElementById('pa-list');
+    if(!el) return;
+    if(!appts.length){el.innerHTML='<p style="color:#999;text-align:center;padding:12px 0;font-size:13px">No appointments scheduled</p>';return;}
+    const sorted=appts.slice().sort((a,b)=>(a.date+a.time)<(b.date+b.time)?-1:1);
+    el.innerHTML=sorted.map((a,i)=>{
+      const isToday=a.date===new Date().toISOString().split('T')[0];
+      return `<div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:${isToday?'#fffbeb':'var(--gray-50,#f8f9fa)'};border-radius:8px;margin-bottom:6px;border-left:3px solid ${isToday?'#f59e0b':'var(--steel,#2e75b6)'}">
+        <div style="flex:1">
+          <div style="font-size:13px;font-weight:600;color:var(--navy,#1a2e4a)">${a.container||'No container'} ${isToday?'<span style="color:#d97706;font-size:10px">TODAY</span>':''}</div>
+          <div style="font-size:11px;color:#666">${a.terminal||''} · ${a.date} ${a.time} · ${a.type||'Pickup'}</div>
+        </div>
+        <span style="font-size:10px;background:${a.confirmed?'#f0fdf4':'#fef3c7'};color:${a.confirmed?'#16a34a':'#92400e'};padding:2px 8px;border-radius:99px;font-weight:700;cursor:pointer" onclick="
+          appts[${appts.indexOf(a)}].confirmed=!appts[${appts.indexOf(a)}].confirmed;
+          savePortAppointments(appts);
+          (${renderAppts.toString()})()
+        ">${a.confirmed?'Confirmed':'Unconfirmed'}</span>
+        <button onclick="appts.splice(${appts.indexOf(a)},1);savePortAppointments(appts);(${renderAppts.toString()})()" style="background:none;border:none;cursor:pointer;color:#dc2626;font-size:12px">✕</button>
+      </div>`;
+    }).join('');
+  }
+
+  openModal(`
+    <div style="min-width:500px">
+      <h3 style="margin:0 0 12px;font-size:15px;color:var(--navy,#1a2e4a)">⚓ Port appointment scheduler</h3>
+      <div id="pa-list"></div>
+      <div style="margin-top:10px;background:var(--gray-50,#f8f9fa);border-radius:8px;padding:10px">
+        <div style="font-size:11px;font-weight:700;color:#666;margin-bottom:6px">NEW APPOINTMENT</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <input id="pa-container" type="text" placeholder="Container #" style="flex:2;padding:5px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:12px;min-width:100px">
+          <select id="pa-terminal" style="flex:2;padding:5px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:12px;min-width:100px">
+            <option>Port Newark</option><option>Port Elizabeth</option><option>Bayonne</option><option>Red Hook</option><option>Global Container Terminal</option>
+          </select>
+          <select id="pa-type" style="flex:1;padding:5px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:12px">
+            <option>Pickup</option><option>Empty return</option><option>Delivery</option>
+          </select>
+        </div>
+        <div style="display:flex;gap:6px;margin-top:6px">
+          <input id="pa-date" type="date" style="flex:1;padding:5px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:12px">
+          <input id="pa-time" type="time" style="flex:1;padding:5px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:12px">
+          <input id="pa-appt-num" type="text" placeholder="Appt # (optional)" style="flex:1;padding:5px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:12px">
+          <button class="btn blue" onclick="
+            appts.push({
+              container:document.getElementById('pa-container').value,
+              terminal:document.getElementById('pa-terminal').value,
+              type:document.getElementById('pa-type').value,
+              date:document.getElementById('pa-date').value,
+              time:document.getElementById('pa-time').value,
+              apptNum:document.getElementById('pa-appt-num').value,
+              confirmed:false,
+              createdAt:localDateStr()
+            });
+            savePortAppointments(appts);
+            (${renderAppts.toString()})()
+          ">Schedule</button>
+        </div>
+      </div>
+      <div style="margin-top:10px;text-align:right"><button class="btn" onclick="closeModal()">Close</button></div>
+    </div>
+  `);
+  setTimeout(renderAppts,50);
+}
+
+// ── PER DIEM AUTO-CALCULATOR ──────────────────────────────────
+function getPerDiemSettings(){return JSON.parse(localStorage.getItem('per_diem_settings')||'{"freeDays":5,"dailyRate":150,"currency":"USD"}');}
+
+function openPerDiemCalculator(containerId,containerRef){
+  const settings=getPerDiemSettings();
+  const pd=JSON.parse(localStorage.getItem('per_diem_'+containerId)||'{}');
+
+  function calcDays(){
+    const lfd=document.getElementById('pd-lfd').value;
+    const returned=document.getElementById('pd-returned').value;
+    if(!lfd) return {billable:0,total:0,charge:0};
+    const lfdDate=new Date(lfd);
+    const returnDate=returned?new Date(returned):new Date();
+    const total=Math.max(0,Math.round((returnDate-lfdDate)/86400000));
+    const billable=Math.max(0,total-settings.freeDays);
+    return {billable,total,charge:billable*settings.dailyRate};
+  }
+
+  function updateCalc(){
+    const r=calcDays();
+    const el=document.getElementById('pd-result');
+    if(el) el.innerHTML=`
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:10px">
+        <div style="background:var(--gray-50,#f8f9fa);border-radius:8px;padding:10px;text-align:center">
+          <div style="font-size:10px;color:#666;margin-bottom:4px">TOTAL DAYS OUT</div>
+          <div style="font-size:22px;font-weight:800;color:var(--navy,#1a2e4a)">${r.total}</div>
+        </div>
+        <div style="background:${r.billable>0?'#fef2f2':'#f0fdf4'};border-radius:8px;padding:10px;text-align:center">
+          <div style="font-size:10px;color:#666;margin-bottom:4px">BILLABLE DAYS</div>
+          <div style="font-size:22px;font-weight:800;color:${r.billable>0?'#dc2626':'#16a34a'}">${r.billable}</div>
+        </div>
+        <div style="background:${r.charge>0?'#fef2f2':'#f0fdf4'};border-radius:8px;padding:10px;text-align:center">
+          <div style="font-size:10px;color:#666;margin-bottom:4px">PER DIEM CHARGE</div>
+          <div style="font-size:22px;font-weight:800;color:${r.charge>0?'#dc2626':'#16a34a'}">$${r.charge.toLocaleString()}</div>
+        </div>
+      </div>`;
+  }
+
+  openModal(`
+    <div style="min-width:440px">
+      <h3 style="margin:0 0 12px;font-size:15px;color:var(--navy,#1a2e4a)">📅 Per diem calculator — ${containerRef||containerId}</h3>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <div style="flex:1;min-width:160px">
+          <label style="font-size:11px;color:#666;display:block;margin-bottom:3px">Last free day (LFD)</label>
+          <input id="pd-lfd" type="date" value="${pd.lfd||''}" oninput="updateCalc()" style="width:100%;padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;box-sizing:border-box">
+        </div>
+        <div style="flex:1;min-width:160px">
+          <label style="font-size:11px;color:#666;display:block;margin-bottom:3px">Empty returned date</label>
+          <input id="pd-returned" type="date" value="${pd.returned||''}" oninput="updateCalc()" style="width:100%;padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;box-sizing:border-box">
+          <span style="font-size:10px;color:#999">(leave blank to use today)</span>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <div>
+          <label style="font-size:11px;color:#666;display:block;margin-bottom:3px">Free days included</label>
+          <input id="pd-freedays" type="number" value="${settings.freeDays}" min="0" max="30" oninput="settings.freeDays=parseInt(this.value)||0;localStorage.setItem('per_diem_settings',JSON.stringify(settings));updateCalc()" style="width:80px;padding:5px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+        </div>
+        <div>
+          <label style="font-size:11px;color:#666;display:block;margin-bottom:3px">Daily rate ($)</label>
+          <input id="pd-rate" type="number" value="${settings.dailyRate}" min="0" oninput="settings.dailyRate=parseFloat(this.value)||0;localStorage.setItem('per_diem_settings',JSON.stringify(settings));updateCalc()" style="width:100px;padding:5px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+        </div>
+      </div>
+      <div id="pd-result"></div>
+      <div style="margin-top:12px;display:flex;gap:8px;justify-content:flex-end">
+        <button class="btn" onclick="
+          const d={lfd:document.getElementById('pd-lfd').value,returned:document.getElementById('pd-returned').value,savedAt:localDateStr()};
+          localStorage.setItem('per_diem_'+('${containerId}'),JSON.stringify(d));
+          showToast('Per diem saved','success',2000);closeModal()
+        ">Save</button>
+        <button class="btn blue" onclick="
+          const r=calcDays();
+          navigator.clipboard&&navigator.clipboard.writeText('Per diem charge for ${containerRef||containerId}: $'+r.charge.toLocaleString()+' ('+r.billable+' billable days @ $'+settings.dailyRate+'/day)');
+          showToast('Copied to clipboard','success',2000)
+        ">Copy charge</button>
+      </div>
+    </div>
+  `);
+  setTimeout(updateCalc,50);
+}
+</script>
+
+<script>
+/* ============================================================
+   BATCH 4: AI / ANALYTICS FEATURES
+   - Auto-classification of freight (NMFC)
+   - Auto-summarize load notes
+   - Duplicate load detector
+   - Lane volatility score
+   - Win/loss log
+   - Lane density map
+   ============================================================ */
+
+// ── AUTO-CLASSIFICATION OF FREIGHT ───────────────────────────
+const NMFC_RULES=[
+  {keywords:['furniture','sofa','chair','desk','cabinet','couch'],cls:'Class 85',nmfc:'36000'},
+  {keywords:['electronics','computer','laptop','tv','monitor','phone'],cls:'Class 92.5',nmfc:'53375'},
+  {keywords:['food','perishable','produce','meat','dairy','frozen'],cls:'Class 65',nmfc:'62070'},
+  {keywords:['machinery','equipment','industrial','motor','pump','engine'],cls:'Class 70',nmfc:'38000'},
+  {keywords:['clothing','apparel','garment','textile','fabric'],cls:'Class 85',nmfc:'23360'},
+  {keywords:['auto','automotive','vehicle','parts','tire','bumper'],cls:'Class 77.5',nmfc:'12310'},
+  {keywords:['chemical','hazmat','flammable','corrosive'],cls:'Class 100',nmfc:'49000'},
+  {keywords:['paper','cardboard','box','packaging','carton'],cls:'Class 55',nmfc:'60640'},
+  {keywords:['metal','steel','iron','aluminum','copper','pipe'],cls:'Class 50',nmfc:'15130'},
+  {keywords:['plastic','resin','polymer','container'],cls:'Class 70',nmfc:'33140'},
+  {keywords:['lumber','wood','timber','plywood'],cls:'Class 60',nmfc:'40000'},
+  {keywords:['glass','window','mirror','crystal'],cls:'Class 200',nmfc:'64100'},
+];
+
+function autoClassifyFreight(commodity){
+  if(!commodity) return null;
+  const lower=commodity.toLowerCase();
+  for(const rule of NMFC_RULES){
+    if(rule.keywords.some(k=>lower.includes(k))) return rule;
+  }
+  return {cls:'Class 70',nmfc:'Unknown',note:'Default — verify with NMFC directory'};
+}
+
+function openFreightClassifier(){
+  openModal(`
+    <div style="min-width:420px">
+      <h3 style="margin:0 0 12px;font-size:15px;color:var(--navy,#1a2e4a)">🏷️ Freight auto-classifier</h3>
+      <div style="display:flex;gap:6px;margin-bottom:12px">
+        <input id="fc-commodity" type="text" placeholder="Describe the commodity (e.g. 'office furniture', 'auto parts')"
+          style="flex:1;padding:7px 10px;border:1px solid #d1d5db;border-radius:8px;font-size:13px"
+          onkeydown="if(event.key==='Enter')runFreightClassify()">
+        <button class="btn blue" onclick="runFreightClassify()">Classify</button>
+      </div>
+      <div id="fc-result"></div>
+      <div style="margin-top:12px;text-align:right"><button class="btn" onclick="closeModal()">Close</button></div>
+    </div>
+  `);
+}
+
+function runFreightClassify(){
+  const commodity=document.getElementById('fc-commodity').value;
+  const result=autoClassifyFreight(commodity);
+  const el=document.getElementById('fc-result');
+  if(!el)return;
+  if(!result){el.innerHTML='<p style="color:#999;text-align:center">Enter a commodity to classify</p>';return;}
+  el.innerHTML=`
+    <div style="background:var(--blue-bg,#eff6ff);border-radius:10px;padding:14px 16px;border-left:4px solid var(--steel,#2e75b6)">
+      <div style="font-size:11px;color:#666;margin-bottom:6px">SUGGESTED CLASSIFICATION</div>
+      <div style="font-size:22px;font-weight:800;color:var(--navy,#1a2e4a);margin-bottom:4px">${result.cls}</div>
+      <div style="font-size:12px;color:#666">NMFC item: <strong>${result.nmfc}</strong></div>
+      ${result.note?`<div style="font-size:11px;color:#d97706;margin-top:6px">⚠️ ${result.note}</div>`:''}
+      <div style="font-size:11px;color:#999;margin-top:8px">Always verify with the official NMFC directory before billing</div>
+    </div>`;
+}
+
+// ── AUTO-SUMMARIZE LOAD NOTES ─────────────────────────────────
+function getLoadNotes(id){return localStorage.getItem('load_notes_'+id)||'';}
+function saveLoadNotes(id,txt){localStorage.setItem('load_notes_'+id,txt);}
+
+function openLoadNotesSummarizer(loadId,loadLabel){
+  const notes=getLoadNotes(loadId);
+
+  function summarizeLocally(text){
+    if(!text||text.length<20) return 'No notes to summarize.';
+    const sentences=text.match(/[^.!?]+[.!?]+/g)||[text];
+    const key=sentences.filter(s=>
+      s.toLowerCase().includes('deliver')||
+      s.toLowerCase().includes('pickup')||
+      s.toLowerCase().includes('delay')||
+      s.toLowerCase().includes('issue')||
+      s.toLowerCase().includes('confirm')||
+      s.toLowerCase().includes('driver')
+    ).slice(0,3);
+    return key.length?key.map(s=>s.trim()).join(' '):'Key info: '+sentences.slice(0,2).join(' ');
+  }
+
+  openModal(`
+    <div style="min-width:460px">
+      <h3 style="margin:0 0 12px;font-size:15px;color:var(--navy,#1a2e4a)">📋 Load notes — ${loadLabel||loadId}</h3>
+      <textarea id="ln-text" style="width:100%;height:120px;padding:8px;border:1px solid #d1d5db;border-radius:8px;font-size:13px;resize:vertical;box-sizing:border-box" placeholder="Enter load notes…">${notes}</textarea>
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <button class="btn" onclick="saveLoadNotes('${loadId}',document.getElementById('ln-text').value);showToast('Notes saved','success',2000)">Save notes</button>
+        <button class="btn blue" onclick="
+          const txt=document.getElementById('ln-text').value;
+          const sum=summarizeLocally(txt);
+          document.getElementById('ln-summary').innerHTML='<div style=\'background:var(--blue-bg,#eff6ff);border-radius:8px;padding:10px 12px;margin-top:8px;font-size:13px;color:var(--navy,#1a2e4a);border-left:3px solid var(--steel,#2e75b6)\'><strong>Summary:</strong> '+sum+'</div>';
+        ">Summarize</button>
+      </div>
+      <div id="ln-summary"></div>
+      <div style="margin-top:12px;text-align:right"><button class="btn" onclick="closeModal()">Close</button></div>
+    </div>
+  `);
+}
+
+// ── DUPLICATE LOAD DETECTOR ───────────────────────────────────
+function checkDuplicateLoad(newLoad){
+  const loads=getTMSLoads();
+  const cutoff=Date.now()-(7*24*60*60*1000);
+  return loads.filter(l=>{
+    if(!l.createdAt&&!l.bookedAt) return false;
+    const ts=new Date(l.createdAt||l.bookedAt).getTime();
+    if(ts<cutoff) return false;
+    const sameOrigin=(l.pickupZip||'').slice(0,3)===(newLoad.pickupZip||'').slice(0,3);
+    const sameDest=(l.deliveryZip||'').slice(0,3)===(newLoad.deliveryZip||'').slice(0,3);
+    const sameCarrier=l.carrier&&newLoad.carrier&&l.carrier.toLowerCase()===newLoad.carrier.toLowerCase();
+    return sameOrigin&&sameDest&&sameCarrier;
+  });
+}
+
+function openDuplicateDetector(){
+  openModal(`
+    <div style="min-width:440px">
+      <h3 style="margin:0 0 12px;font-size:15px;color:var(--navy,#1a2e4a)">🔍 Duplicate load detector</h3>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
+        <input id="dd-pu" type="text" placeholder="Pickup ZIP" style="flex:1;padding:5px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+        <input id="dd-del" type="text" placeholder="Delivery ZIP" style="flex:1;padding:5px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+        <input id="dd-carrier" type="text" placeholder="Carrier name" style="flex:1;padding:5px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+        <button class="btn blue" onclick="runDupCheck()">Check</button>
+      </div>
+      <div id="dd-result"></div>
+      <div style="margin-top:12px;text-align:right"><button class="btn" onclick="closeModal()">Close</button></div>
+    </div>
+  `);
+}
+
+function runDupCheck(){
+  const pu=document.getElementById('dd-pu').value;
+  const del=document.getElementById('dd-del').value;
+  const carrier=document.getElementById('dd-carrier').value;
+  const dupes=checkDuplicateLoad({pickupZip:pu,deliveryZip:del,carrier});
+  const el=document.getElementById('dd-result');
+  if(!el)return;
+  if(!dupes.length){
+    el.innerHTML='<div style="background:#f0fdf4;border-radius:8px;padding:12px;color:#16a34a;font-weight:600;text-align:center">✅ No duplicates found in the last 7 days</div>';
+    return;
+  }
+  el.innerHTML=`<div style="background:#fef2f2;border-radius:8px;padding:10px 14px;border-left:4px solid #dc2626">
+    <div style="font-weight:700;color:#dc2626;margin-bottom:8px">⚠️ ${dupes.length} possible duplicate${dupes.length>1?'s':''} found</div>
+    ${dupes.map(l=>`<div style="font-size:12px;color:var(--navy,#1a2e4a);padding:4px 0;border-bottom:1px solid #fee2e2">${l.id} — ${l.carrier||'?'} — ${l.pickupZip||'?'} → ${l.deliveryZip||'?'} — ${l.status||'?'}</div>`).join('')}
+    <div style="font-size:11px;color:#991b1b;margin-top:6px">Review before booking to avoid duplicate dispatch</div>
+  </div>`;
+}
+
+// ── LANE VOLATILITY SCORE ─────────────────────────────────────
+function calcLaneVolatility(pickupZip,deliveryZip){
+  const loads=getTMSLoads().filter(l=>{
+    const puMatch=(l.pickupZip||'').slice(0,3)===(pickupZip||'').slice(0,3);
+    const delMatch=(l.deliveryZip||'').slice(0,3)===(deliveryZip||'').slice(0,3);
+    return puMatch&&delMatch&&l.customerRate;
+  });
+  if(loads.length<3) return {score:'Insufficient data',loads:loads.length,label:'gray'};
+  const rates=loads.map(l=>parseFloat(l.customerRate));
+  const avg=rates.reduce((a,b)=>a+b,0)/rates.length;
+  const variance=rates.reduce((a,b)=>a+Math.pow(b-avg,2),0)/rates.length;
+  const cv=Math.sqrt(variance)/avg;
+  const pct=Math.round(cv*100);
+  const label=pct<10?'Low':pct<25?'Medium':'High';
+  const color=pct<10?'#16a34a':pct<25?'#d97706':'#dc2626';
+  return {score:pct+'%',loads:loads.length,label,color,avg:Math.round(avg)};
+}
+
+function openLaneVolatility(){
+  openModal(`
+    <div style="min-width:420px">
+      <h3 style="margin:0 0 12px;font-size:15px;color:var(--navy,#1a2e4a)">📊 Lane volatility score</h3>
+      <div style="display:flex;gap:6px;margin-bottom:8px">
+        <input id="lv-pu" type="text" placeholder="Pickup ZIP" style="flex:1;padding:5px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+        <input id="lv-del" type="text" placeholder="Delivery ZIP" style="flex:1;padding:5px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+        <button class="btn blue" onclick="runLaneVolatility()">Score</button>
+      </div>
+      <div id="lv-result"></div>
+      <div style="margin-top:12px;text-align:right"><button class="btn" onclick="closeModal()">Close</button></div>
+    </div>
+  `);
+}
+
+function runLaneVolatility(){
+  const pu=document.getElementById('lv-pu').value;
+  const del=document.getElementById('lv-del').value;
+  const r=calcLaneVolatility(pu,del);
+  const el=document.getElementById('lv-result');
+  if(!el)return;
+  if(r.score==='Insufficient data'){
+    el.innerHTML='<div style="background:#f8f9fa;border-radius:8px;padding:12px;color:#666;text-align:center">Need at least 3 historical loads on this lane to calculate volatility</div>';
+    return;
+  }
+  el.innerHTML=`
+    <div style="background:${r.color}15;border-radius:10px;padding:14px 16px;border-left:4px solid ${r.color}">
+      <div style="display:flex;align-items:center;gap:12px">
+        <div>
+          <div style="font-size:11px;color:#666">VOLATILITY</div>
+          <div style="font-size:28px;font-weight:800;color:${r.color}">${r.label}</div>
+          <div style="font-size:13px;color:#666">CV: ${r.score}</div>
+        </div>
+        <div style="margin-left:auto;text-align:right">
+          <div style="font-size:11px;color:#666">Based on ${r.loads} loads</div>
+          <div style="font-size:14px;font-weight:700;color:var(--navy,#1a2e4a)">Avg rate: $${r.avg.toLocaleString()}</div>
+        </div>
+      </div>
+      <div style="font-size:11px;color:#666;margin-top:8px">${r.label==='Low'?'Stable lane — rates are consistent. Good for contract pricing.':r.label==='Medium'?'Moderate rate variation. Consider spot + mini-contract mix.':'High price volatility. Use spot market and protect margins carefully.'}</div>
+    </div>`;
+}
+
+// ── WIN/LOSS LOG ──────────────────────────────────────────────
+function getWinLossLog(){return JSON.parse(localStorage.getItem('win_loss_log')||'[]');}
+function addWinLossEntry(entry){
+  const log=getWinLossLog();
+  log.unshift({...entry,id:'wl-'+Date.now(),at:new Date().toLocaleString()});
+  localStorage.setItem('win_loss_log',JSON.stringify(log.slice(0,200)));
+}
+
+function openWinLossLog(){
+  const log=getWinLossLog();
+  const wins=log.filter(e=>e.outcome==='Won').length;
+  const losses=log.filter(e=>e.outcome==='Lost').length;
+  const winRate=log.length?Math.round(wins/log.length*100):0;
+
+  openModal(`
+    <div style="min-width:520px">
+      <div style="display:flex;align-items:center;gap:16px;margin-bottom:14px">
+        <h3 style="margin:0;font-size:15px;color:var(--navy,#1a2e4a)">📈 Win/loss log</h3>
+        <span style="font-size:12px;background:#f0fdf4;color:#16a34a;padding:2px 10px;border-radius:99px;font-weight:700">${wins}W</span>
+        <span style="font-size:12px;background:#fef2f2;color:#dc2626;padding:2px 10px;border-radius:99px;font-weight:700">${losses}L</span>
+        <span style="font-size:12px;color:#666;margin-left:auto">Win rate: <strong>${winRate}%</strong></span>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;background:var(--gray-50,#f8f9fa);border-radius:8px;padding:8px">
+        <select id="wl-outcome" style="padding:4px 8px;border-radius:6px;border:1px solid #d1d5db;font-size:12px">
+          <option>Won</option><option>Lost</option><option>No decision</option>
+        </select>
+        <input id="wl-customer" type="text" placeholder="Customer" style="flex:2;padding:4px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:12px">
+        <input id="wl-lane" type="text" placeholder="Lane (e.g. NJ→TX)" style="flex:1;padding:4px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:12px">
+        <input id="wl-rate" type="number" placeholder="$ Rate" style="width:90px;padding:4px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:12px">
+        <input id="wl-competitor" type="text" placeholder="Competitor (if lost)" style="flex:1;padding:4px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:12px">
+        <input id="wl-reason" type="text" placeholder="Reason / notes" style="flex:2;padding:4px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:12px">
+        <button class="btn blue" style="white-space:nowrap" onclick="
+          addWinLossEntry({
+            outcome:document.getElementById('wl-outcome').value,
+            customer:document.getElementById('wl-customer').value,
+            lane:document.getElementById('wl-lane').value,
+            rate:parseFloat(document.getElementById('wl-rate').value)||0,
+            competitor:document.getElementById('wl-competitor').value,
+            reason:document.getElementById('wl-reason').value
+          });
+          openWinLossLog()
+        ">Log</button>
+      </div>
+      <div style="max-height:280px;overflow-y:auto">
+        ${log.length===0?'<p style="color:#999;text-align:center;padding:16px 0;font-size:13px">No entries yet</p>':`
+        <table style="width:100%;font-size:12px;border-collapse:collapse">
+          <thead><tr style="background:var(--gray-50,#f8f9fa)"><th style="padding:5px 8px;text-align:left">Outcome</th><th style="padding:5px 8px">Customer</th><th style="padding:5px 8px">Lane</th><th style="padding:5px 8px;text-align:right">Rate</th><th style="padding:5px 8px">Reason</th></tr></thead>
+          <tbody>${log.slice(0,50).map(e=>`
+            <tr style="border-bottom:1px solid #f3f4f6">
+              <td style="padding:5px 8px"><span style="background:${e.outcome==='Won'?'#dcfce7':'#fee2e2'};color:${e.outcome==='Won'?'#16a34a':'#dc2626'};padding:1px 8px;border-radius:99px;font-size:10px;font-weight:700">${e.outcome}</span></td>
+              <td style="padding:5px 8px">${e.customer||'—'}</td>
+              <td style="padding:5px 8px">${e.lane||'—'}</td>
+              <td style="padding:5px 8px;text-align:right">${e.rate?'$'+e.rate.toLocaleString():'—'}</td>
+              <td style="padding:5px 8px;color:#666">${e.reason||e.competitor||'—'}</td>
+            </tr>`).join('')}</tbody>
+        </table>`}
+      </div>
+      <div style="margin-top:12px;text-align:right"><button class="btn" onclick="closeModal()">Close</button></div>
+    </div>
+  `);
+}
+
+// ── LANE DENSITY MAP ──────────────────────────────────────────
+const ZIP_COORDS={
+  '070':'40.73,-74.17','071':'40.73,-74.17','072':'40.68,-74.12','073':'40.68,-74.12',
+  '074':'40.92,-74.08','075':'40.92,-74.08','076':'40.88,-74.17','077':'40.64,-74.03',
+  '100':'40.71,-74.00','101':'40.71,-74.00','102':'40.73,-73.97','103':'40.64,-74.07',
+  '104':'40.85,-73.88','105':'41.02,-73.90','106':'41.12,-73.81','107':'40.97,-73.87',
+  '080':'39.95,-75.17','081':'39.95,-75.17','082':'39.95,-75.17','085':'40.22,-74.77',
+  '195':'39.95,-75.17','212':'39.29,-76.61','300':'33.75,-84.39','770':'29.76,-95.37',
+  '606':'41.88,-87.63','900':'34.05,-118.24','941':'37.77,-122.42','980':'47.61,-122.33',
+  '750':'32.78,-96.80','557':'44.98,-93.27','021':'42.36,-71.06'
+};
+
+function getZipCoord(zip){
+  if(!zip) return null;
+  const pre=String(zip).slice(0,3);
+  const c=ZIP_COORDS[pre];
+  if(!c) return null;
+  const parts=c.split(',');
+  return {lat:parseFloat(parts[0]),lng:parseFloat(parts[1])};
+}
+
+function renderLaneDensityMap(){
+  const loads=getTMSLoads();
+  const laneCount={};
+  loads.forEach(l=>{
+    if(!l.pickupZip||!l.deliveryZip) return;
+    const key=l.pickupZip.slice(0,3)+'→'+l.deliveryZip.slice(0,3);
+    laneCount[key]=(laneCount[key]||0)+1;
+  });
+
+  const sortedLanes=Object.entries(laneCount).sort((a,b)=>b[1]-a[1]).slice(0,20);
+  const maxCount=sortedLanes.length?sortedLanes[0][1]:1;
+
+  const W=680,H=380;
+  const toSVG=(lat,lng)=>({
+    x:PAD+(((lng+130)/80)*(W-PAD*2)),
+    y:PAD+(((55-lat)/30)*(H-PAD*2))
+  });
+  const PAD=30;
+
+  const lines=sortedLanes.map(([lane,count])=>{
+    const [pu,del]=lane.split('→');
+    const puCoord=getZipCoord(pu);
+    const delCoord=getZipCoord(del);
+    if(!puCoord||!delCoord) return '';
+    const p1=toSVG(puCoord.lat,puCoord.lng);
+    const p2=toSVG(delCoord.lat,delCoord.lng);
+    const opacity=0.3+0.7*(count/maxCount);
+    const stroke=count===maxCount?'#dc2626':count>=maxCount*0.6?'#d97706':'#2e75b6';
+    const sw=1+3*(count/maxCount);
+    const mx=(p1.x+p2.x)/2,my=(p1.y+p2.y)/2-30;
+    return `<path d="M${p1.x.toFixed(0)},${p1.y.toFixed(0)} Q${mx.toFixed(0)},${my.toFixed(0)} ${p2.x.toFixed(0)},${p2.y.toFixed(0)}" fill="none" stroke="${stroke}" stroke-width="${sw.toFixed(1)}" opacity="${opacity.toFixed(2)}"><title>${lane} · ${count} loads</title></path>
+      <circle cx="${p1.x.toFixed(0)}" cy="${p1.y.toFixed(0)}" r="4" fill="${stroke}" opacity="${opacity.toFixed(2)}"/>
+      <circle cx="${p2.x.toFixed(0)}" cy="${p2.y.toFixed(0)}" r="4" fill="${stroke}" opacity="${opacity.toFixed(2)}"/>`;
+  }).join('');
+
+  const el=document.getElementById('page');
+  if(!el) return;
+  el.innerHTML=`
+    <div style="padding:0 0 16px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <h3 style="margin:0;font-size:16px;color:var(--navy,#1a2e4a)">🗺️ Lane density map</h3>
+        <div style="display:flex;gap:6px;font-size:11px;align-items:center">
+          <span style="color:#dc2626">■</span> High volume
+          <span style="color:#d97706;margin-left:6px">■</span> Medium
+          <span style="color:#2e75b6;margin-left:6px">■</span> Low
+        </div>
+      </div>
+      ${loads.length===0?'<div class="empty"><div class="empty-ico">🗺️</div><p>No loads in TMS yet</p><small>Book loads and they will appear on the lane map</small></div>':`
+      <svg viewBox="0 0 ${W} ${H}" style="width:100%;border-radius:10px;background:#f0f4f8">
+        <!-- US outline approximate -->
+        <rect x="0" y="0" width="${W}" height="${H}" rx="10" fill="#e8f0f8"/>
+        ${lines}
+        <text x="${PAD}" y="${H-8}" font-size="10" fill="#999">West Coast</text>
+        <text x="${W-PAD}" y="${H-8}" font-size="10" fill="#999" text-anchor="end">East Coast</text>
+      </svg>
+      <div style="margin-top:12px">
+        <h4 style="font-size:13px;margin:0 0 8px;color:var(--navy,#1a2e4a)">Top lanes by load count</h4>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:6px">
+          ${sortedLanes.slice(0,10).map(([lane,count])=>`
+            <div style="background:var(--gray-50,#f8f9fa);border-radius:8px;padding:8px 12px;font-size:12px">
+              <span style="font-weight:600;color:var(--navy,#1a2e4a)">${lane.replace('→',' → ')}</span>
+              <span style="float:right;background:#dbeafe;color:#1d4ed8;padding:1px 7px;border-radius:99px;font-size:10px;font-weight:700">${count}</span>
+            </div>`).join('')}
+        </div>
+      </div>`}
+    </div>`;
+}
+
+// Wire lane density map to nav
+const _origSetView=window.setView;
+if(typeof _origSetView==='function'){
+  window.setView=function(v){
+    _origSetView.apply(this,arguments);
+    if(v==='lanemap') setTimeout(renderLaneDensityMap,100);
+  };
+}
+
+// ── GLOBAL SEARCH BUTTON IN NAV ───────────────────────────────
+// Add search icon to topbar if it exists
+document.addEventListener('DOMContentLoaded',function(){
+  const topbar=document.querySelector('.topbar-right,.topbar [class*="right"]');
+  if(topbar&&!document.getElementById('gs-btn')){
+    const btn=document.createElement('button');
+    btn.id='gs-btn';
+    btn.className='btn';
+    btn.innerHTML='🔍 Search';
+    btn.style.cssText='font-size:12px;padding:4px 12px';
+    btn.onclick=openGlobalSearch;
+    topbar.prepend(btn);
+  }
+});
+</script>
