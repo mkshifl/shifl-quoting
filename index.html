@@ -462,6 +462,7 @@ if('caches' in window){
       <div class="acc-sub" id="acc-sub-drayage">
         <button class="sub-link" id="nav-quote" onclick="goTo('quote')">🏗️ Quote builder</button>
         <button class="sub-link" id="nav-log" onclick="goTo('log')">📁 Quote log</button>
+        <button class="sub-link" id="nav-requests" onclick="goTo('requests')" style="display:flex;align-items:center;justify-content:space-between">📋 Rate requests <span id="qr-nav-badge" style="background:#f59e0b;color:#fff;border-radius:99px;font-size:9px;font-weight:800;padding:1px 6px;display:none"></span></button>
         <button class="sub-link" id="nav-rates" onclick="goTo('rates')">📋 Carrier rates</button>
         <button class="sub-link" id="nav-customers" onclick="goTo('customers')">👥 Customers</button>
         <button class="sub-link" id="nav-dash" onclick="goTo('dash')">📊 Dashboard</button>
@@ -1070,7 +1071,7 @@ function setView(v){
   S.view=v;
   document.querySelectorAll('.nav-btn,.sub-link').forEach(b=>b.classList.remove('active'));
   const navEl=$('nav-'+v);if(navEl) navEl.classList.add('active');
-  const titles={tms:'TMS — FTL/LTL Operations',quote:'Quote builder',customers:'Customers',rates:'Carrier rates',log:'Quote log',dash:'Dashboard',freight:'Freight Quoting',transload:'Transload Quoting',active:'Active Shipments',admin:'Admin Panel',reports:'Reports',activity:'Activity Log',auditlog:'Audit Log',carriers:'Carrier Network',air:'Air Freight',home:'Home',invoicing:'Invoicing'};
+  const titles={tms:'TMS — FTL/LTL Operations',quote:'Quote builder',customers:'Customers',rates:'Carrier rates',log:'Quote log',dash:'Dashboard',freight:'Freight Quoting',transload:'Transload Quoting',active:'Active Shipments',admin:'Admin Panel',reports:'Reports',activity:'Activity Log',auditlog:'Audit Log',carriers:'Carrier Network',air:'Air Freight',home:'Home',invoicing:'Invoicing',requests:'Rate Requests'};
   $('view-title').textContent=titles[v]||v;
   openAccFor(v);
   updateSubActive(v);
@@ -1089,6 +1090,7 @@ function render(){
   else if(S.view==='air')         renderAirFreight();
   else if(S.view==='home')        renderHome();
   else if(S.view==='profit')      renderProfitMonitor();
+  else if(S.view==='requests')    renderQuoteRequests();
   else if(S.view==='achievements')  renderAchievementsPage();
   else if(S.view==='usmap')         renderShiflAchievements();
   else if(S.view==='tms')           renderTMS();
@@ -17708,10 +17710,20 @@ document.addEventListener('DOMContentLoaded',function(){
   // Add badge to sidebar showing pending requests
   function updateRequestsBadge(){
     const pending=getQuoteRequests().filter(r=>r.status==='Pending').length;
-    let badge=document.getElementById('qr-nav-badge');
-    if(badge) badge.textContent=pending>0?pending:'';
+    const badge=document.getElementById('qr-nav-badge');
+    if(!badge) return;
+    if(pending>0){badge.textContent=pending;badge.style.display='inline';}
+    else badge.style.display='none';
   }
   setInterval(updateRequestsBadge,5000);
   updateRequestsBadge();
+  // Also update badge whenever requests view is opened
+  const _origGoTo=window.goTo;
+  if(typeof _origGoTo==='function'){
+    window.goTo=function(v,...args){
+      _origGoTo(v,...args);
+      if(v==='requests') setTimeout(updateRequestsBadge,100);
+    };
+  }
 });
 </script>
