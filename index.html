@@ -15858,6 +15858,8 @@ if(hash === '#freight') window.addEventListener('DOMContentLoaded', () => setTim
 </body>
 </html>
 <script>
+function openModal(html){$('modal-root').innerHTML='<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal">'+html+'</div></div>';}
+
 /* ============================================================
    BATCH 1: UX FEATURES
    - Quick global search
@@ -17402,6 +17404,7 @@ setTimeout(()=>{
 </script>
 
 <script>
+function openModal(html){$('modal-root').innerHTML='<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal">'+html+'</div></div>';}
 /* ── PRE-QUOTE REQUEST TRACKER ──────────────────────────────── */
 // Allows entering a rate request BEFORE pricing is received
 // Status flow: Pending → Priced → Quoted → Booked
