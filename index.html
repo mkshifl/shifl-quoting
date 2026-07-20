@@ -1337,7 +1337,7 @@ function renderQuote(){
   const isExport=qi.drayType==='export';const matches=getMatches();
   if(!S.selId&&matches.length) S.selId=matches[0].id;
   const sel=matches.find(r=>r.id===S.selId)||matches[0]||null;
-  $('topbar-right').innerHTML=`<button class="btn" onclick="showRepeatPicker()" title="Load a previous quote for this lane">🔁 Repeat</button><button class="btn" onclick="saveDraft('drayage')">📋 Save draft</button><button class="btn" onclick="printQuote()">🖨️ Print</button><button class="btn" onclick="downloadPDF()">📄 PDF</button><button class="btn blue" onclick="saveQuote()">💾 Save quote</button>`;
+  $('topbar-right').innerHTML=`<button class="btn" onclick="openSeasonalRateForecast()" title="Seasonal rate forecast">📈 Forecast</button><button class="btn" onclick="openAutoUpsell(S.qi)" title="Auto-upsell suggestions">💡 Upsells <span id='upsell-badge' style='display:none;background:#dc2626;color:#fff;border-radius:99px;font-size:9px;font-weight:800;padding:1px 5px;margin-left:3px'></span></button><button class="btn" onclick="showRepeatPicker()" title="Load a previous quote for this lane">🔁 Repeat</button><button class="btn" onclick="saveDraft('drayage')">📋 Save draft</button><button class="btn" onclick="printQuote()">🖨️ Print</button><button class="btn" onclick="downloadPDF()">📄 PDF</button><button class="btn blue" onclick="saveQuote()">💾 Save quote</button>`;
   $('page').innerHTML=draftBanner('drayage','drayage')+`<div class="two-col">
     <div>
       <div class="card">
@@ -3030,7 +3030,7 @@ function renderCustomers(){
   $('topbar-right').innerHTML=`
     <input type="text" id="cust-search" placeholder="Search customers…" value="${S.cSearch}"
       oninput="onCustSearch(this.value)" style="width:200px">
-    <button class="btn blue" onclick="showAddCustomer()">+ Add customer</button>`;
+    <button class="btn blue" onclick="showAddCustomer()">+ Add customer</button><button class="btn" onclick="openVIPSpendAlert()">⚠️ VIP alerts</button><button class="btn" onclick="openCustomerHealthDashboard()">💚 Health</button>`;
   $('page').innerHTML=`<div class="tbl-wrap"><table>
     <thead><tr><th>Company</th><th>Contact name</th><th>Email</th><th>Phone</th><th>Notes</th><th></th></tr></thead>
     <tbody id="cust-tbody">${buildCustomerRows()}</tbody>
@@ -6742,7 +6742,7 @@ async function upsertCarrier(name, mode) {
 }
 
 async function renderCarriers(){
-  $('topbar-right').innerHTML=`<button class="btn blue" onclick="showCarrierModal()">+ Add carrier</button>`;
+  $('topbar-right').innerHTML=`<button class="btn" onclick="openCarrierFraudDetector()">🚨 Fraud check</button><button class="btn" onclick="openInsuranceLapseTracker()">🔔 Insurance</button><button class="btn" onclick="openPerformanceDeclineAnalyzer()">📉 Perf trends</button><button class="btn" onclick="openOnTimeTrendDetector()">📊 OT trends</button><button class="btn" onclick="openCarrierFitScorer()">🏆 Fit score</button><button class="btn" onclick="openRateNegotiationCoach()">💬 Neg coach</button><button class="btn blue" onclick="showCarrierModal()">+ Add carrier</button>`;
   $('page').innerHTML='<div style="text-align:center;padding:40px"><div class="loading-spin" style="margin:0 auto 12px"></div><div style="color:var(--gray-400);font-size:13px">Loading carriers...</div></div>';
   try{
     const{data:carriers}=await db.from('carriers').select('*').order('name');
@@ -6779,6 +6779,9 @@ async function renderCarriers(){
           <button class="btn btn-sm" onclick="openCertModal('${c.name.replace(/'/g,"\'")}')">🏆 Certs</button>
           <button class="btn btn-sm" onclick="showPayTermsModal('${c.name.replace(/'/g,"\'")}')">💳 Terms</button>
           <button class="btn btn-sm" onclick="event.stopPropagation();showCarrierModal('${c.id}')">✏️</button>
+          <button class="btn btn-sm" onclick="event.stopPropagation();openCarrierOnboardingChecklist('${c.name.replace(/'/g,"\'")}')">✅ Onboard</button>
+          <button class="btn btn-sm" onclick="event.stopPropagation();openCarrierFitScorer();setTimeout(()=>{const el=document.getElementById('cfs-name');if(el){el.value='${c.name.replace(/'/g,"\'")}';runCarrierFit();}},100)">🏆 Fit</button>
+          <button class="btn btn-sm" onclick="event.stopPropagation();openCarrierRateChart('${c.name.replace(/'/g,"\'")}')">📈 Rates</button>
           <button class="btn btn-sm" onclick="event.stopPropagation();toggleBlacklist('${c.name.replace(/'/g,"\'")}');renderCarriers()" style="color:${isBlacklisted(c.name)?'var(--red)':'var(--gray-500)'}">🚫</button>
         </div>
       </td>
@@ -12506,7 +12509,7 @@ function renderTMS(){
   const badge=document.getElementById('tms-badge');
   if(badge) badge.textContent=tmsCnt>0?tmsCnt+' loads':'FTL/LTL';
 
-  $('topbar-right').innerHTML=`<div style="font-size:12px;font-weight:700;color:var(--steel)">🚚 TMS — FTL / LTL Operations</div>`;
+  $('topbar-right').innerHTML=`<button class="btn" onclick="openRevenueLeakDetector()">💸 Revenue leaks</button><button class="btn" onclick="openLoadDocumentBundle('','')">📦 Doc bundle</button><div style="font-size:12px;font-weight:700;color:var(--steel)">🚚 TMS</div>`;
 
   const tabBar=`<div style="display:flex;gap:0;border-bottom:2px solid var(--gray-100);margin-bottom:20px;overflow-x:auto">
     ${tabs.map(t=>`<button onclick="S.tmsTab='${t.id}';renderTMS()"
@@ -13150,7 +13153,7 @@ const _origRenderTMS=window.renderTMS;
 function renderTMS(){
   const sub=S.tmsTab||'dashboard';
   const loads=getTMSLoads();
-  $('topbar-right').innerHTML=`<div style="font-size:12px;font-weight:700;color:var(--steel)">🚚 TMS — FTL / LTL Operations</div>`;
+  $('topbar-right').innerHTML=`<button class="btn" onclick="openRevenueLeakDetector()">💸 Revenue leaks</button><button class="btn" onclick="openLoadDocumentBundle('','')">📦 Doc bundle</button><div style="font-size:12px;font-weight:700;color:var(--steel)">🚚 TMS</div>`;
   updateTMSBadge();
 
   const tabs=[
@@ -18643,4 +18646,71 @@ function checkUpsellOnQuote(){
   }
 }
 setInterval(checkUpsellOnQuote, 3000);
+</script>
+
+<script>
+/* ── AI TOOLS FLOATING BUTTON ─────────────────────────────── */
+// A floating "AI ✦" button in the bottom-right corner for quick access
+// to all the new AI tools from any screen
+
+function buildAIToolsPanel(){
+  if(document.getElementById('ai-tools-fab')) return;
+
+  const fab=document.createElement('div');
+  fab.id='ai-tools-fab';
+  fab.style.cssText='position:fixed;bottom:24px;right:24px;z-index:8500;display:flex;flex-direction:column;align-items:flex-end;gap:8px';
+
+  fab.innerHTML=`
+    <div id="ai-tools-menu" style="display:none;background:var(--white,#fff);border:1px solid var(--gray-200,#e5e7eb);border-radius:14px;box-shadow:0 8px 32px rgba(0,0,0,.16);padding:12px;min-width:220px">
+      <div style="font-size:10px;font-weight:800;color:#666;text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid #f3f4f6">AI Tools</div>
+      <div style="display:flex;flex-direction:column;gap:4px">
+        ${[
+          ['🚨','Carrier fraud check','openCarrierFraudDetector()'],
+          ['🔔','Insurance lapse tracker','openInsuranceLapseTracker()'],
+          ['📉','Performance decline alert','openPerformanceDeclineAnalyzer()'],
+          ['🏆','Carrier fit scorer','openCarrierFitScorer()'],
+          ['💬','Rate negotiation coach','openRateNegotiationCoach()'],
+          ['📊','On-time trend detector','openOnTimeTrendDetector()'],
+          ['⚠️','VIP spend alert','openVIPSpendAlert()'],
+          ['💚','Customer health dashboard','openCustomerHealthDashboard()'],
+          ['💸','Revenue leak detector','openRevenueLeakDetector()'],
+          ['📦','Load document bundle','openLoadDocumentBundle(\'\',\'\')'],
+          ['📈','Seasonal rate forecast','openSeasonalRateForecast()'],
+          ['💡','Auto-upsell suggestions','openAutoUpsell(typeof S!==\'undefined\'?S.qi:{})'],
+          ['🏷️','Freight classifier','openFreightClassifier()'],
+          ['📋','Carrier bid ranker','openCarrierBidRanker()'],
+          ['📊','Win/loss log','openWinLossLog()'],
+          ['🗺️','Lane density map','renderLaneDensityMap&&renderLaneDensityMap()'],
+        ].map(([icon,label,fn])=>`
+          <button onclick="${fn};document.getElementById('ai-tools-menu').style.display='none'"
+            style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:none;border:none;border-radius:7px;cursor:pointer;text-align:left;width:100%;font-size:12px;font-weight:500;color:var(--navy,#1a2e4a);transition:background .1s"
+            onmouseenter="this.style.background='var(--blue-bg,#eff6ff)'" onmouseleave="this.style.background='none'">
+            <span style="font-size:15px;width:20px;text-align:center">${icon}</span>${label}
+          </button>`).join('')}
+      </div>
+    </div>
+    <button id="ai-fab-btn" onclick="const m=document.getElementById('ai-tools-menu');m.style.display=m.style.display==='none'?'block':'none'"
+      style="width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,#1a2e4a,#2e75b6);border:none;cursor:pointer;font-size:20px;color:#fff;box-shadow:0 4px 16px rgba(46,117,182,.4);display:flex;align-items:center;justify-content:center;font-weight:800;letter-spacing:-1px"
+      title="AI Tools">✦</button>`;
+
+  document.body.appendChild(fab);
+
+  // Close when clicking outside
+  document.addEventListener('click',e=>{
+    const menu=document.getElementById('ai-tools-menu');
+    const btn=document.getElementById('ai-fab-btn');
+    if(menu&&btn&&!fab.contains(e.target)) menu.style.display='none';
+  });
+}
+
+// Build it after page loads
+setTimeout(buildAIToolsPanel, 2000);
+// Rebuild after each render in case DOM was wiped
+const _fabOrigRender=window.render;
+if(typeof _fabOrigRender==='function'){
+  window.render=function(){
+    _fabOrigRender.apply(this,arguments);
+    setTimeout(buildAIToolsPanel,300);
+  };
+}
 </script>
