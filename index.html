@@ -17731,3 +17731,916 @@ document.addEventListener('DOMContentLoaded',function(){
   }
 });
 </script>
+
+<script>
+/* ============================================================
+   BATCH A: AI CARRIER INTELLIGENCE
+   - Carrier fraud detector
+   - Insurance lapse predictor
+   - Performance decline alert
+   - Carrier fit scorer
+   - Rate negotiation coach
+   - On-time trend detector
+   ============================================================ */
+
+// ── SHARED HELPERS ────────────────────────────────────────────
+function getCarrierLoads(name){
+  try{
+    const all=JSON.parse(localStorage.getItem('tms_loads')||'[]');
+    return all.filter(l=>(l.carrier||'').toLowerCase()===name.toLowerCase());
+  }catch(e){return[];}
+}
+function getCarrierHistory(name){
+  return JSON.parse(localStorage.getItem('carrier_perf_'+name)||'[]');
+}
+function saveCarrierHistory(name,arr){
+  localStorage.setItem('carrier_perf_'+name,JSON.stringify(arr.slice(-120)));
+}
+function recordCarrierPerf(name,evt){
+  // evt: {type:'onTime'|'late'|'damage'|'cancel', date, loadId}
+  const hist=getCarrierHistory(name);
+  hist.push({...evt, at:new Date().toISOString()});
+  saveCarrierHistory(name,hist);
+}
+
+// ── CARRIER FRAUD DETECTOR ────────────────────────────────────
+const FRAUD_SIGNALS=[
+  {key:'newMC',     label:'MC authority < 6 months old',     weight:25},
+  {key:'noInsur',   label:'No insurance cert on file',        weight:30},
+  {key:'rateSpike', label:'Rate 40%+ below market',           weight:20},
+  {key:'noW9',      label:'No W-9 on file',                   weight:15},
+  {key:'unverEmail',label:'Unverified contact email domain',  weight:10},
+  {key:'noHistory', label:'Zero load history with Shifl',     weight:15},
+  {key:'nameMatch', label:'Name close-matches a known carrier (typosquat)', weight:35},
+  {key:'multiMC',   label:'Same contact on multiple MCs',     weight:40},
+];
+
+function openCarrierFraudDetector(prefillName){
+  openModal(`
+    <div style="min-width:500px">
+      <h3 style="margin:0 0 12px;font-size:15px;color:var(--navy,#1a2e4a)">🚨 Carrier fraud detector</h3>
+      <div style="display:flex;gap:8px;margin-bottom:14px">
+        <input id="cfd-name" type="text" placeholder="Carrier name or MC#" value="${prefillName||''}"
+          style="flex:1;padding:7px 10px;border:1px solid #d1d5db;border-radius:8px;font-size:13px">
+        <input id="cfd-mc" type="text" placeholder="MC #"
+          style="width:110px;padding:7px 10px;border:1px solid #d1d5db;border-radius:8px;font-size:13px">
+        <button class="btn blue" onclick="runFraudCheck()">Analyze</button>
+      </div>
+      <div style="font-size:11px;font-weight:700;color:#666;text-transform:uppercase;margin-bottom:8px">Risk signals — check all that apply</div>
+      <div id="cfd-signals">
+        ${FRAUD_SIGNALS.map(s=>`
+          <label style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid #f3f4f6;cursor:pointer">
+            <input type="checkbox" id="sig-${s.key}" style="width:15px;height:15px" onchange="updateFraudScore()">
+            <span style="flex:1;font-size:13px;color:var(--navy,#1a2e4a)">${s.label}</span>
+            <span style="font-size:10px;font-weight:700;color:#dc2626">+${s.weight} pts</span>
+          </label>`).join('')}
+      </div>
+      <div id="cfd-result" style="margin-top:14px"></div>
+      <div style="margin-top:12px;text-align:right"><button class="btn" onclick="closeModal()">Close</button></div>
+    </div>
+  `);
+  updateFraudScore();
+}
+
+function updateFraudScore(){
+  let score=0;
+  const flags=[];
+  FRAUD_SIGNALS.forEach(s=>{
+    const cb=document.getElementById('sig-'+s.key);
+    if(cb&&cb.checked){score+=s.weight;flags.push(s.label);}
+  });
+  const el=document.getElementById('cfd-result');
+  if(!el) return;
+  const risk=score>=60?{label:'HIGH RISK',color:'#dc2626',bg:'#fef2f2',advice:'Do not book. Verify MC authority on FMCSA, call dispatch directly, and require a new COI before any load.'}
+            :score>=30?{label:'MODERATE RISK',color:'#d97706',bg:'#fffbeb',advice:'Proceed with caution. Complete onboarding checklist before dispatching. Use tracked payment only.'}
+            :{label:'LOW RISK',color:'#16a34a',bg:'#f0fdf4',advice:'Standard onboarding applies. Verify COI and W-9 before first payment.'};
+  el.innerHTML=`
+    <div style="background:${risk.bg};border-radius:10px;padding:14px 16px;border-left:4px solid ${risk.color}">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+        <div style="font-size:22px;font-weight:800;color:${risk.color}">${risk.label}</div>
+        <div style="font-size:13px;color:${risk.color};font-weight:700">Score: ${score}/170</div>
+      </div>
+      <div style="background:${risk.color}30;border-radius:4px;height:6px;margin-bottom:10px">
+        <div style="width:${Math.min(score/170*100,100).toFixed(0)}%;background:${risk.color};height:6px;border-radius:4px;transition:width .4s"></div>
+      </div>
+      <div style="font-size:12px;color:#374151">${risk.advice}</div>
+      ${flags.length?`<div style="margin-top:8px;font-size:11px;color:${risk.color}">Flags: ${flags.join(' · ')}</div>`:''}
+    </div>`;
+}
+
+function runFraudCheck(){
+  const name=document.getElementById('cfd-name')?.value.trim()||'';
+  if(!name) return;
+  // Auto-check noHistory if no loads found
+  const loads=getCarrierLoads(name);
+  const noHistCb=document.getElementById('sig-noHistory');
+  if(noHistCb&&loads.length===0) noHistCb.checked=true;
+  // Auto-check noInsur if onboarding not complete
+  const onb=JSON.parse(localStorage.getItem('co_onb_'+name)||'{}');
+  const noInsurCb=document.getElementById('sig-noInsur');
+  if(noInsurCb&&!onb.insurance) noInsurCb.checked=true;
+  const noW9=document.getElementById('sig-noW9');
+  if(noW9&&!onb.w9) noW9.checked=true;
+  updateFraudScore();
+}
+
+// ── INSURANCE LAPSE PREDICTOR ─────────────────────────────────
+function getCarrierInsurance(name){
+  return JSON.parse(localStorage.getItem('carrier_ins_'+name)||'{}');
+}
+function saveCarrierInsurance(name,data){
+  localStorage.setItem('carrier_ins_'+name,JSON.stringify(data));
+}
+
+function openInsuranceLapseTracker(){
+  // Build list of all carriers with saved insurance data
+  const keys=Object.keys(localStorage).filter(k=>k.startsWith('carrier_ins_'));
+  const today=new Date();
+  const carriers=keys.map(k=>{
+    const name=k.replace('carrier_ins_','');
+    const data=JSON.parse(localStorage.getItem(k)||'{}');
+    if(!data.expiry) return null;
+    const exp=new Date(data.expiry);
+    const days=Math.round((exp-today)/86400000);
+    return {name,data,days,exp};
+  }).filter(Boolean).sort((a,b)=>a.days-b.days);
+
+  const statusColor=days=>days<0?'#dc2626':days<=15?'#d97706':days<=30?'#f59e0b':'#16a34a';
+  const statusLabel=days=>days<0?'EXPIRED':days<=15?'CRITICAL':days<=30?'WARNING':'OK';
+
+  openModal(`
+    <div style="min-width:520px">
+      <h3 style="margin:0 0 14px;font-size:15px;color:var(--navy,#1a2e4a)">🔔 Insurance lapse predictor</h3>
+      ${carriers.length===0?'<p style="color:#999;text-align:center;padding:16px 0">No insurance data on file. Add carrier certificates below.</p>':`
+      <div style="max-height:240px;overflow-y:auto;margin-bottom:14px">
+        ${carriers.map(c=>`
+          <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:${statusColor(c.days)}10;border-radius:8px;margin-bottom:6px;border-left:3px solid ${statusColor(c.days)}">
+            <div style="flex:1">
+              <div style="font-size:13px;font-weight:600;color:var(--navy,#1a2e4a)">${c.name}</div>
+              <div style="font-size:11px;color:#666">${c.data.insurer||'Insurer not set'} · Exp: ${c.data.expiry}</div>
+            </div>
+            <span style="font-size:10px;font-weight:800;background:${statusColor(c.days)}20;color:${statusColor(c.days)};padding:2px 10px;border-radius:99px">${statusLabel(c.days)}</span>
+            <span style="font-size:12px;font-weight:700;color:${statusColor(c.days)};min-width:60px;text-align:right">${c.days<0?Math.abs(c.days)+' days ago':c.days+' days'}</span>
+          </div>`).join('')}
+      </div>`}
+      <div style="background:var(--gray-50,#f8f9fa);border-radius:8px;padding:10px 12px">
+        <div style="font-size:11px;font-weight:700;color:#666;text-transform:uppercase;margin-bottom:8px">Add / update COI</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <input id="ins-carrier" type="text" placeholder="Carrier name" style="flex:2;min-width:120px;padding:5px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:12px">
+          <input id="ins-insurer" type="text" placeholder="Insurance company" style="flex:2;min-width:120px;padding:5px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:12px">
+          <input id="ins-expiry" type="date" style="flex:1;min-width:120px;padding:5px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:12px">
+          <input id="ins-amount" type="text" placeholder="Coverage ($)" style="flex:1;min-width:100px;padding:5px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:12px">
+          <button class="btn blue" onclick="
+            const n=document.getElementById('ins-carrier').value.trim();
+            if(!n) return;
+            saveCarrierInsurance(n,{insurer:document.getElementById('ins-insurer').value,expiry:document.getElementById('ins-expiry').value,amount:document.getElementById('ins-amount').value,addedAt:new Date().toISOString()});
+            showToast('Insurance saved for '+n,'success',2000);
+            openInsuranceLapseTracker();
+          ">Save</button>
+        </div>
+      </div>
+      <div style="margin-top:12px;text-align:right"><button class="btn" onclick="closeModal()">Close</button></div>
+    </div>
+  `);
+}
+
+// ── PERFORMANCE DECLINE ALERT ─────────────────────────────────
+function openPerformanceDeclineAnalyzer(){
+  const scoreData=JSON.parse(localStorage.getItem('driver_scores')||'{}');
+  const carriers=Object.keys(scoreData);
+
+  // Build trend: compare last 30 days vs prior 30 days using carrier perf history
+  const today=new Date();
+  const thirtyAgo=new Date(today-30*86400000);
+  const sixtyAgo=new Date(today-60*86400000);
+
+  const trends=carriers.map(name=>{
+    const hist=getCarrierHistory(name);
+    const recent=hist.filter(e=>new Date(e.at)>=thirtyAgo);
+    const prior=hist.filter(e=>new Date(e.at)>=sixtyAgo&&new Date(e.at)<thirtyAgo);
+    const recentOT=recent.length?recent.filter(e=>e.type==='onTime').length/recent.length:null;
+    const priorOT=prior.length?prior.filter(e=>e.type==='onTime').length/prior.length:null;
+    const delta=recentOT!=null&&priorOT!=null?recentOT-priorOT:null;
+    // Also check from driver scores
+    const s=scoreData[name]||{};
+    const overallOT=s.loads?Math.round((s.onTime||0)/s.loads*100):null;
+    return {name,recentOT,priorOT,delta,overallOT,loads:s.loads||0};
+  }).filter(c=>c.loads>0).sort((a,b)=>(a.delta??0)-(b.delta??0));
+
+  openModal(`
+    <div style="min-width:520px">
+      <h3 style="margin:0 0 4px;font-size:15px;color:var(--navy,#1a2e4a)">📉 Performance decline alert</h3>
+      <div style="font-size:12px;color:#666;margin-bottom:14px">Comparing last 30 days vs prior 30 days · sorted by biggest decline</div>
+      ${trends.length===0?'<p style="color:#999;text-align:center;padding:24px">No performance data yet. Log driver events in the Driver Scorecard.</p>':`
+      <div style="max-height:360px;overflow-y:auto">
+        ${trends.map(c=>{
+          const declining=c.delta!=null&&c.delta<-0.1;
+          const improving=c.delta!=null&&c.delta>0.05;
+          const color=declining?'#dc2626':improving?'#16a34a':'#666';
+          const icon=declining?'▼':improving?'▲':'–';
+          return `<div style="display:flex;align-items:center;gap:12px;padding:9px 12px;border-radius:8px;margin-bottom:6px;background:${declining?'#fef2f2':improving?'#f0fdf4':'var(--gray-50,#f8f9fa)'}">
+            <div style="flex:1">
+              <div style="font-size:13px;font-weight:700;color:var(--navy,#1a2e4a)">${c.name}</div>
+              <div style="font-size:11px;color:#666">${c.loads} total loads · Overall on-time: ${c.overallOT!=null?c.overallOT+'%':'n/a'}</div>
+            </div>
+            <div style="text-align:right">
+              <div style="font-size:16px;font-weight:800;color:${color}">${icon} ${c.delta!=null?(Math.abs(c.delta*100).toFixed(0)+'%'):'no trend data'}</div>
+              <div style="font-size:10px;color:#666">${c.recentOT!=null?Math.round(c.recentOT*100)+'%':'-'} vs ${c.priorOT!=null?Math.round(c.priorOT*100)+'%':'-'}</div>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>`}
+      <div style="margin-top:14px">
+        <div style="font-size:11px;font-weight:700;color:#666;text-transform:uppercase;margin-bottom:6px">Log performance event</div>
+        <div style="display:flex;gap:6px">
+          <input id="pd-carrier" type="text" placeholder="Carrier / driver name" style="flex:2;padding:5px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:12px">
+          <select id="pd-type" style="flex:1;padding:5px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:12px">
+            <option value="onTime">On-time</option>
+            <option value="late">Late</option>
+            <option value="damage">Damage</option>
+            <option value="cancel">Cancellation</option>
+          </select>
+          <button class="btn blue" onclick="
+            const n=document.getElementById('pd-carrier').value.trim();
+            const t=document.getElementById('pd-type').value;
+            if(!n)return;
+            recordCarrierPerf(n,{type:t,date:localDateStr(),loadId:''});
+            const s=JSON.parse(localStorage.getItem('driver_scores')||'{}');
+            if(!s[n])s[n]={onTime:0,late:0,damage:0,comms:0,loads:0};
+            s[n].loads=(s[n].loads||0)+1;
+            if(t==='onTime')s[n].onTime=(s[n].onTime||0)+1;
+            if(t==='late')s[n].late=(s[n].late||0)+1;
+            if(t==='damage')s[n].damage=(s[n].damage||0)+1;
+            localStorage.setItem('driver_scores',JSON.stringify(s));
+            showToast('Event logged','success',1500);
+            openPerformanceDeclineAnalyzer();
+          ">Log</button>
+        </div>
+      </div>
+      <div style="margin-top:12px;text-align:right"><button class="btn" onclick="closeModal()">Close</button></div>
+    </div>
+  `);
+}
+
+// ── CARRIER FIT SCORER ────────────────────────────────────────
+function scoreCarrierFit(carrierName, lane){
+  const loads=getCarrierLoads(carrierName).filter(l=>{
+    if(!lane) return true;
+    const puMatch=(l.pickupZip||'').slice(0,3)===(lane.pu||'').slice(0,3);
+    const delMatch=(l.deliveryZip||'').slice(0,3)===(lane.del||'').slice(0,3);
+    return puMatch&&delMatch;
+  });
+  const scores=JSON.parse(localStorage.getItem('driver_scores')||'{}');
+  const s=scores[carrierName]||{};
+  const onb=JSON.parse(localStorage.getItem('co_onb_'+carrierName)||'{}');
+  const ins=getCarrierInsurance(carrierName);
+  const today=new Date();
+  const insValid=ins.expiry&&new Date(ins.expiry)>today;
+  const onbPct=Object.keys(onb).filter(k=>onb[k]).length/9;
+  const otPct=s.loads?s.onTime/s.loads:0.5;
+  const laneExp=Math.min(loads.length/10,1);
+  const dmgRate=s.loads?1-(s.damage||0)/s.loads:1;
+
+  const score=Math.round(
+    otPct*35 +
+    onbPct*20 +
+    (insValid?15:0) +
+    laneExp*20 +
+    dmgRate*10
+  );
+  return {score,breakdown:{onTime:Math.round(otPct*35),onboarding:Math.round(onbPct*20),insurance:insValid?15:0,laneExp:Math.round(laneExp*20),damage:Math.round(dmgRate*10)},loads:loads.length,otPct:Math.round(otPct*100)};
+}
+
+function openCarrierFitScorer(){
+  openModal(`
+    <div style="min-width:480px">
+      <h3 style="margin:0 0 12px;font-size:15px;color:var(--navy,#1a2e4a)">🏆 Carrier fit scorer</h3>
+      <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">
+        <input id="cfs-name" type="text" placeholder="Carrier name" style="flex:2;min-width:140px;padding:6px 9px;border:1px solid #d1d5db;border-radius:7px;font-size:13px">
+        <input id="cfs-pu" type="text" placeholder="Pickup ZIP (opt)" style="flex:1;min-width:100px;padding:6px 9px;border:1px solid #d1d5db;border-radius:7px;font-size:13px">
+        <input id="cfs-del" type="text" placeholder="Delivery ZIP (opt)" style="flex:1;min-width:100px;padding:6px 9px;border:1px solid #d1d5db;border-radius:7px;font-size:13px">
+        <button class="btn blue" onclick="runCarrierFit()">Score</button>
+      </div>
+      <div id="cfs-result"></div>
+      <div style="margin-top:12px;text-align:right"><button class="btn" onclick="closeModal()">Close</button></div>
+    </div>
+  `);
+}
+
+function runCarrierFit(){
+  const name=document.getElementById('cfs-name')?.value.trim();
+  if(!name){showToast('Enter a carrier name','error',2000);return;}
+  const pu=document.getElementById('cfs-pu')?.value.trim();
+  const del=document.getElementById('cfs-del')?.value.trim();
+  const r=scoreCarrierFit(name,{pu,del});
+  const el=document.getElementById('cfs-result');
+  if(!el) return;
+  const color=r.score>=75?'#16a34a':r.score>=50?'#d97706':'#dc2626';
+  const label=r.score>=75?'Strong fit':r.score>=50?'Acceptable fit':'Poor fit';
+  el.innerHTML=`
+    <div style="background:${color}15;border-radius:10px;padding:14px 16px;border-left:4px solid ${color}">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+        <div style="font-size:36px;font-weight:800;color:${color}">${r.score}</div>
+        <div>
+          <div style="font-size:15px;font-weight:700;color:${color}">${label}</div>
+          <div style="font-size:11px;color:#666">${r.loads} loads on this lane · ${r.otPct}% on-time overall</div>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+        ${[['On-time rate',r.breakdown.onTime,35],['Onboarding',r.breakdown.onboarding,20],['Insurance',r.breakdown.insurance,15],['Lane experience',r.breakdown.laneExp,20],['Damage record',r.breakdown.damage,10]].map(([l,v,max])=>`
+          <div style="background:rgba(255,255,255,.6);border-radius:6px;padding:7px 10px">
+            <div style="font-size:10px;color:#666;text-transform:uppercase;font-weight:700">${l}</div>
+            <div style="display:flex;align-items:center;gap:6px;margin-top:3px">
+              <div style="flex:1;background:#e5e7eb;border-radius:3px;height:4px"><div style="width:${Math.round(v/max*100)}%;background:${color};height:4px;border-radius:3px"></div></div>
+              <span style="font-size:11px;font-weight:700;color:${color}">${v}/${max}</span>
+            </div>
+          </div>`).join('')}
+      </div>
+    </div>`;
+}
+
+// ── RATE NEGOTIATION COACH ────────────────────────────────────
+function openRateNegotiationCoach(){
+  openModal(`
+    <div style="min-width:500px">
+      <h3 style="margin:0 0 12px;font-size:15px;color:var(--navy,#1a2e4a)">💬 Rate negotiation coach</h3>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+        <div>
+          <label style="font-size:11px;font-weight:700;color:#666;display:block;margin-bottom:3px">Carrier</label>
+          <input id="rnc-carrier" type="text" placeholder="Carrier name" style="width:100%;padding:6px 9px;border:1px solid #d1d5db;border-radius:7px;font-size:13px;box-sizing:border-box">
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:700;color:#666;display:block;margin-bottom:3px">Lane</label>
+          <input id="rnc-lane" type="text" placeholder="e.g. NJ → TX" style="width:100%;padding:6px 9px;border:1px solid #d1d5db;border-radius:7px;font-size:13px;box-sizing:border-box">
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:700;color:#666;display:block;margin-bottom:3px">Their asking rate</label>
+          <input id="rnc-ask" type="number" placeholder="$0" style="width:100%;padding:6px 9px;border:1px solid #d1d5db;border-radius:7px;font-size:13px;box-sizing:border-box">
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:700;color:#666;display:block;margin-bottom:3px">Your target rate</label>
+          <input id="rnc-target" type="number" placeholder="$0" style="width:100%;padding:6px 9px;border:1px solid #d1d5db;border-radius:7px;font-size:13px;box-sizing:border-box">
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:700;color:#666;display:block;margin-bottom:3px">Your volume on this lane (mo)</label>
+          <input id="rnc-vol" type="number" placeholder="# loads/month" style="width:100%;padding:6px 9px;border:1px solid #d1d5db;border-radius:7px;font-size:13px;box-sizing:border-box">
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:700;color:#666;display:block;margin-bottom:3px">Market tone</label>
+          <select id="rnc-mkt" style="width:100%;padding:6px 9px;border:1px solid #d1d5db;border-radius:7px;font-size:13px;box-sizing:border-box">
+            <option value="soft">Soft (capacity available)</option>
+            <option value="balanced">Balanced</option>
+            <option value="tight">Tight (capacity scarce)</option>
+          </select>
+        </div>
+      </div>
+      <button class="btn blue" style="width:100%;justify-content:center;margin-bottom:12px" onclick="generateNegScript()">Generate negotiation script</button>
+      <div id="rnc-result"></div>
+      <div style="text-align:right"><button class="btn" onclick="closeModal()">Close</button></div>
+    </div>
+  `);
+}
+
+function generateNegScript(){
+  const carrier=document.getElementById('rnc-carrier')?.value.trim()||'the carrier';
+  const lane=document.getElementById('rnc-lane')?.value.trim()||'this lane';
+  const ask=parseFloat(document.getElementById('rnc-ask')?.value)||0;
+  const target=parseFloat(document.getElementById('rnc-target')?.value)||0;
+  const vol=parseInt(document.getElementById('rnc-vol')?.value)||0;
+  const mkt=document.getElementById('rnc-mkt')?.value||'balanced';
+  const gap=ask-target;
+  const el=document.getElementById('rnc-result');
+  if(!el) return;
+
+  const mktLine=mkt==='soft'?`The market is currently soft on this lane — capacity is available and rates are trending down. You have leverage.`
+    :mkt==='tight'?`Market is tight right now, so acknowledge that but lean on your volume and reliability as differentiators.`
+    :`Market is balanced. Come in confident with your data.`;
+
+  const volLine=vol>=4?`You're moving ${vol} loads/month on this lane — that's a meaningful book of business. Use it.`
+    :vol>=2?`You have ${vol} loads/month — not huge, but consistent and predictable. Carriers value reliability.`
+    :`Volume is light, so lean more on relationship and future growth potential.`;
+
+  el.innerHTML=`
+    <div style="background:var(--blue-bg,#eff6ff);border-radius:10px;padding:14px 16px;border-left:4px solid var(--steel,#2e75b6)">
+      <div style="font-size:11px;font-weight:700;color:#1d4ed8;text-transform:uppercase;margin-bottom:10px">Negotiation playbook</div>
+      <div style="font-size:12px;color:#374151;line-height:1.7">
+        <strong>Situation:</strong> ${mktLine}<br><br>
+        <strong>Opening move:</strong> ${ask&&target?`Don't accept $${ask.toLocaleString()} — open at $${(target*0.97).toFixed(0)} and let them counter. Your real floor is $${target.toLocaleString()}.`:'Set your opening offer 3–5% below your target and let them negotiate up to it.'}<br><br>
+        <strong>Your leverage:</strong> ${volLine}<br><br>
+        <strong>What to say:</strong><br>
+        <em style="background:#dbeafe;border-radius:4px;padding:2px 6px;display:block;margin:6px 0">"Hey [${carrier}], we want to lock in a rate for ${lane}. We're moving consistent volume and we pay on time, every time. Based on where the market is sitting, we were thinking ${target?'$'+target.toLocaleString():'[your target]'}. What can you do?"</em>
+        <strong>If they push back:</strong> Ask what they'd need on volume to make it work, or offer a net-7 quick-pay in exchange for a lower rate (saves them factoring fees).<br><br>
+        ${gap>0&&ask>0?`<strong>Gap to close: $${gap.toLocaleString()}</strong> — that's ${vol>0?'$'+(gap*vol*12).toLocaleString()+'/year on your book':''} — worth the conversation.`:''}
+      </div>
+    </div>`;
+}
+
+// ── ON-TIME TREND DETECTOR ────────────────────────────────────
+function openOnTimeTrendDetector(){
+  const scores=JSON.parse(localStorage.getItem('driver_scores')||'{}');
+  const carriers=Object.keys(scores).filter(k=>scores[k].loads>=3);
+
+  if(!carriers.length){
+    openModal(`<div style="min-width:400px"><h3 style="margin:0 0 12px;font-size:15px;color:var(--navy,#1a2e4a)">📊 On-time trend detector</h3><p style="color:#999;text-align:center;padding:24px">Need at least 3 logged events per carrier. Use the Driver Scorecard to log on-time and late events.</p><div style="text-align:right;margin-top:12px"><button class="btn" onclick="closeModal()">Close</button></div></div>`);
+    return;
+  }
+
+  const rows=carriers.map(name=>{
+    const s=scores[name];
+    const otPct=Math.round((s.onTime||0)/s.loads*100);
+    const hist=getCarrierHistory(name);
+    const recent=hist.slice(-10);
+    const recentOT=recent.length?Math.round(recent.filter(e=>e.type==='onTime').length/recent.length*100):otPct;
+    const trend=recentOT-otPct;
+    return {name,otPct,recentOT,trend,loads:s.loads,late:s.late||0,damage:s.damage||0};
+  }).sort((a,b)=>a.recentOT-b.recentOT);
+
+  const W=200,H=40;
+  function sparkline(name){
+    const hist=getCarrierHistory(name).slice(-20);
+    if(hist.length<3) return '<span style="font-size:11px;color:#999">–</span>';
+    const pts=hist.map((e,i)=>({x:Math.round(i/(hist.length-1)*(W-10)+5),y:e.type==='onTime'?8:H-8}));
+    const path=pts.map((p,i)=>(i===0?'M':'L')+p.x+','+p.y).join(' ');
+    return `<svg viewBox="0 0 ${W} ${H}" style="width:80px;height:20px"><path d="${path}" fill="none" stroke="#2e75b6" stroke-width="2"/></svg>`;
+  }
+
+  openModal(`
+    <div style="min-width:560px">
+      <h3 style="margin:0 0 14px;font-size:15px;color:var(--navy,#1a2e4a)">📊 On-time trend detector</h3>
+      <table style="width:100%;font-size:12px;border-collapse:collapse">
+        <thead><tr style="background:var(--gray-50,#f8f9fa)">
+          <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e7eb">Carrier</th>
+          <th style="padding:6px 8px;text-align:right">Loads</th>
+          <th style="padding:6px 8px;text-align:right">Overall OT%</th>
+          <th style="padding:6px 8px;text-align:right">Recent OT%</th>
+          <th style="padding:6px 8px;text-align:right">Trend</th>
+          <th style="padding:6px 8px;text-align:center">Pattern</th>
+        </tr></thead>
+        <tbody>${rows.map(r=>{
+          const tc=r.trend>5?'#16a34a':r.trend<-5?'#dc2626':'#666';
+          const ti=r.trend>5?'▲ '+r.trend+'%':r.trend<-5?'▼ '+Math.abs(r.trend)+'%':'→ stable';
+          return `<tr style="border-bottom:1px solid #f3f4f6">
+            <td style="padding:7px 8px;font-weight:600">${r.name}</td>
+            <td style="padding:7px 8px;text-align:right">${r.loads}</td>
+            <td style="padding:7px 8px;text-align:right;font-weight:700;color:${r.otPct>=85?'#16a34a':r.otPct>=70?'#d97706':'#dc2626'}">${r.otPct}%</td>
+            <td style="padding:7px 8px;text-align:right;font-weight:700;color:${tc}">${r.recentOT}%</td>
+            <td style="padding:7px 8px;text-align:right;color:${tc};font-weight:700">${ti}</td>
+            <td style="padding:7px 8px;text-align:center">${sparkline(r.name)}</td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table>
+      <div style="margin-top:12px;text-align:right"><button class="btn" onclick="closeModal()">Close</button></div>
+    </div>
+  `);
+}
+</script>
+
+<script>
+/* ============================================================
+   BATCH B: AI CUSTOMER INTELLIGENCE + FINANCE
+   - VIP spend alert
+   - Customer health dashboard
+   - Revenue leak detector
+   ============================================================ */
+
+// ── VIP SPEND ALERT ───────────────────────────────────────────
+function getVIPThresholds(){
+  return JSON.parse(localStorage.getItem('vip_thresholds')||'{"minMonthly":5000,"dropPct":20,"windowDays":30}');
+}
+
+function calcCustomerMonthlyRevenue(customerName, daysBack){
+  const cutoff=new Date(Date.now()-daysBack*86400000);
+  const loads=JSON.parse(localStorage.getItem('tms_loads')||'[]');
+  return loads
+    .filter(l=>(l.shipper||'').toLowerCase()===customerName.toLowerCase()&&new Date(l.bookedAt||l.createdAt||0)>=cutoff)
+    .reduce((sum,l)=>sum+(parseFloat(l.customerRate)||0),0);
+}
+
+function openVIPSpendAlert(){
+  const thresh=getVIPThresholds();
+  const customers=JSON.parse(localStorage.getItem('shifl_customers')||window._customers&&JSON.stringify(window._customers)||'[]');
+
+  // Also scrape from TMS loads
+  const loads=JSON.parse(localStorage.getItem('tms_loads')||'[]');
+  const custMap={};
+  loads.forEach(l=>{
+    const n=l.shipper||l.customer||'';
+    if(!n) return;
+    if(!custMap[n]) custMap[n]={name:n};
+  });
+  const allNames=[...new Set([...customers.map(c=>c.name||c.company||''),...Object.keys(custMap)])].filter(Boolean);
+
+  const analysis=allNames.map(name=>{
+    const rev30=calcCustomerMonthlyRevenue(name,30);
+    const rev60_30=calcCustomerMonthlyRevenue(name,60)-rev30;
+    const drop=rev60_30>0?Math.round((rev60_30-rev30)/rev60_30*100):0;
+    const isVIP=rev30>=thresh.minMonthly||rev60_30>=thresh.minMonthly;
+    const isDropping=drop>=thresh.dropPct&&rev60_30>0;
+    return {name,rev30,rev60_30,drop,isVIP,isDropping};
+  }).filter(c=>c.rev30>0||c.rev60_30>0).sort((a,b)=>b.rev30-a.rev30);
+
+  const alerts=analysis.filter(c=>c.isVIP&&c.isDropping);
+
+  openModal(`
+    <div style="min-width:540px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+        <h3 style="margin:0;font-size:15px;color:var(--navy,#1a2e4a)">⚠️ VIP spend alert</h3>
+        <div style="display:flex;align-items:center;gap:8px;font-size:11px;color:#666">
+          Alert threshold: <strong>$${thresh.minMonthly.toLocaleString()}/mo · ${thresh.dropPct}% drop</strong>
+        </div>
+      </div>
+      ${alerts.length?`
+      <div style="background:#fef2f2;border-radius:8px;padding:10px 14px;border-left:4px solid #dc2626;margin-bottom:14px">
+        <div style="font-size:12px;font-weight:700;color:#dc2626;margin-bottom:6px">🚨 ${alerts.length} VIP customer${alerts.length>1?'s':''} with significant spend drop</div>
+        ${alerts.map(c=>`<div style="font-size:12px;color:#374151;padding:3px 0">• <strong>${c.name}</strong> — down ${c.drop}% ($${c.rev60_30.toLocaleString()} → $${c.rev30.toLocaleString()})</div>`).join('')}
+      </div>`:'<div style="background:#f0fdf4;border-radius:8px;padding:10px 14px;border-left:4px solid #16a34a;margin-bottom:14px;font-size:12px;color:#166534">✅ No VIP spend drops detected</div>'}
+      ${analysis.length?`
+      <table style="width:100%;font-size:12px;border-collapse:collapse">
+        <thead><tr style="background:var(--gray-50,#f8f9fa)">
+          <th style="padding:5px 8px;text-align:left;border-bottom:1px solid #e5e7eb">Customer</th>
+          <th style="padding:5px 8px;text-align:right">Last 30d</th>
+          <th style="padding:5px 8px;text-align:right">Prior 30d</th>
+          <th style="padding:5px 8px;text-align:right">Change</th>
+          <th style="padding:5px 8px;text-align:center">VIP</th>
+        </tr></thead>
+        <tbody>${analysis.slice(0,15).map(c=>
+          `<tr style="border-bottom:1px solid #f3f4f6${c.isDropping&&c.isVIP?';background:#fff5f5':''}">
+            <td style="padding:6px 8px;font-weight:600">${c.name}</td>
+            <td style="padding:6px 8px;text-align:right;font-weight:700;color:var(--steel,#2e75b6)">$${c.rev30.toLocaleString()}</td>
+            <td style="padding:6px 8px;text-align:right;color:#666">$${c.rev60_30.toLocaleString()}</td>
+            <td style="padding:6px 8px;text-align:right;font-weight:700;color:${c.drop>=thresh.dropPct?'#dc2626':c.drop<0?'#16a34a':'#666'}">${c.drop>0?'-':'+'}${Math.abs(c.drop)}%</td>
+            <td style="padding:6px 8px;text-align:center">${c.isVIP?'⭐':''}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>`:
+      '<p style="color:#999;text-align:center;padding:16px">No customer load history found. Book loads with a customer name to track spend.</p>'}
+      <div style="margin-top:12px;display:flex;gap:8px;align-items:center;justify-content:space-between">
+        <div style="display:flex;gap:6px;align-items:center;font-size:12px;color:#666">
+          VIP floor: $<input type="number" value="${thresh.minMonthly}" style="width:80px;padding:3px 6px;border:1px solid #d1d5db;border-radius:5px;font-size:12px" onchange="const t=getVIPThresholds();t.minMonthly=+this.value;localStorage.setItem('vip_thresholds',JSON.stringify(t))">
+          &nbsp;Drop alert: <input type="number" value="${thresh.dropPct}" style="width:50px;padding:3px 6px;border:1px solid #d1d5db;border-radius:5px;font-size:12px" onchange="const t=getVIPThresholds();t.dropPct=+this.value;localStorage.setItem('vip_thresholds',JSON.stringify(t))">%
+        </div>
+        <button class="btn" onclick="closeModal()">Close</button>
+      </div>
+    </div>
+  `);
+}
+
+// ── CUSTOMER HEALTH DASHBOARD ─────────────────────────────────
+function openCustomerHealthDashboard(){
+  const loads=JSON.parse(localStorage.getItem('tms_loads')||'[]');
+  const customers=JSON.parse(localStorage.getItem('shifl_customers')||window._customers&&JSON.stringify(window._customers)||'[]');
+  const custNames=[...new Set([...loads.map(l=>l.shipper||l.customer||''),...customers.map(c=>c.name||c.company||'')])].filter(Boolean);
+
+  const health=custNames.map(name=>{
+    const custLoads=loads.filter(l=>(l.shipper||l.customer||'')===name);
+    const rev30=calcCustomerMonthlyRevenue(name,30);
+    const rev90=calcCustomerMonthlyRevenue(name,90);
+    const onbData=JSON.parse(localStorage.getItem('cust_onb_'+name.replace(/\s/g,'_'))||'{}');
+    const onbPct=Object.keys(onbData).filter(k=>onbData[k]).length;
+    const noteCount=JSON.parse(localStorage.getItem('cust_notes_'+name.replace(/\s/g,'_'))||'[]').length;
+    const termData=JSON.parse(localStorage.getItem('net_terms_'+name.replace(/\s/g,'_'))||'{"invoices":[]}');
+    const overdueCount=termData.invoices?.filter(inv=>!inv.paid&&inv.invoiceDate&&(new Date()-new Date(inv.invoiceDate))>30*86400000).length||0;
+    const loadCount=custLoads.length;
+    const lastLoad=custLoads.sort((a,b)=>new Date(b.bookedAt||0)-new Date(a.bookedAt||0))[0];
+    const daysSinceLast=lastLoad?Math.round((Date.now()-new Date(lastLoad.bookedAt||0))/86400000):999;
+
+    // Health score 0-100
+    const score=Math.min(100,Math.round(
+      (rev30>0?20:0)+(rev30>5000?10:0)+
+      (daysSinceLast<30?20:daysSinceLast<60?10:0)+
+      (overdueCount===0?20:overdueCount<=1?10:0)+
+      (onbPct>=6?15:onbPct>=3?8:0)+
+      (loadCount>=10?15:loadCount>=3?8:0)
+    ));
+
+    const status=score>=75?{label:'Healthy',color:'#16a34a',bg:'#f0fdf4'}
+                :score>=50?{label:'Watch',color:'#d97706',bg:'#fffbeb'}
+                          :{label:'At risk',color:'#dc2626',bg:'#fef2f2'};
+    return {name,score,status,rev30,rev90,loadCount,daysSinceLast,overdueCount,onbPct};
+  }).filter(c=>c.loadCount>0||c.rev30>0).sort((a,b)=>a.score-b.score);
+
+  openModal(`
+    <div style="min-width:560px">
+      <h3 style="margin:0 0 14px;font-size:15px;color:var(--navy,#1a2e4a)">💚 Customer health dashboard</h3>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px">
+        ${[['Healthy',health.filter(c=>c.score>=75).length,'#16a34a'],['Watch',health.filter(c=>c.score>=50&&c.score<75).length,'#d97706'],['At risk',health.filter(c=>c.score<50).length,'#dc2626']].map(([l,n,c])=>`
+          <div style="background:${c}15;border-radius:8px;padding:10px;text-align:center;border-left:3px solid ${c}">
+            <div style="font-size:22px;font-weight:800;color:${c}">${n}</div>
+            <div style="font-size:11px;font-weight:700;color:${c}">${l}</div>
+          </div>`).join('')}
+      </div>
+      ${health.length===0?'<p style="color:#999;text-align:center;padding:16px">No customer data found.</p>':`
+      <div style="max-height:340px;overflow-y:auto">
+        ${health.map(c=>`
+          <div style="display:flex;align-items:center;gap:10px;padding:9px 12px;background:${c.status.bg};border-radius:8px;margin-bottom:6px">
+            <div style="flex:1">
+              <div style="font-size:13px;font-weight:700;color:var(--navy,#1a2e4a)">${c.name}</div>
+              <div style="font-size:11px;color:#666">${c.loadCount} loads · $${c.rev30.toLocaleString()}/mo · ${c.daysSinceLast<999?c.daysSinceLast+'d since last load':'no loads'}${c.overdueCount?` · <span style="color:#dc2626;font-weight:700">${c.overdueCount} overdue</span>`:''}</div>
+            </div>
+            <div style="text-align:right">
+              <div style="font-size:20px;font-weight:800;color:${c.status.color}">${c.score}</div>
+              <span style="font-size:10px;font-weight:700;background:${c.status.color}20;color:${c.status.color};padding:1px 7px;border-radius:99px">${c.status.label}</span>
+            </div>
+          </div>`).join('')}
+      </div>`}
+      <div style="margin-top:12px;text-align:right"><button class="btn" onclick="closeModal()">Close</button></div>
+    </div>
+  `);
+}
+
+// ── REVENUE LEAK DETECTOR ─────────────────────────────────────
+function openRevenueLeakDetector(){
+  const loads=JSON.parse(localStorage.getItem('tms_loads')||'[]');
+  const delivered=loads.filter(l=>l.status==='Delivered'||l.status==='Completed');
+  const leaks=[];
+
+  delivered.forEach(l=>{
+    const id=l.id;
+    const meta=JSON.parse(localStorage.getItem('tms_meta_'+id)||'{}');
+    // Check 1: delivered but no invoice
+    if(!meta.invoiced&&!meta.invoiceDate) leaks.push({id,type:'Uninvoiced delivery',desc:`Load ${id} — ${l.shipper||'?'} — delivered but no invoice found`,amount:parseFloat(l.customerRate)||0,color:'#dc2626'});
+    // Check 2: per diem logged but not billed
+    const pd=JSON.parse(localStorage.getItem('per_diem_'+id)||'{}');
+    if(pd.lfd&&!pd.billed){
+      const lfd=new Date(pd.lfd);
+      const ret=pd.returned?new Date(pd.returned):new Date();
+      const settings=JSON.parse(localStorage.getItem('per_diem_settings')||'{"freeDays":5,"dailyRate":150}');
+      const days=Math.max(0,Math.round((ret-lfd)/86400000)-settings.freeDays);
+      if(days>0) leaks.push({id,type:'Unbilled per diem',desc:`Load ${id} — ${days} billable days @ $${settings.dailyRate}/day`,amount:days*settings.dailyRate,color:'#d97706'});
+    }
+    // Check 3: no POD on file
+    if(!meta.podConfirmed&&!meta.podDate) leaks.push({id,type:'Missing POD',desc:`Load ${id} — no POD on file, may affect billing`,amount:0,color:'#666'});
+  });
+
+  const totalLeak=leaks.reduce((s,l)=>s+l.amount,0);
+
+  openModal(`
+    <div style="min-width:540px">
+      <h3 style="margin:0 0 4px;font-size:15px;color:var(--navy,#1a2e4a)">💸 Revenue leak detector</h3>
+      <div style="font-size:12px;color:#666;margin-bottom:14px">Scanning ${delivered.length} delivered loads for unbilled revenue</div>
+      ${totalLeak>0?`<div style="background:#fef2f2;border-radius:8px;padding:10px 14px;border-left:4px solid #dc2626;margin-bottom:12px">
+        <div style="font-size:12px;font-weight:700;color:#dc2626">Estimated unbilled: <span style="font-size:18px">$${totalLeak.toLocaleString()}</span></div>
+      </div>`:''}
+      ${leaks.length===0?`<div style="background:#f0fdf4;border-radius:8px;padding:14px;text-align:center;color:#16a34a;font-weight:700">✅ No revenue leaks detected across ${delivered.length} loads</div>`:`
+      <div style="max-height:320px;overflow-y:auto">
+        ${leaks.map(l=>`
+          <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:${l.color}10;border-radius:8px;margin-bottom:6px;border-left:3px solid ${l.color}">
+            <div style="flex:1">
+              <div style="font-size:12px;font-weight:700;color:${l.color}">${l.type}</div>
+              <div style="font-size:11px;color:#374151">${l.desc}</div>
+            </div>
+            ${l.amount>0?`<div style="font-size:14px;font-weight:800;color:${l.color}">$${l.amount.toLocaleString()}</div>`:''}
+          </div>`).join('')}
+      </div>`}
+      <div style="margin-top:12px;font-size:11px;color:#999">Tip: Mark loads as invoiced in the TMS meta to clear false positives. Per diem data comes from the Per Diem Calculator.</div>
+      <div style="margin-top:10px;text-align:right"><button class="btn" onclick="closeModal()">Close</button></div>
+    </div>
+  `);
+}
+</script>
+
+<script>
+/* ============================================================
+   BATCH C: AI QUOTING + DOCUMENT
+   - Load document auto-bundle
+   - Seasonal rate forecast
+   - Auto-upsell suggestions
+   ============================================================ */
+
+// ── LOAD DOCUMENT AUTO-BUNDLE ─────────────────────────────────
+function getLoadDocuments(loadId){
+  return JSON.parse(localStorage.getItem('load_docs_'+loadId)||'[]');
+}
+function saveLoadDocument(loadId,doc){
+  const docs=getLoadDocuments(loadId);
+  docs.push({...doc,id:'doc-'+Date.now(),savedAt:new Date().toISOString()});
+  localStorage.setItem('load_docs_'+loadId,JSON.stringify(docs));
+}
+
+function openLoadDocumentBundle(loadId,loadLabel){
+  const docs=getLoadDocuments(loadId);
+  const load=(()=>{try{return(JSON.parse(localStorage.getItem('tms_loads')||'[]')||[]).find(l=>l.id===loadId)||{};}catch(e){return{};}})();
+  const meta=(()=>{try{return JSON.parse(localStorage.getItem('tms_meta_'+loadId)||'{}');}catch(e){return{};}})();
+
+  const DOC_TYPES=['BOL','Rate Confirmation','POD','Invoice','Carrier Invoice','COI','Other'];
+
+  openModal(`
+    <div style="min-width:520px">
+      <h3 style="margin:0 0 4px;font-size:15px;color:var(--navy,#1a2e4a)">📦 Document bundle — ${loadLabel||loadId}</h3>
+      <div style="font-size:12px;color:#666;margin-bottom:14px">${load.shipper||'?'} · ${load.pickupZip||'?'} → ${load.deliveryZip||'?'}</div>
+
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">
+        ${['BOL','Rate Confirmation','POD','Invoice'].map(type=>{
+          const has=docs.some(d=>d.type===type);
+          return `<span style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:99px;background:${has?'#f0fdf4':'#f3f4f6'};color:${has?'#16a34a':'#9ca3af'};border:1px solid ${has?'#16a34a':'#e5e7eb'}">${has?'✓':''} ${type}</span>`;
+        }).join('')}
+      </div>
+
+      <div style="max-height:200px;overflow-y:auto;margin-bottom:12px">
+        ${docs.length===0?'<p style="color:#999;font-size:12px;text-align:center;padding:12px">No documents attached yet</p>':
+        docs.map(d=>`
+          <div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--gray-50,#f8f9fa);border-radius:7px;margin-bottom:5px">
+            <span style="font-size:18px">${d.type==='BOL'?'📋':d.type==='POD'?'✅':d.type==='Invoice'?'💰':d.type==='Rate Confirmation'?'📄':'📎'}</span>
+            <div style="flex:1">
+              <div style="font-size:12px;font-weight:600;color:var(--navy,#1a2e4a)">${d.type}</div>
+              <div style="font-size:10px;color:#666">${d.note||''} · ${d.savedAt?new Date(d.savedAt).toLocaleDateString():''}</div>
+            </div>
+            <span style="font-size:10px;font-weight:700;background:#dbeafe;color:#1d4ed8;padding:1px 7px;border-radius:99px">${d.source||'Manual'}</span>
+          </div>`).join('')}
+      </div>
+
+      <div style="background:var(--gray-50,#f8f9fa);border-radius:8px;padding:10px 12px;margin-bottom:12px">
+        <div style="font-size:11px;font-weight:700;color:#666;text-transform:uppercase;margin-bottom:6px">Add document</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <select id="doc-type" style="flex:1;min-width:130px;padding:5px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:12px">
+            ${DOC_TYPES.map(t=>`<option>${t}</option>`).join('')}
+          </select>
+          <input id="doc-note" type="text" placeholder="Note (optional)" style="flex:2;min-width:140px;padding:5px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:12px">
+          <button class="btn blue" onclick="
+            saveLoadDocument('${loadId}',{type:document.getElementById('doc-type').value,note:document.getElementById('doc-note').value,source:'Manual'});
+            openLoadDocumentBundle('${loadId}','${loadLabel||loadId}')
+          ">Add</button>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:8px;justify-content:space-between;align-items:center">
+        <button class="btn" style="background:#f0fdf4;color:#16a34a;border-color:#16a34a" onclick="autoBundleAndEmail('${loadId}','${loadLabel||loadId}')">
+          📧 Auto-bundle &amp; email to customer
+        </button>
+        <button class="btn" onclick="closeModal()">Close</button>
+      </div>
+    </div>
+  `);
+}
+
+function autoBundleAndEmail(loadId,loadLabel){
+  const docs=getLoadDocuments(loadId);
+  const required=['BOL','Rate Confirmation','POD'];
+  const missing=required.filter(r=>!docs.some(d=>d.type===r));
+
+  if(missing.length>0){
+    showToast('Missing: '+missing.join(', ')+' — add before sending','error',3000);
+    return;
+  }
+
+  const load=(()=>{try{return(JSON.parse(localStorage.getItem('tms_loads')||'[]')||[]).find(l=>l.id===loadId)||{};}catch(e){return{};}})();
+  const email=load.customerEmail||load.shipperEmail||'';
+
+  // Generate email body text
+  const body=`Hi,\n\nPlease find attached the complete document package for load ${loadId} (${loadLabel}):\n\n${docs.map(d=>'• '+d.type+(d.note?' — '+d.note:'')).join('\n')}\n\nPlease confirm receipt and let us know if you need anything else.\n\nThank you,\nShifl Team`;
+
+  // Copy to clipboard
+  if(navigator.clipboard){
+    navigator.clipboard.writeText(body).then(()=>showToast('Email draft copied to clipboard','success',3000));
+  }
+
+  // Mark load as invoiced if invoice is in bundle
+  if(docs.some(d=>d.type==='Invoice')){
+    try{
+      const meta=JSON.parse(localStorage.getItem('tms_meta_'+loadId)||'{}');
+      meta.invoiced=true;meta.invoiceDate=new Date().toISOString();
+      localStorage.setItem('tms_meta_'+loadId,JSON.stringify(meta));
+    }catch(e){}
+  }
+
+  showToast('Bundle ready — email draft copied · Load marked as invoiced','success',4000);
+}
+
+// ── SEASONAL RATE FORECAST ────────────────────────────────────
+const SEASONAL_PATTERNS={
+  Jan:{label:'Jan',index:0.88,note:'Post-holiday lull. Rates soft, capacity available. Lock in contract rates now.'},
+  Feb:{label:'Feb',index:0.90,note:'Still quiet. Good time to negotiate annual rates with carriers.'},
+  Mar:{label:'Mar',index:0.95,note:'Pre-spring pickup starting. Rates firming up, especially produce lanes.'},
+  Apr:{label:'Apr',index:1.02,note:'Spring surge underway. Agricultural freight heating up. Expect +5–10% on spot.'},
+  May:{label:'May',index:1.08,note:'Strong demand. Memorial Day creates short-week disruptions. Book early.'},
+  Jun:{label:'Jun',index:1.05,note:'Summer retail imports ramping. Drayage demand picking up at East Coast ports.'},
+  Jul:{label:'Jul',index:1.00,note:'Moderate. Back-to-school imports beginning. Watch LA/LB congestion.'},
+  Aug:{label:'Aug',index:1.10,note:'Peak season warning. Importers front-loading holiday goods. Tight capacity.'},
+  Sep:{label:'Sep',index:1.15,note:'PEAK. Highest demand of the year. Spot rates elevated 15–25%. Book ahead.'},
+  Oct:{label:'Oct',index:1.12,note:'Still hot. Holiday inventory moving. Per diem and detention rates spiking.'},
+  Nov:{label:'Nov',index:1.05,note:'Easing slightly post-peak. Black Friday imports mostly delivered.'},
+  Dec:{label:'Dec',index:0.92,note:'Holiday slowdown. Carriers want to get home. Rates soften mid-month.'},
+};
+
+function openSeasonalRateForecast(){
+  const months=Object.values(SEASONAL_PATTERNS);
+  const curMonth=new Date().getMonth();
+  const baseRate=1200; // baseline drayage rate for illustration
+
+  const bars=months.map((m,i)=>{
+    const h=Math.round(m.index*100);
+    const isCur=i===curMonth;
+    const color=m.index>=1.10?'#dc2626':m.index>=1.02?'#d97706':m.index>=0.98?'#2e75b6':'#16a34a';
+    return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;min-width:0">
+      <div style="font-size:10px;font-weight:700;color:${color}">${h}%</div>
+      <div style="width:100%;background:${color}${isCur?'':'80'};border-radius:4px 4px 0 0;height:${Math.round((m.index-0.8)*5*h*0.6)}px;min-height:8px;border:${isCur?'2px solid '+color:'none'};box-sizing:border-box"></div>
+      <div style="font-size:10px;color:${isCur?color:'#666'};font-weight:${isCur?'800':'400'}">${m.label}</div>
+    </div>`;
+  }).join('');
+
+  const cur=months[curMonth];
+  const next=months[(curMonth+1)%12];
+  const isGoingUp=next.index>cur.index;
+
+  openModal(`
+    <div style="min-width:560px">
+      <h3 style="margin:0 0 4px;font-size:15px;color:var(--navy,#1a2e4a)">📈 Seasonal rate forecast</h3>
+      <div style="font-size:12px;color:#666;margin-bottom:14px">Historical rate index by month (100% = baseline). Current month highlighted.</div>
+
+      <div style="display:flex;align-items:flex-end;gap:2px;height:120px;padding:0 4px;margin-bottom:10px;border-bottom:1px solid #e5e7eb">
+        ${bars}
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px">
+        <div style="background:${cur.index>=1.08?'#fef2f2':cur.index>=1.02?'#fffbeb':'#f0fdf4'};border-radius:8px;padding:10px 12px;border-left:3px solid ${cur.index>=1.08?'#dc2626':cur.index>=1.02?'#d97706':'#16a34a'}">
+          <div style="font-size:10px;font-weight:700;color:#666;text-transform:uppercase">Now (${cur.label})</div>
+          <div style="font-size:18px;font-weight:800;color:var(--navy,#1a2e4a)">${Math.round(cur.index*100)}% index</div>
+          <div style="font-size:11px;color:#374151;margin-top:4px;line-height:1.5">${cur.note}</div>
+        </div>
+        <div style="background:#f8f9fa;border-radius:8px;padding:10px 12px;border-left:3px solid #666">
+          <div style="font-size:10px;font-weight:700;color:#666;text-transform:uppercase">Next month (${next.label}) ${isGoingUp?'📈':'📉'}</div>
+          <div style="font-size:18px;font-weight:800;color:var(--navy,#1a2e4a)">${Math.round(next.index*100)}% index</div>
+          <div style="font-size:11px;color:#374151;margin-top:4px;line-height:1.5">${next.note}</div>
+        </div>
+      </div>
+
+      <div style="margin-top:12px;background:#eff6ff;border-radius:8px;padding:10px 12px;border-left:3px solid #2e75b6">
+        <div style="font-size:11px;font-weight:700;color:#1d4ed8;margin-bottom:4px">💡 Action for this month</div>
+        <div style="font-size:12px;color:#374151">${cur.index>=1.08?'Peak season: add a 10–15% spot premium to all quotes. Use seasonal surcharge language in rate confirmations. Pre-book carrier capacity now.':cur.index>=1.02?'Rates are elevated. Quote aggressively on spot. Consider locking carrier rates before next month spikes further.':cur.index>=0.95?'Market balanced. Normal margins apply. Good window to renegotiate carrier contracts before spring surge.':'Soft market. Lock in low carrier rates now — consider 3-month agreements. Pass some savings to win new customers.'}</div>
+      </div>
+      <div style="margin-top:12px;text-align:right"><button class="btn" onclick="closeModal()">Close</button></div>
+    </div>
+  `);
+}
+
+// ── AUTO-UPSELL SUGGESTIONS ────────────────────────────────────
+const UPSELL_RULES=[
+  {id:'heavy',  check:q=>q.weight&&parseFloat(q.weight)>43000, suggest:'Overweight permit + triaxle surcharge', revenue:350, why:'Weight over 43k lbs triggers state permit requirements and axle weight charges.'},
+  {id:'reefer', check:q=>/reefer|refrigerat|frozen|cold|perishable|dairy|meat|produce/i.test(q.commodity||''), suggest:'Genset / reefer surcharge', revenue:200, why:'Temperature-controlled cargo requires genset power — this is always billable.'},
+  {id:'haz',    check:q=>/hazmat|chemical|flammable|corrosive|imdg|dangerous/i.test(q.commodity||''), suggest:'Hazmat surcharge + placarding fee', revenue:250, why:'IMDG cargo requires special handling, placards, and driver certification.'},
+  {id:'prepull',check:q=>q.ld==='Live'&&q.port&&/newark|elizabeth|bayonne/i.test(q.port), suggest:'Pre-pull fee', revenue:175, why:'NJ port congestion often forces early container pulls — charge for it upfront.'},
+  {id:'drop',   check:q=>q.ld==='Drop', suggest:'Chassis split / chassis overage', revenue:150, why:'Drop loads often incur extra chassis days — add a chassis overage buffer.'},
+  {id:'multi',  check:q=>(q.containerCount||1)>2, suggest:'Multi-container coordination fee', revenue:100, why:'3+ containers require coordinated dispatch — add a flat coordination surcharge.'},
+  {id:'toll',   check:q=>q.zip&&/07|08|10|11|12|13/.test((q.zip||'').slice(0,2)), suggest:'Toll surcharge', revenue:220, why:'NJ/NY tolls are significant on every move — always include as a separate line item.'},
+  {id:'storage',check:q=>q.eta&&(new Date(q.eta)-new Date())<3*86400000&&(new Date(q.eta)-new Date())>0, suggest:'Storage reserve fee', revenue:120, why:'Short ETAs increase storage risk — add a reserve fee to protect your margin.'},
+  {id:'export', check:q=>q.drayType==='export', suggest:'Export chassis fee + VGM weighing surcharge', revenue:180, why:'Export moves need chassis for staging plus VGM weight certification.'},
+];
+
+function getUpsellSuggestions(quoteData){
+  return UPSELL_RULES.filter(r=>{
+    try{return r.check(quoteData);}catch(e){return false;}
+  });
+}
+
+function openAutoUpsell(quoteData){
+  const suggestions=getUpsellSuggestions(quoteData||{});
+  const totalUpside=suggestions.reduce((s,r)=>s+r.revenue,0);
+
+  openModal(`
+    <div style="min-width:500px">
+      <h3 style="margin:0 0 4px;font-size:15px;color:var(--navy,#1a2e4a)">💡 Auto-upsell suggestions</h3>
+      <div style="font-size:12px;color:#666;margin-bottom:12px">Based on this quote's details — potential additional revenue: <strong style="color:var(--steel,#2e75b6)">+$${totalUpside.toLocaleString()}</strong></div>
+      ${suggestions.length===0?'<p style="color:#999;text-align:center;padding:16px">No upsell triggers detected for this quote.</p>':`
+      <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px">
+        ${suggestions.map(s=>`
+          <div style="background:#eff6ff;border-radius:8px;padding:10px 14px;border-left:3px solid var(--steel,#2e75b6)">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+              <span style="font-size:13px;font-weight:700;color:var(--navy,#1a2e4a)">${s.suggest}</span>
+              <span style="font-size:13px;font-weight:800;color:#16a34a">+$${s.revenue.toLocaleString()}</span>
+            </div>
+            <div style="font-size:11px;color:#374151">${s.why}</div>
+          </div>`).join('')}
+      </div>`}
+      <div style="background:var(--gray-50,#f8f9fa);border-radius:8px;padding:10px 12px;margin-bottom:12px">
+        <div style="font-size:11px;font-weight:700;color:#666;text-transform:uppercase;margin-bottom:6px">Manual check — other upsells</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px">
+          ${UPSELL_RULES.filter(r=>!suggestions.find(s=>s.id===r.id)).map(r=>`
+            <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:#666;cursor:pointer">
+              <input type="checkbox" style="width:13px;height:13px"> ${r.suggest} (+$${r.revenue})
+            </label>`).join('')}
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        ${suggestions.length?`<button class="btn" onclick="
+          const txt='Upsell opportunities:\\n'+${JSON.stringify(suggestions.map(s=>s.suggest+' (+\$'+s.revenue+')').join('\\n'))};
+          navigator.clipboard&&navigator.clipboard.writeText(txt);
+          showToast('Copied to clipboard','success',2000)
+        ">Copy suggestions</button>`:''}
+        <button class="btn" onclick="closeModal()">Close</button>
+      </div>
+    </div>
+  `);
+}
+
+// Wire auto-upsell into quote builder — check after carrier is selected
+function checkUpsellOnQuote(){
+  const qi=typeof S!=='undefined'?S.qi:{};
+  if(!qi) return;
+  const suggestions=getUpsellSuggestions(qi);
+  if(suggestions.length>0){
+    const badge=document.getElementById('upsell-badge');
+    if(badge){badge.textContent=suggestions.length;badge.style.display='inline';}
+  }
+}
+setInterval(checkUpsellOnQuote, 3000);
+</script>
