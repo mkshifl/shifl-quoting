@@ -19125,21 +19125,37 @@ function showComingSoon(feature){
            safety rating, insurance, operating status
    ============================================================ */
 
-const FMCSA_PROXY = 'https://api.allorigins.win/raw?url=';
+// Multiple CORS proxies — tried in order until one works
+const FMCSA_PROXIES = [
+  url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
+  url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+  url => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
+  url => `https://thingproxy.freeboard.io/fetch/${url}`,
+];
+
+async function fmcsaFetch(url){
+  for(const proxyFn of FMCSA_PROXIES){
+    try{
+      const res = await fetch(proxyFn(url), {signal: AbortSignal.timeout(8000)});
+      if(res.ok){
+        const text = await res.text();
+        if(text && text.length > 200 && !text.includes('error') && text.includes('USDOT')) return text;
+        if(text && text.length > 500) return text;
+      }
+    }catch(e){ continue; }
+  }
+  throw new Error('All proxies failed');
+}
 
 async function fmcsaLookup(dotNumber){
   const url = `https://safer.fmcsa.dot.gov/query.asp?searchtype=ANY&query_type=queryCarrierSnapshot&query_param=USDOT&query_string=${dotNumber.trim()}`;
-  const res = await fetch(FMCSA_PROXY + encodeURIComponent(url), {signal: AbortSignal.timeout(10000)});
-  if(!res.ok) throw new Error('Lookup failed');
-  return await res.text();
+  return fmcsaFetch(url);
 }
 
 async function fmcsaLookupMC(mc){
   const mcNum = mc.replace(/MC-?/i,'').trim();
   const url = `https://safer.fmcsa.dot.gov/query.asp?searchtype=ANY&query_type=queryCarrierSnapshot&query_param=MC_MX&query_string=${mcNum}`;
-  const res = await fetch(FMCSA_PROXY + encodeURIComponent(url), {signal: AbortSignal.timeout(10000)});
-  if(!res.ok) throw new Error('Lookup failed');
-  return await res.text();
+  return fmcsaFetch(url);
 }
 
 function parseSaferWeb(html){
@@ -19330,11 +19346,28 @@ async function runSaferWebCheck(name){
     resultEl.innerHTML = renderSaferWebResult(parsed, dot, mc);
 
   } catch(err){
+    const dot2=(dotEl?.value||'').trim().replace(/\D/g,'');
+    const mc2=(mcEl?.value||'').replace(/MC-?/i,'').trim();
+    const saferUrl=dot2
+      ? `https://safer.fmcsa.dot.gov/query.asp?searchtype=ANY&query_type=queryCarrierSnapshot&query_param=USDOT&query_string=${dot2}`
+      : `https://safer.fmcsa.dot.gov/query.asp?searchtype=ANY&query_type=queryCarrierSnapshot&query_param=MC_MX&query_string=${mc2}`;
     resultEl.innerHTML = `
-      <div style="background:#fef2f2;border-radius:8px;padding:10px 14px;border-left:3px solid #dc2626;font-size:12px;margin-top:10px">
-        <div style="font-weight:700;color:#dc2626;margin-bottom:4px">Connection error</div>
-        <div style="color:#374151">Could not reach FMCSA. Check your connection or verify manually on SaferWeb.</div>
-        <a href="https://safer.fmcsa.dot.gov/CompanySnapshot.aspx" target="_blank" style="color:#2e75b6;font-weight:600;display:inline-block;margin-top:6px">Open SaferWeb ↗</a>
+      <div style="background:#fffbeb;border-radius:8px;padding:12px 14px;border-left:3px solid #f59e0b;font-size:12px;margin-top:10px">
+        <div style="font-weight:700;color:#92400e;margin-bottom:6px">⚠️ Could not auto-verify — open SaferWeb manually</div>
+        <div style="color:#374151;margin-bottom:10px">CORS proxies are blocked for this network. Click below to verify directly on the FMCSA website.</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <a href="${saferUrl}" target="_blank"
+            style="display:inline-flex;align-items:center;gap:6px;padding:7px 14px;background:#1a2e4a;color:#fff;border-radius:7px;font-weight:700;font-size:12px;text-decoration:none">
+            🔍 Look up on SaferWeb ↗
+          </a>
+          <a href="https://safer.fmcsa.dot.gov/CompanySnapshot.aspx" target="_blank"
+            style="display:inline-flex;align-items:center;gap:6px;padding:7px 14px;background:#f3f4f6;color:#374151;border-radius:7px;font-weight:600;font-size:12px;text-decoration:none">
+            SaferWeb home ↗
+          </a>
+        </div>
+        <div style="margin-top:8px;font-size:11px;color:#92400e">
+          On SaferWeb: search by DOT# or MC# → verify Operating Status is "AUTHORIZED" → check entity type (Carrier vs Broker)
+        </div>
       </div>`;
   } finally {
     if(btnEl){btnEl.disabled=false;btnEl.textContent='🔍 SaferWeb check';}
