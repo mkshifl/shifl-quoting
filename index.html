@@ -346,19 +346,11 @@ body.screenshot-mode .money::after,body.screenshot-mode .kpi-val::after{content:
 
 /* ── Sidebar sub-link cleanup ── */
 .acc-sub a,.acc-sub button.sub-link{
-  padding:7px 14px 7px 36px;
+  padding:7px 14px 7px 40px;
   font-size:12px;
-  display:flex;align-items:center;gap:8px;
+  display:flex;align-items:center;gap:0;
   position:relative;
 }
-.acc-sub a::before,.acc-sub button.sub-link::before{
-  content:'';display:inline-block;width:4px;height:4px;
-  border-radius:50%;background:rgba(255,255,255,.25);
-  flex-shrink:0;margin-right:2px;
-  transition:background .12s;
-}
-.acc-sub a:hover::before,.acc-sub button.sub-link:hover::before{background:rgba(255,255,255,.6)}
-.acc-sub a.active::before,.acc-sub button.sub-link.active::before{background:#93c5fd}
 
 /* ── Sidebar accordion open state ── */
 .acc-btn.open{background:rgba(255,255,255,.13)!important;color:#fff!important;border-left:3px solid rgba(255,255,255,.25)}
@@ -580,7 +572,7 @@ if('caches' in window){
       <div class="acc-sub" id="acc-sub-drayage">
         <button class="sub-link" id="nav-quote" onclick="goTo('quote')">🏗️ Quote builder</button>
         <button class="sub-link" id="nav-log" onclick="goTo('log')">📁 Quote log</button>
-        <button class="sub-link" id="nav-requests" onclick="goTo('requests')" style="display:flex;align-items:center;justify-content:space-between">📋 Rate requests <span id="qr-nav-badge" style="background:#f59e0b;color:#fff;border-radius:99px;font-size:9px;font-weight:800;padding:1px 6px;display:none"></span></button>
+        <button class="sub-link" id="nav-requests" onclick="goTo('requests')">📋 Rate requests <span id="qr-nav-badge" style="background:#f59e0b;color:#fff;border-radius:99px;font-size:9px;font-weight:800;padding:1px 6px;display:none;margin-left:auto"></span></button>
         <button class="sub-link" id="nav-rates" onclick="goTo('rates')">📋 Carrier rates</button>
         <button class="sub-link" id="nav-customers" onclick="goTo('customers')">👥 Customers</button>
         <button class="sub-link" id="nav-dash" onclick="goTo('dash')">📊 Dashboard</button>
