@@ -438,6 +438,9 @@ input:focus,select:focus,textarea:focus{
   padding:6px 14px!important;border-radius:8px!important;
   height:32px!important;font-size:12px!important;font-weight:700!important;
 }
+
+/* Carrier onboarding — conditional sections */
+#ins-detail-section, #w9-detail-section{transition:all .2s}
 </style>
 <script>
 // Force clear service worker and caches
@@ -1464,8 +1467,7 @@ function renderQuote(){
   const isExport=qi.drayType==='export';const matches=getMatches();
   if(!S.selId&&matches.length) S.selId=matches[0].id;
   const sel=matches.find(r=>r.id===S.selId)||matches[0]||null;
-  $('topbar-right').innerHTML=`<button class="btn" onclick="openSeasonalRateForecast()" title="Seasonal rate forecast">📈 Forecast</button><button class="btn" onclick="openAutoUpsell(S.qi)" title="Auto-upsell suggestions">💡 Upsells <span id='upsell-badge' style='display:none;background:#dc2626;color:#fff;border-radius:99px;font-size:9px;font-weight:800;padding:1px 5px;margin-left:3px'></span></button><button class="btn" onclick="showRepeatPicker()" title="Load a previous quote for this lane">🔁 Repeat</button><button class="btn" onclick="saveDraft('drayage')">📋 Save draft</button><button class="btn" onclick="printQuote()">🖨️ Print</button><button class="btn" onclick="downloadPDF()">📄 PDF</button><button class="btn blue" onclick="saveQuote()">💾 Save quote</button>`;
-  $('page').innerHTML=draftBanner('drayage','drayage')+`<div class="two-col">
+  $('topbar-right').innerHTML='<button class="btn" onclick="showRepeatPicker()" title="Load a previous quote">&#x1F501; Repeat</button><button class="btn" onclick="saveDraft(\'drayage\')">&#x1F4CB; Draft</button><span id="upsell-badge" style="display:none;background:#dc2626;color:#fff;border-radius:99px;font-size:9px;font-weight:800;padding:2px 7px"></span><button class="btn" onclick="printQuote()">&#x1F5A8; Print</button><button class="btn" onclick="downloadPDF()">&#x1F4C4; PDF</button><button class="btn blue" onclick="saveQuote()">&#x1F4BE; Save quote</button>';  $('page').innerHTML=draftBanner('drayage','drayage')+`<div class="two-col">
     <div>
       <div class="card">
         <div class="sec-head" style="display:flex;align-items:center;justify-content:space-between">
@@ -2324,7 +2326,7 @@ function renderFqLog(){
           onclick="event.stopPropagation()"
           onchange="saveFqRef(${i},this.value)"
           placeholder="Add ref #"
-          style="border:none;background:${q.shiflRef?'var(--blue-bg)':'transparent'};color:${q.shiflRef?'var(--steel)':'var(--gray-300)'};font-weight:${q.shiflRef?'700':'400'};font-size:12px;padding:3px 6px;border-radius:4px;width:90px;cursor:text;outline:none"
+          style="border:none;background:${q.shiflRef?'var(--blue-bg)':'transparent'};color:${q.shiflRef?'var(--steel)':'var(--gray-300)'};font-weight:${q.shiflRef?'700':'400'};font-size:11px;padding:2px 5px;border-radius:4px;width:68px;cursor:text;outline:none"
           onfocus="this.style.background='var(--blue-bg)';this.style.border='1px solid var(--steel)'"
           onblur="this.style.border='none';this.style.background=this.value?'var(--blue-bg)':'transparent'">
       </td>
@@ -6006,10 +6008,10 @@ function renderLog(){
     </div>
   </div>`;
   $('page').innerHTML=pillBar+`<div class="tbl-wrap" id="dray-log-wrap"><table style="table-layout:fixed;width:100%"><colgroup>
-  <col style="width:32px"><col style="width:50px"><col style="width:90px"><col style="width:80px">
-  <col style="width:140px"><col style="width:150px"><col style="width:140px">
-  <col style="width:90px"><col style="width:100px"><col style="width:90px">
-  <col style="width:90px"><col style="width:120px"><col style="width:100px">
+  <col style="width:32px"><col style="width:46px"><col style="width:72px"><col style="width:76px">
+  <col style="width:140px"><col style="width:140px"><col style="width:130px">
+  <col style="width:86px"><col style="width:96px"><col style="width:86px">
+  <col style="width:80px"><col style="width:116px"><col style="width:90px">
 </colgroup><thead><tr>
   <th style="width:32px"><input type="checkbox" ${selCount===S.quotes.length&&selCount>0?'checked':''} onchange="if(this.checked){window._draySelected=new Set(S.quotes.map(q=>q.id));}else{window._draySelected=new Set();}renderLog()" style="width:auto"></th>
   <th>#</th><th>Ref #</th><th>Date</th><th>Customer</th><th>Lane</th><th>Carrier</th>
@@ -6878,7 +6880,7 @@ async function upsertCarrier(name, mode) {
 }
 
 async function renderCarriers(){
-  $('topbar-right').innerHTML=`<button class="btn" onclick="openCarrierFraudDetector()">🚨 Fraud check</button><button class="btn" onclick="openInsuranceLapseTracker()">🔔 Insurance</button><button class="btn" onclick="openPerformanceDeclineAnalyzer()">📉 Perf trends</button><button class="btn" onclick="openCarrierFitScorer()">🏆 Fit score</button><button class="btn" onclick="openRateNegotiationCoach()">💬 Neg coach</button><button class="btn blue" onclick="showCarrierModal()">+ Add carrier</button>`;
+  $('topbar-right').innerHTML=`<button class="btn" onclick="openCarrierFraudDetector()">🚨 Fraud check</button><button class="btn" onclick="openInsuranceLapseTracker()">🔔 Insurance</button><button class="btn blue" onclick="showCarrierModal()">+ Add carrier</button>`;
   $('page').innerHTML='<div style="text-align:center;padding:40px"><div class="loading-spin" style="margin:0 auto 12px"></div><div style="color:var(--gray-400);font-size:13px">Loading carriers...</div></div>';
   try{
     const{data:carriers}=await db.from('carriers').select('*').order('name');
@@ -12673,7 +12675,7 @@ function renderTMS(){
   const badge=document.getElementById('tms-badge');
   if(badge) badge.textContent=tmsCnt>0?tmsCnt+' loads':'FTL/LTL';
 
-  $('topbar-right').innerHTML=`<button class="btn" onclick="openRevenueLeakDetector()">💸 Revenue leaks</button><button class="btn" onclick="openLoadDocumentBundle('','')">📦 Doc bundle</button><div style="font-size:12px;font-weight:700;color:var(--steel)">🚚 TMS</div>`;
+  $('topbar-right').innerHTML='';
 
   const tabBar=`<div style="display:flex;gap:0;border-bottom:2px solid var(--gray-100);margin-bottom:20px;overflow-x:auto">
     ${tabs.map(t=>`<button onclick="S.tmsTab='${t.id}';renderTMS()"
@@ -16140,8 +16142,8 @@ function updateBulkBar(){
     bar.style.cssText='position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--navy,#1a2e4a);color:#fff;border-radius:10px;padding:10px 20px;display:flex;align-items:center;gap:12px;z-index:8000;box-shadow:0 4px 16px rgba(0,0,0,.25);transition:opacity .2s';
     document.body.appendChild(bar);
   }
-  if(n===0){bar.style.opacity='0';bar.style.pointerEvents='none';return;}
-  bar.style.opacity='1';bar.style.pointerEvents='auto';
+  if(n===0){bar.style.opacity='0';bar.style.pointerEvents='none';bar.style.display='none';return;}
+  bar.style.opacity='1';bar.style.pointerEvents='auto';bar.style.display='flex';
   const statuses=['Booked','Dispatched','In Transit','Out for Delivery','Delivered','Invoiced','Paid'];
   bar.innerHTML=`<span style="font-size:13px;font-weight:600">${n} load${n>1?'s':''} selected</span>
     <select id="bulk-status-sel" style="padding:4px 8px;border-radius:6px;border:1px solid #fff3;background:#ffffff22;color:#fff;font-size:12px">
@@ -17685,9 +17687,9 @@ function renderQuoteRequests(){
   if(!el) return;
 
   const STATUS_COLORS={
-    Pending:'#f59e0b',Priced:'#2e75b6',Quoted:'#7c3aed',Booked:'#16a34a',Cancelled:'#dc2626'
+    Pending:'#f59e0b','Rates received':'#2e75b6',Quoted:'#7c3aed',Booked:'#16a34a',Cancelled:'#dc2626'
   };
-  const counts={Pending:0,Priced:0,Quoted:0,Booked:0};
+  const counts={'Pending':0,'Rates received':0,'Quoted':0,'Booked':0};
   all.forEach(r=>{if(counts[r.status]!==undefined)counts[r.status]++;});
 
   el.innerHTML=`
@@ -17716,7 +17718,7 @@ function renderQuoteRequests(){
             <td>
               <div style="display:flex;gap:4px;flex-wrap:wrap">
                 ${r.status==='Pending'?`<button class="btn" style="font-size:11px;padding:3px 8px" onclick="openPricingEntry('${r.id}')">Enter pricing</button>`:''}
-                ${r.status==='Priced'?`<button class="btn blue" style="font-size:11px;padding:3px 8px" onclick="loadRequestIntoQuoteBuilder('${r.id}')">Build quote →</button>`:''}
+                ${r.status==='Rates received'?`<button class="btn blue" style="font-size:11px;padding:3px 8px" onclick="loadRequestIntoQuoteBuilder('${r.id}')">Build quote →</button>`:''}
                 ${r.status==='Quoted'?`<button class="btn" style="font-size:11px;padding:3px 8px;background:#f0fdf4;color:#16a34a;border-color:#16a34a" onclick="markRequestStatus('${r.id}','Booked')">Mark booked</button>`:''}
                 <button class="btn" style="font-size:11px;padding:3px 8px" onclick="viewRequestDetail('${r.id}')">View</button>
                 <button class="btn" style="font-size:11px;padding:3px 8px;color:#dc2626;border-color:#dc2626" onclick="markRequestStatus('${r.id}','Cancelled')">✕</button>
@@ -17802,7 +17804,7 @@ function savePricingToRequest(id){
     notes:document.getElementById('pe-notes')?.value||'',
     pricedAt:new Date().toISOString()
   };
-  all[idx].status='Priced';
+  all[idx].status='Rates received';
   saveQuoteRequests(all);
   closeModal();
   showToast('Pricing saved — status: Priced','success',2500);
@@ -18802,12 +18804,12 @@ function openAutoUpsell(quoteData){
 // Wire auto-upsell into quote builder — check after carrier is selected
 function checkUpsellOnQuote(){
   const qi=typeof S!=='undefined'?S.qi:{};
-  if(!qi) return;
+  const badge=document.getElementById('upsell-badge');
+  if(!badge) return;
+  if(!qi){badge.style.display='none';return;}
   const suggestions=getUpsellSuggestions(qi);
-  if(suggestions.length>0){
-    const badge=document.getElementById('upsell-badge');
-    if(badge){badge.textContent=suggestions.length;badge.style.display='inline';}
-  }
+  if(suggestions.length>0){badge.textContent=suggestions.length;badge.style.display='inline';}
+  else{badge.style.display='none';badge.textContent='';}
 }
 setInterval(checkUpsellOnQuote, 3000);
 </script>
@@ -18829,23 +18831,23 @@ function buildAIToolsPanel(){
       <div style="font-size:10px;font-weight:800;color:#666;text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid #f3f4f6">AI Tools</div>
       <div style="display:flex;flex-direction:column;gap:4px">
         ${[
-          ['🚨','Carrier fraud check','openCarrierFraudDetector()'],
-          ['🔔','Insurance lapse tracker','openInsuranceLapseTracker()'],
-          ['📉','Performance decline alert','openPerformanceDeclineAnalyzer()'],
-          ['🏆','Carrier fit scorer','openCarrierFitScorer()'],
-          ['💬','Rate negotiation coach','openRateNegotiationCoach()'],
-          ['📊','On-time trend detector','openOnTimeTrendDetector()'],
-          ['⚠️','VIP spend alert','openVIPSpendAlert()'],
-          ['💚','Customer health dashboard','openCustomerHealthDashboard()'],
-          ['💸','Revenue leak detector','openRevenueLeakDetector()'],
-          ['📦','Load document bundle','openLoadDocumentBundle(\'\',\'\')'],
-          ['📈','Seasonal rate forecast','openSeasonalRateForecast()'],
-          ['💡','Auto-upsell suggestions','openAutoUpsell(typeof S!==\'undefined\'?S.qi:{})'],
-          ['🏷️','Freight classifier','openFreightClassifier()'],
+          ['──','CARRIER',''],
+          ['🚨','Fraud check','openCarrierFraudDetector()'],
+          ['🔔','Insurance lapse','openInsuranceLapseTracker()'],
+          ['📉','Perf decline alert','openPerformanceDeclineAnalyzer()'],
+          ['🏆','Carrier fit score','openCarrierFitScorer()'],
           ['📋','Carrier bid ranker','openCarrierBidRanker()'],
+          ['──','CUSTOMER',''],
+          ['⚠️','VIP spend alert','openVIPSpendAlert()'],
+          ['💚','Customer health','openCustomerHealthDashboard()'],
+          ['💸','Revenue leaks','openRevenueLeakDetector()'],
+          ['──','QUOTING',''],
+          ['📈','Seasonal forecast','openSeasonalRateForecast()'],
+          ['💡','Auto-upsell','openAutoUpsell(typeof S!==\'undefined\'?S.qi:{})'],
+          ['🏷️','Freight classifier','openFreightClassifier()'],
           ['📊','Win/loss log','openWinLossLog()'],
-          ['🗺️','Lane density map','renderLaneDensityMap&&renderLaneDensityMap()'],
-        ].map(([icon,label,fn])=>`
+          ['📦','Doc bundle','openLoadDocumentBundle(\'\',\'\')'],
+        ].map(([icon,label,fn])=>icon==='──'?`<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#9ca3af;padding:8px 10px 2px">${label}</div>`:`
           <button onclick="${fn};document.getElementById('ai-tools-menu').style.display='none'"
             style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:none;border:none;border-radius:7px;cursor:pointer;text-align:left;width:100%;font-size:12px;font-weight:500;color:var(--navy,#1a2e4a);transition:background .1s"
             onmouseenter="this.style.background='var(--blue-bg,#eff6ff)'" onmouseleave="this.style.background='none'">
