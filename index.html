@@ -448,151 +448,95 @@ input:focus,select:focus,textarea:focus{
 .modal{max-height:90vh;overflow-y:auto}
 
 /* ================================================================
-   MASSIVE OVERHAUL — color system, topbar, cards, dark mode fixes
+   OVERHAUL CSS — safe visual changes only
    ================================================================ */
 
-/* ── New color tokens ── */
+/* Color system */
 :root{
   --navy:#1e3a5f;
   --steel:#2563eb;
   --page-bg:#eef2f7;
   --card-border:#d0d7e3;
   --btn-radius:10px;
-  --sidebar-bg:#1e3a5f;
 }
-
-/* ── Page background ── */
 body{background:var(--page-bg)}
-
-/* ── Sidebar ── */
-.sidebar{background:var(--sidebar-bg)}
-
-/* ── Button radius ── */
+.sidebar{background:#1e3a5f}
 .btn{border-radius:var(--btn-radius)}
-.btn.blue{background:var(--steel);border-color:var(--steel)}
+.btn.blue{background:#2563eb;border-color:#2563eb}
 .btn.blue:hover{background:#1d4ed8}
 
-/* ── Topbar redesign: remove clock, tighten height ── */
+/* Topbar */
 #topbar-clock{display:none!important}
 .topbar{height:50px;padding:0 20px}
-.topbar h1{font-size:14px;font-weight:600;color:#374151}
-#view-title::before{content:'';} /* remove Shifl › prefix */
+#view-title::before{content:''}
 #view-title{font-size:14px;font-weight:600;color:#1e3a5f}
 
-/* ── AI FAB — move to topbar via CSS hint ── */
-#ai-tools-fab{bottom:24px!important}
-
-/* ── KPI cards — gradient tint + accent bar ── */
+/* KPI cards */
 .kpi{
   background:linear-gradient(135deg,#fff 60%,#f0f6ff);
-  border-left:4px solid var(--steel);
+  border-left:4px solid #2563eb;
   border-radius:12px;
   box-shadow:0 2px 8px rgba(30,58,95,.06);
 }
-.kpi-val{font-size:28px;font-weight:700}
-.kpi-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#6b7280;margin-bottom:6px}
+.kpi-val{font-size:26px;font-weight:700}
 
-/* ── Cards ── */
-.card{border-radius:12px;border-color:var(--card-border);box-shadow:0 1px 4px rgba(30,58,95,.07)}
+/* Cards */
+.card{border-radius:12px;border-color:#d0d7e3}
+.tbl-wrap{border-color:#d0d7e3;border-radius:12px}
 
-/* ── Tables ── */
-.tbl-wrap{border-color:var(--card-border);border-radius:12px}
-thead th{font-size:10px;letter-spacing:.06em;color:#6b7280;background:#f5f7fa!important}
+/* Badges rounder */
+.badge{border-radius:99px}
 
-/* ── Quote log — tighter rows ── */
-#dray-log-wrap tbody tr{height:38px}
-#dray-log-wrap tbody td{padding:5px 6px;vertical-align:middle}
-
-/* ── Badges — rounder ── */
-.badge{border-radius:99px;font-size:10px;font-weight:600}
-
-/* ── Modal ── */
+/* Modal */
 .modal{border-radius:16px;box-shadow:0 8px 40px rgba(30,58,95,.18)}
 .overlay{background:rgba(15,26,42,.5)}
 
-/* ── Status pill in quote log ── */
-.status-pill{
-  display:inline-flex;align-items:center;gap:4px;
-  padding:3px 10px;border-radius:99px;font-size:10px;font-weight:700;
-  cursor:pointer;white-space:nowrap;border:none;font-family:inherit;
-}
+/* Status pills */
+.status-pill{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:99px;font-size:10px;font-weight:700;cursor:pointer;white-space:nowrap;border:none;font-family:inherit}
 .status-pill.quoted{background:#dbeafe;color:#1d4ed8}
 .status-pill.booked{background:#dcfce7;color:#15803d}
 .status-pill.lost{background:#fee2e2;color:#dc2626}
 .status-pill.cancelled{background:#f3f4f6;color:#6b7280}
 .status-pill.expired{background:#fef3c7;color:#92400e}
 .status-pill.delivered{background:#f0fdf4;color:#16a34a}
-
-/* Status popover */
-.status-popover{
-  position:fixed;background:#fff;border:1px solid #e5e7eb;
-  border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,.15);
-  padding:6px 0;z-index:9999;min-width:140px;
-}
-.status-popover button{
-  display:flex;align-items:center;gap:8px;width:100%;
-  padding:7px 14px;border:none;background:none;
-  font-size:12px;font-weight:500;cursor:pointer;font-family:inherit;
-  color:#374151;text-align:left;
-}
+.status-popover{position:fixed;background:#fff;border:1px solid #e5e7eb;border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,.15);padding:6px 0;z-index:9999;min-width:140px}
+.status-popover button{display:flex;align-items:center;gap:8px;width:100%;padding:7px 14px;border:none;background:none;font-size:12px;font-weight:500;cursor:pointer;font-family:inherit;color:#374151;text-align:left}
 .status-popover button:hover{background:#f9fafb}
 
-/* ── Carrier card grid view ── */
+/* Carrier card grid */
 .carrier-card-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;padding:4px 0}
-.carrier-card{background:#fff;border:1px solid var(--card-border);border-radius:12px;padding:14px 16px;transition:box-shadow .15s;cursor:pointer}
+.carrier-card{background:#fff;border:1px solid #d0d7e3;border-radius:12px;padding:14px 16px;transition:box-shadow .15s;cursor:pointer}
 .carrier-card:hover{box-shadow:0 4px 16px rgba(30,58,95,.12)}
 .carrier-card-name{font-size:14px;font-weight:700;color:#1e3a5f;margin-bottom:4px}
 .carrier-card-meta{font-size:11px;color:#6b7280;margin-bottom:10px}
 .carrier-card-badges{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:10px}
 .carrier-card-actions{display:flex;gap:6px}
 
-/* ── Sidebar icons ── */
-.acc-sub a,.acc-sub button.sub-link{gap:7px}
-
-/* ── Empty states — contextual ── */
+/* Empty state CTA */
 .empty-cta{display:inline-flex;align-items:center;gap:6px;margin-top:12px;padding:8px 18px;background:#1e3a5f;color:#fff;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;border:none;font-family:inherit}
 .empty-cta:hover{background:#2563eb}
 
-/* ── Dark mode fixes for injected components ── */
+/* Dark mode fixes */
 body.dark .carrier-card{background:#1a2533;border-color:#243447;color:#c5d4e4}
 body.dark .carrier-card-name{color:#93c5fd}
-body.dark .status-pill.quoted{background:#1e3a5f;color:#93c5fd}
-body.dark #ai-tools-menu{background:#1a2533;border-color:#243447}
-body.dark #ai-tools-menu button{color:#c5d4e4}
-body.dark #ai-tools-menu button:hover{background:#243447}
-body.dark #cs-dropdown-menu{background:#1a2533;border-color:#243447}
-body.dark #cs-dropdown-menu button{color:#c5d4e4}
-body.dark #cs-dropdown-menu button:hover{background:#243447}
 body.dark .status-popover{background:#1a2533;border-color:#243447}
 body.dark .status-popover button{color:#c5d4e4}
 body.dark .status-popover button:hover{background:#243447}
-body.dark .carrier-onboarding-modal,
-body.dark [style*="background:#fff5f5"],
-body.dark [style*="background:#f0fdf4"],
-body.dark [style*="background:#eff6ff"],
-body.dark [style*="background:#fafafa"]{
-  background:#1a2533!important;border-color:#243447!important;
-}
-body.dark .nav-section-label{color:rgba(255,255,255,.35)}
-body.dark .acc-btn.open{background:rgba(255,255,255,.1)!important}
 
-/* ── TMS mode border strips ── */
+/* TMS mode strips */
 .tms-card-drayage{border-left:4px solid #1e3a5f!important}
 .tms-card-ftl{border-left:4px solid #2563eb!important}
 .tms-card-ltl{border-left:4px solid #7c3aed!important}
-.tms-card-lcl{border-left:4px solid #0d9488!important}
-.tms-card-air{border-left:4px solid #0369a1!important}
 
-/* ── Sidebar section labels brighter ── */
-.nav-section-label{color:rgba(255,255,255,.42)!important;font-size:9px}
-
-/* ── Topbar ✦ AI button style ── */
-#topbar-ai-btn{
-  padding:5px 11px;border-radius:10px;border:1px solid rgba(37,99,235,.3);
-  background:rgba(37,99,235,.08);color:#2563eb;font-size:13px;font-weight:700;
-  cursor:pointer;font-family:inherit;transition:all .15s;
-}
+/* Topbar AI button */
+#topbar-ai-btn{padding:5px 11px;border-radius:10px;border:1px solid rgba(37,99,235,.3);background:rgba(37,99,235,.08);color:#2563eb;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .15s}
 #topbar-ai-btn:hover{background:rgba(37,99,235,.15)}
+
+/* Sidebar section labels brighter */
+.nav-section-label{color:rgba(255,255,255,.42)!important}
+
+/* Print styles */
+@media print{.sidebar,.topbar,#ai-tools-fab,#bulk-action-bar{display:none!important}.main{overflow:visible}.page{padding:0}}
 </style>
 <script>
 // Force clear service worker and caches
@@ -854,10 +798,8 @@ if('caches' in window){
         </div>
         <!-- Neg Coach Button -->
         <button id="topbar-neg-coach" onclick="openRateNegotiationCoach()">💬 Neg Coach</button>
-        <!-- AI Tools Button -->
-        <button id="topbar-ai-btn" onclick="const m=document.getElementById('ai-tools-menu');if(m){m.style.display=m.style.display==='block'?'none':'block';m.style.position='fixed';m.style.bottom='auto';m.style.right='auto';const r=this.getBoundingClientRect();m.style.top=(r.bottom+6)+'px';m.style.right=(window.innerWidth-r.right)+'px';}">✦ AI</button>
         <!-- TMS Button -->
-        <button id="topbar-tms-btn" onclick="goTo('tms')" style="background:linear-gradient(135deg,#1e3a5f,#2563eb);border:none;color:#fff;cursor:pointer;display:flex;align-items:center;gap:5px;border-radius:10px">🚚 TMS</button>
+        <button id="topbar-tms-btn" onclick="goTo('tms')" style="background:linear-gradient(135deg,#1a2e4a,#2e75b6);border:none;color:#fff;cursor:pointer;display:flex;align-items:center;gap:5px;border-radius:8px">🚚 TMS</button>
         <div class="topbar-right" id="topbar-right"></div>
       </div>
     </div>
@@ -12825,6 +12767,667 @@ function tmsModeBadge(mode){
 
 // ── MAIN TMS RENDER ────────────────────────────────────────────────
 function renderTMS(){
+  const sub=S.tmsTab||'dispatch';
+  const loads=getTMSLoads();
+  $('topbar-right').innerHTML='';
+
+  const tabs=[
+    {id:'dispatch',icon:'ti-layout-kanban',label:'Dispatch'},
+    {id:'loads',icon:'ti-list',label:'All loads'},
+    {id:'bol',icon:'ti-file-text',label:'BOL & Docs'},
+    {id:'invoicing',icon:'ti-receipt',label:'Invoicing'},
+    {id:'scorecard',icon:'ti-chart-bar',label:'Scorecards'},
+    {id:'tools',icon:'ti-calculator',label:'Tools'},
+    {id:'reports',icon:'ti-report-analytics',label:'Reports'},
+  ];
+
+  // Load count badge
+  const tmsCnt=getTMSLoads().length;
+  const badge=document.getElementById('tms-badge');
+  if(badge) badge.textContent=tmsCnt>0?tmsCnt+' loads':'FTL/LTL';
+
+  $('topbar-right').innerHTML='';
+
+  const tabBar=`<div style="display:flex;gap:0;border-bottom:2px solid var(--gray-100);margin-bottom:20px;overflow-x:auto">
+    ${tabs.map(t=>`<button onclick="S.tmsTab='${t.id}';renderTMS()"
+      style="display:flex;align-items:center;gap:6px;padding:11px 18px;border:none;border-bottom:2px solid ${sub===t.id?'var(--steel)':'transparent'};margin-bottom:-2px;font-size:13px;font-weight:${sub===t.id?700:500};cursor:pointer;font-family:inherit;background:transparent;color:${sub===t.id?'var(--steel)':'var(--gray-500)'};white-space:nowrap;transition:color .12s">
+      <i class="ti ${t.icon}" style="font-size:15px"></i>${t.label}</button>`).join('')}
+  </div>`;
+
+  const inTransit=loads.filter(l=>['Dispatched','In Transit','Out for Delivery'].includes(l.status));
+  const needsInvoice=loads.filter(l=>['Delivered','Invoiced'].includes(l.status)&&!getInvoice(l.id));
+  const totalRevInTransit=inTransit.reduce((s,l)=>s+(l.customerRate||0),0);
+  const weekAgo=new Date(Date.now()-7*864e5).toISOString().slice(0,10);
+  const thisWeek=loads.filter(l=>l.date>=weekAgo).length;
+  const kpis=`<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:16px">
+    <div class="kpi"><div class="kpi-lbl">In transit now</div><div class="kpi-val" style="color:#d97706;font-size:20px">${inTransit.length}</div><div style="font-size:11px;color:var(--gray-400)">${fmtD(totalRevInTransit)}</div></div>
+    <div class="kpi"><div class="kpi-lbl">This week</div><div class="kpi-val" style="font-size:20px">${thisWeek}</div></div>
+    <div class="kpi"><div class="kpi-lbl">Needs invoice</div><div class="kpi-val" style="color:${needsInvoice.length?'var(--red)':'var(--green)'};font-size:20px">${needsInvoice.length}</div></div>
+    <div class="kpi"><div class="kpi-lbl">Total loads</div><div class="kpi-val" style="font-size:20px">${loads.length}</div></div>
+    <div class="kpi" style="grid-column:span 1"><div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px">${TMS_STATUSES.map(s=>{const c=loads.filter(l=>l.status===s).length;return c?`<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:99px;background:${tmsStatusColor(s)}18;color:${tmsStatusColor(s)}">${s} ${c}</span>`:''}).join('')}</div></div>
+  </div>`;
+
+  if(sub==='dispatch') renderTMSDispatch(tabBar,kpis,loads);
+  else if(sub==='loads') renderTMSLoads(tabBar,kpis,loads);
+  else if(sub==='bol') renderTMSBol(tabBar,loads);
+  else if(sub==='invoicing') renderTMSInvoicing(tabBar,loads);
+  else if(sub==='scorecard') renderTMSScorecard(tabBar,loads);
+  else if(sub==='tools') renderTMSTools(tabBar);
+  else if(sub==='reports') renderTMSReports(tabBar,loads);
+}
+
+// ── DISPATCH BOARD (KANBAN) ────────────────────────────────────────
+function renderTMSDispatch(tabBar,kpis,loads){
+  const cols=TMS_STATUSES.map(s=>{
+    const colLoads=loads.filter(l=>l.status===s);
+    const cards=colLoads.length?colLoads.map(l=>{
+      const next=nextTMSStatus(s);
+      const sIdx=TMS_STATUSES.indexOf(s);const prev=sIdx>0?TMS_STATUSES[sIdx-1]:null;
+      const meta=l.tmsMeta||{};
+      const hasCInv=!!getInvoice(l.id);const hasCarrI=!!getCarrierInvoice(l.id);
+    return`<div style="background:#fff;border:1px solid var(--gray-100);border-left:3px solid ${tmsStatusColor(l.status)};border-radius:0 10px 10px 0;padding:12px;margin-bottom:8px;box-shadow:0 1px 4px rgba(0,0,0,.06);cursor:pointer" onclick="openTMSLoadDetail('${l.id}')">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+          <span style="font-size:10px;font-weight:700;background:${tmsStatusColor(s)}18;color:${tmsStatusColor(s)};padding:2px 8px;border-radius:99px">${l.fqMode}</span>
+          <span style="font-size:10px;color:var(--gray-400)">${l.date}</span>
+        </div>
+        <div style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:2px">${l.customer||'—'}</div>
+        <div style="font-size:11px;color:var(--gray-500);margin-bottom:6px">${l.pickupZip||'—'} → ${l.deliveryZip||'—'}</div>
+        <div style="font-size:11px;color:var(--gray-600);margin-bottom:8px">
+          <span style="font-weight:600">${l.carrier||'Unassigned'}</span>
+          ${l.weight?` · ${Number(l.weight).toLocaleString()} lbs`:''}
+          ${l.customerRate?` · <span style="color:var(--steel);font-weight:700">${fmtD(l.customerRate)}</span>`:''}
+        </div>
+        ${meta.bookingNum?`<div style="font-size:10px;color:var(--steel);font-weight:700;margin-bottom:2px">${meta.bookingNum}</div>`:''}        ${meta.bolNum?`<div style="font-size:10px;color:var(--gray-500);margin-bottom:6px">BOL: ${meta.bolNum}</div>`:''}
+        ${meta.pickupAppt?`<div style="font-size:10px;color:var(--amber);font-weight:600">PU: ${meta.pickupAppt}</div>`:''}
+        <div style="display:flex;gap:4px;margin-bottom:4px">${hasCInv?'<span style="font-size:10px;background:#f0fdf4;color:#16a34a;padding:1px 6px;border-radius:99px;font-weight:700">🧾 ✓</span>':'<span style="font-size:10px;background:#f9fafb;color:#9ca3af;padding:1px 6px;border-radius:99px">🧾</span>'}${hasCarrI?'<span style="font-size:10px;background:#fffbeb;color:#d97706;padding:1px 6px;border-radius:99px;font-weight:700">🚛 ✓</span>':'<span style="font-size:10px;background:#f9fafb;color:#9ca3af;padding:1px 6px;border-radius:99px">🚛</span>'}</div>
+        <div style="display:flex;gap:4px;margin-top:8px;flex-wrap:wrap">
+          ${next?`<button onclick="advanceTMSLoad('${l.id}','${next}')" style="font-size:10px;font-weight:700;padding:4px 8px;border:none;border-radius:5px;background:${tmsStatusColor(next)};color:#fff;cursor:pointer;font-family:inherit">→ ${next}</button>`:''}
+          ${prev?`<button onclick="advanceTMSLoad('${l.id}','${prev}')" style="font-size:10px;font-weight:600;padding:4px 8px;border:1px solid var(--gray-300);border-radius:5px;background:transparent;cursor:pointer;font-family:inherit;color:var(--gray-500)">← ${prev}</button>`:''}
+          <button onclick="openTMSLoadDetail('${l.id}')" style="font-size:10px;font-weight:600;padding:4px 8px;border:1px solid var(--gray-200);border-radius:5px;background:transparent;cursor:pointer;font-family:inherit;color:var(--gray-600)">Details</button>
+          <button onclick="openBOLBuilder('${l.id}')" style="font-size:10px;font-weight:600;padding:4px 8px;border:1px solid var(--gray-200);border-radius:5px;background:transparent;cursor:pointer;font-family:inherit;color:var(--gray-600)">BOL</button>
+        </div>
+      </div>`;}).join(''):`<div style="padding:20px;text-align:center;color:var(--gray-300);font-size:12px">No loads</div>`;
+    return`<div style="flex:1;min-width:180px">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:${tmsStatusColor(s)};margin-bottom:10px;padding-bottom:6px;border-bottom:2px solid ${tmsStatusColor(s)}">${s} (${colLoads.length})</div>
+      ${cards}
+    </div>`;}).join('');
+
+  $('page').innerHTML=tabBar+kpis+(loads.length?
+    `<div style="display:flex;gap:12px;overflow-x:auto;padding-bottom:16px">${cols}</div>`:
+    `<div class="empty"><div class="empty-ico">🚚</div><p>No FTL/LTL loads yet — book a freight quote to start</p><button class="btn blue" onclick="goTo('freight','builder')">+ New freight quote</button></div>`);
+}
+
+// ── ALL LOADS TABLE ────────────────────────────────────────────────
+function tmsInvOpen(id){openInvoiceBuilder('freight',id);}
+function tmsGoFreight(){goTo('freight','builder');}
+function tmsFilter(s){S.tmsTab='loads';S.tmsLoadsFilt=s||'all';renderTMS();}
+function tmsGo(tab){S.tmsTab=tab;renderTMS();}
+function renderTMSBolDocs(tabBar,loads){renderTMSBol(tabBar,loads);}
+function buildTMSLoadRow(l){
+  const id=l.id,meta=getTMSMeta(id);
+  const p=getShipmentProfit(l,'freight');
+  const hasCInv=!!getInvoice(id),hasCarrI=!!getCarrierInvoice(id);
+  const sIdx=TMS_STATUSES.indexOf(l.status);
+  const prev=sIdx>0?TMS_STATUSES[sIdx-1]:null;
+  const next=nextTMSStatus(l.status);
+  const pc=p.isActual?'var(--green)':p.margin>=0.08?'var(--amber)':'var(--red)';
+  const sc=tmsStatusColor(l.status);
+  const bk=meta.bookingNum?'<div style="font-size:10px;font-weight:700;color:var(--steel)">'+escH(meta.bookingNum)+'</div>':'';
+  const acts=[
+    prev?'<button data-id="'+id+'" data-s="'+prev+'" onclick="event.stopPropagation();advanceTMSLoad(this.dataset.id,this.dataset.s)" class="tms-act-btn">← '+escH(prev)+'</button>':'',
+    next?'<button data-id="'+id+'" data-s="'+next+'" onclick="event.stopPropagation();advanceTMSLoad(this.dataset.id,this.dataset.s)" class="tms-act-btn" style="background:'+tmsStatusColor(next)+';color:#fff;border-color:'+tmsStatusColor(next)+'">→ '+escH(next)+'</button>':'',
+    '<button data-id="'+id+'" onclick="event.stopPropagation();tmsInvOpen(this.dataset.id)" class="tms-act-btn" style="border-color:'+(hasCInv?'#86efac':'var(--gray-200)')+';background:'+(hasCInv?'#f0fdf4':'transparent')+';color:'+(hasCInv?'#16a34a':'var(--gray-600)')+'">🧾 '+(hasCInv?'✓':'Invoice')+'</button>',
+    '<button data-id="'+id+'" onclick="event.stopPropagation();openFqCarrierInvById(this.dataset.id)" class="tms-act-btn" style="border-color:'+(hasCarrI?'#fbbf24':'var(--gray-200)')+';background:'+(hasCarrI?'#fffbeb':'transparent')+';color:'+(hasCarrI?'#d97706':'var(--gray-600)')+'">🚛 '+(hasCarrI?'✓':'Carrier')+'</button>',
+    '<button data-id="'+id+'" onclick="event.stopPropagation();deleteTMSLoad(this.dataset.id)" class="tms-act-btn" style="border-color:#fca5a5;color:#dc2626">🗑️</button>'
+  ].join('');
+  return '<tr class="tms-row" data-lid="'+id+'" onclick="openTMSLoadDetail(this.dataset.lid)" style="cursor:pointer;border-left:3px solid '+sc+'">'+
+    '<td onclick="event.stopPropagation()"><div style="font-size:13px;font-weight:700;color:var(--navy)">'+escH(l.customer||'—')+'</div>'+bk+'</td>'+
+    '<td><span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px;background:'+sc+'18;color:'+sc+'">'+escH(l.fqMode||'')+'</span></td>'+
+    '<td class="muted" style="font-size:12px">'+escH((l.pickupZip||'—')+' → '+(l.deliveryZip||'—'))+'</td>'+
+    '<td style="font-weight:600;color:var(--navy)">'+escH(l.carrier||'—')+'</td>'+
+    '<td style="font-family:monospace;font-size:11px;color:var(--gray-500)">'+escH(meta.bolNum||'—')+'</td>'+
+    '<td class="money" style="color:var(--steel);font-weight:700">'+fmtD(l.customerRate||0)+'</td>'+
+    '<td><span style="font-weight:700;color:'+pc+'">+'+fmtD(p.profit)+'</span> '+profitBadge(p.isActual)+'</td>'+
+    '<td><span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px;background:'+sc+'18;color:'+sc+'">'+escH(l.status)+'</span></td>'+
+    '<td onclick="event.stopPropagation()" style="min-width:280px"><div style="display:flex;gap:4px;flex-wrap:wrap">'+acts+'</div></td>'+
+    '</tr>';
+}
+
+function escH(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
+function renderTMSLoads(tabBar,kpis,loads){
+  if(!loads.length){
+    $('page').innerHTML=tabBar+'<div class="empty"><div class="empty-ico">🚚</div><p>No FTL/LTL loads yet — book a freight quote to start</p><button class="btn blue" onclick="tmsGoFreight()">+ New freight quote</button></div>';
+    return;
+  }
+  const lSrch=(S.tmsLoadsSearch||'').toLowerCase();
+  const lFilt=S.tmsLoadsFilt||'all';
+  const sorted=loads.slice().sort((a,b)=>b.date.localeCompare(a.date));
+  const filtLoads=sorted.filter(l=>{
+    if(lFilt!=='all'&&l.status!==lFilt) return false;
+    if(!lSrch) return true;
+    const m=getTMSMeta(l.id);
+    return (l.customer||'').toLowerCase().includes(lSrch)||(m.bookingNum||'').toLowerCase().includes(lSrch)||(l.carrier||'').toLowerCase().includes(lSrch)||(l.pickupZip||'').includes(lSrch)||(l.deliveryZip||'').includes(lSrch)||(m.bolNum||'').toLowerCase().includes(lSrch);
+  });
+  const filterBar='<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:14px">'+
+    '<div style="display:flex;gap:4px;flex-wrap:wrap;flex:1">'+
+    ['all',...TMS_STATUSES].map(s=>{
+      const cnt=s==='all'?loads.length:loads.filter(l=>l.status===s).length;
+      const active=lFilt===s;
+      return '<button data-sf="'+s+'" onclick="S.tmsLoadsFilt=this.dataset.sf;renderTMS()" style="padding:4px 12px;border-radius:99px;border:1.5px solid '+(s==='all'?'#1a2e4a':tmsStatusColor(s))+';font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;background:'+(active?(s==='all'?'#1a2e4a':tmsStatusColor(s)):'transparent')+';color:'+(active?'#fff':(s==='all'?'#1a2e4a':tmsStatusColor(s)))+'">'+( s==='all'?'All':s)+' '+cnt+'</button>';
+    }).join('')+
+    '</div>'+
+    '<div style="position:relative;min-width:220px"><span style="position:absolute;left:10px;top:50%;transform:translateY(-50%)">🔍</span>'+
+    '<input type="text" placeholder="Customer, booking#, carrier, ZIP…" value="'+(S.tmsLoadsSearch||'')+'" oninput="S.tmsLoadsSearch=this.value;renderTMS()" style="padding:7px 12px 7px 32px;border-radius:99px;border:1.5px solid var(--gray-200);font-size:12px;width:100%;box-sizing:border-box"></div>'+
+    '<button onclick="exportTMSLoads()" style="padding:7px 14px;border:1px solid var(--gray-200);border-radius:var(--radius);background:transparent;font-size:12px;cursor:pointer;font-family:inherit;color:var(--gray-600)">📥 CSV</button>'+
+    '<button onclick="openBulkAdvance()" style="padding:7px 14px;border:1px solid var(--steel);border-radius:var(--radius);background:transparent;font-size:12px;cursor:pointer;font-family:inherit;color:var(--steel)">☑️ Bulk advance</button>'+
+    '<button onclick="openLoadMerge()" style="padding:7px 14px;border:1px solid var(--gray-200);border-radius:var(--radius);background:transparent;font-size:12px;cursor:pointer;font-family:inherit;color:var(--gray-600)">🔀 Merge</button>'+
+    '<button onclick="window.print()" style="padding:7px 14px;border:1px solid var(--gray-200);border-radius:var(--radius);background:transparent;font-size:12px;cursor:pointer;font-family:inherit;color:var(--gray-600)">🖨️ Print</button></div>';
+
+  const tableHTML='<div class="tbl-wrap"><table><thead><tr>'+
+    '<th>Customer / BK#</th><th>Mode</th><th>Lane</th><th>Carrier</th><th>BOL #</th><th>Revenue</th><th>Profit</th><th>Status</th><th>Actions</th>'+
+    '</tr></thead><tbody>'+filtLoads.map(buildTMSLoadRow).join('')+'</tbody></table></div>';
+
+  const emptyHTML='<div class="empty"><div class="empty-ico">'+(lSrch||lFilt!=='all'?'🔍':'🚚')+'</div><p>'+(lSrch||lFilt!=='all'?'No loads match — try a different filter':'No loads yet')+'</p></div>';
+  $('page').innerHTML=tabBar+kpis+filterBar+(filtLoads.length?tableHTML:emptyHTML);
+}
+
+
+function deleteTMSLoad(id){
+  if(!confirm('Remove this load from TMS? This will revert it to Quoted status.')) return;
+  const idx=(window._fqHistory||[]).findIndex(q=>q.id===id);
+  if(idx<0) return;
+  window._fqHistory[idx].status='Quoted';
+  try{localStorage.setItem('fq_history',JSON.stringify(window._fqHistory));dbUpdateFqStatus(id,'Quoted');}catch(e){}
+  showToast('Load removed from TMS','info',2500);
+  renderTMS();
+}
+
+// ── ADVANCE LOAD STATUS ────────────────────────────────────────────
+async function advanceTMSLoad(id,newStatus){
+  const idx=(window._fqHistory||[]).findIndex(q=>q.id===id);
+  if(idx<0) return;
+  const prevStatus=window._fqHistory[idx].status;
+  window._fqHistory[idx].status=newStatus;
+  try{localStorage.setItem('fq_history',JSON.stringify(window._fqHistory));}catch(e){}
+  // ★ FIX: Save to Supabase so refresh doesn't revert
+  try{await dbUpdateFqStatus(id,newStatus);}catch(e){console.warn('TMS status sync:',e.message);}
+  saveTMSMeta(id,{[newStatus.toLowerCase().replace(/ /g,'_')+'_at']:new Date().toISOString()});
+  incrementQuestMetric(newStatus==='Delivered'?'delivered_today':'bookings_today');
+  // Undo toast
+  const container=$('toast-container')||document.createElement('div');
+  if(!$('toast-container')){container.id='toast-container';container.style.cssText='position:fixed;bottom:24px;right:24px;z-index:99999;display:flex;flex-direction:column;gap:8px;pointer-events:none';document.body.appendChild(container);}
+  const toast=document.createElement('div');
+  toast.style.cssText='background:#1a2e4a;color:#fff;padding:12px 18px;border-radius:10px;font-size:13px;font-weight:600;font-family:inherit;box-shadow:0 4px 16px rgba(0,0,0,.25);display:flex;align-items:center;gap:12px;pointer-events:all;min-width:260px';
+  toast.innerHTML=`<span>→ <strong>${newStatus}</strong></span><button style="background:rgba(255,255,255,.2);border:none;color:#fff;padding:4px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:700;font-family:inherit;white-space:nowrap">↩ Undo</button>`;
+  toast.querySelector('button').onclick=async()=>{
+    toast.remove();
+    const q=(window._fqHistory||[])[idx];
+    if(q){
+      q.status=prevStatus;
+      try{localStorage.setItem('fq_history',JSON.stringify(window._fqHistory));}catch(e){}
+      try{await dbUpdateFqStatus(id,prevStatus);}catch(e){}
+    }
+    showToast('↩ Reverted to '+prevStatus,'info',2000);
+    renderTMS();
+  };
+  container.appendChild(toast);
+  setTimeout(()=>toast.remove(),6000);
+  renderTMS();
+}
+
+// ── BOL GENERATOR ─────────────────────────────────────────────────
+function renderTMSBol(tabBar,loads){
+  const bolLoads=loads.filter(l=>['Booked','Dispatched','In Transit'].includes(l.status));
+  $('page').innerHTML=tabBar+`
+  <div style="font-size:14px;font-weight:700;color:var(--navy);margin-bottom:14px">📄 Bill of Lading — generate for booked loads</div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px">
+    ${bolLoads.length?bolLoads.map(l=>{const meta=getTMSMeta(l.id);return`
+      <div class="card">
+        <div style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:4px">${l.customer||'—'}</div>
+        <div style="font-size:11px;color:var(--gray-500);margin-bottom:8px">${l.pickupZip||'—'} → ${l.deliveryZip||'—'} · ${l.fqMode} · ${l.carrier||'—'}</div>
+        ${meta.bolNum?`<div style="font-size:11px;font-weight:700;color:var(--steel);margin-bottom:8px">BOL # ${meta.bolNum}</div>`:'<div style="font-size:11px;color:var(--gray-400);margin-bottom:8px">No BOL generated yet</div>'}
+        <button onclick="openBOLBuilder('${l.id}')" class="btn blue" style="width:100%;font-size:12px">📄 ${meta.bolNum?'Edit':'Create'} BOL</button>
+      </div>`;}).join(''):`<div style="grid-column:1/-1;padding:40px;text-align:center;color:var(--gray-400)">No booked loads needing BOL</div>`}
+  </div>`;
+}
+
+// BOL Builder Modal
+function openBOLBuilder(id){
+  const q=(window._fqHistory||[]).find(q=>q.id===id);
+  if(!q){showToast('Load not found','error');return;}
+  const meta=getTMSMeta(id);
+  const bolNum=meta.bolNum||'BOL-'+Date.now().toString().slice(-6);
+  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal" style="max-width:620px;max-height:90vh;overflow-y:auto">
+    <div class="modal-title">📄 Bill of Lading — ${q.customer||'—'}</div>
+    <div class="g2">
+      <div class="field"><label>BOL Number</label><input type="text" id="bol-num" value="${bolNum}"></div>
+      <div class="field"><label>Ship date</label><input type="date" id="bol-date" value="${localDateStr()}"></div>
+    </div>
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gray-400);margin:10px 0 8px">Shipper</div>
+    <div class="g2">
+      <div class="field"><label>Company name</label><input type="text" id="bol-ship-name" value="" placeholder="Shipper name"></div>
+      <div class="field"><label>Address</label><input type="text" id="bol-ship-addr" value="" placeholder="123 Main St, City, State ZIP"></div>
+    </div>
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gray-400);margin:10px 0 8px">Consignee</div>
+    <div class="g2">
+      <div class="field"><label>Company name</label><input type="text" id="bol-cons-name" value="${q.customer||''}" placeholder="Consignee name"></div>
+      <div class="field"><label>Address</label><input type="text" id="bol-cons-addr" value="" placeholder="456 Oak Ave, City, State ZIP"></div>
+    </div>
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gray-400);margin:10px 0 8px">Carrier</div>
+    <div class="g2">
+      <div class="field"><label>Carrier name</label><input type="text" id="bol-carrier" value="${q.carrier||''}"></div>
+      <div class="field"><label>Pro / Tracking #</label><input type="text" id="bol-pro" value="${meta.proNum||''}" placeholder="PRO number"></div>
+    </div>
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gray-400);margin:10px 0 8px">Freight details</div>
+    <div class="g3">
+      <div class="field"><label>Pieces</label><input type="number" id="bol-pieces" value="${q.palletCount||''}"></div>
+      <div class="field"><label>Weight (lbs)</label><input type="number" id="bol-weight" value="${q.weight||''}"></div>
+      <div class="field"><label>Freight class</label><input type="text" id="bol-class" value="${meta.freightClass||''}" placeholder="e.g. 70"></div>
+    </div>
+    <div class="g2">
+      <div class="field"><label>Commodity description</label><input type="text" id="bol-commodity" value="${q.commodity||''}" placeholder="General freight, no hazmat"></div>
+      <div class="field"><label>NMFC #</label><input type="text" id="bol-nmfc" value="${meta.nmfc||''}" placeholder="Optional"></div>
+    </div>
+    <div class="field"><label>Special instructions</label><textarea id="bol-notes" rows="2" style="width:100%;box-sizing:border-box;resize:vertical" placeholder="Liftgate required, appointment needed, etc.">${meta.bolNotes||''}</textarea></div>
+    <div class="modal-foot">
+      <button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn" onclick="saveBOL('${id}');closeModal()">💾 Save BOL</button>
+      <button class="btn blue" onclick="saveBOL('${id}');generateBOLPDF('${id}')">📄 Save & Download PDF</button>
+    </div>
+  </div></div>`;
+}
+
+function saveBOL(id){
+  saveTMSMeta(id,{
+    bolNum:($('bol-num')||{}).value?.trim()||'',
+    bolDate:($('bol-date')||{}).value||'',
+    shipperName:($('bol-ship-name')||{}).value?.trim()||'',
+    shipperAddr:($('bol-ship-addr')||{}).value?.trim()||'',
+    consigneeName:($('bol-cons-name')||{}).value?.trim()||'',
+    consigneeAddr:($('bol-cons-addr')||{}).value?.trim()||'',
+    carrier:($('bol-carrier')||{}).value?.trim()||'',
+    proNum:($('bol-pro')||{}).value?.trim()||'',
+    pieces:($('bol-pieces')||{}).value||'',
+    weight:($('bol-weight')||{}).value||'',
+    freightClass:($('bol-class')||{}).value?.trim()||'',
+    commodity:($('bol-commodity')||{}).value?.trim()||'',
+    nmfc:($('bol-nmfc')||{}).value?.trim()||'',
+    bolNotes:($('bol-notes')||{}).value?.trim()||''
+  });
+  showToast('BOL saved','success',2000);
+}
+
+async function generateBOLPDF(id){
+  if(!await loadJsPDF()) return;
+  const q=(window._fqHistory||[]).find(q=>q.id===id);
+  const meta=getTMSMeta(id);
+  if(!q||!meta) return;
+  try{
+    const{jsPDF}=window.jspdf;
+    const doc=new jsPDF({unit:'mm',format:'a4'});
+    const W=210,M=14;
+    const navy=[26,46,74];
+    doc.setFillColor(...navy);doc.rect(0,0,W,28,'F');
+    doc.setTextColor(255,255,255);doc.setFont('helvetica','bold');doc.setFontSize(18);
+    doc.text('BILL OF LADING',M,12);
+    doc.setFontSize(10);doc.setFont('helvetica','normal');
+    doc.text('Non-Negotiable',M,20);
+    doc.text('BOL #: '+(meta.bolNum||'—'),W-M,12,{align:'right'});
+    doc.text('Date: '+(meta.bolDate||localDateStr()),W-M,20,{align:'right'});
+    doc.setTextColor(0,0,0);
+    let y=36;
+    const sec=(title)=>{doc.setFillColor(240,244,248);doc.rect(M,y-4,W-M*2,6,'F');doc.setFont('helvetica','bold');doc.setFontSize(9);doc.setTextColor(...navy);doc.text(title,M+2,y);doc.setTextColor(0,0,0);y+=8;};
+    const row=(label,val)=>{doc.setFont('helvetica','bold');doc.setFontSize(9);doc.text(label+':',M,y);doc.setFont('helvetica','normal');doc.text(val||'—',M+40,y);y+=6;};
+    sec('SHIPPER');row('Company',meta.shipperName);row('Address',meta.shipperAddr);y+=2;
+    sec('CONSIGNEE');row('Company',meta.consigneeName||q.customer);row('Address',meta.consigneeAddr);y+=2;
+    sec('CARRIER INFORMATION');row('Carrier',meta.carrier||q.carrier);row('PRO / Tracking #',meta.proNum);y+=2;
+    sec('FREIGHT DETAILS');row('Pieces',meta.pieces);row('Weight',meta.weight?(meta.weight+' lbs'):'—');row('Freight class',meta.freightClass);row('Commodity',meta.commodity);row('NMFC #',meta.nmfc);y+=2;
+    if(meta.bolNotes){sec('SPECIAL INSTRUCTIONS');doc.setFont('helvetica','normal');doc.setFontSize(9);const lines=doc.splitTextToSize(meta.bolNotes,W-M*2);doc.text(lines,M,y);y+=lines.length*5+4;}
+    y+=8;doc.setDrawColor(...navy);doc.setLineWidth(0.5);doc.line(M,y,90,y);doc.line(120,y,W-M,y);
+    doc.setFontSize(8);doc.text('Shipper signature',M,y+4);doc.text('Carrier signature',120,y+4);
+    doc.setFontSize(7);doc.setTextColor(150,150,150);doc.text('Generated by Shifl Logistics TMS · This is a non-negotiable bill of lading',W/2,285,{align:'center'});
+    doc.save('BOL_'+(meta.bolNum||id)+'_'+q.customer?.replace(/\s+/g,'_')+'.pdf');
+    closeModal();showToast('BOL PDF downloaded','success',2000);
+  }catch(e){showToast('PDF error: '+e.message,'error');}
+}
+
+// ── CARRIER SCORECARDS ─────────────────────────────────────────────
+function renderTMSScorecard(tabBar,loads){
+  const carriers={};
+  loads.forEach(l=>{
+    const c=l.carrier||'Unknown';
+    if(!carriers[c]) carriers[c]={name:c,total:0,delivered:0,onTime:0,revenue:0,profit:0};
+    carriers[c].total++;
+    if(['Delivered','Invoiced','Paid'].includes(l.status)){carriers[c].delivered++;carriers[c].onTime++;}
+    carriers[c].revenue+=(l.customerRate||0);
+    carriers[c].profit+=getShipmentProfit(l,'freight').profit;
+  });
+  const sorted=Object.values(carriers).sort((a,b)=>b.total-a.total);
+  $('page').innerHTML=tabBar+`
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px">
+    ${sorted.length?sorted.map(c=>{
+      const onTimeRate=c.delivered>0?Math.round(c.onTime/c.delivered*100):0;
+      const color=onTimeRate>=90?'var(--green)':onTimeRate>=70?'var(--amber)':'var(--red)';
+      return`<div class="card">
+        <div style="font-size:15px;font-weight:800;color:var(--navy);margin-bottom:4px">${c.name}</div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:14px">
+          <div style="text-align:center"><div style="font-size:22px;font-weight:900;color:${color}">${onTimeRate}%</div><div style="font-size:10px;color:var(--gray-400)">On-time</div></div>
+          <div style="text-align:center"><div style="font-size:22px;font-weight:900;color:var(--navy)">${c.total}</div><div style="font-size:10px;color:var(--gray-400)">Loads</div></div>
+          <div style="text-align:center"><div style="font-size:18px;font-weight:800;color:var(--steel)">${fmtD(c.revenue)}</div><div style="font-size:10px;color:var(--gray-400)">Revenue</div></div>
+        </div>
+        <div style="height:6px;background:var(--gray-100);border-radius:3px;overflow:hidden"><div style="height:6px;width:${onTimeRate}%;background:${color};border-radius:3px"></div></div>
+        <div style="font-size:11px;color:var(--gray-500);margin-top:6px">${c.delivered} delivered · avg margin ${c.revenue>0?pct(c.profit/c.revenue):'—'}</div>
+      </div>`;}).join(''):`<div style="padding:40px;text-align:center;color:var(--gray-400)">No carrier data yet</div>`}
+  </div>`;
+}
+
+// ── TOOLS — NMFC + DENSITY CALCULATOR ─────────────────────────────
+function renderTMSTools(tabBar){
+  $('page').innerHTML=tabBar+`
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+    <!-- Density/Class Calculator -->
+    <div class="card">
+      <div style="font-size:15px;font-weight:800;color:var(--navy);margin-bottom:14px">⚖️ Freight class calculator</div>
+      <div class="field"><label>Length (in)</label><input type="number" id="fc-len" placeholder="0" oninput="calcFreightClass()" min="0"></div>
+      <div class="field"><label>Width (in)</label><input type="number" id="fc-wid" placeholder="0" oninput="calcFreightClass()" min="0"></div>
+      <div class="field"><label>Height (in)</label><input type="number" id="fc-hgt" placeholder="0" oninput="calcFreightClass()" min="0"></div>
+      <div class="field"><label>Weight (lbs)</label><input type="number" id="fc-wgt" placeholder="0" oninput="calcFreightClass()" min="0"></div>
+      <div id="fc-result" style="margin-top:12px;padding:14px;background:var(--blue-bg);border-radius:var(--radius);display:none">
+        <div style="font-size:12px;color:var(--gray-500)">Density</div>
+        <div id="fc-density" style="font-size:22px;font-weight:900;color:var(--navy)">—</div>
+        <div style="font-size:12px;color:var(--gray-500);margin-top:6px">Freight class</div>
+        <div id="fc-class" style="font-size:28px;font-weight:900;color:var(--steel)">—</div>
+        <div id="fc-note" style="font-size:11px;color:var(--amber);margin-top:4px"></div>
+      </div>
+    </div>
+    <!-- NMFC Lookup -->
+    <div class="card">
+      <div style="font-size:15px;font-weight:800;color:var(--navy);margin-bottom:14px">🔍 NMFC class reference</div>
+      <div class="field"><label>Search commodity</label><input type="text" id="nmfc-search" placeholder="e.g. furniture, electronics, food..." oninput="searchNMFC(this.value)"></div>
+      <div id="nmfc-results" style="margin-top:10px;max-height:280px;overflow-y:auto"></div>
+    </div>
+  </div>`;
+}
+
+function calcFreightClass(){
+  const l=parseFloat($('fc-len')?.value)||0;
+  const w=parseFloat($('fc-wid')?.value)||0;
+  const h=parseFloat($('fc-hgt')?.value)||0;
+  const wgt=parseFloat($('fc-wgt')?.value)||0;
+  if(!l||!w||!h||!wgt) return;
+  const cubicFt=(l*w*h)/1728;
+  const density=wgt/cubicFt;
+  const cls=densityToClass(density);
+  const el=$('fc-result');if(el) el.style.display='block';
+  const de=$('fc-density');if(de) de.textContent=density.toFixed(2)+' lbs/ft³';
+  const ce=$('fc-class');if(ce) ce.textContent='Class '+cls;
+  const ne=$('fc-note');if(ne) ne.textContent='Verify with carrier tariff — commodity type may affect class';
+}
+
+function densityToClass(d){
+  if(d>=50) return 50;if(d>=35) return 55;if(d>=30) return 60;if(d>=22.5) return 65;
+  if(d>=15) return 70;if(d>=13.5) return 77.5;if(d>=12) return 85;if(d>=10.5) return 92.5;
+  if(d>=9) return 100;if(d>=8) return 110;if(d>=7) return 125;if(d>=6) return 150;
+  if(d>=5) return 175;if(d>=4) return 200;if(d>=3) return 250;if(d>=2) return 300;
+  if(d>=1) return 400; return 500;
+}
+
+const NMFC_TABLE=[
+  {commodity:'Furniture',class:'85–125',nmfc:'40600',note:'Depends on material and packing'},
+  {commodity:'Electronics / computers',class:'70–100',nmfc:'34560',note:'Properly packed in original boxes'},
+  {commodity:'Clothing / apparel',class:'100–150',nmfc:'22500',note:'Boxed or hanging garments'},
+  {commodity:'Auto parts',class:'55–100',nmfc:'10000',note:'Varies by part type'},
+  {commodity:'Beverages / liquids',class:'60–85',nmfc:'16580',note:'Canned or bottled'},
+  {commodity:'Paper / printed matter',class:'50–100',nmfc:'48440',note:'Depends on density'},
+  {commodity:'Food / dry goods',class:'65–85',nmfc:'28520',note:'Canned goods = class 60'},
+  {commodity:'Machinery / equipment',class:'55–85',nmfc:'46000',note:'Varies by weight'},
+  {commodity:'Building materials',class:'50–70',nmfc:'17440',note:'Lumber, brick, stone'},
+  {commodity:'Toys',class:'85–125',nmfc:'54730',note:'Depends on packing'},
+  {commodity:'Pharmaceuticals',class:'85–150',nmfc:'43900',note:'Boxed medications'},
+  {commodity:'Metal / steel',class:'50–70',nmfc:'42260',note:'Depends on form'},
+  {commodity:'Plastic products',class:'85–150',nmfc:'49640',note:'Molded or sheet'},
+  {commodity:'Chemicals',class:'60–100',nmfc:'22000',note:'Non-hazardous only'},
+  {commodity:'Sporting goods',class:'100–150',nmfc:'51500',note:'Varies by item'},
+];
+function searchNMFC(q){
+  const el=$('nmfc-results');if(!el) return;
+  if(!q.trim()){el.innerHTML='';return;}
+  const results=NMFC_TABLE.filter(r=>r.commodity.toLowerCase().includes(q.toLowerCase()));
+  el.innerHTML=results.length?results.map(r=>`
+    <div style="padding:10px;border-bottom:1px solid var(--gray-100)">
+      <div style="font-size:13px;font-weight:700;color:var(--navy)">${r.commodity}</div>
+      <div style="display:flex;gap:16px;margin-top:4px">
+        <span style="font-size:12px;color:var(--gray-500)">Class: <strong style="color:var(--steel)">${r.class}</strong></span>
+        <span style="font-size:12px;color:var(--gray-500)">NMFC: <strong>${r.nmfc}</strong></span>
+      </div>
+      <div style="font-size:11px;color:var(--amber);margin-top:2px">⚠ ${r.note}</div>
+    </div>`).join(''):'<div style="padding:20px;text-align:center;color:var(--gray-400);font-size:13px">No matches — consult your carrier tariff</div>';
+}
+
+// ── TMS REPORTS ────────────────────────────────────────────────────
+function renderTMSReports(tabBar,loads){
+  const today=localDateStr();
+  const AR_30=loads.filter(l=>l.status==='Invoiced'&&l.date>=new Date(Date.now()-30*864e5).toISOString().slice(0,10));
+  const AR_60=loads.filter(l=>l.status==='Invoiced'&&l.date<new Date(Date.now()-30*864e5).toISOString().slice(0,10)&&l.date>=new Date(Date.now()-60*864e5).toISOString().slice(0,10));
+  const AR_90=loads.filter(l=>l.status==='Invoiced'&&l.date<new Date(Date.now()-60*864e5).toISOString().slice(0,10));
+  const totalRev=loads.reduce((s,l)=>s+(l.customerRate||0),0);
+  const totalProfit=loads.reduce((s,l)=>s+getShipmentProfit(l,'freight').profit,0);
+  const laneMap={};loads.forEach(l=>{const k=`${l.pickupZip||'?'} → ${l.deliveryZip||'?'}`;if(!laneMap[k]) laneMap[k]={loads:0,revenue:0,profit:0};laneMap[k].loads++;laneMap[k].revenue+=(l.customerRate||0);laneMap[k].profit+=getShipmentProfit(l,'freight').profit;});
+  const topLanes=Object.entries(laneMap).sort((a,b)=>b[1].revenue-a[1].revenue).slice(0,8);
+  $('page').innerHTML=tabBar+`
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+    <!-- AR Aging -->
+    <div class="card">
+      <div style="font-size:14px;font-weight:800;color:var(--navy);margin-bottom:14px">⏳ AR Aging</div>
+      ${[{label:'0–30 days',loads:AR_30,color:'var(--green)'},{label:'31–60 days',loads:AR_60,color:'var(--amber)'},{label:'61+ days',loads:AR_90,color:'var(--red)'}].map(b=>`
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--gray-100)">
+          <div><div style="font-size:13px;font-weight:600;color:${b.color}">${b.label}</div><div style="font-size:11px;color:var(--gray-400)">${b.loads.length} invoices outstanding</div></div>
+          <div style="font-size:15px;font-weight:800;color:${b.color}">${fmtD(b.loads.reduce((s,l)=>s+(l.customerRate||0),0))}</div>
+        </div>`).join('')}
+    </div>
+    <!-- P&L Summary -->
+    <div class="card">
+      <div style="font-size:14px;font-weight:800;color:var(--navy);margin-bottom:14px">💰 P&L Summary</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div style="text-align:center;padding:12px;background:var(--gray-50);border-radius:var(--radius)"><div style="font-size:11px;color:var(--gray-500)">Total loads</div><div style="font-size:24px;font-weight:900;color:var(--navy)">${loads.length}</div></div>
+        <div style="text-align:center;padding:12px;background:var(--blue-bg);border-radius:var(--radius)"><div style="font-size:11px;color:var(--gray-500)">Total revenue</div><div style="font-size:20px;font-weight:900;color:var(--steel)">${fmtD(totalRev)}</div></div>
+        <div style="text-align:center;padding:12px;background:#f0fdf4;border-radius:var(--radius)"><div style="font-size:11px;color:var(--gray-500)">Net profit</div><div style="font-size:20px;font-weight:900;color:var(--green)">${fmtD(totalProfit)}</div></div>
+        <div style="text-align:center;padding:12px;background:#faf5ff;border-radius:var(--radius)"><div style="font-size:11px;color:var(--gray-500)">Avg margin</div><div style="font-size:20px;font-weight:900;color:#7c3aed">${totalRev>0?pct(totalProfit/totalRev):'—'}</div></div>
+      </div>
+    </div>
+  </div>
+  <!-- Top lanes -->
+  <div class="card">
+    <div style="font-size:14px;font-weight:800;color:var(--navy);margin-bottom:14px">🗺️ Top lanes by revenue</div>
+    ${topLanes.length?topLanes.map(([lane,d],i)=>`
+      <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--gray-100)">
+        <div style="font-size:13px;font-weight:700;color:var(--gray-400);min-width:20px">#${i+1}</div>
+        <div style="flex:1"><div style="font-size:13px;font-weight:700;color:var(--navy)">${lane}</div><div style="height:5px;background:var(--gray-100);border-radius:3px;margin-top:4px;overflow:hidden"><div style="height:5px;width:${Math.round(d.revenue/topLanes[0][1].revenue*100)}%;background:var(--steel);border-radius:3px"></div></div></div>
+        <div style="text-align:right"><div style="font-size:13px;font-weight:700;color:var(--steel)">${fmtD(d.revenue)}</div><div style="font-size:11px;color:var(--gray-400)">${d.loads} loads · ${pct(d.revenue>0?d.profit/d.revenue:0)} margin</div></div>
+      </div>`).join(''):'<div style="text-align:center;color:var(--gray-400);padding:20px">No lane data yet</div>'}
+  </div>`;
+}
+
+// Load detail modal
+function openTMSLoadDetail(id){
+  const q=(window._fqHistory||[]).find(q=>q.id===id);
+  if(!q) return;
+  const meta=getTMSMeta(id);
+  const statusIdx=TMS_STATUSES.indexOf(q.status);
+  const timeline=TMS_STATUSES.map((s,i)=>{
+    const done=i<=statusIdx;
+    const ts=meta[s.toLowerCase().replace(/ /g,'_')+'_at'];
+    return`<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+      <div style="width:20px;height:20px;border-radius:50%;background:${done?tmsStatusColor(s):'var(--gray-100)'};display:flex;align-items:center;justify-content:center;font-size:11px;color:${done?'#fff':'var(--gray-300)'};flex-shrink:0">${done?'✓':'○'}</div>
+      <div style="flex:1"><div style="font-size:12px;font-weight:${done?700:400};color:${done?'var(--navy)':'var(--gray-400)'}">${s}</div>${ts?`<div style="font-size:10px;color:var(--gray-400)">${new Date(ts).toLocaleString('en-US',{timeZone:'America/New_York',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}</div>`:''}</div>
+    </div>`;}).join('');
+  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-title">🚚 ${q.customer||'Load'} — ${q.fqMode}</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px">
+      <div><div style="font-size:11px;color:var(--gray-400)">Lane</div><div style="font-size:13px;font-weight:700;color:var(--navy)">${q.pickupZip||'—'} → ${q.deliveryZip||'—'}</div></div>
+      <div><div style="font-size:11px;color:var(--gray-400)">Carrier</div><div style="font-size:13px;font-weight:700;color:var(--navy)">${q.carrier||'—'}</div></div>
+      <div><div style="font-size:11px;color:var(--gray-400)">Revenue</div><div style="font-size:13px;font-weight:700;color:var(--steel)">${fmtD(q.customerRate||0)}</div></div>
+      <div><div style="font-size:11px;color:var(--gray-400)">BOL #</div><div style="font-size:13px;font-weight:700;color:var(--navy)">${meta.bolNum||'—'}</div></div>
+    </div>
+    <div style="font-size:12px;font-weight:700;color:var(--gray-500);margin-bottom:10px;text-transform:uppercase;letter-spacing:.05em">Status timeline</div>
+    ${timeline}
+    <div class="g2" style="margin-top:12px">
+      <div class="field"><label>Pickup appointment</label><input type="datetime-local" id="tms-pu-appt" value="${meta.pickupAppt||''}" onchange="saveTMSMeta('${id}',{pickupAppt:this.value});showSavedIndicator()"></div>
+      <div class="field"><label>Delivery appointment</label><input type="datetime-local" id="tms-del-appt" value="${meta.deliveryAppt||''}" onchange="saveTMSMeta('${id}',{deliveryAppt:this.value});showSavedIndicator()"></div>
+    </div>
+    <div class="g2">
+      <div class="field"><label>ETA (estimated delivery)</label><input type="date" id="tms-eta" value="${meta.eta||''}" onchange="saveTMSMeta('${id}',{eta:this.value});showSavedIndicator()"></div>
+      <div class="field"><label>PRO / Tracking #</label><input type="text" id="tms-pro" value="${meta.proNum||''}" placeholder="Carrier PRO or tracking #" onchange="saveTMSMeta('${id}',{proNum:this.value});showSavedIndicator()"></div>
+    </div>
+    <div class="field"><label>Load notes <span style="font-size:10px;color:var(--gray-400)">(visible to all team)</span></label>
+      <textarea id="tms-notes" rows="3" style="width:100%;box-sizing:border-box;resize:vertical;font-size:13px" placeholder="Special instructions, exceptions, updates..." onchange="saveTMSMeta('${id}',{notes:this.value});showSavedIndicator()">${meta.notes||''}</textarea>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" onclick="closeModal()">Close</button>
+      <button class="btn" onclick="closeModal();openBOLBuilder('${id}')">📄 BOL</button>
+      ${TMS_STATUSES.indexOf(q.status)<TMS_STATUSES.length-1?`<button class="btn blue" onclick="closeModal();advanceTMSLoad('${id}','${nextTMSStatus(q.status)}')">→ Move to ${nextTMSStatus(q.status)}</button>`:'<button class="btn" style="color:var(--green);border-color:var(--green)" disabled>✓ Delivered</button>'}
+    </div>
+  </div></div>`;
+}
+
+
+
+// ════════════════════════════════════════════════════════════════════
+// TMS INVOICING — Full AR/AP for FTL/LTL loads
+// ════════════════════════════════════════════════════════════════════
+function renderTMSInvoicing(tabBar, loads){
+  const invTab=S.tmsInvTab||'customer';
+  const today=localDateStr();
+
+  const pending=loads.filter(l=>l.status==='Delivered');
+  const invoiced=loads.filter(l=>l.status==='Invoiced');
+  const paid=loads.filter(l=>l.status==='Paid');
+
+  const custAR_total=invoiced.reduce((s,l)=>s+(getInvoice(l.id)?.grandTotal||l.customerRate||0),0);
+  const carrAP_total=loads.filter(l=>['Delivered','Invoiced'].includes(l.status)).reduce((s,l)=>s+(getCarrierInvoice(l.id)?.grandTotal||l.carrierRate||0),0);
+  const collected=paid.reduce((s,l)=>s+(l.customerRate||0),0);
+
+  const invTopTabs=`<div style="display:flex;gap:0;margin-bottom:20px;border-bottom:2px solid var(--gray-100)">
+    <button onclick="S.tmsInvTab='customer';renderTMS()" style="padding:10px 22px;border:none;border-bottom:2px solid ${invTab==='customer'?'var(--steel)':'transparent'};margin-bottom:-2px;font-size:13px;font-weight:${invTab==='customer'?700:500};cursor:pointer;font-family:inherit;background:transparent;color:${invTab==='customer'?'var(--steel)':'var(--gray-500)'}">🧾 Customer (AR)</button>
+    <button onclick="S.tmsInvTab='carrier';renderTMS()" style="padding:10px 22px;border:none;border-bottom:2px solid ${invTab==='carrier'?'#d97706':'transparent'};margin-bottom:-2px;font-size:13px;font-weight:${invTab==='carrier'?700:500};cursor:pointer;font-family:inherit;background:transparent;color:${invTab==='carrier'?'#d97706':'var(--gray-500)'}">🚛 Carrier (AP)</button>
+  </div>`;
+
+  if(invTab==='customer'){
+    const kpis=`<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px">
+      <div class="kpi"><div class="kpi-lbl">Pending invoice</div><div class="kpi-val" style="color:var(--amber)">${pending.length}</div><div style="font-size:11px;color:var(--gray-400)">${fmtD(pending.reduce((s,l)=>s+(l.customerRate||0),0))}</div></div>
+      <div class="kpi"><div class="kpi-lbl">Outstanding AR</div><div class="kpi-val" style="color:var(--steel);font-size:18px">${fmtD(custAR_total)}</div><div style="font-size:11px;color:var(--gray-400)">${invoiced.length} invoices</div></div>
+      <div class="kpi"><div class="kpi-lbl">Collected</div><div class="kpi-val" style="color:var(--green);font-size:18px">${fmtD(collected)}</div></div>
+      <div class="kpi"><div class="kpi-lbl">Total FTL/LTL revenue</div><div class="kpi-val" style="color:var(--navy);font-size:16px">${fmtD(loads.reduce((s,l)=>s+(l.customerRate||0),0))}</div></div>
+    </div>`;
+
+    const subTabs=`<div style="display:flex;gap:4px;background:var(--gray-100);padding:3px;border-radius:var(--radius);width:fit-content;margin-bottom:16px">
+      ${[{id:'pending',label:'⏳ Pending ('+pending.length+')'},{id:'invoiced',label:'📤 Invoiced ('+invoiced.length+')'},{id:'paid',label:'✅ Paid ('+paid.length+')'}].map(t=>`<button onclick="S.tmsInvSubTab='${t.id}';renderTMS()" style="padding:6px 14px;border-radius:5px;border:none;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;background:${(S.tmsInvSubTab||'pending')===t.id?'#fff':'none'};color:${(S.tmsInvSubTab||'pending')===t.id?'var(--navy)':'var(--gray-500)'};box-shadow:${(S.tmsInvSubTab||'pending')===t.id?'0 1px 3px rgba(0,0,0,.08)':'none'}">${t.label}</button>`).join('')}
+    </div>`;
+
+    const currentSub=S.tmsInvSubTab||'pending';
+    let tableData=currentSub==='pending'?pending:currentSub==='invoiced'?invoiced:paid;
+    const emptyMsg=currentSub==='pending'?'No loads pending invoice — mark loads as Delivered to invoice them':currentSub==='invoiced'?'No outstanding customer invoices':'No payments recorded yet';
+
+    const rows=tableData.map(l=>{
+      const inv=getInvoice(l.id);
+      const p=getShipmentProfit(l,'freight');
+      return`<tr>
+        <td class="bold">${l.customer||'—'}</td>
+        <td><span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px;background:${tmsStatusColor(l.fqMode||'')}18;color:${tmsStatusColor(l.fqMode||'')}">${l.fqMode}</span></td>
+        <td class="muted">${l.pickupZip||'—'} → ${l.deliveryZip||'—'}</td>
+        <td style="font-family:monospace;font-size:11px;color:var(--steel)">${inv?.invNum||'—'}</td>
+        <td class="money" style="color:var(--steel);font-weight:700">${fmtD(inv?.grandTotal||l.customerRate||0)}</td>
+        <td style="white-space:nowrap;font-weight:700;color:${p.isActual?'var(--green)':'var(--amber)'}">${fmtD(p.profit)} ${profitBadge(p.isActual)}</td>
+        <td onclick="event.stopPropagation()" style="white-space:nowrap">
+          ${currentSub==='pending'?`<button class="btn sm blue" onclick="openInvoiceBuilder('freight','${l.id}')">🧾 Invoice</button>`:''}
+          ${currentSub==='invoiced'?`<button class="btn sm" onclick="openInvoiceBuilder('freight','${l.id}')">✏️ Edit</button><button class="btn sm" onclick="markFqPaid('${l.id}')" style="color:var(--green);border-color:#86efac">✅ Paid</button>`:''}
+        </td>
+      </tr>`;}).join('');
+
+    $('page').innerHTML=tabBar+invTopTabs+kpis+subTabs+(tableData.length?`<div class="tbl-wrap"><table><thead><tr><th>Customer</th><th>Mode</th><th>Lane</th><th>Invoice #</th><th>Amount</th><th>Profit</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`:`<div class="empty"><div class="empty-ico">🧾</div><p>${emptyMsg}</p></div>`);
+
+  } else {
+    // CARRIER AP
+    const toPay=loads.filter(l=>['Delivered','Invoiced'].includes(l.status));
+    const carrPaid=loads.filter(l=>l.status==='Paid');
+    const kpis=`<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:20px">
+      <div class="kpi" style="border-color:#fca5a5;background:#fff5f5"><div class="kpi-lbl" style="color:#dc2626">To pay carriers</div><div class="kpi-val" style="color:#dc2626;font-size:18px">${fmtD(carrAP_total)}</div><div style="font-size:11px;color:#dc2626">${toPay.length} loads</div></div>
+      <div class="kpi"><div class="kpi-lbl">Carrier invoices</div><div class="kpi-val">${toPay.filter(l=>getCarrierInvoice(l.id)).length}</div></div>
+      <div class="kpi" style="border-color:#86efac;background:#f0fdf4"><div class="kpi-lbl" style="color:var(--green)">Paid to carriers</div><div class="kpi-val" style="color:var(--green);font-size:18px">${fmtD(carrPaid.reduce((s,l)=>s+(getCarrierInvoice(l.id)?.grandTotal||l.carrierRate||0),0))}</div></div>
+    </div>`;
+
+    const rows=toPay.map(l=>{
+      const cinv=getCarrierInvoice(l.id);
+      return`<tr>
+        <td class="bold">${l.customer||'—'}</td>
+        <td><span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px;background:#fff7ed;color:#d97706">${l.fqMode}</span></td>
+        <td class="muted">${l.pickupZip||'—'} → ${l.deliveryZip||'—'}</td>
+        <td class="bold" style="color:var(--navy)">${l.carrier||'—'}</td>
+        <td style="font-family:monospace;font-size:11px;color:var(--gray-500)">${cinv?.invNum||'—'}</td>
+        <td class="money" style="color:#d97706;font-weight:700">${fmtD(cinv?.grandTotal||l.carrierRate||0)}</td>
+        <td onclick="event.stopPropagation()" style="white-space:nowrap">
+          <button class="btn sm" onclick="openCarrierInvoiceBuilder('freight','${l.id}')" style="color:#d97706;border-color:#fbbf24">${cinv?'✏️ Edit':'🚛 Enter'}</button>
+        </td>
+      </tr>`;}).join('');
+
+    $('page').innerHTML=tabBar+invTopTabs+kpis+(toPay.length?`<div class="tbl-wrap"><table><thead><tr><th>Customer</th><th>Mode</th><th>Lane</th><th>Carrier</th><th>Invoice #</th><th>Carrier cost</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`:`<div class="empty"><div class="empty-ico">🚛</div><p>No pending carrier payments</p></div>`);
+  }
+}
+
+function markFqPaid(id){
+  const idx=(window._fqHistory||[]).findIndex(q=>q.id===id);
+  if(idx<0) return;
+  window._fqHistory[idx].status='Paid';
+  window._fqHistory[idx].paidDate=localDateStr();
+  try{localStorage.setItem('fq_history',JSON.stringify(window._fqHistory));}catch(e){}
+  showToast('Marked as paid','success',2000);
+  renderTMS();
+}
+
+
+
+function exportTMSLoads(){
+  const loads=getTMSLoads();
+  const rows=[['Booking#','Customer','Mode','Pickup ZIP','Delivery ZIP','Carrier','BOL#','Revenue','Carrier Cost','Profit','Status','Date'],...loads.map(l=>{const m=getTMSMeta(l.id);const p=getShipmentProfit(l,'freight');return[m.bookingNum||'',l.customer||'',l.fqMode||'',l.pickupZip||'',l.deliveryZip||'',l.carrier||'',m.bolNum||'',l.customerRate||0,l.carrierRate||0,p.profit.toFixed(2),l.status,l.date];})];
+  const csv=rows.map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\n');
+  const a=document.createElement('a');a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);a.download='TMS_Loads_'+localDateStr()+'.csv';a.click();
+  showToast('CSV exported','success',2000);
+}
+
+function openFqCarrierInvById(id){
+  const idx=(window._fqHistory||[]).findIndex(q=>q.id===id);
+  if(idx>=0) openFqCarrierInvoice(idx);
+  else showToast('Load not found','error');
+}
+// ════════════════════════════════════════════════════════════════════
+// TMS MEGA BUILD — 19 new features
+// ════════════════════════════════════════════════════════════════════
+
+// ── HELPERS ───────────────────────────────────────────────────────
+function getTMSCheckcalls(id){return JSON.parse(localStorage.getItem('tms_cc_'+id)||'[]');}
+function saveTMSCheckcall(id,entry){const cc=getTMSCheckcalls(id);cc.push({...entry,ts:new Date().toISOString()});localStorage.setItem('tms_cc_'+id,JSON.stringify(cc));}
+function getTMSStops(id){return JSON.parse(localStorage.getItem('tms_stops_'+id)||'[]');}
+function saveTMSStops(id,stops){localStorage.setItem('tms_stops_'+id,JSON.stringify(stops));}
+function getTMSClaims(id){return JSON.parse(localStorage.getItem('tms_claims_'+id)||'[]');}
+function saveTMSClaim(id,claim){const c=getTMSClaims(id);c.push({...claim,id:'CLM-'+Date.now(),ts:new Date().toISOString()});localStorage.setItem('tms_claims_'+id,JSON.stringify(c));return c;}
+function getTMSCapacity(){return JSON.parse(localStorage.getItem('tms_capacity')||'[]');}
+function saveTMSCapacity(list){localStorage.setItem('tms_capacity',JSON.stringify(list));}
+function isOverdue(l){const m=getTMSMeta(l.id);if(!m.eta||['Delivered','Paid','Invoiced'].includes(l.status))return false;return new Date(m.eta)<new Date();}
+function getOverdueLoads(){return getTMSLoads().filter(isOverdue);}
+function updateTMSBadge(){
+  const ov=getOverdueLoads().length;
+  const btn=document.getElementById('nav-tms');
+  if(!btn)return;
+  const badge=document.getElementById('tms-badge');
+  if(badge)badge.textContent=ov>0?'⚠️ '+ov+' overdue':getTMSLoads().length>0?getTMSLoads().length+' loads':'All modes';
+}
+
+// ── OVERRIDE renderTMS to add new tabs + dashboard default ─────────
+const _origRenderTMS=window.renderTMS;
+function renderTMS(){
   const sub=S.tmsTab||'dashboard';
   const loads=getTMSLoads();
   $('topbar-right').innerHTML=`<button class="btn" onclick="openRevenueLeakDetector()">💸 Revenue leaks</button><button class="btn" onclick="openLoadDocumentBundle('','')">📦 Doc bundle</button><div style="font-size:12px;font-weight:700;color:var(--steel)">🚚 TMS</div>`;
@@ -19361,329 +19964,4 @@ window.openCarrierOnboarding=function(name){
     footer.parentElement.insertBefore(wrap,footer);
   },200);
 };
-</script>
-
-<script>
-/* ================================================================
-   OVERHAUL BATCH 3: Feature fixes + UI enhancements
-   ================================================================ */
-
-// ── FIX: Rate requests — pre-fill carrier when building quote ──
-const _origLoadReqIntoBuilder = window.loadRequestIntoQuoteBuilder;
-window.loadRequestIntoQuoteBuilder = function(id){
-  const all = getQuoteRequests();
-  const req = all.find(r=>r.id===id);
-  if(req && req.pricing && req.pricing.carrier){
-    // Pre-fill carrier in quote builder state
-    if(typeof S !== 'undefined'){
-      S.qi = S.qi || {};
-      S.qi.preselectedCarrier = req.pricing.carrier;
-      S.qi.preselectedBase = req.pricing.base || 0;
-    }
-  }
-  if(typeof _origLoadReqIntoBuilder === 'function') _origLoadReqIntoBuilder.apply(this, arguments);
-};
-
-// ── FIX: Global search — TMS loads with localStorage fallback ──
-const _origGsSearch = window.gsSearch;
-window.gsSearch = function(q){
-  // Ensure getTMSLoads is always available
-  if(typeof window.getTMSLoads !== 'function'){
-    window.getTMSLoads = function(){
-      try{ return JSON.parse(localStorage.getItem('tms_loads')||'[]'); }catch(e){ return []; }
-    };
-  }
-  if(typeof _origGsSearch === 'function') _origGsSearch.apply(this, arguments);
-};
-
-// ── FIX: Carrier bid ranker — fix renderBids reference ──
-const _origOpenCarrierBidRanker = window.openCarrierBidRanker;
-window.openCarrierBidRanker = function(){
-  _origOpenCarrierBidRanker && _origOpenCarrierBidRanker.apply(this, arguments);
-  // Re-wire the Add button after modal opens
-  setTimeout(()=>{
-    const addBtn = document.querySelector('#bid-list + button, [onclick*="bids.push"]');
-  }, 100);
-};
-
-// ── FIX: Clipboard fallback for HTTP environments ──
-window.copyToClipboard = function(text){
-  if(navigator.clipboard && window.isSecureContext){
-    return navigator.clipboard.writeText(text);
-  }
-  // Fallback
-  const ta = document.createElement('textarea');
-  ta.value = text;
-  ta.style.cssText = 'position:fixed;left:-9999px;top:-9999px;opacity:0';
-  document.body.appendChild(ta);
-  ta.focus(); ta.select();
-  try{ document.execCommand('copy'); } catch(e){}
-  document.body.removeChild(ta);
-  return Promise.resolve();
-};
-
-// ── FIX: Ref# save to Supabase ──
-const _origSaveDrayRef = window.saveDrayRef;
-if(typeof _origSaveDrayRef === 'function'){
-  window.saveDrayRef = function(id, val){
-    _origSaveDrayRef.apply(this, arguments);
-    // Also push to Supabase
-    try{
-      if(typeof db !== 'undefined' && db){
-        db.from('quotes').update({shifl_ref: val}).eq('id', id).then(()=>{});
-      }
-    }catch(e){}
-  };
-}
-
-// ── STATUS PILL — replace select dropdowns with colored pills ──
-function statusPillColor(status){
-  const map = {
-    'Quoted':'quoted','Booked':'booked','Lost':'lost',
-    'Cancelled':'cancelled','Expired':'expired','Delivered':'delivered'
-  };
-  return map[(status||'').toLowerCase()] || 'quoted';
-}
-
-function openStatusPopover(id, currentStatus, e){
-  e.stopPropagation();
-  document.querySelectorAll('.status-popover').forEach(p=>p.remove());
-  const statuses = ['Quoted','Booked','Lost','Cancelled','Expired','Delivered'];
-  const pop = document.createElement('div');
-  pop.className = 'status-popover';
-  const rect = e.currentTarget.getBoundingClientRect();
-  pop.style.cssText = `top:${rect.bottom+4}px;left:${rect.left}px`;
-  pop.innerHTML = statuses.map(s=>`
-    <button onclick="updateStatus('${id}','${s}');this.closest('.status-popover').remove();
-      const pill=document.querySelector('[data-status-id=\\'${id}\\']');
-      if(pill){pill.textContent='${s}';pill.className='status-pill '+statusPillColor('${s}');}
-    " style="${s===currentStatus?'font-weight:700;color:#1e3a5f;':''}">${s}</button>
-  `).join('');
-  document.body.appendChild(pop);
-  setTimeout(()=>document.addEventListener('click', function _close(ev){
-    if(!pop.contains(ev.target)){pop.remove();document.removeEventListener('click',_close);}
-  }), 0);
-}
-
-// ── CARRIER CARD GRID VIEW ──
-let _carrierViewMode = localStorage.getItem('carrier_view_mode') || 'table';
-
-function setCarrierViewMode(mode){
-  _carrierViewMode = mode;
-  localStorage.setItem('carrier_view_mode', mode);
-  renderCarriers();
-}
-
-function renderCarrierCardGrid(carriers){
-  if(!carriers.length) return '<div class="empty"><div class="empty-ico">🚛</div><p>No carriers yet</p><button class="empty-cta" onclick="showCarrierModal()">+ Add first carrier</button></div>';
-  return `<div class="carrier-card-grid">${carriers.map(c=>{
-    const status = getOnboardStatus(c.name);
-    const onb = getCarrierOnboardData(c.name);
-    const isOnboarded = isCarrierOnboarded(c.name);
-    const insExpiry = onb.insExpiry ? new Date(onb.insExpiry) : null;
-    const today = new Date();
-    const insExpired = insExpiry && insExpiry < today;
-    const insExpiring = insExpiry && !insExpired && (insExpiry-today) < 30*86400000;
-    return `<div class="carrier-card" onclick="showCarrierDetail('${c.id}')">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-        <span style="width:8px;height:8px;border-radius:50%;background:${isOnboarded?'#16a34a':'#f59e0b'};flex-shrink:0"></span>
-        <div class="carrier-card-name">${c.name}</div>
-      </div>
-      ${onb.mc||onb.dot?`<div class="carrier-card-meta">${onb.mc?'MC '+onb.mc:''}${onb.dot?' · DOT '+onb.dot:''}</div>`:''}
-      <div class="carrier-card-badges">
-        <span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:99px;background:${status.bg};color:${status.color}">${status.icon} ${status.label}</span>
-        ${onb.insurance?`<span style="font-size:10px;padding:2px 8px;border-radius:99px;background:${insExpired?'#fee2e2':insExpiring?'#fef3c7':'#f0fdf4'};color:${insExpired?'#dc2626':insExpiring?'#d97706':'#16a34a'}">${insExpired?'⚠ COI Exp':insExpiring?'⚠ COI Soon':'✓ COI'}</span>`:''}
-        ${onb.w9?'<span style="font-size:10px;padding:2px 8px;border-radius:99px;background:#f0fdf4;color:#16a34a">✓ W-9</span>':''}
-      </div>
-      ${(c.modes||[]).length?`<div style="display:flex;gap:4px;margin-bottom:10px">${(c.modes||[]).map(m=>`<span style="font-size:10px;background:#dbeafe;color:#1e40af;padding:1px 7px;border-radius:99px;font-weight:600">${m}</span>`).join('')}</div>`:''}
-      <div class="carrier-card-actions" onclick="event.stopPropagation()">
-        <button class="btn sm" onclick="openCarrierOnboarding('${c.name.replace(/'/g,"\\'")}')" style="${isOnboarded?'color:#16a34a;border-color:#bbf7d0':''}">${isOnboarded?'✅ Onboarded':'📋 Onboard'}</button>
-        <button class="btn sm" onclick="showCarrierModal('${c.id}')">✏️</button>
-        <button class="btn sm" data-cid="${c.id}" data-cname="${c.name}" onclick="confirmDeleteCarrier(this.dataset.cid,this.dataset.cname)" style="color:#dc2626;border-color:#fca5a5">🗑️</button>
-      </div>
-    </div>`;
-  }).join('')}</div>`;
-}
-
-// Patch renderCarriers to respect view mode + add toggle buttons
-const _origRenderCarriersOverhaul = window.renderCarriers;
-window.renderCarriers = async function(){
-  await _origRenderCarriersOverhaul.apply(this, arguments);
-  // Inject view toggle after topbar is set
-  setTimeout(()=>{
-    const topbar = document.getElementById('topbar-right');
-    if(topbar && !document.getElementById('carrier-view-toggle')){
-      const tog = document.createElement('div');
-      tog.id = 'carrier-view-toggle';
-      tog.style.cssText = 'display:flex;border:1px solid #d1d5db;border-radius:8px;overflow:hidden';
-      tog.innerHTML = `
-        <button onclick="setCarrierViewMode('table')" style="padding:4px 9px;border:none;font-size:12px;cursor:pointer;background:${_carrierViewMode==='table'?'#1e3a5f':'#fff'};color:${_carrierViewMode==='table'?'#fff':'#6b7280'};font-family:inherit" title="Table view">≡</button>
-        <button onclick="setCarrierViewMode('grid')" style="padding:4px 9px;border:none;font-size:12px;cursor:pointer;background:${_carrierViewMode==='grid'?'#1e3a5f':'#fff'};color:${_carrierViewMode==='grid'?'#fff':'#6b7280'};font-family:inherit" title="Card grid">⊞</button>`;
-      topbar.prepend(tog);
-    }
-    // If grid mode, replace the tbl-wrap with card grid
-    if(_carrierViewMode === 'grid'){
-      const tblWrap = document.querySelector('#page .tbl-wrap');
-      if(tblWrap){
-        // Get current carrier data
-        const carriers = window._fqRates || JSON.parse(localStorage.getItem('fq_rates')||'[]');
-        tblWrap.outerHTML = renderCarrierCardGrid(carriers);
-      }
-    }
-  }, 400);
-};
-
-// ── EMPTY STATES — contextual CTAs ──
-const EMPTY_STATE_CONFIG = {
-  log:    {icon:'📋', msg:'No quotes yet', cta:'Build your first quote', action:"goTo('quote')"},
-  carriers:{icon:'🚛', msg:'No carriers in your network', cta:'Add first carrier', action:'showCarrierModal()'},
-  requests:{icon:'📋', msg:'No rate requests yet', cta:'Create a rate request', action:'openNewQuoteRequest()'},
-  customers:{icon:'👥', msg:'No customers yet', cta:'Add a customer', action:"S.view='customers';render()"},
-  tms:    {icon:'🚚', msg:'No loads in TMS', cta:'Add a load', action:"S.tmsTab='loads';renderTMS()"},
-};
-
-// Override the generic empty render
-const _origRender = window.render;
-window.render = function(){
-  _origRender && _origRender.apply(this, arguments);
-  // After render, check for generic empty states and upgrade them
-  setTimeout(()=>{
-    const empties = document.querySelectorAll('.empty');
-    empties.forEach(el=>{
-      const cfg = EMPTY_STATE_CONFIG[S.view];
-      if(cfg && !el.querySelector('.empty-cta') && el.querySelector('p')){
-        const p = el.querySelector('p');
-        if(!p.querySelector('.empty-cta')){
-          const btn = document.createElement('button');
-          btn.className = 'empty-cta';
-          btn.textContent = cfg.cta + ' →';
-          btn.onclick = new Function(cfg.action);
-          el.appendChild(btn);
-        }
-      }
-    });
-  }, 100);
-};
-
-// ── CONSOLIDATE BACKGROUND INTERVALS ──
-// Clear individual intervals and replace with one master tick
-if(window._masterTickInterval) clearInterval(window._masterTickInterval);
-window._masterTickInterval = setInterval(()=>{
-  // 1. Chat badge
-  if(typeof updateChatBadge==='function') try{updateChatBadge();}catch(e){}
-  // 2. Rate request badge
-  if(typeof updateRequestsBadge==='function') try{updateRequestsBadge();}catch(e){}
-  // 3. Upsell check
-  if(typeof checkUpsellOnQuote==='function') try{checkUpsellOnQuote();}catch(e){}
-  // 4. Insurance lapse check (once per minute — skip if not on carriers view)
-  if(S&&S.view==='carriers'&&typeof updateChatBadge==='function') try{updateChatBadge();}catch(e){}
-}, 5000);
-
-// ── EXPAND ZIP PREFIX MAP for lane density ──
-// Add 120+ common drayage destination ZIPs
-if(typeof ZIP_COORDS !== 'undefined'){
-  Object.assign(ZIP_COORDS, {
-    // Northeast
-    '060':'41.76,-72.68','061':'41.76,-72.68','062':'41.56,-72.65','063':'41.35,-73.08',
-    '064':'41.30,-72.93','065':'42.10,-72.59','066':'41.05,-73.54','067':'41.31,-72.73',
-    '068':'41.05,-73.54','069':'41.05,-73.54',
-    '010':'42.10,-72.59','011':'42.10,-72.59','012':'42.37,-72.51','013':'42.01,-71.86',
-    '014':'42.37,-71.10','015':'42.26,-71.80','016':'42.40,-71.36','017':'42.52,-71.71',
-    '018':'42.62,-70.94','019':'42.46,-70.94','020':'42.36,-71.06','021':'42.36,-71.06',
-    '022':'42.36,-71.06','023':'42.10,-70.94','024':'42.47,-71.21','025':'41.82,-71.41',
-    '026':'41.70,-71.16','027':'41.49,-71.31','028':'41.49,-71.32','029':'41.49,-71.32',
-    // Mid-Atlantic
-    '030':'43.20,-71.54','031':'43.20,-71.54','032':'43.20,-71.54','033':'43.20,-71.54',
-    '034':'43.20,-71.54','035':'43.93,-71.12','036':'44.31,-69.78','037':'44.10,-70.22',
-    '038':'43.66,-70.25','039':'43.66,-70.25','040':'43.66,-70.25','041':'44.80,-68.78',
-    '042':'44.80,-68.78','043':'44.80,-68.78','044':'44.80,-68.78','045':'44.50,-69.63',
-    '046':'47.36,-68.37','047':'47.00,-68.00','048':'44.80,-68.78','049':'44.80,-68.78',
-    '050':'44.26,-72.58','051':'44.26,-72.58','052':'44.26,-72.58','053':'43.62,-72.97',
-    '054':'44.48,-73.22','055':'44.48,-73.22','056':'44.48,-73.22','057':'44.48,-73.22',
-    '058':'44.48,-73.22','059':'44.48,-73.22',
-    // PA/NJ more
-    '150':'40.44,-79.99','151':'40.44,-79.99','152':'40.44,-79.99','153':'40.44,-79.99',
-    '154':'40.44,-79.99','155':'40.44,-79.99','156':'40.44,-79.99','157':'41.24,-77.00',
-    '158':'41.24,-77.00','159':'40.44,-79.99','160':'41.00,-80.34','161':'41.00,-80.34',
-    '162':'41.12,-80.60','163':'41.58,-80.14','164':'41.97,-80.33','165':'41.97,-80.33',
-    '166':'41.97,-80.33','167':'41.97,-80.33','168':'41.97,-80.33','169':'41.65,-78.83',
-    '170':'40.27,-76.88','171':'40.27,-76.88','172':'40.27,-76.88','173':'40.27,-76.88',
-    '174':'40.27,-76.88','175':'40.27,-76.88','176':'40.27,-76.88','177':'40.27,-76.88',
-    '178':'39.96,-76.73','179':'39.96,-76.73','180':'40.69,-75.22','181':'40.69,-75.22',
-    '182':'41.41,-75.66','183':'40.69,-75.22','184':'41.41,-75.66','185':'41.41,-75.66',
-    '186':'41.41,-75.66','187':'41.16,-75.88','188':'40.33,-75.93','189':'40.02,-75.30',
-    '190':'40.02,-75.30','191':'40.02,-75.30','192':'40.02,-75.30','193':'40.02,-75.30',
-    '194':'40.02,-75.30','195':'39.95,-75.17','196':'39.95,-75.17','197':'39.95,-75.17',
-    // DE/MD
-    '198':'39.74,-75.55','199':'39.74,-75.55','200':'38.89,-77.03','201':'38.89,-77.03',
-    '202':'38.89,-77.03','203':'38.89,-77.03','204':'38.89,-77.03','205':'39.10,-77.15',
-    '206':'39.10,-77.15','207':'39.10,-77.15','208':'39.10,-77.15','209':'39.10,-77.15',
-    '210':'39.29,-76.61','211':'39.29,-76.61','213':'39.29,-76.61','214':'39.29,-76.61',
-    '215':'39.29,-76.61','216':'38.97,-76.49','217':'38.97,-76.49','218':'38.34,-76.45',
-    '219':'38.97,-76.49',
-    // Southeast
-    '270':'36.07,-79.79','271':'36.07,-79.79','272':'36.07,-79.79','273':'35.23,-80.84',
-    '274':'35.23,-80.84','275':'35.23,-80.84','276':'35.23,-80.84','277':'35.23,-80.84',
-    '278':'35.23,-80.84','279':'35.23,-80.84','280':'35.59,-82.55','281':'35.23,-80.84',
-    '282':'35.23,-80.84','283':'35.23,-80.84','284':'34.19,-77.94','285':'35.78,-78.64',
-    '286':'35.78,-78.64','287':'35.78,-78.64','288':'35.78,-78.64','289':'34.19,-79.38',
-    // FL
-    '320':'30.33,-81.66','321':'28.54,-81.38','322':'30.33,-81.66','323':'30.43,-84.28',
-    '324':'30.43,-84.28','325':'29.65,-82.33','326':'29.65,-82.33','327':'28.54,-81.38',
-    '328':'28.54,-81.38','329':'28.20,-80.63','330':'25.77,-80.19','331':'25.77,-80.19',
-    '332':'25.77,-80.19','333':'26.12,-80.14','334':'26.71,-80.05','335':'27.95,-82.46',
-    '336':'27.95,-82.46','337':'27.95,-82.46','338':'27.95,-82.46','339':'26.12,-80.14',
-    '340':'25.77,-80.19','341':'26.12,-80.14','342':'26.12,-80.14','344':'28.20,-80.63',
-    // Midwest
-    '460':'39.77,-86.16','461':'39.77,-86.16','462':'39.77,-86.16','463':'41.60,-87.35',
-    '464':'41.60,-87.35','465':'41.60,-87.35','466':'41.68,-85.97','467':'41.68,-85.97',
-    '468':'41.68,-85.97','469':'41.68,-85.97','470':'39.77,-86.16','471':'38.21,-85.76',
-    '472':'39.77,-86.16','473':'40.42,-86.88','474':'39.77,-86.16','475':'39.34,-87.52',
-    '476':'38.67,-87.54','477':'38.67,-87.54','478':'39.50,-87.38','479':'40.93,-85.15',
-    // Ohio
-    '430':'39.96,-82.99','431':'39.96,-82.99','432':'39.96,-82.99','433':'39.96,-82.99',
-    '434':'41.66,-83.56','435':'41.66,-83.56','436':'41.66,-83.56','437':'40.31,-82.80',
-    '438':'40.31,-82.80','439':'40.31,-82.80','440':'41.50,-81.69','441':'41.50,-81.69',
-    '442':'41.09,-81.52','443':'41.09,-81.52','444':'41.09,-81.52','445':'41.09,-81.52',
-    '446':'41.00,-80.67','447':'41.00,-80.67','448':'40.80,-81.38','449':'40.80,-81.38',
-    // Michigan
-    '480':'42.33,-83.05','481':'42.33,-83.05','482':'42.33,-83.05','483':'42.33,-83.05',
-    '484':'42.73,-84.56','485':'42.73,-84.56','486':'43.42,-83.95','487':'43.42,-83.95',
-    '488':'42.73,-84.56','489':'42.73,-84.56','490':'42.09,-85.64','491':'42.09,-85.64',
-    '492':'43.02,-82.46','493':'42.97,-85.67','494':'42.97,-85.67','495':'44.95,-84.72',
-    '496':'43.76,-84.77','497':'46.86,-88.65','498':'46.49,-84.35','499':'46.49,-84.35',
-    // Texas more
-    '752':'32.78,-96.80','753':'32.78,-96.80','754':'32.07,-98.00','755':'32.07,-98.00',
-    '756':'32.07,-98.00','757':'32.07,-98.00','758':'33.57,-101.85','759':'31.55,-97.15',
-    '760':'32.75,-97.33','761':'32.75,-97.33','762':'32.75,-97.33','763':'32.75,-97.33',
-    '764':'32.75,-97.33','765':'31.55,-97.15','766':'31.55,-97.15','767':'31.55,-97.15',
-    '768':'31.55,-97.15','769':'31.55,-97.15','770':'29.76,-95.37','771':'29.76,-95.37',
-    '772':'29.76,-95.37','773':'29.76,-95.37','774':'29.76,-95.37','775':'29.76,-95.37',
-    '776':'29.76,-95.37','777':'29.76,-95.37','778':'29.76,-95.37','779':'29.76,-95.37',
-    '780':'29.42,-98.50','781':'29.42,-98.50','782':'29.42,-98.50','783':'27.80,-97.39',
-    '784':'27.80,-97.39','785':'30.27,-97.74','786':'30.27,-97.74','787':'30.27,-97.74',
-    '788':'30.27,-97.74','789':'30.27,-97.74','790':'31.55,-97.15','791':'35.22,-101.83',
-    '792':'34.19,-101.84','793':'33.57,-101.85','794':'35.22,-101.83','795':'32.45,-99.74',
-    '796':'32.45,-99.74','797':'31.87,-102.36','798':'31.87,-102.36','799':'31.87,-102.36',
-  });
-  console.log('ZIP coords expanded to', Object.keys(ZIP_COORDS).length, 'prefixes');
-}
-
-// ── PERFORMANCE: localStorage cache ──
-const _lsCache = {};
-const _origGetCarrierOnboardData = window.getCarrierOnboardData;
-if(typeof _origGetCarrierOnboardData === 'function'){
-  window.getCarrierOnboardData = function(name){
-    const key = 'co_onb_'+name;
-    if(_lsCache[key] !== undefined) return _lsCache[key];
-    const val = _origGetCarrierOnboardData(name);
-    _lsCache[key] = val;
-    return val;
-  };
-  const _origSaveCarrierOnboardData = window.saveCarrierOnboardData;
-  window.saveCarrierOnboardData = function(name, data){
-    _lsCache['co_onb_'+name] = data; // update cache
-    if(typeof _origSaveCarrierOnboardData === 'function') _origSaveCarrierOnboardData(name, data);
-  };
-}
 </script>
