@@ -6783,6 +6783,7 @@ async function renderCarriers(){
           <button class="btn btn-sm" onclick="event.stopPropagation();openCarrierFitScorer();setTimeout(()=>{const el=document.getElementById('cfs-name');if(el){el.value='${c.name.replace(/'/g,"\'")}';runCarrierFit();}},100)">🏆 Fit</button>
           <button class="btn btn-sm" onclick="event.stopPropagation();openCarrierRateChart('${c.name.replace(/'/g,"\'")}')">📈 Rates</button>
           <button class="btn btn-sm" onclick="event.stopPropagation();toggleBlacklist('${c.name.replace(/'/g,"\'")}');renderCarriers()" style="color:${isBlacklisted(c.name)?'var(--red)':'var(--gray-500)'}">🚫</button>
+          <button class="btn btn-sm" data-cid="${c.id}" data-cname="${c.name}" onclick="event.stopPropagation();confirmDeleteCarrier(this.dataset.cid,this.dataset.cname)" style="color:#dc2626;border-color:#fca5a5" title="Delete carrier">🗑️</button>
         </div>
       </td>
     </tr>`).join('');
@@ -18994,5 +18995,40 @@ function carrierOnboardBtn(name){
   return `<button class="btn btn-sm" style="${color}" onclick="event.stopPropagation();openCarrierOnboarding('${name.replace(/'/g,"\\'")}')">
     ${status.icon} ${status.label}
   </button>`;
+}
+</script>
+
+<script>
+function confirmDeleteCarrier(id, name){
+  openModal(`
+    <div style="max-width:380px;text-align:center;padding:8px">
+      <div style="font-size:36px;margin-bottom:10px">🗑️</div>
+      <h3 style="margin:0 0 8px;font-size:16px;color:var(--navy,#1a2e4a)">Delete carrier?</h3>
+      <p style="font-size:13px;color:#666;margin-bottom:16px">This will permanently remove <strong>${name}</strong> from your carrier network. Onboarding data and rate history will also be deleted.</p>
+      <div style="display:flex;gap:8px;justify-content:center">
+        <button class="btn" onclick="closeModal()">Cancel</button>
+        <button class="btn" style="background:#dc2626;color:#fff;border-color:#dc2626" onclick="deleteCarrierConfirmed('${id}','${name.replace(/'/g,"\\'")}')">Yes, delete</button>
+      </div>
+    </div>
+  `);
+}
+
+async function deleteCarrierConfirmed(id, name){
+  try{
+    // Delete from Supabase if connected
+    if(typeof db!=='undefined'&&db){
+      await Promise.race([
+        db.from('carriers').delete().eq('id',id),
+        new Promise((_,rej)=>setTimeout(()=>rej(),4000))
+      ]);
+    }
+  }catch(e){}
+  // Always clean up localStorage onboarding data
+  ['co_onb_','carrier_w9_','carrier_ins_','carrier_perf_','carrier_rate_hist_','co_onb_'].forEach(prefix=>{
+    localStorage.removeItem(prefix+name);
+  });
+  closeModal();
+  showToast(name+' deleted','success',2500);
+  if(typeof renderCarriers==='function') renderCarriers();
 }
 </script>
