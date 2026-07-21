@@ -19114,3 +19114,270 @@ function showComingSoon(feature){
   },50);
 }
 </script>
+
+<script>
+/* ============================================================
+   FMCSA / SAFERWEB CARRIER LOOKUP
+   Uses FMCSA public web lookup + allorigins CORS proxy
+   Checks: DOT#, MC#, authority status, carrier vs broker,
+           safety rating, insurance, operating status
+   ============================================================ */
+
+const FMCSA_PROXY = 'https://api.allorigins.win/raw?url=';
+
+async function fmcsaLookup(dotNumber){
+  const url = `https://safer.fmcsa.dot.gov/query.asp?searchtype=ANY&query_type=queryCarrierSnapshot&query_param=USDOT&query_string=${dotNumber.trim()}`;
+  const res = await fetch(FMCSA_PROXY + encodeURIComponent(url), {signal: AbortSignal.timeout(10000)});
+  if(!res.ok) throw new Error('Lookup failed');
+  return await res.text();
+}
+
+async function fmcsaLookupMC(mc){
+  const mcNum = mc.replace(/MC-?/i,'').trim();
+  const url = `https://safer.fmcsa.dot.gov/query.asp?searchtype=ANY&query_type=queryCarrierSnapshot&query_param=MC_MX&query_string=${mcNum}`;
+  const res = await fetch(FMCSA_PROXY + encodeURIComponent(url), {signal: AbortSignal.timeout(10000)});
+  if(!res.ok) throw new Error('Lookup failed');
+  return await res.text();
+}
+
+function parseSaferWeb(html){
+  // Parse key fields from SaferWeb HTML snapshot page
+  const get = (pattern) => {
+    const m = html.match(pattern);
+    return m ? m[1].replace(/<[^>]+>/g,'').trim() : null;
+  };
+
+  // Entity name
+  const name = get(/Legal Name[^<]*<\/td>\s*<td[^>]*>([^<]+)/i)
+             || get(/Entity Name[^<]*<\/td>\s*<td[^>]*>([^<]+)/i);
+
+  // DBA
+  const dba = get(/DBA Name[^<]*<\/td>\s*<td[^>]*>([^<]+)/i);
+
+  // DOT number
+  const dot = get(/USDOT Number[^<]*<\/td>\s*<td[^>]*>([^<]+)/i);
+
+  // MC/MX number
+  const mc = get(/MC\/MX\/FF Number\(s\)[^<]*<\/td>\s*<td[^>]*>([^<\n]+)/i)
+           || get(/Docket Number[^<]*<\/td>\s*<td[^>]*>([^<]+)/i);
+
+  // Operating status
+  const opStatus = get(/Operating Status[^<]*<\/td>\s*<td[^>]*>([^<]+)/i);
+
+  // Out of Service date
+  const oos = get(/Out of Service Date[^<]*<\/td>\s*<td[^>]*>([^<]+)/i);
+
+  // Entity type (carrier, broker, etc.)
+  const entityType = get(/Entity Type[^<]*<\/td>\s*<td[^>]*>([^<]+)/i);
+
+  // Safety rating
+  const safetyRating = get(/Safety Rating[^<]*<\/td>\s*<td[^>]*>([^<]+)/i);
+
+  // Safety rating date
+  const safetyRatingDate = get(/Rating Date[^<]*<\/td>\s*<td[^>]*>([^<]+)/i);
+
+  // Power units
+  const powerUnits = get(/Power Units[^<]*<\/td>\s*<td[^>]*>([^<]+)/i);
+
+  // Drivers
+  const drivers = get(/Drivers[^<]*<\/td>\s*<td[^>]*>([^<]+)/i);
+
+  // State
+  const state = get(/Physical Address[^<]*<\/td>\s*<td[^>]*>([^<]+)/i);
+
+  // Insurance on file
+  const bipdInsurance = get(/BIPD Insurance On File[^<]*<\/td>\s*<td[^>]*>([^<]+)/i);
+  const cargoInsurance = get(/Cargo Insurance On File[^<]*<\/td>\s*<td[^>]*>([^<]+)/i);
+
+  // Common/Contract authority
+  const commonAuth = get(/Common Authority[^<]*<\/td>\s*<td[^>]*>([^<]+)/i);
+  const contractAuth = get(/Contract Authority[^<]*<\/td>\s*<td[^>]*>([^<]+)/i);
+  const brokerAuth = get(/Broker Authority[^<]*<\/td>\s*<td[^>]*>([^<]+)/i);
+
+  // Crash data
+  const crashes = get(/Crashes[^<]*<\/td>\s*<td[^>]*>([^<]+)/i);
+
+  return {name, dba, dot, mc, opStatus, oos, entityType, safetyRating, safetyRatingDate,
+          powerUnits, drivers, state, bipdInsurance, cargoInsurance,
+          commonAuth, contractAuth, brokerAuth, crashes};
+}
+
+function renderSaferWebResult(data, inputDot, inputMc){
+  const isActive = (data.opStatus||'').toLowerCase().includes('authorized') ||
+                   (data.opStatus||'').toLowerCase().includes('active');
+  const isOOS = (data.opStatus||'').toLowerCase().includes('out of service') ||
+                (data.oos && !data.oos.includes('None'));
+  const isBroker = (data.entityType||'').toLowerCase().includes('broker') ||
+                   (data.brokerAuth||'').toLowerCase().includes('active');
+  const isCarrier = (data.entityType||'').toLowerCase().includes('carrier') ||
+                    (data.commonAuth||'').toLowerCase().includes('active') ||
+                    (data.contractAuth||'').toLowerCase().includes('active');
+
+  const rating = (data.safetyRating||'Not Rated').trim();
+  const ratingColor = rating.toLowerCase().includes('satisfactory') ? '#16a34a'
+                    : rating.toLowerCase().includes('conditional') ? '#d97706'
+                    : rating.toLowerCase().includes('unsatisfactory') ? '#dc2626'
+                    : '#6b7280';
+
+  const statusColor = isOOS ? '#dc2626' : isActive ? '#16a34a' : '#d97706';
+  const statusLabel = isOOS ? '⛔ OUT OF SERVICE' : isActive ? '✅ AUTHORIZED' : '⚠️ ' + (data.opStatus||'Unknown');
+
+  const hasInsurance = (data.bipdInsurance||'').toLowerCase().includes('yes') ||
+                       (data.bipdInsurance||'').trim() !== '';
+
+  // DOT/MC match check
+  const dotMatch = !inputDot || !data.dot || data.dot.replace(/\D/g,'') === inputDot.replace(/\D/g,'');
+  const mcMatch  = !inputMc  || !data.mc  || (data.mc||'').includes(inputMc.replace(/MC-?/i,'').trim());
+
+  return `
+    <div style="margin-top:12px">
+      <!-- Status banner -->
+      <div style="background:${statusColor}15;border:1px solid ${statusColor}40;border-radius:10px;padding:12px 16px;margin-bottom:12px;display:flex;align-items:center;gap:12px">
+        <div style="font-size:18px;font-weight:800;color:${statusColor}">${statusLabel}</div>
+        ${isBroker&&!isCarrier ? '<span style="background:#7c3aed20;color:#7c3aed;font-size:11px;font-weight:700;padding:2px 10px;border-radius:99px">BROKER</span>' : ''}
+        ${isCarrier ? '<span style="background:#1d4ed820;color:#1d4ed8;font-size:11px;font-weight:700;padding:2px 10px;border-radius:99px">CARRIER</span>' : ''}
+        ${isBroker&&isCarrier ? '<span style="background:#0891b220;color:#0891b2;font-size:11px;font-weight:700;padding:2px 10px;border-radius:99px">CARRIER + BROKER</span>' : ''}
+      </div>
+
+      <!-- Carrier info grid -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px">
+        ${[
+          ['Legal name', data.name||'—'],
+          ['DBA', data.dba||'—'],
+          ['USDOT #', data.dot||'—'],
+          ['MC/MX #', data.mc||'—'],
+          ['Safety rating', `<span style="color:${ratingColor};font-weight:700">${rating}</span>`],
+          ['Rating date', data.safetyRatingDate||'—'],
+          ['Power units', data.powerUnits||'—'],
+          ['Drivers', data.drivers||'—'],
+          ['BIPD insurance', data.bipdInsurance||'—'],
+          ['Cargo insurance', data.cargoInsurance||'—'],
+          ['Common auth', data.commonAuth||'—'],
+          ['Broker auth', data.brokerAuth||'—'],
+        ].map(([l,v])=>`
+          <div style="background:var(--gray-50,#f8f9fa);border-radius:6px;padding:6px 9px">
+            <div style="font-size:10px;font-weight:600;color:#9ca3af;text-transform:uppercase;margin-bottom:1px">${l}</div>
+            <div style="font-size:12px;font-weight:600;color:var(--navy,#1a2e4a)">${v}</div>
+          </div>`).join('')}
+      </div>
+
+      <!-- Match verification -->
+      <div style="background:#f8f9fa;border-radius:8px;padding:8px 12px;font-size:11px;color:#666;display:flex;gap:16px;flex-wrap:wrap">
+        <span>${dotMatch ? '✅' : '⚠️'} DOT# ${dotMatch ? 'matches' : 'MISMATCH — verify'}</span>
+        <span>${mcMatch ? '✅' : '⚠️'} MC# ${mcMatch ? 'matches' : 'MISMATCH — verify'}</span>
+        <span>${hasInsurance ? '✅ Insurance on file' : '⚠️ No insurance on FMCSA'}</span>
+        <span style="margin-left:auto"><a href="https://safer.fmcsa.dot.gov/query.asp?searchtype=ANY&query_type=queryCarrierSnapshot&query_param=USDOT&query_string=${(data.dot||'').replace(/\D/g,'')}" target="_blank" style="color:#2e75b6;text-decoration:none;font-weight:600">View full SaferWeb ↗</a></span>
+      </div>
+
+      ${isOOS ? `<div style="background:#fef2f2;border-radius:8px;padding:8px 12px;margin-top:8px;font-size:12px;color:#dc2626;font-weight:700">⛔ DO NOT BOOK — Carrier is Out of Service as of ${data.oos||'unknown date'}</div>` : ''}
+      ${isBroker&&!isCarrier ? `<div style="background:#fdf4ff;border-radius:8px;padding:8px 12px;margin-top:8px;font-size:12px;color:#7c3aed;font-weight:600">⚠️ This entity is a BROKER, not an asset carrier. Booking through them risks double-brokering.</div>` : ''}
+    </div>`;
+}
+
+async function runSaferWebCheck(name){
+  const mcEl = document.getElementById('cob-mc');
+  const dotEl = document.getElementById('cob-dot');
+  const resultEl = document.getElementById('sw-result');
+  const btnEl = document.getElementById('sw-btn');
+  if(!resultEl) return;
+
+  const mc = (mcEl?.value||'').trim();
+  const dot = (dotEl?.value||'').trim();
+
+  if(!mc && !dot){
+    resultEl.innerHTML = '<div style="color:#dc2626;font-size:12px;padding:8px 0">Enter MC# or DOT# first</div>';
+    return;
+  }
+
+  // Loading state
+  resultEl.innerHTML = `
+    <div style="display:flex;align-items:center;gap:10px;padding:12px 0;color:#666;font-size:13px">
+      <div style="width:18px;height:18px;border:2px solid #e5e7eb;border-top-color:#2e75b6;border-radius:50%;animation:spin .7s linear infinite"></div>
+      Checking FMCSA SaferWeb…
+    </div>`;
+  if(btnEl){btnEl.disabled=true;btnEl.textContent='Checking…';}
+
+  try{
+    let html = '';
+    // Prefer DOT lookup; fall back to MC
+    if(dot){
+      html = await fmcsaLookup(dot.replace(/\D/g,''));
+    } else {
+      html = await fmcsaLookupMC(mc);
+    }
+
+    // Check if we got a valid result page
+    if(!html || html.length < 500 || html.includes('No records found') || html.includes('no snapshot')){
+      resultEl.innerHTML = `
+        <div style="background:#fffbeb;border-radius:8px;padding:10px 14px;border-left:3px solid #f59e0b;font-size:12px;margin-top:10px">
+          <div style="font-weight:700;color:#92400e;margin-bottom:4px">⚠️ No FMCSA record found</div>
+          <div style="color:#374151">No carrier found for ${dot?'DOT# '+dot:'MC# '+mc}. Verify the number is correct, or check SaferWeb directly.</div>
+          <a href="https://safer.fmcsa.dot.gov/CompanySnapshot.aspx" target="_blank" style="color:#2e75b6;font-weight:600;display:inline-block;margin-top:6px">Open SaferWeb ↗</a>
+        </div>`;
+      return;
+    }
+
+    const parsed = parseSaferWeb(html);
+
+    // Auto-fill name if empty
+    if(parsed.name && name){
+      const nameEl = document.getElementById('cob-legalName');
+      if(nameEl && !nameEl.value) nameEl.value = parsed.name;
+    }
+
+    resultEl.innerHTML = renderSaferWebResult(parsed, dot, mc);
+
+  } catch(err){
+    resultEl.innerHTML = `
+      <div style="background:#fef2f2;border-radius:8px;padding:10px 14px;border-left:3px solid #dc2626;font-size:12px;margin-top:10px">
+        <div style="font-weight:700;color:#dc2626;margin-bottom:4px">Connection error</div>
+        <div style="color:#374151">Could not reach FMCSA. Check your connection or verify manually on SaferWeb.</div>
+        <a href="https://safer.fmcsa.dot.gov/CompanySnapshot.aspx" target="_blank" style="color:#2e75b6;font-weight:600;display:inline-block;margin-top:6px">Open SaferWeb ↗</a>
+      </div>`;
+  } finally {
+    if(btnEl){btnEl.disabled=false;btnEl.textContent='🔍 SaferWeb check';}
+  }
+}
+
+// Inject spin keyframe if not present
+if(!document.getElementById('sw-spin-style')){
+  const st=document.createElement('style');
+  st.id='sw-spin-style';
+  st.textContent='@keyframes spin{to{transform:rotate(360deg)}}';
+  document.head.appendChild(st);
+}
+
+// ── PATCH openCarrierOnboarding to inject SaferWeb button ─────
+const _origOpenCarrierOnboarding = window.openCarrierOnboarding;
+window.openCarrierOnboarding = function(name){
+  _origOpenCarrierOnboarding(name);
+  // After modal renders, inject SaferWeb check section after MC/DOT fields
+  setTimeout(()=>{
+    const mcWrap = document.getElementById('cob-mc-wrap');
+    if(!mcWrap || document.getElementById('sw-section')) return;
+    const section = document.createElement('div');
+    section.id = 'sw-section';
+    section.style.cssText = 'grid-column:1/-1;margin-top:4px';
+    section.innerHTML = `
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <button id="sw-btn" class="btn blue" style="font-size:12px;padding:5px 14px" onclick="runSaferWebCheck('${name.replace(/'/g,"\\'")}')">🔍 SaferWeb check</button>
+        <span style="font-size:11px;color:#9ca3af">Verify MC# &amp; DOT# against FMCSA database</span>
+        <a href="https://safer.fmcsa.dot.gov/CompanySnapshot.aspx" target="_blank" style="font-size:11px;color:#2e75b6;text-decoration:none;font-weight:600">SaferWeb ↗</a>
+      </div>
+      <div id="sw-result"></div>`;
+
+    // Insert after the MC/DOT grid (parent's parent)
+    const grid = mcWrap.closest('div[style*="grid"]') || mcWrap.parentElement;
+    if(grid && grid.parentElement){
+      grid.parentElement.insertBefore(section, grid.nextSibling);
+    }
+
+    // Also auto-run if both MC and DOT already filled
+    const mc = document.getElementById('cob-mc')?.value.trim();
+    const dot = document.getElementById('cob-dot')?.value.trim();
+    if(mc && dot) {
+      setTimeout(()=>runSaferWebCheck(name), 200);
+    }
+  }, 150);
+};
+</script>
