@@ -439,6 +439,13 @@ input:focus,select:focus,textarea:focus{
 
 /* Carrier onboarding — conditional sections */
 #ins-detail-section, #w9-detail-section{transition:all .2s}
+
+/* Hide clock on narrow screens */
+@media(max-width:1200px){#topbar-clock{display:none!important}}
+@media(max-width:960px){#topbar-neg-coach{display:none!important}}
+
+/* Carrier onboarding modal scroll */
+.modal{max-height:90vh;overflow-y:auto}
 </style>
 <script>
 // Force clear service worker and caches
@@ -1199,7 +1206,7 @@ function setView(v){
   S.view=v;
   document.querySelectorAll('.nav-btn,.sub-link').forEach(b=>b.classList.remove('active'));
   const navEl=$('nav-'+v);if(navEl) navEl.classList.add('active');
-  const titles={tms:'TMS — FTL/LTL Operations',quote:'Quote builder',customers:'Customers',rates:'Carrier rates',log:'Quote log',dash:'Dashboard',freight:'Freight Quoting',transload:'Transload Quoting',active:'Active Shipments',admin:'Admin Panel',reports:'Reports',activity:'Activity Log',auditlog:'Audit Log',carriers:'Carrier Network',air:'Air Freight',home:'Home',invoicing:'Invoicing',requests:'Rate Requests'};
+  const titles={tms:'TMS',quote:'Quote builder',customers:'Customers',rates:'Carrier rates',log:'Quote log',dash:'Dashboard',freight:'Freight Quoting',transload:'Transload Quoting',active:'Active Shipments',admin:'Admin Panel',reports:'Reports',activity:'Activity Log',auditlog:'Audit Log',carriers:'Carrier Network',air:'Air Freight',home:'Home',invoicing:'Invoicing',requests:'Rate Requests'};
   $('view-title').textContent=titles[v]||v;
   openAccFor(v);
   updateSubActive(v);
@@ -16057,7 +16064,7 @@ if(hash === '#freight') window.addEventListener('DOMContentLoaded', () => setTim
 </body>
 </html>
 <script>
-function openModal(html){$('modal-root').innerHTML='<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal">'+html+'</div></div>';}
+function openModal(html){$('modal-root').innerHTML='<div class="overlay" onclick="if(event.target.classList.contains(\'overlay\'))closeModal()"><div class="modal">'+html+'</div></div>';}
 
 /* ============================================================
    BATCH 1: UX FEATURES
@@ -16108,7 +16115,8 @@ function gsSearch(q){
 
   // Customers
   try{
-    (window._customers||[]).forEach(c=>{
+    const custList=window._customers||JSON.parse(localStorage.getItem('shifl_customers')||'[]');
+    custList.forEach(c=>{
       const text=[c.name,c.email,c.phone,c.contact].join(' ').toLowerCase();
       if(!q||text.includes(q)) results.push({icon:'🏢',label:c.name||'Customer',sub:c.email||c.phone||'',action:'S.view=\'customers\';render()'});
     });
@@ -16811,7 +16819,7 @@ function openPortAppointmentScheduler(){
     if(!appts.length){el.innerHTML='<p style="color:#999;text-align:center;padding:12px 0;font-size:13px">No appointments scheduled</p>';return;}
     const sorted=appts.slice().sort((a,b)=>(a.date+a.time)<(b.date+b.time)?-1:1);
     el.innerHTML=sorted.map((a,i)=>{
-      const isToday=a.date===new Date().toISOString().split('T')[0];
+      const isToday=a.date===(typeof localDateStr==='function'?localDateStr():new Date().toLocaleDateString('en-CA'));
       return `<div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:${isToday?'#fffbeb':'var(--gray-50,#f8f9fa)'};border-radius:8px;margin-bottom:6px;border-left:3px solid ${isToday?'#f59e0b':'var(--steel,#2e75b6)'}">
         <div style="flex:1">
           <div style="font-size:13px;font-weight:600;color:var(--navy,#1a2e4a)">${a.container||'No container'} ${isToday?'<span style="color:#d97706;font-size:10px">TODAY</span>':''}</div>
@@ -17746,12 +17754,12 @@ function renderQuoteRequests(){
             <td style="font-size:12px;color:#666">${r.eta||'—'}</td>
             <td><span style="background:${STATUS_COLORS[r.status]||'#999'}20;color:${STATUS_COLORS[r.status]||'#999'};padding:2px 9px;border-radius:99px;font-size:11px;font-weight:700">${r.status}</span></td>
             <td>
-              <div style="display:flex;gap:4px;flex-wrap:wrap">
+              <div style="display:flex;gap:4px;align-items:center">
                 ${r.status==='Pending'?`<button class="btn" style="font-size:11px;padding:3px 8px" onclick="openPricingEntry('${r.id}')">Enter pricing</button>`:''}
                 ${r.status==='Rates received'?`<button class="btn blue" style="font-size:11px;padding:3px 8px" onclick="loadRequestIntoQuoteBuilder('${r.id}')">Build quote →</button>`:''}
                 ${r.status==='Quoted'?`<button class="btn" style="font-size:11px;padding:3px 8px;background:#f0fdf4;color:#16a34a;border-color:#16a34a" onclick="markRequestStatus('${r.id}','Booked')">Mark booked</button>`:''}
                 <button class="btn" style="font-size:11px;padding:3px 8px" onclick="viewRequestDetail('${r.id}')">View</button>
-                <button class="btn" style="font-size:11px;padding:3px 8px;color:#dc2626;border-color:#dc2626" onclick="markRequestStatus('${r.id}','Cancelled')">✕</button>
+                <button class="btn" style="font-size:11px;padding:3px 8px;color:#dc2626" onclick="markRequestStatus('${r.id}','Cancelled')">✕</button>
               </div>
             </td>
           </tr>`).join('')}
@@ -18877,7 +18885,7 @@ function buildAIToolsPanel(){
           ['🏷️','Freight classifier','openFreightClassifier()'],
           ['📊','Win/loss log','openWinLossLog()'],
           ['📦','Doc bundle','openLoadDocumentBundle(\'\',\'\')'],
-        ].map(([icon,label,fn])=>icon==='──'?`<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#9ca3af;padding:8px 10px 2px">${label}</div>`:`
+        ].map(([icon,label,fn])=>icon==='──'?`<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#9ca3af;padding:10px 10px 2px;pointer-events:none;user-select:none">${label}</div>`:`
           <button onclick="${fn};document.getElementById('ai-tools-menu').style.display='none'"
             style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:none;border:none;border-radius:7px;cursor:pointer;text-align:left;width:100%;font-size:12px;font-weight:500;color:var(--navy,#1a2e4a);transition:background .1s"
             onmouseenter="this.style.background='var(--blue-bg,#eff6ff)'" onmouseleave="this.style.background='none'">
@@ -19127,15 +19135,21 @@ function openCarrierOnboarding(name){
 }
 
 function saveCarrierOnboardingForm(name){
-  const data={};
-  // Collect all field values
+  // Start from existing data so we don't wipe fields not in the form
+  const data=Object.assign({},getCarrierOnboardData(name));
+  // Collect required + optional checkboxes and text fields
   [...COB_FIELDS.required,...COB_FIELDS.optional].forEach(f=>{
     const el=document.getElementById('cob-'+f.key);
     if(!el) return;
     data[f.key]=f.type==='check'?el.checked:(el.value||'').trim();
   });
-  // Also collect insurance + w9 detail fields
-  ['insCompany','insExpiry','insAmount','ein','legalName'].forEach(k=>{
+  // Collect insurance detail fields
+  ['insCompany','insExpiry','insAmount'].forEach(k=>{
+    const el=document.getElementById('cob-'+k);
+    if(el) data[k]=el.value.trim();
+  });
+  // Collect W-9 detail fields
+  ['ein','legalName'].forEach(k=>{
     const el=document.getElementById('cob-'+k);
     if(el) data[k]=el.value.trim();
   });
@@ -19722,4 +19736,141 @@ setTimeout(()=>{
     localUpsertCarrier(name,[...modes][0]||'');
   });
 },2000);
+</script>
+
+<script>
+/* ============================================================
+   CARRIER FILE UPLOAD SYSTEM
+   Stores files as base64 in localStorage per carrier
+   Doc types: W9, COI, Agreement, Other
+   Auto-checks onboarding boxes when docs are uploaded
+   ============================================================ */
+
+function getCarrierDocs(name){
+  try{return JSON.parse(localStorage.getItem('carrier_docs_'+name)||'[]');}catch(e){return[];}
+}
+function saveCarrierDocs(name,docs){
+  try{localStorage.setItem('carrier_docs_'+name,JSON.stringify(docs));}catch(e){
+    showToast('File too large for local storage','error',3000);
+  }
+}
+
+const DOC_TYPE_MAP={
+  'W9':    {icon:'📄',label:'W-9',      color:'#16a34a',cobKey:'w9'},
+  'COI':   {icon:'🛡️',label:'COI',      color:'#2e75b6',cobKey:'insurance'},
+  'Agreement':{icon:'📋',label:'Agreement',color:'#7c3aed',cobKey:'agreement'},
+  'Other': {icon:'📎',label:'Other',     color:'#6b7280',cobKey:null},
+};
+
+function renderCarrierFileUpload(carrierName){
+  const docs=getCarrierDocs(carrierName);
+  const types=Object.keys(DOC_TYPE_MAP);
+
+  const fileList=docs.length===0
+    ?'<div style="text-align:center;padding:12px 0;color:#9ca3af;font-size:12px">No files uploaded yet</div>'
+    :docs.map((d,i)=>`
+      <div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:#f8f9fa;border-radius:7px;margin-bottom:4px">
+        <span style="font-size:16px">${DOC_TYPE_MAP[d.type]?.icon||'📎'}</span>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:12px;font-weight:600;color:#1a2e4a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${d.name}</div>
+          <div style="font-size:10px;color:#9ca3af">${DOC_TYPE_MAP[d.type]?.label||d.type} · ${d.size} · ${d.uploadedAt}</div>
+        </div>
+        <button onclick="downloadCarrierDoc('${carrierName}',${i})" style="padding:3px 8px;border:1px solid #d1d5db;border-radius:5px;background:#fff;font-size:11px;cursor:pointer;color:#374151">⬇ Download</button>
+        <button onclick="deleteCarrierDoc('${carrierName}',${i})" style="padding:3px 7px;border:1px solid #fca5a5;border-radius:5px;background:#fff;font-size:11px;cursor:pointer;color:#dc2626">✕</button>
+      </div>`).join('');
+
+  return `
+    <div style="border:1.5px dashed #d1d5db;border-radius:10px;padding:14px;background:#fafafa">
+      <div style="font-size:11px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px">📎 Documents</div>
+      ${fileList}
+      <div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+        <select id="doc-type-sel-${carrierName.replace(/\s/g,'_')}" style="padding:5px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:12px">
+          ${types.map(t=>`<option value="${t}">${DOC_TYPE_MAP[t].icon} ${DOC_TYPE_MAP[t].label}</option>`).join('')}
+        </select>
+        <label style="display:inline-flex;align-items:center;gap:6px;padding:5px 12px;background:#1a2e4a;color:#fff;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer">
+          ⬆ Upload file
+          <input type="file" accept=".pdf,.png,.jpg,.jpeg,.doc,.docx" style="display:none"
+            onchange="handleCarrierFileUpload(this,'${carrierName.replace(/'/g,"\\'")}')">
+        </label>
+        <span style="font-size:10px;color:#9ca3af">PDF, image, or Word · max 5MB</span>
+      </div>
+    </div>`;
+}
+
+function handleCarrierFileUpload(input, carrierName){
+  const file=input.files[0];
+  if(!file) return;
+  if(file.size>5*1024*1024){showToast('File too large — max 5MB','error',3000);return;}
+
+  const selId='doc-type-sel-'+carrierName.replace(/\s/g,'_');
+  const typeEl=document.getElementById(selId);
+  const docType=typeEl?typeEl.value:'Other';
+
+  const reader=new FileReader();
+  reader.onload=function(e){
+    const docs=getCarrierDocs(carrierName);
+    docs.push({
+      name:file.name,
+      type:docType,
+      data:e.target.result, // base64 data URL
+      size:file.size>1024*1024?(file.size/1024/1024).toFixed(1)+'MB':(file.size/1024).toFixed(0)+'KB',
+      uploadedAt:new Date().toLocaleDateString()
+    });
+    saveCarrierDocs(carrierName,docs);
+
+    // Auto-tick the relevant onboarding checkbox
+    const cobKey=DOC_TYPE_MAP[docType]?.cobKey;
+    if(cobKey){
+      const cb=document.getElementById('cob-'+cobKey);
+      if(cb&&!cb.checked){cb.checked=true;}
+      // Also save it to onboarding data
+      const data=getCarrierOnboardData(carrierName);
+      data[cobKey]=true;
+      saveCarrierOnboardData(carrierName,data);
+    }
+
+    showToast(file.name+' uploaded','success',2500);
+    // Re-render the file section
+    const wrap=document.getElementById('carrier-docs-wrap-'+carrierName.replace(/\s/g,'_'));
+    if(wrap) wrap.innerHTML=renderCarrierFileUpload(carrierName);
+  };
+  reader.readAsDataURL(file);
+  input.value=''; // reset so same file can be re-uploaded
+}
+
+function downloadCarrierDoc(carrierName, idx){
+  const docs=getCarrierDocs(carrierName);
+  const doc=docs[idx];
+  if(!doc) return;
+  const a=document.createElement('a');
+  a.href=doc.data;
+  a.download=doc.name;
+  a.click();
+}
+
+function deleteCarrierDoc(carrierName, idx){
+  if(!confirm('Delete this file?')) return;
+  const docs=getCarrierDocs(carrierName);
+  docs.splice(idx,1);
+  saveCarrierDocs(carrierName,docs);
+  const wrap=document.getElementById('carrier-docs-wrap-'+carrierName.replace(/\s/g,'_'));
+  if(wrap) wrap.innerHTML=renderCarrierFileUpload(carrierName);
+  showToast('File deleted','success',2000);
+}
+
+// Patch openCarrierOnboarding to inject file upload section
+const _origOpenOnboarding=window.openCarrierOnboarding;
+window.openCarrierOnboarding=function(name){
+  _origOpenOnboarding(name);
+  setTimeout(()=>{
+    // Find the footer (Save button row) and insert file upload before it
+    const footer=document.querySelector('.modal [style*="border-top"][style*="justify-content"]');
+    if(!footer||document.getElementById('carrier-docs-wrap-'+name.replace(/\s/g,'_'))) return;
+    const wrap=document.createElement('div');
+    wrap.id='carrier-docs-wrap-'+name.replace(/\s/g,'_');
+    wrap.style.marginBottom='14px';
+    wrap.innerHTML=renderCarrierFileUpload(name);
+    footer.parentElement.insertBefore(wrap,footer);
+  },200);
+};
 </script>
