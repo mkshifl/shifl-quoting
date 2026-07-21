@@ -327,7 +327,126 @@ body.screenshot-mode .money::after,body.screenshot-mode .kpi-val::after{content:
 .active-card{cursor:grab;transition:transform .15s,box-shadow .15s}
 .active-card.dragging{opacity:.5;cursor:grabbing;transform:scale(1.02)}
 .active-card.drag-over{box-shadow:0 0 0 2px var(--steel)!important}
-.tms-row:hover{background:var(--blue-bg)!important}.tms-act-btn{font-size:10px;padding:3px 7px;border:1px solid var(--gray-200);border-radius:4px;background:transparent;cursor:pointer;font-family:inherit;color:var(--gray-600)}</style>
+.tms-row:hover{background:var(--blue-bg)!important}.tms-act-btn{font-size:10px;padding:3px 7px;border:1px solid var(--gray-200);border-radius:4px;background:transparent;cursor:pointer;font-family:inherit;color:var(--gray-600)}
+/* ================================================================
+   UI CLEANUP — applied globally, no logic changes
+   ================================================================ */
+
+/* ── Modal entrance animation ── */
+@keyframes modal-in{from{opacity:0;transform:scale(.97)}to{opacity:1;transform:scale(1)}}
+@keyframes overlay-in{from{opacity:0}to{opacity:1}}
+.overlay{animation:overlay-in .15s ease}
+.modal{animation:modal-in .15s ease}
+
+/* ── Modal title hierarchy ── */
+.modal-title{color:var(--navy);font-size:16px;font-weight:700;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--gray-100)}
+
+/* ── Modal responsive grids ── */
+.modal .g2,.modal [style*="grid-template-columns:1fr 1fr"]{grid-template-columns:repeat(auto-fill,minmax(200px,1fr))}
+
+/* ── Sidebar sub-link cleanup ── */
+.acc-sub a,.acc-sub button.sub-link{
+  padding:7px 14px 7px 36px;
+  font-size:12px;
+  display:flex;align-items:center;gap:8px;
+  position:relative;
+}
+.acc-sub a::before,.acc-sub button.sub-link::before{
+  content:'';display:inline-block;width:4px;height:4px;
+  border-radius:50%;background:rgba(255,255,255,.25);
+  flex-shrink:0;margin-right:2px;
+  transition:background .12s;
+}
+.acc-sub a:hover::before,.acc-sub button.sub-link:hover::before{background:rgba(255,255,255,.6)}
+.acc-sub a.active::before,.acc-sub button.sub-link.active::before{background:#93c5fd}
+
+/* ── Sidebar accordion open state ── */
+.acc-btn.open{background:rgba(255,255,255,.13)!important;color:#fff!important;border-left:3px solid rgba(255,255,255,.25)}
+
+/* ── Table: no layout-shift hover, sticky header ── */
+.tbl-wrap table{border-collapse:separate!important;border-spacing:0}
+.tbl-wrap table tbody tr{border-left:none!important;transition:background .1s}
+.tbl-wrap table tbody tr:hover{background:#eef3ff!important;border-left:none!important;cursor:pointer}
+.tbl-wrap table thead{position:sticky;top:0;z-index:3}
+.tbl-wrap table thead th{background:var(--gray-50)!important;border-bottom:1px solid var(--gray-200)}
+
+/* ── Page max-width ── */
+.page{max-width:1200px;margin-left:auto;margin-right:auto;padding:20px 22px}
+
+/* ── Empty state refresh ── */
+.empty{padding:60px 24px;border:1.5px dashed var(--gray-200);border-radius:var(--radius-lg);margin:12px 0}
+.empty-ico{font-size:48px;margin-bottom:12px}
+
+/* ── KPI card accent bar ── */
+.kpi{border-left:3px solid var(--steel);padding:14px 18px 14px 16px}
+.kpi-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-500);margin-bottom:6px}
+.kpi-sub{font-size:11px;color:var(--gray-400);margin-top:4px}
+
+/* ── Input focus ring ── */
+input:focus,select:focus,textarea:focus{
+  outline:none;
+  border-color:var(--steel)!important;
+  box-shadow:0 0 0 3px rgba(46,117,182,.18)!important;
+}
+
+/* ── Topbar button consistency ── */
+#topbar-right .btn{padding:5px 11px!important;font-size:12px!important;height:30px}
+#topbar-right .btn.blue{height:30px}
+
+/* ── AI FAB raised above toasts ── */
+#ai-tools-fab{bottom:80px!important}
+
+/* ── Topbar breadcrumb title ── */
+#view-title{font-size:14px;font-weight:500;color:var(--gray-700)}
+#view-title::before{content:'Shifl  ›  ';color:var(--gray-300);font-weight:400;font-size:12px}
+
+/* ── Toast container offset above FAB ── */
+#toast-container{bottom:88px!important}
+
+/* ── Unified toast appearance ── */
+#toast-container>div{
+  border-radius:10px!important;
+  padding:11px 16px!important;
+  font-size:13px!important;
+  box-shadow:0 4px 20px rgba(0,0,0,.18)!important;
+}
+
+/* ── Sidebar section group labels ── */
+.nav-section-label{
+  font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;
+  color:rgba(255,255,255,.25);padding:10px 18px 3px;pointer-events:none;
+}
+
+/* ── Topbar coming-soon dropdown ── */
+#cs-dropdown-wrap{position:relative;display:inline-flex}
+#cs-dropdown-menu{
+  position:absolute;top:calc(100% + 6px);right:0;
+  background:var(--white);border:1px solid var(--gray-200);
+  border-radius:var(--radius-lg);box-shadow:var(--shadow-md);
+  min-width:180px;padding:4px 0;z-index:9000;display:none;
+}
+#cs-dropdown-menu.open{display:block;animation:modal-in .1s ease}
+#cs-dropdown-menu button{
+  display:flex;align-items:center;gap:8px;width:100%;
+  padding:8px 14px;background:none;border:none;cursor:pointer;
+  font-size:13px;color:var(--gray-700);font-family:inherit;text-align:left;
+  transition:background .1s;
+}
+#cs-dropdown-menu button:hover{background:var(--gray-50)}
+
+/* ── Neg Coach + TMS button match ── */
+#topbar-neg-coach{
+  padding:6px 13px!important;border-radius:8px!important;
+  border:1.5px solid var(--navy)!important;background:#fff!important;
+  color:var(--navy)!important;font-size:12px!important;font-weight:700!important;
+  height:32px!important;
+}
+#topbar-neg-coach:hover{background:var(--navy)!important;color:#fff!important}
+#topbar-tms-btn{
+  padding:6px 14px!important;border-radius:8px!important;
+  height:32px!important;font-size:12px!important;font-weight:700!important;
+}
+</style>
 <script>
 // Force clear service worker and caches
 if('serviceWorker' in navigator){
@@ -451,8 +570,7 @@ if('caches' in window){
       </button>
 
       <div class="acc-sep" style="margin:8px 16px"></div>
-
-      <!-- DRAYAGE -->
+      <div class="nav-section-label">Drayage</div>
       <button class="acc-btn" id="acc-drayage" onclick="toggleAcc('drayage')">
         <span style="display:flex;align-items:center;gap:10px">
           <span style="font-size:16px">🚢</span>Drayage
@@ -472,6 +590,7 @@ if('caches' in window){
 
       <div class="acc-sep"></div>
 
+      <div class="nav-section-label">Freight & air</div>
       <!-- FREIGHT -->
       <button class="acc-btn" id="acc-freight" onclick="toggleAcc('freight')">
         <span style="display:flex;align-items:center;gap:10px">
@@ -525,6 +644,7 @@ if('caches' in window){
       <!-- ADMIN (conditional) -->
       <div id="admin-nav-section" style="display:none">
         <div class="acc-sep"></div>
+        <div class="nav-section-label">Admin & tools</div>
         <button class="acc-btn" id="acc-admin" onclick="toggleAcc('admin')">
           <span style="display:flex;align-items:center;gap:10px">
             <span style="font-size:16px">⚙️</span>Admin
@@ -576,14 +696,19 @@ if('caches' in window){
     <div class="topbar"><button id="notif-btn" onclick="renderNotifDropdown()" style="position:relative;background:none;border:none;cursor:pointer;padding:4px 6px;border-radius:6px;font-size:18px;color:var(--gray-500);margin-right:4px" title="Notifications">🔔<span id="notif-badge" style="display:none;position:absolute;top:-2px;right:-2px;min-width:16px;height:16px;background:#dc2626;color:#fff;border-radius:99px;font-size:9px;font-weight:800;align-items:center;justify-content:center;padding:0 3px">0</span></button><span id="topbar-clock" style="font-size:12px;font-weight:600;color:var(--gray-400);font-family:monospace;white-space:nowrap;margin-right:12px"></span>
       <h1 id="view-title">Quote builder</h1>
       <div style="display:flex;align-items:center;gap:8px;margin-left:auto">
-        <!-- Coming Soon buttons -->
-        <button onclick="showComingSoon('Mobile App')" style="padding:4px 11px;border-radius:99px;border:1px dashed #d1d5db;background:transparent;font-size:11px;font-weight:600;color:#9ca3af;cursor:pointer;transition:all .15s" onmouseenter="this.style.borderColor='#2e75b6';this.style.color='#2e75b6'" onmouseleave="this.style.borderColor='#d1d5db';this.style.color='#9ca3af'">📱 Mobile App</button>
-        <button onclick="showComingSoon('AI Dispatch')" style="padding:4px 11px;border-radius:99px;border:1px dashed #d1d5db;background:transparent;font-size:11px;font-weight:600;color:#9ca3af;cursor:pointer;transition:all .15s" onmouseenter="this.style.borderColor='#2e75b6';this.style.color='#2e75b6'" onmouseleave="this.style.borderColor='#d1d5db';this.style.color='#9ca3af'">🤖 AI Dispatch</button>
-        <button onclick="showComingSoon('Live Tracking')" style="padding:4px 11px;border-radius:99px;border:1px dashed #d1d5db;background:transparent;font-size:11px;font-weight:600;color:#9ca3af;cursor:pointer;transition:all .15s" onmouseenter="this.style.borderColor='#2e75b6';this.style.color='#2e75b6'" onmouseleave="this.style.borderColor='#d1d5db';this.style.color='#9ca3af'">📡 Live Tracking</button>
+        <!-- Coming Soon dropdown -->
+        <div id="cs-dropdown-wrap">
+          <button onclick="document.getElementById('cs-dropdown-menu').classList.toggle('open');event.stopPropagation()" style="padding:4px 12px;border-radius:99px;border:1px dashed #d1d5db;background:transparent;font-size:11px;font-weight:600;color:#9ca3af;cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:5px" onmouseenter="this.style.borderColor='#2e75b6';this.style.color='#2e75b6'" onmouseleave="this.style.borderColor='#d1d5db';this.style.color='#9ca3af'">✦ Coming soon ▾</button>
+          <div id="cs-dropdown-menu">
+            <button onclick="showComingSoon('Mobile App');document.getElementById('cs-dropdown-menu').classList.remove('open')">📱 Mobile App</button>
+            <button onclick="showComingSoon('AI Dispatch');document.getElementById('cs-dropdown-menu').classList.remove('open')">🤖 AI Dispatch</button>
+            <button onclick="showComingSoon('Live Tracking');document.getElementById('cs-dropdown-menu').classList.remove('open')">📡 Live Tracking</button>
+          </div>
+        </div>
         <!-- Neg Coach Button -->
-        <button onclick="openRateNegotiationCoach()" style="padding:6px 14px;border-radius:8px;border:1px solid #d1d5db;background:#fff;color:#1a2e4a;font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px;box-shadow:0 1px 4px rgba(0,0,0,.08);transition:all .15s" onmouseenter="this.style.background='#eff6ff';this.style.borderColor='#2e75b6'" onmouseleave="this.style.background='#fff';this.style.borderColor='#d1d5db'">💬 Neg Coach</button>
+        <button id="topbar-neg-coach" onclick="openRateNegotiationCoach()">💬 Neg Coach</button>
         <!-- TMS Button -->
-        <button onclick="goTo('tms')" style="padding:6px 16px;border-radius:8px;border:none;background:linear-gradient(135deg,#1a2e4a,#2e75b6);color:#fff;font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px;box-shadow:0 2px 8px rgba(46,117,182,.35);transition:box-shadow .15s" onmouseenter="this.style.boxShadow='0 4px 16px rgba(46,117,182,.5)'" onmouseleave="this.style.boxShadow='0 2px 8px rgba(46,117,182,.35)'">🚚 TMS</button>
+        <button id="topbar-tms-btn" onclick="goTo('tms')" style="background:linear-gradient(135deg,#1a2e4a,#2e75b6);border:none;color:#fff;cursor:pointer;display:flex;align-items:center;gap:5px;border-radius:8px">🚚 TMS</button>
         <div class="topbar-right" id="topbar-right"></div>
       </div>
     </div>
@@ -9556,6 +9681,13 @@ function renderTemplates(mode) {
 // ══════════════════════════════════════════════════════════════
 // FEATURE 11: TOAST NOTIFICATIONS
 // ══════════════════════════════════════════════════════════════
+// Close coming-soon dropdown on outside click
+document.addEventListener('click',function(e){
+  const dd=document.getElementById('cs-dropdown-menu');
+  const wrap=document.getElementById('cs-dropdown-wrap');
+  if(dd&&wrap&&!wrap.contains(e.target)) dd.classList.remove('open');
+});
+
 function showToast(msg, type='success', duration=3000) {
   let container = $('toast-container');
   if(!container) {
