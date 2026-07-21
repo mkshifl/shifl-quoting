@@ -256,7 +256,7 @@ hr{border:none;border-top:1px solid var(--gray-100);margin:14px 0}
 
   /* Tables scroll horizontally */
   .tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
-  table{min-width:960px}
+  table{min-width:0}
 
   /* Mode selector cards stack */
   .mode-cards{flex-direction:column}
@@ -290,9 +290,7 @@ body.dark .overlay{background:rgba(0,0,0,.7)}
 body.dark .tbl-wrap table{background:#1a2533}
 body.dark .tbl-wrap table thead tr{background:#0f1723}
 body.dark .tbl-wrap table th:nth-child(2){position:sticky;left:32px;background:inherit;z-index:2}
-.tbl-wrap table td:nth-child(2){position:sticky;left:32px;background:var(--white);z-index:1}
-.tbl-wrap table th:nth-child(3){position:sticky;left:100px;background:inherit;z-index:2}
-.tbl-wrap table td:nth-child(3){position:sticky;left:100px;background:var(--white);z-index:1}
+.tbl-wrap table td:nth-child(2){background:inherit}
 .tbl-wrap table thead th{border-color:#243447;color:#8fa3b8}
 body.dark .tbl-wrap table tbody tr{border-color:#243447}
 body.dark .tbl-wrap table tbody tr:hover{background:#1e3050!important;border-left-color:#2e75b6}
@@ -5914,9 +5912,9 @@ function buildLogRows(){
   const sel=window._draySelected;
   return filtered.map(q=>`
     <tr onclick="showQuoteModal('${q.id}')" style="cursor:pointer">
-      <td onclick="event.stopPropagation()" style="width:32px;text-align:center;padding:8px 4px">
+      <td onclick="event.stopPropagation()" style="padding:7px 6px;text-align:center">
         <input type="checkbox" ${sel.has(q.id)?'checked':''} onchange="toggleDraySelect('${q.id}',this.checked)" style="width:auto;cursor:pointer"></td>
-      <td class="muted small">#${q.quoteNum}</td>
+      <td class="muted" style="font-size:11px;padding:7px 4px">#${q.quoteNum}</td>
       <td onclick="event.stopPropagation()" style="min-width:90px">
         <input type="text" value="${q.shiflRef||''}"
           onclick="event.stopPropagation()"
@@ -6007,15 +6005,34 @@ function renderLog(){
         style="padding:7px 12px 7px 32px;border-radius:99px;border:1.5px solid var(--gray-200);font-size:12px;width:100%;box-sizing:border-box">
     </div>
   </div>`;
-  $('page').innerHTML=pillBar+`<div class="tbl-wrap" id="dray-log-wrap"><table style="table-layout:fixed;width:100%"><colgroup>
-  <col style="width:32px"><col style="width:46px"><col style="width:72px"><col style="width:76px">
-  <col style="width:140px"><col style="width:140px"><col style="width:130px">
-  <col style="width:86px"><col style="width:96px"><col style="width:86px">
-  <col style="width:80px"><col style="width:116px"><col style="width:90px">
+  $('page').innerHTML=pillBar+`<div class="tbl-wrap" id="dray-log-wrap" style="overflow-x:auto"><table style="width:100%;min-width:900px;table-layout:fixed"><colgroup>
+  <col style="width:30px">
+  <col style="width:44px">
+  <col style="width:70px">
+  <col style="width:74px">
+  <col style="width:15%">
+  <col style="width:15%">
+  <col style="width:14%">
+  <col style="width:7%">
+  <col style="width:8%">
+  <col style="width:8%">
+  <col style="width:7%">
+  <col style="width:110px">
+  <col style="width:80px">
 </colgroup><thead><tr>
-  <th style="width:32px"><input type="checkbox" ${selCount===S.quotes.length&&selCount>0?'checked':''} onchange="if(this.checked){window._draySelected=new Set(S.quotes.map(q=>q.id));}else{window._draySelected=new Set();}renderLog()" style="width:auto"></th>
-  <th>#</th><th>Ref #</th><th>Date</th><th>Customer</th><th>Lane</th><th>Carrier</th>
-  <th>Carrier $</th><th>Customer $</th><th>Profit</th><th>By</th><th>Status</th><th></th>
+  <th style="padding:8px 6px"><input type="checkbox" ${selCount===S.quotes.length&&selCount>0?'checked':''} onchange="if(this.checked){window._draySelected=new Set(S.quotes.map(q=>q.id));}else{window._draySelected=new Set();}renderLog()" style="width:auto"></th>
+  <th style="padding:8px 4px">#</th>
+  <th style="padding:8px 4px">Ref #</th>
+  <th style="padding:8px 6px">Date</th>
+  <th style="padding:8px 8px">Customer</th>
+  <th style="padding:8px 8px">Lane</th>
+  <th style="padding:8px 8px">Carrier</th>
+  <th style="padding:8px 6px">Cost</th>
+  <th style="padding:8px 6px">Revenue</th>
+  <th style="padding:8px 6px">Profit</th>
+  <th style="padding:8px 6px">By</th>
+  <th style="padding:8px 6px">Status</th>
+  <th style="padding:8px 4px"></th>
 </tr></thead><tbody id="log-tbody">${buildLogRows()}</tbody></table></div>`;
 }
 function onLogFilter(v){S.logFilter=v;const t=$('log-tbody');if(t){t.innerHTML=buildLogRows();setTimeout(()=>setupDragReorder('log-tbody'),100);}}
