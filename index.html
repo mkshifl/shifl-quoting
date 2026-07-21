@@ -19383,3 +19383,256 @@ window.openCarrierOnboarding = function(name){
   }, 150);
 };
 </script>
+
+<script>
+/* ============================================================
+   CARRIER AUTO-POPULATE + BACKFILL
+   - localStorage fallback so upsert works without Supabase
+   - Backfill: scrape all carrier names from quotes, TMS loads,
+     rate cards, and fq_quotes then upsert each one
+   - Auto-wire: every save/book path calls ensureCarrierExists
+   ============================================================ */
+
+// ── localStorage carrier store (fallback + offline) ──────────
+function getLocalCarriers(){
+  try{return JSON.parse(localStorage.getItem('local_carriers')||'[]');}catch(e){return[];}
+}
+function saveLocalCarriers(arr){
+  try{localStorage.setItem('local_carriers',JSON.stringify(arr));}catch(e){}
+}
+function localUpsertCarrier(name, mode){
+  if(!name||name==='—') return;
+  const all=getLocalCarriers();
+  const idx=all.findIndex(c=>c.name.toLowerCase()===name.toLowerCase());
+  if(idx>=0){
+    const modes=all[idx].modes||[];
+    if(mode&&!modes.includes(mode)) all[idx].modes=[...modes,mode];
+    all[idx].updated_at=new Date().toISOString();
+    all[idx].seenInQuotes=true;
+  } else {
+    all.push({id:'local-'+Date.now()+'-'+Math.random().toString(36).slice(2),name,modes:mode?[mode]:[],created_at:new Date().toISOString(),updated_at:new Date().toISOString(),seenInQuotes:true});
+  }
+  saveLocalCarriers(all);
+}
+
+// ── Override upsertCarrier with localStorage fallback ─────────
+const _origUpsertCarrier=window.upsertCarrier;
+window.upsertCarrier=async function(name, mode){
+  if(!name||name==='—') return;
+  // Always save locally first (instant, no network needed)
+  localUpsertCarrier(name, mode);
+  // Then try Supabase
+  try{
+    if(typeof _origUpsertCarrier==='function') await _origUpsertCarrier(name, mode);
+  }catch(e){}
+};
+
+// ── Also patch renderCarriers to merge local carriers ─────────
+const _origRenderCarriers=window.renderCarriers;
+window.renderCarriers=async function(){
+  // Before rendering, sync local carriers to Supabase if possible
+  await syncLocalCarriersToSupabase();
+  return _origRenderCarriers.apply(this,arguments);
+};
+
+async function syncLocalCarriersToSupabase(){
+  const local=getLocalCarriers();
+  if(!local.length) return;
+  if(typeof db==='undefined'||!db) return;
+  for(const c of local){
+    try{
+      const{data}=await Promise.race([
+        db.from('carriers').select('id').eq('name',c.name).limit(1),
+        new Promise((_,rej)=>setTimeout(()=>rej(),3000))
+      ]);
+      if(!data||!data[0]){
+        await db.from('carriers').insert({
+          id:c.id.startsWith('local-')?uid():c.id,
+          name:c.name,modes:c.modes||[],
+          created_at:c.created_at||new Date().toISOString(),
+          updated_at:new Date().toISOString()
+        });
+      }
+    }catch(e){}
+  }
+}
+
+// ── BACKFILL: collect all carrier names from every data source ─
+function collectAllCarrierNames(){
+  const carriers=new Map(); // name -> Set of modes
+
+  const add=(name, mode)=>{
+    if(!name||name==='—'||name.trim()==='') return;
+    name=name.trim();
+    if(!carriers.has(name)) carriers.set(name,new Set());
+    if(mode) carriers.get(name).add(mode);
+  };
+
+  // 1. Drayage quotes (S.quotes and localStorage)
+  try{
+    const drayQuotes=JSON.parse(localStorage.getItem('shifl_quotes')||'[]');
+    drayQuotes.forEach(q=>add(q.carrier,'Drayage'));
+  }catch(e){}
+  try{(window.S?.quotes||[]).forEach(q=>add(q.carrier,'Drayage'));}catch(e){}
+
+  // 2. TMS loads
+  try{
+    const tmsLoads=JSON.parse(localStorage.getItem('tms_loads')||'[]');
+    tmsLoads.forEach(l=>{
+      const mode=l.fqMode||l.mode||'FTL';
+      add(l.carrier, mode);
+    });
+  }catch(e){}
+
+  // 3. FQ rate cards (carrier network already has these but include anyway)
+  try{
+    const fqRates=JSON.parse(localStorage.getItem('fq_rates')||'[]');
+    fqRates.forEach(r=>add(r.carrier||r.name, r.mode||'FTL'));
+  }catch(e){}
+  try{(window._fqRates||[]).forEach(r=>add(r.carrier||r.name, r.mode||'FTL'));}catch(e){}
+
+  // 4. Quote log from Supabase cache
+  try{
+    const logCache=JSON.parse(localStorage.getItem('quote_log_cache')||'[]');
+    logCache.forEach(q=>add(q.carrier,'Drayage'));
+  }catch(e){}
+
+  // 5. FQ quotes cache
+  try{
+    const fqCache=JSON.parse(localStorage.getItem('fq_quotes_cache')||'[]');
+    fqCache.forEach(q=>add(q.carrier, q.fqMode||'FTL'));
+  }catch(e){}
+
+  // 6. Win/loss log
+  try{
+    const wl=JSON.parse(localStorage.getItem('win_loss_log')||'[]');
+    wl.forEach(e=>{if(e.carrier) add(e.carrier,'');});
+  }catch(e){}
+
+  // 7. Driver scores (carriers logged there)
+  try{
+    const scores=JSON.parse(localStorage.getItem('driver_scores')||'{}');
+    Object.keys(scores).forEach(name=>add(name,''));
+  }catch(e){}
+
+  // 8. Carrier rate history keys
+  try{
+    Object.keys(localStorage)
+      .filter(k=>k.startsWith('carrier_rate_hist_'))
+      .forEach(k=>add(k.replace('carrier_rate_hist_',''),''));
+  }catch(e){}
+
+  // 9. Carrier onboarding keys
+  try{
+    Object.keys(localStorage)
+      .filter(k=>k.startsWith('co_onb_'))
+      .forEach(k=>add(k.replace('co_onb_',''),''));
+  }catch(e){}
+
+  return carriers;
+}
+
+async function backfillCarriersFromQuotes(){
+  const btn=document.getElementById('backfill-btn');
+  if(btn){btn.disabled=true;btn.textContent='⏳ Scanning…';}
+
+  const carriers=collectAllCarrierNames();
+  if(!carriers.size){
+    showToast('No carriers found in quote history','info',2500);
+    if(btn){btn.disabled=false;btn.textContent='🔄 Sync carriers from quotes';}
+    return;
+  }
+
+  let added=0, existing=0;
+  showToast('Syncing '+carriers.size+' carriers…','info',2000);
+
+  for(const [name, modesSet] of carriers){
+    const modes=[...modesSet].filter(Boolean);
+    const mode=modes[0]||'';
+    localUpsertCarrier(name, mode);
+    // Try Supabase
+    try{
+      if(typeof db!=='undefined'&&db){
+        const{data}=await Promise.race([
+          db.from('carriers').select('id,modes').eq('name',name).limit(1),
+          new Promise((_,rej)=>setTimeout(()=>rej(),3000))
+        ]);
+        if(data&&data[0]){
+          // Update modes if needed
+          const existing_modes=data[0].modes||[];
+          const new_modes=[...new Set([...existing_modes,...modes])];
+          if(new_modes.length!==existing_modes.length){
+            await db.from('carriers').update({modes:new_modes,updated_at:new Date().toISOString()}).eq('id',data[0].id);
+          }
+          existing++;
+        } else {
+          await db.from('carriers').insert({
+            id:uid(),name,modes,
+            created_at:new Date().toISOString(),
+            updated_at:new Date().toISOString()
+          });
+          added++;
+        }
+      } else {
+        added++;
+      }
+    }catch(e){added++;}
+  }
+
+  showToast(`✅ Done — ${added} added, ${existing} already existed`,'success',4000);
+  if(btn){btn.disabled=false;btn.textContent='🔄 Sync carriers from quotes';}
+  if(typeof renderCarriers==='function') setTimeout(renderCarriers,500);
+}
+
+// ── Inject backfill button into Carrier Network topbar ────────
+const _origRenderCarriers2=window.renderCarriers;
+window.renderCarriers=async function(){
+  const result=await _origRenderCarriers2.apply(this,arguments);
+  // Add backfill button to topbar after render
+  setTimeout(()=>{
+    const topbar=document.getElementById('topbar-right');
+    if(topbar&&!document.getElementById('backfill-btn')){
+      const btn=document.createElement('button');
+      btn.id='backfill-btn';
+      btn.className='btn';
+      btn.title='Auto-populate carriers from all quotes and loads';
+      btn.textContent='🔄 Sync from quotes';
+      btn.style.cssText='font-size:12px';
+      btn.onclick=backfillCarriersFromQuotes;
+      topbar.prepend(btn);
+    }
+  },300);
+  return result;
+};
+
+// ── Auto-wire: patch all booking paths ───────────────────────
+// FQ save already calls upsertCarrier — but wire TMS booking too
+const _origSaveTMSLoad=window.saveTMSLoad;
+if(typeof _origSaveTMSLoad==='function'){
+  window.saveTMSLoad=function(l){
+    if(l&&l.carrier) upsertCarrier(l.carrier, l.fqMode||l.mode||'FTL');
+    return _origSaveTMSLoad.apply(this,arguments);
+  };
+}
+
+// Also hook into any TMS status update that sets a carrier
+const _origApplyBulkStatus=window.applyBulkStatus;
+if(typeof _origApplyBulkStatus==='function'){
+  window.applyBulkStatus=function(){
+    // After bulk status, re-sync
+    setTimeout(()=>{
+      const loads=JSON.parse(localStorage.getItem('tms_loads')||'[]');
+      loads.forEach(l=>{if(l.carrier) localUpsertCarrier(l.carrier, l.fqMode||'FTL');});
+    },500);
+    return _origApplyBulkStatus.apply(this,arguments);
+  };
+}
+
+// Run a silent backfill on first load (local only, no Supabase calls)
+setTimeout(()=>{
+  const carriers=collectAllCarrierNames();
+  carriers.forEach((modes,name)=>{
+    localUpsertCarrier(name,[...modes][0]||'');
+  });
+},2000);
+</script>
