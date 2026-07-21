@@ -6779,7 +6779,7 @@ async function renderCarriers(){
           <button class="btn btn-sm" onclick="openCertModal('${c.name.replace(/'/g,"\'")}')">🏆 Certs</button>
           <button class="btn btn-sm" onclick="showPayTermsModal('${c.name.replace(/'/g,"\'")}')">💳 Terms</button>
           <button class="btn btn-sm" onclick="event.stopPropagation();showCarrierModal('${c.id}')">✏️</button>
-          <button class="btn btn-sm" onclick="event.stopPropagation();openCarrierOnboardingChecklist('${c.name.replace(/'/g,"\'")}')">✅ Onboard</button>
+          ${carrierOnboardBtn(c.name)}
           <button class="btn btn-sm" onclick="event.stopPropagation();openCarrierFitScorer();setTimeout(()=>{const el=document.getElementById('cfs-name');if(el){el.value='${c.name.replace(/'/g,"\'")}';runCarrierFit();}},100)">🏆 Fit</button>
           <button class="btn btn-sm" onclick="event.stopPropagation();openCarrierRateChart('${c.name.replace(/'/g,"\'")}')">📈 Rates</button>
           <button class="btn btn-sm" onclick="event.stopPropagation();toggleBlacklist('${c.name.replace(/'/g,"\'")}');renderCarriers()" style="color:${isBlacklisted(c.name)?'var(--red)':'var(--gray-500)'}">🚫</button>
@@ -18712,5 +18712,286 @@ if(typeof _fabOrigRender==='function'){
     _fabOrigRender.apply(this,arguments);
     setTimeout(buildAIToolsPanel,300);
   };
+}
+</script>
+
+<script>
+/* ============================================================
+   CARRIER ONBOARDING — FULL REBUILD
+   Required: MC#, DOT#, Insurance COI, W-9
+   Optional: Agreement, ACH, CTPAT, Hazmat, etc.
+   Status: Not started → In progress → Onboarded
+   ============================================================ */
+
+const COB_FIELDS={
+  // Required — must ALL be complete for "Onboarded" status
+  required:[
+    {key:'mc',       label:'MC #',              type:'text',  placeholder:'MC-XXXXXX'},
+    {key:'dot',      label:'DOT #',             type:'text',  placeholder:'XXXXXXX'},
+    {key:'w9',       label:'W-9 on file',       type:'check', note:'EIN / Tax ID verified'},
+    {key:'insurance',label:'Certificate of Insurance', type:'check', note:'Active COI — includes cargo & liability'},
+  ],
+  // Optional — nice to have, shown separately
+  optional:[
+    {key:'insExpiry',  label:'COI expiry date',    type:'date'},
+    {key:'insAmount',  label:'Coverage amount',     type:'text',  placeholder:'e.g. $1,000,000'},
+    {key:'insCompany', label:'Insurance company',   type:'text',  placeholder:'e.g. Progressive'},
+    {key:'ein',        label:'EIN / Tax ID',        type:'text',  placeholder:'XX-XXXXXXX'},
+    {key:'legalName',  label:'Legal business name', type:'text',  placeholder:'Entity on W-9'},
+    {key:'agreement',  label:'Carrier agreement signed', type:'check'},
+    {key:'ach',        label:'ACH / payment info',  type:'check'},
+    {key:'ctpat',      label:'CTPAT certified',     type:'check'},
+    {key:'hazmat',     label:'Hazmat certified',    type:'check'},
+    {key:'lanes',      label:'Preferred lanes documented', type:'check'},
+    {key:'dispatch',   label:'Dispatch contact confirmed', type:'check'},
+  ]
+};
+
+function getCarrierOnboardData(name){
+  // Merge old onboarding data + old w9 data + old insurance data
+  const onb=JSON.parse(localStorage.getItem('co_onb_'+name)||'{}');
+  const w9=JSON.parse(localStorage.getItem('carrier_w9_'+name)||'{}');
+  const ins=JSON.parse(localStorage.getItem('carrier_ins_'+name)||'{}');
+  return Object.assign({},{
+    w9:!!w9.onFile,
+    ein:w9.ein||'',
+    legalName:w9.legalName||'',
+    insExpiry:ins.expiry||'',
+    insAmount:ins.amount||'',
+    insCompany:ins.insurer||'',
+    ...onb
+  });
+}
+function saveCarrierOnboardData(name,data){
+  localStorage.setItem('co_onb_'+name,JSON.stringify(data));
+  // Keep legacy keys in sync so old badges still work
+  if(data.w9) localStorage.setItem('carrier_w9_'+name,JSON.stringify({onFile:true,ein:data.ein||'',legalName:data.legalName||''}));
+  if(data.insurance&&data.insExpiry) localStorage.setItem('carrier_ins_'+name,JSON.stringify({expiry:data.insExpiry,amount:data.insAmount||'',insurer:data.insCompany||''}));
+}
+
+function isCarrierOnboarded(name){
+  const d=getCarrierOnboardData(name);
+  return !!(d.mc&&d.dot&&d.w9&&d.insurance);
+}
+
+function getOnboardStatus(name){
+  const d=getCarrierOnboardData(name);
+  const reqDone=COB_FIELDS.required.filter(f=>f.type==='check'?!!d[f.key]:(d[f.key]||'').trim()!=='').length;
+  if(reqDone===0) return {label:'Onboard',icon:'📋',color:'#6b7280',bg:'#f3f4f6',pct:0};
+  if(reqDone<COB_FIELDS.required.length) return {label:'In progress',icon:'⏳',color:'#d97706',bg:'#fffbeb',pct:Math.round(reqDone/COB_FIELDS.required.length*100)};
+  return {label:'Onboarded ✓',icon:'✅',color:'#16a34a',bg:'#f0fdf4',pct:100};
+}
+
+function openCarrierOnboarding(name){
+  let data=getCarrierOnboardData(name);
+  const status=getOnboardStatus(name);
+  const optDone=COB_FIELDS.optional.filter(f=>f.type==='check'?!!data[f.key]:(data[f.key]||'').trim()!=='').length;
+
+  const reqRows=COB_FIELDS.required.map(f=>{
+    const val=data[f.key]||'';
+    const done=f.type==='check'?!!val:(val+'').trim()!=='';
+    if(f.type==='check') return `
+      <label style="display:flex;align-items:flex-start;gap:12px;padding:10px 12px;border-radius:8px;background:${done?'#f0fdf4':'#fff5f5'};border:1px solid ${done?'#bbf7d0':'#fecaca'};cursor:pointer;margin-bottom:6px">
+        <input type="checkbox" id="cob-${f.key}" ${done?'checked':''} style="width:17px;height:17px;margin-top:1px;flex-shrink:0">
+        <div>
+          <div style="font-size:13px;font-weight:700;color:var(--navy,#1a2e4a)">${f.label} <span style="color:#dc2626;font-size:11px">★ Required</span></div>
+          ${f.note?`<div style="font-size:11px;color:#666;margin-top:1px">${f.note}</div>`:''}
+        </div>
+        <span style="margin-left:auto;font-size:16px">${done?'✅':'❌'}</span>
+      </label>`;
+    return `
+      <div style="margin-bottom:8px">
+        <label style="font-size:11px;font-weight:700;color:#dc2626;text-transform:uppercase;display:block;margin-bottom:3px">${f.label} ★ Required</label>
+        <input type="text" id="cob-${f.key}" value="${(val+'').replace(/"/g,'&quot;')}" placeholder="${f.placeholder||''}"
+          style="width:100%;padding:8px 11px;border:1px solid ${done?'#d1d5db':'#fca5a5'};border-radius:8px;font-size:13px;box-sizing:border-box;background:${done?'#fff':'#fff5f5'}">
+      </div>`;
+  }).join('');
+
+  const optRows=COB_FIELDS.optional.map(f=>{
+    const val=data[f.key]||'';
+    const done=f.type==='check'?!!val:((val+'').trim()!=='');
+    if(f.type==='check') return `
+      <label style="display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:7px;background:${done?'#f0fdf4':'var(--gray-50,#f8f9fa)'};cursor:pointer;margin-bottom:4px;border:1px solid ${done?'#bbf7d0':'transparent'}">
+        <input type="checkbox" id="cob-${f.key}" ${done?'checked':''} style="width:15px;height:15px">
+        <span style="font-size:13px;color:var(--navy,#1a2e4a)">${f.label}</span>
+        <span style="margin-left:auto">${done?'✅':'○'}</span>
+      </label>`;
+    if(f.type==='date') return `
+      <div style="margin-bottom:6px">
+        <label style="font-size:11px;font-weight:600;color:#666;display:block;margin-bottom:2px">${f.label}</label>
+        <input type="date" id="cob-${f.key}" value="${val}"
+          style="width:100%;padding:6px 10px;border:1px solid #d1d5db;border-radius:7px;font-size:13px;box-sizing:border-box">
+      </div>`;
+    return `
+      <div style="margin-bottom:6px">
+        <label style="font-size:11px;font-weight:600;color:#666;display:block;margin-bottom:2px">${f.label}</label>
+        <input type="text" id="cob-${f.key}" value="${(val+'').replace(/"/g,'&quot;')}" placeholder="${f.placeholder||''}"
+          style="width:100%;padding:6px 10px;border:1px solid #d1d5db;border-radius:7px;font-size:13px;box-sizing:border-box">
+      </div>`;
+  }).join('');
+
+  openModal(`
+    <div style="min-width:520px;max-width:560px">
+      <!-- Header -->
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+        <div>
+          <h3 style="margin:0;font-size:16px;font-weight:800;color:var(--navy,#1a2e4a)">${name}</h3>
+          <div style="font-size:12px;color:#666;margin-top:1px">Carrier onboarding file</div>
+        </div>
+        <div style="margin-left:auto;text-align:right">
+          <span style="display:inline-block;background:${status.bg};color:${status.color};padding:4px 14px;border-radius:99px;font-size:12px;font-weight:800;border:1px solid ${status.color}40">${status.icon} ${status.label}</span>
+          ${status.pct<100?`<div style="margin-top:4px;background:#e5e7eb;border-radius:4px;height:4px;width:120px;margin-left:auto"><div style="width:${status.pct}%;background:${status.color};height:4px;border-radius:4px;transition:width .3s"></div></div>`:''}
+        </div>
+      </div>
+
+      <!-- Required section -->
+      <div style="margin-bottom:14px">
+        <div style="font-size:11px;font-weight:800;color:#dc2626;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;display:flex;align-items:center;gap:6px">
+          <span>★ Required to onboard</span>
+          <span style="font-weight:400;color:#666">(${COB_FIELDS.required.filter(f=>f.type==='check'?!!data[f.key]:(data[f.key]||'').trim()!=='').length}/${COB_FIELDS.required.length} complete)</span>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+          <div id="cob-mc-wrap"><label style="font-size:11px;font-weight:700;color:#dc2626;text-transform:uppercase;display:block;margin-bottom:2px">MC # ★</label>
+            <input type="text" id="cob-mc" value="${(data.mc||'').replace(/"/g,'&quot;')}" placeholder="MC-XXXXXX"
+              style="width:100%;padding:8px 10px;border:1px solid ${data.mc?'#d1d5db':'#fca5a5'};border-radius:8px;font-size:13px;box-sizing:border-box;background:${data.mc?'#fff':'#fff5f5'}">
+          </div>
+          <div><label style="font-size:11px;font-weight:700;color:#dc2626;text-transform:uppercase;display:block;margin-bottom:2px">DOT # ★</label>
+            <input type="text" id="cob-dot" value="${(data.dot||'').replace(/"/g,'&quot;')}" placeholder="XXXXXXX"
+              style="width:100%;padding:8px 10px;border:1px solid ${data.dot?'#d1d5db':'#fca5a5'};border-radius:8px;font-size:13px;box-sizing:border-box;background:${data.dot?'#fff':'#fff5f5'}">
+          </div>
+        </div>
+        <div style="margin-top:8px">
+          ${COB_FIELDS.required.filter(f=>f.type==='check').map(f=>{
+            const done=!!data[f.key];
+            return `<label style="display:flex;align-items:flex-start;gap:12px;padding:10px 12px;border-radius:8px;background:${done?'#f0fdf4':'#fff5f5'};border:1px solid ${done?'#bbf7d0':'#fecaca'};cursor:pointer;margin-bottom:6px">
+              <input type="checkbox" id="cob-${f.key}" ${done?'checked':''} style="width:18px;height:18px;margin-top:1px;flex-shrink:0;accent-color:#16a34a">
+              <div style="flex:1">
+                <div style="font-size:13px;font-weight:700;color:var(--navy,#1a2e4a)">${f.label}</div>
+                ${f.note?`<div style="font-size:11px;color:#666;margin-top:1px">${f.note}</div>`:''}
+              </div>
+              <span style="font-size:18px">${done?'✅':'❌'}</span>
+            </label>`;
+          }).join('')}
+        </div>
+      </div>
+
+      <!-- Insurance details (shown when insurance is checked) -->
+      <div style="background:#eff6ff;border-radius:8px;padding:10px 12px;margin-bottom:14px">
+        <div style="font-size:11px;font-weight:700;color:#1d4ed8;text-transform:uppercase;margin-bottom:8px">📋 Insurance details</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
+          <div><label style="font-size:10px;font-weight:600;color:#666;display:block;margin-bottom:2px">Company</label>
+            <input type="text" id="cob-insCompany" value="${(data.insCompany||'').replace(/"/g,'&quot;')}" placeholder="e.g. Progressive" style="width:100%;padding:5px 8px;border:1px solid #bfdbfe;border-radius:6px;font-size:12px;box-sizing:border-box"></div>
+          <div><label style="font-size:10px;font-weight:600;color:#666;display:block;margin-bottom:2px">COI Expiry</label>
+            <input type="date" id="cob-insExpiry" value="${data.insExpiry||''}" style="width:100%;padding:5px 8px;border:1px solid #bfdbfe;border-radius:6px;font-size:12px;box-sizing:border-box"></div>
+          <div><label style="font-size:10px;font-weight:600;color:#666;display:block;margin-bottom:2px">Coverage</label>
+            <input type="text" id="cob-insAmount" value="${(data.insAmount||'').replace(/"/g,'&quot;')}" placeholder="$1,000,000" style="width:100%;padding:5px 8px;border:1px solid #bfdbfe;border-radius:6px;font-size:12px;box-sizing:border-box"></div>
+        </div>
+      </div>
+
+      <!-- W-9 details -->
+      <div style="background:#f0fdf4;border-radius:8px;padding:10px 12px;margin-bottom:14px">
+        <div style="font-size:11px;font-weight:700;color:#166534;text-transform:uppercase;margin-bottom:8px">📄 W-9 details</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+          <div><label style="font-size:10px;font-weight:600;color:#666;display:block;margin-bottom:2px">EIN / Tax ID</label>
+            <input type="text" id="cob-ein" value="${(data.ein||'').replace(/"/g,'&quot;')}" placeholder="XX-XXXXXXX" style="width:100%;padding:5px 8px;border:1px solid #bbf7d0;border-radius:6px;font-size:12px;box-sizing:border-box"></div>
+          <div><label style="font-size:10px;font-weight:600;color:#666;display:block;margin-bottom:2px">Legal name on W-9</label>
+            <input type="text" id="cob-legalName" value="${(data.legalName||'').replace(/"/g,'&quot;')}" placeholder="Legal entity name" style="width:100%;padding:5px 8px;border:1px solid #bbf7d0;border-radius:6px;font-size:12px;box-sizing:border-box"></div>
+        </div>
+      </div>
+
+      <!-- Optional section collapsible -->
+      <details style="margin-bottom:14px">
+        <summary style="font-size:11px;font-weight:700;color:#666;text-transform:uppercase;cursor:pointer;letter-spacing:.06em;list-style:none;display:flex;align-items:center;gap:6px">
+          <span>▶ Optional documents</span>
+          <span style="font-weight:400">(${optDone}/${COB_FIELDS.optional.length} complete)</span>
+        </summary>
+        <div style="margin-top:10px;display:grid;grid-template-columns:1fr 1fr;gap:4px">
+          ${COB_FIELDS.optional.filter(f=>f.type==='check').map(f=>{
+            const done=!!data[f.key];
+            return `<label style="display:flex;align-items:center;gap:8px;padding:6px 9px;border-radius:7px;background:${done?'#f0fdf4':'var(--gray-50,#f8f9fa)'};cursor:pointer;border:1px solid ${done?'#bbf7d0':'transparent'}">
+              <input type="checkbox" id="cob-${f.key}" ${done?'checked':''} style="width:14px;height:14px;accent-color:#16a34a">
+              <span style="font-size:12px;color:var(--navy,#1a2e4a)">${f.label}</span>
+              <span style="margin-left:auto;font-size:13px">${done?'✅':'○'}</span>
+            </label>`;
+          }).join('')}
+        </div>
+      </details>
+
+      <!-- Footer -->
+      <div style="display:flex;gap:8px;justify-content:space-between;align-items:center;padding-top:12px;border-top:1px solid #f3f4f6">
+        <div style="font-size:11px;color:#999">Changes auto-saved when you click Save</div>
+        <div style="display:flex;gap:8px">
+          <button class="btn" onclick="closeModal()">Cancel</button>
+          <button class="btn blue" onclick="saveCarrierOnboardingForm('${name.replace(/'/g,"\\'")}')">💾 Save</button>
+        </div>
+      </div>
+    </div>
+  `);
+}
+
+function saveCarrierOnboardingForm(name){
+  const data={};
+  // Collect all field values
+  [...COB_FIELDS.required,...COB_FIELDS.optional].forEach(f=>{
+    const el=document.getElementById('cob-'+f.key);
+    if(!el) return;
+    data[f.key]=f.type==='check'?el.checked:el.value.trim();
+  });
+  // Also collect insurance + w9 detail fields
+  ['insCompany','insExpiry','insAmount','ein','legalName'].forEach(k=>{
+    const el=document.getElementById('cob-'+k);
+    if(el) data[k]=el.value.trim();
+  });
+  saveCarrierOnboardData(name,data);
+  const status=getOnboardStatus(name);
+  closeModal();
+  showToast(name+' — '+status.label,'success',2500);
+  if(typeof renderCarriers==='function') renderCarriers();
+}
+
+// ── CARRIER ROW: UNIFIED ONBOARD BUTTON ───────────────────────
+// Replace the old badge functions with a single onboard status badge
+function carrierOnboardBadge(name){
+  const status=getOnboardStatus(name);
+  const d=getCarrierOnboardData(name);
+  const insExpiry=d.insExpiry?new Date(d.insExpiry):null;
+  const insExpiring=insExpiry&&(insExpiry-new Date())<30*86400000&&insExpiry>new Date();
+  const insExpired=insExpiry&&insExpiry<new Date();
+
+  let badge=`<span style="font-size:10px;font-weight:700;padding:2px 9px;border-radius:99px;background:${status.bg};color:${status.color};border:1px solid ${status.color}40">${status.icon} ${status.label}</span>`;
+
+  if(d.mc) badge+=` <span style="font-size:10px;color:#666;background:#f3f4f6;padding:1px 6px;border-radius:99px">MC: ${d.mc}</span>`;
+
+  if(insExpired) badge+=` <span style="font-size:10px;font-weight:700;background:#fef2f2;color:#dc2626;padding:1px 7px;border-radius:99px">COI EXPIRED</span>`;
+  else if(insExpiring) badge+=` <span style="font-size:10px;font-weight:700;background:#fffbeb;color:#d97706;padding:1px 7px;border-radius:99px">COI expiring soon</span>`;
+  else if(d.insurance) badge+=` <span style="font-size:10px;background:#f0fdf4;color:#16a34a;padding:1px 7px;border-radius:99px">COI ✓</span>`;
+  else badge+=` <span style="font-size:10px;background:#fef2f2;color:#dc2626;padding:1px 7px;border-radius:99px">No COI</span>`;
+
+  if(d.w9) badge+=` <span style="font-size:10px;background:#f0fdf4;color:#16a34a;padding:1px 7px;border-radius:99px">W-9 ✓</span>`;
+  else badge+=` <span style="font-size:10px;background:#fef2f2;color:#dc2626;padding:1px 7px;border-radius:99px">No W-9</span>`;
+
+  return badge;
+}
+
+// Override the carrier row render to use new system
+// Patch into renderCarriers by overriding the badge functions
+const _origW9Badge=window.w9Badge;
+window.w9Badge=function(name){return '';};// swallow old — replaced by carrierOnboardBadge
+
+const _origCertBadges=window.certBadges;
+window.certBadges=function(name){return carrierOnboardBadge(name);};// hijack certBadges slot for unified badge
+
+// Override old openW9Modal and openCertModal to open the new unified flow
+window.openW9Modal=function(name){openCarrierOnboarding(name);};
+window.openCertModal=function(name){openCarrierOnboarding(name);};
+window.openCarrierOnboardingChecklist=function(name){openCarrierOnboarding(name);};
+
+// Replace onboard button label dynamically
+function carrierOnboardBtn(name){
+  const status=getOnboardStatus(name);
+  const color=status.pct===100?'background:#f0fdf4;color:#16a34a;border-color:#16a34a':'';
+  return `<button class="btn btn-sm" style="${color}" onclick="event.stopPropagation();openCarrierOnboarding('${name.replace(/'/g,"\\'")}')">
+    ${status.icon} ${status.label}
+  </button>`;
 }
 </script>
