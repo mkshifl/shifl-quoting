@@ -256,7 +256,7 @@ hr{border:none;border-top:1px solid var(--gray-100);margin:14px 0}
 
   /* Tables scroll horizontally */
   .tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
-  table{min-width:600px}
+  table{min-width:960px}
 
   /* Mode selector cards stack */
   .mode-cards{flex-direction:column}
@@ -6888,32 +6888,51 @@ async function renderCarriers(){
       </div>`;
       return;
     }
-    const rows=shown.map(c=>`<tr style="cursor:pointer" onclick="showCarrierDetail('${c.id}')">
-      <td><div style="font-weight:600;color:var(--navy);font-size:13px">${c.name}</div>${c.notes?`<div style="font-size:11px;color:var(--gray-400);margin-top:2px">${c.notes.slice(0,60)}${c.notes.length>60?'…':''}</div>`:''}</td>
-      <td>${(c.modes||[]).map(m=>`<span style="display:inline-flex;padding:2px 7px;border-radius:99px;font-size:10px;font-weight:700;background:#dbeafe;color:#1e40af;margin-right:3px">${m}</span>`).join('')||'<span style="color:var(--gray-400);font-size:12px">—</span>'}</td>
-      <td style="font-size:13px">${c.contact_name||'<span style="color:var(--gray-400)">—</span>'}</td>
-      <td style="font-size:12px;color:var(--gray-500)">${c.phone||'—'}</td>
-      <td style="font-size:12px;color:var(--gray-500)">${c.email||'—'}</td>
-      <td onclick="event.stopPropagation()" style="white-space:nowrap">
-        <div style="display:flex;gap:4px;flex-wrap:wrap">
-          ${w9Badge(c.name)}
-          ${certBadges(c.name)}
-          ${payTermsBadge(c.name)}
-          ${blacklistBadge(c.name)}
-        </div>
-        <div style="display:flex;gap:4px;margin-top:4px">
-          <button class="btn btn-sm" onclick="openW9Modal('${c.name.replace(/'/g,"\'")}')">📋 W-9</button>
-          <button class="btn btn-sm" onclick="openCertModal('${c.name.replace(/'/g,"\'")}')">🏆 Certs</button>
-          <button class="btn btn-sm" onclick="showPayTermsModal('${c.name.replace(/'/g,"\'")}')">💳 Terms</button>
-          <button class="btn btn-sm" onclick="event.stopPropagation();showCarrierModal('${c.id}')">✏️</button>
-          ${carrierOnboardBtn(c.name)}
-          <button class="btn btn-sm" onclick="event.stopPropagation();openCarrierFitScorer();setTimeout(()=>{const el=document.getElementById('cfs-name');if(el){el.value='${c.name.replace(/'/g,"\'")}';runCarrierFit();}},100)">🏆 Fit</button>
-          <button class="btn btn-sm" onclick="event.stopPropagation();openCarrierRateChart('${c.name.replace(/'/g,"\'")}')">📈 Rates</button>
-          <button class="btn btn-sm" onclick="event.stopPropagation();toggleBlacklist('${c.name.replace(/'/g,"\'")}');renderCarriers()" style="color:${isBlacklisted(c.name)?'var(--red)':'var(--gray-500)'}">🚫</button>
-          <button class="btn btn-sm" data-cid="${c.id}" data-cname="${c.name}" onclick="event.stopPropagation();confirmDeleteCarrier(this.dataset.cid,this.dataset.cname)" style="color:#dc2626;border-color:#fca5a5" title="Delete carrier">🗑️</button>
-        </div>
-      </td>
-    </tr>`).join('');
+    const rows=shown.map(c=>{
+      const onb=getCarrierOnboardData(c.name);
+      const isOnboarded=isCarrierOnboarded(c.name);
+      const obStatus=getOnboardStatus(c.name);
+      const insExpiry=onb.insExpiry?new Date(onb.insExpiry):null;
+      const today=new Date();
+      const insExpired=insExpiry&&insExpiry<today;
+      const insExpiring=insExpiry&&!insExpired&&(insExpiry-today)<30*86400000;
+      const statusDot=isOnboarded
+        ?'<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#16a34a;margin-right:6px" title="Onboarded"></span>'
+        :'<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#f59e0b;margin-right:6px" title="Incomplete onboarding"></span>';
+      return `<tr onclick="showCarrierDetail('${c.id}')" style="cursor:pointer">
+        <td style="min-width:180px">
+          <div style="display:flex;align-items:center">
+            ${statusDot}
+            <div>
+              <div style="font-weight:600;color:var(--navy);font-size:13px">${c.name}</div>
+              ${onb.mc?`<div style="font-size:10px;color:var(--gray-400)">MC-${onb.mc}${onb.dot?' · DOT '+onb.dot:''}</div>`:''}
+            </div>
+          </div>
+        </td>
+        <td style="min-width:120px">${(c.modes||[]).map(m=>`<span style="display:inline-flex;padding:1px 6px;border-radius:99px;font-size:10px;font-weight:700;background:#dbeafe;color:#1e40af;margin-right:2px;margin-bottom:2px">${m}</span>`).join('')||'<span style="color:var(--gray-400);font-size:12px">—</span>'}</td>
+        <td style="min-width:130px;font-size:13px">${c.contact_name||'<span style="color:var(--gray-400)">—</span>'}</td>
+        <td style="min-width:120px;font-size:12px;color:var(--gray-500)">${c.phone||'—'}</td>
+        <td style="min-width:160px;font-size:12px;color:var(--gray-500)">${c.email||'—'}</td>
+        <td style="min-width:100px">
+          <div style="display:flex;flex-direction:column;gap:2px">
+            <span style="font-size:10px;font-weight:700;padding:1px 7px;border-radius:99px;display:inline-block;width:fit-content;background:${isOnboarded?'#dcfce7':'#fef3c7'};color:${isOnboarded?'#16a34a':'#92400e'}">${obStatus.icon} ${obStatus.label}</span>
+            ${onb.insurance?`<span style="font-size:10px;padding:1px 6px;border-radius:99px;display:inline-block;width:fit-content;background:${insExpired?'#fee2e2':insExpiring?'#fef3c7':'#f0fdf4'};color:${insExpired?'#dc2626':insExpiring?'#d97706':'#16a34a'}">${insExpired?'⚠ COI expired':insExpiring?'⚠ COI expiring':'✓ COI on file'}</span>`:'<span style="font-size:10px;color:#9ca3af">No COI</span>'}
+            ${onb.w9?'<span style="font-size:10px;color:#16a34a">✓ W-9</span>':'<span style="font-size:10px;color:#9ca3af">No W-9</span>'}
+          </div>
+        </td>
+        <td onclick="event.stopPropagation()" style="min-width:180px;white-space:nowrap">
+          <div style="display:flex;gap:3px;align-items:center;flex-wrap:nowrap">
+            <button class="btn btn-sm" onclick="openCarrierOnboarding('${c.name.replace(/'/g,"\'")}'); event.stopPropagation()" title="${isOnboarded?'Onboarded — view file':'Complete onboarding'}" style="${isOnboarded?'color:#16a34a;border-color:#bbf7d0':''}">
+              ${isOnboarded?'✅ Onboarded':'📋 Onboard'}
+            </button>
+            <button class="btn btn-sm" onclick="event.stopPropagation();showCarrierModal('${c.id}')" title="Edit">✏️</button>
+            <button class="btn btn-sm" onclick="event.stopPropagation();openCarrierRateChart('${c.name.replace(/'/g,"\'")}')" title="Rate history">📈</button>
+            <button class="btn btn-sm" onclick="event.stopPropagation();toggleBlacklist('${c.name.replace(/'/g,"\'") }');renderCarriers()" style="color:${isBlacklisted(c.name)?'var(--red)':'var(--gray-400)'}" title="Blacklist">🚫</button>
+            <button class="btn btn-sm" data-cid="${c.id}" data-cname="${c.name}" onclick="event.stopPropagation();confirmDeleteCarrier(this.dataset.cid,this.dataset.cname)" style="color:#dc2626;border-color:#fca5a5" title="Delete">🗑️</button>
+          </div>
+        </td>
+      </tr>`;
+    }).join('');
 
     $('page').innerHTML=`
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap">
@@ -6926,13 +6945,14 @@ async function renderCarriers(){
       ${shown.length===0?'<div style="text-align:center;padding:40px;color:var(--gray-400)">No carriers match your filter</div>':`
       <div class="tbl-wrap">
         <table style="width:100%;border-collapse:collapse">
-          <thead><tr style="background:var(--gray-50);border-bottom:1px solid var(--gray-200)">
-            <th style="padding:10px 14px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-500)">Carrier</th>
-            <th style="padding:10px 14px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-500)">Modes</th>
-            <th style="padding:10px 14px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-500)">Point of Contact</th>
-            <th style="padding:10px 14px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-500)">Phone</th>
-            <th style="padding:10px 14px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-500)">Email</th>
-            <th style="padding:10px 14px"></th>
+          <thead><tr>
+            <th style="min-width:180px">Carrier</th>
+            <th style="min-width:120px">Modes</th>
+            <th style="min-width:130px">Contact</th>
+            <th style="min-width:120px">Phone</th>
+            <th style="min-width:160px">Email</th>
+            <th style="min-width:100px">Status</th>
+            <th style="min-width:180px">Actions</th>
           </tr></thead>
           <tbody>${rows}</tbody>
         </table>
