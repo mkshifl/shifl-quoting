@@ -13322,24 +13322,28 @@ function renderTMS(){
   $('topbar-right').innerHTML=`<button class="btn" onclick="openRevenueLeakDetector()">💸 Revenue leaks</button><button class="btn" onclick="openLoadDocumentBundle('','')">📦 Doc bundle</button><div style="font-size:12px;font-weight:700;color:var(--steel)">🚚 TMS</div>`;
   updateTMSBadge();
 
-  const tabs=[
+  // Primary tabs — always visible
+  const primaryTabs=[
     {id:'dashboard',icon:'ti-home',label:'Dashboard'},
     {id:'dispatch',icon:'ti-layout-kanban',label:'Dispatch'},
-    {id:'loads',icon:'ti-list',label:'All loads'},
-    {id:'bol',icon:'ti-file-text',label:'BOL & Docs'},
+    {id:'loads',icon:'ti-list',label:'Loads'},
     {id:'invoicing',icon:'ti-receipt',label:'Invoicing'},
-    {id:'scorecard',icon:'ti-chart-bar',label:'Scorecards'},
-    {id:'dashboard',icon:'ti-home',label:'Dashboard'},
-    {id:'calendar',icon:'ti-calendar',label:'Calendar'},
-    {id:'map',icon:'ti-map',label:'Map'},
-    {id:'vault',icon:'ti-shield-check',label:'Carrier vault'},
-    {id:'escalation',icon:'ti-alert-triangle',label:'Late loads'},
-    {id:'templates',icon:'ti-template',label:'Templates'},
-    {id:'capacity',icon:'ti-truck',label:'Capacity'},
-    {id:'claims',icon:'ti-alert-triangle',label:'Claims'},
-    {id:'tools',icon:'ti-calculator',label:'Tools'},
+    {id:'bol',icon:'ti-file-text',label:'BOL'},
     {id:'reports',icon:'ti-report-analytics',label:'Reports'},
   ];
+  // Secondary tabs — in "More" dropdown
+  const secondaryTabs=[
+    {id:'scorecard',icon:'ti-chart-bar',label:'Scorecards'},
+    {id:'escalation',icon:'ti-alert-triangle',label:'Late loads'},
+    {id:'tools',icon:'ti-calculator',label:'Tools'},
+    {id:'capacity',icon:'ti-truck',label:'Capacity'},
+    {id:'claims',icon:'ti-alert-triangle',label:'Claims'},
+    {id:'templates',icon:'ti-template',label:'Templates'},
+    {id:'calendar',icon:'ti-calendar',label:'Calendar'},
+    {id:'vault',icon:'ti-shield-check',label:'Carrier vault'},
+    {id:'map',icon:'ti-map',label:'Map'},
+  ];
+  const tabs=[...primaryTabs,...secondaryTabs];
 
   const inTransit=loads.filter(l=>['Dispatched','In Transit','Out for Delivery'].includes(l.status));
   const needsInvoice=loads.filter(l=>['Delivered','Invoiced'].includes(l.status)&&!getInvoice(l.id));
@@ -13354,11 +13358,24 @@ function renderTMS(){
     <div class="kpi" onclick="tmsFilter('all')" style="cursor:pointer;transition:transform .1s" onmouseenter="this.style.transform='translateY(-2px)'" onmouseleave="this.style.transform=''"><div class="kpi-lbl">Total loads</div><div class="kpi-val" style="font-size:20px">${loads.length}</div></div>
   </div>`;
 
-  const tabBar=`<div style="display:flex;gap:0;border-bottom:2px solid var(--gray-100);margin-bottom:20px;overflow-x:auto">
-    ${tabs.map(t=>`<button onclick="S.tmsTab='${t.id}';renderTMS()"
-      style="display:flex;align-items:center;gap:5px;padding:10px 14px;border:none;border-bottom:2px solid ${sub===t.id?'var(--steel)':'transparent'};margin-bottom:-2px;font-size:12px;font-weight:${sub===t.id?700:500};cursor:pointer;font-family:inherit;background:transparent;color:${sub===t.id?'var(--steel)':'var(--gray-500)'};white-space:nowrap">
-      <i class="ti ${t.icon}" style="font-size:14px"></i>${t.label}</button>`).join('')}
+  const isSecondaryActive=secondaryTabs.some(t=>t.id===sub);
+  const tabBar=`<div style="display:flex;align-items:center;gap:0;border-bottom:2px solid var(--gray-100);margin-bottom:20px">
+    ${primaryTabs.map(t=>`<button onclick="S.tmsTab='${t.id}';renderTMS()"
+      style="display:flex;align-items:center;gap:5px;padding:9px 13px;border:none;border-bottom:2px solid ${sub===t.id?'var(--steel)':'transparent'};margin-bottom:-2px;font-size:12px;font-weight:${sub===t.id?700:500};cursor:pointer;font-family:inherit;background:transparent;color:${sub===t.id?'var(--steel)':'var(--gray-500)'};white-space:nowrap;flex-shrink:0">
+      <i class="ti ${t.icon}" style="font-size:13px"></i>${t.label}</button>`).join('')}
+    <div style="position:relative;flex-shrink:0;margin-bottom:-2px" id="tms-more-wrap">
+      <button onclick="const m=document.getElementById('tms-more-dd');m.style.display=m.style.display==='block'?'none':'block';event.stopPropagation()"
+        style="display:flex;align-items:center;gap:4px;padding:9px 13px;border:none;border-bottom:2px solid ${isSecondaryActive?'var(--steel)':'transparent'};font-size:12px;font-weight:${isSecondaryActive?700:500};cursor:pointer;font-family:inherit;background:transparent;color:${isSecondaryActive?'var(--steel)':'var(--gray-500)'};white-space:nowrap">
+        More ▾</button>
+      <div id="tms-more-dd" style="display:none;position:absolute;top:100%;left:0;background:var(--white);border:1px solid var(--gray-200);border-radius:var(--radius-lg);box-shadow:var(--shadow-md);min-width:160px;padding:4px 0;z-index:500">
+        ${secondaryTabs.map(t=>`<button onclick="S.tmsTab='${t.id}';renderTMS();document.getElementById('tms-more-dd').style.display='none'"
+          style="display:flex;align-items:center;gap:8px;width:100%;padding:8px 14px;border:none;background:${sub===t.id?'var(--blue-bg)':'transparent'};color:${sub===t.id?'var(--steel)':'var(--gray-700)'};font-size:13px;font-weight:${sub===t.id?700:400};cursor:pointer;font-family:inherit;text-align:left">
+          <i class="ti ${t.icon}" style="font-size:14px;color:${sub===t.id?'var(--steel)':'var(--gray-400)'}"></i>${t.label}</button>`).join('')}
+      </div>
+    </div>
   </div>`;
+  // Close More dropdown on outside click
+  setTimeout(()=>{document.addEventListener('click',function _tmsClose(e){const w=document.getElementById('tms-more-wrap');if(w&&!w.contains(e.target)){const d=document.getElementById('tms-more-dd');if(d)d.style.display='none';}},{once:true});},0);
 
   if(sub==='dashboard')  renderTMSDashboard(tabBar,kpis,loads);
   else if(sub==='dispatch')   renderTMSDispatch(tabBar,kpis,loads);
