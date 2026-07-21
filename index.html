@@ -6752,7 +6752,7 @@ async function upsertCarrier(name, mode) {
 }
 
 async function renderCarriers(){
-  $('topbar-right').innerHTML=`<button class="btn" onclick="openCarrierFraudDetector()">🚨 Fraud check</button><button class="btn" onclick="openInsuranceLapseTracker()">🔔 Insurance</button><button class="btn" onclick="openPerformanceDeclineAnalyzer()">📉 Perf trends</button><button class="btn" onclick="openOnTimeTrendDetector()">📊 OT trends</button><button class="btn" onclick="openCarrierFitScorer()">🏆 Fit score</button><button class="btn" onclick="openRateNegotiationCoach()">💬 Neg coach</button><button class="btn blue" onclick="showCarrierModal()">+ Add carrier</button>`;
+  $('topbar-right').innerHTML=`<button class="btn" onclick="openCarrierFraudDetector()">🚨 Fraud check</button><button class="btn" onclick="openInsuranceLapseTracker()">🔔 Insurance</button><button class="btn" onclick="openPerformanceDeclineAnalyzer()">📉 Perf trends</button><button class="btn" onclick="openCarrierFitScorer()">🏆 Fit score</button><button class="btn" onclick="openRateNegotiationCoach()">💬 Neg coach</button><button class="btn blue" onclick="showCarrierModal()">+ Add carrier</button>`;
   $('page').innerHTML='<div style="text-align:center;padding:40px"><div class="loading-spin" style="margin:0 auto 12px"></div><div style="color:var(--gray-400);font-size:13px">Loading carriers...</div></div>';
   try{
     const{data:carriers}=await db.from('carriers').select('*').order('name');
