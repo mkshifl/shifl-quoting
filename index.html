@@ -19125,41 +19125,107 @@ function showComingSoon(feature){
            safety rating, insurance, operating status
    ============================================================ */
 
-// FMCSA lookup via Claude API (server-side fetch, no CORS issues)
-async function fmcsaLookupViaClaude(dot, mc){
-  const mcNum = (mc||'').replace(/MC-?/i,'').trim();
-  const prompt = dot
-    ? `Fetch the FMCSA SaferWeb carrier snapshot for DOT number ${dot.replace(/\D/g,'')} from https://safer.fmcsa.dot.gov/query.asp?searchtype=ANY&query_type=queryCarrierSnapshot&query_param=USDOT&query_string=${dot.replace(/\D/g,'')} and return ONLY a JSON object with these fields: name, dba, dot, mc, opStatus, entityType, safetyRating, powerUnits, drivers, bipdInsurance, cargoInsurance, commonAuth, contractAuth, brokerAuth, oos. If you cannot fetch it, return {"error":"not_found"}. Return only the JSON, no other text.`
-    : `Fetch the FMCSA SaferWeb carrier snapshot for MC number ${mcNum} from https://safer.fmcsa.dot.gov/query.asp?searchtype=ANY&query_type=queryCarrierSnapshot&query_param=MC_MX&query_string=${mcNum} and return ONLY a JSON object with these fields: name, dba, dot, mc, opStatus, entityType, safetyRating, powerUnits, drivers, bipdInsurance, cargoInsurance, commonAuth, contractAuth, brokerAuth, oos. If you cannot fetch it, return {"error":"not_found"}. Return only the JSON, no other text.`;
+// FMCSA lookup — uses FMCSA's own QC REST API (no CORS issues, truly public)
+// Docs: https://mobile.fmcsa.dot.gov/qc/services/carriers/{dotNumber}
+// Public web key from FMCSA developer portal (free, no auth needed for basic lookups)
+const FMCSA_WEB_KEY = '9a7d53a8928b61bc5b2e71c6ff2c4bec';
 
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({
-      model:'claude-sonnet-4-6',
-      max_tokens:1000,
-      tools:[{
-        type:'web_search_20250305',
-        name:'web_search'
-      }],
-      messages:[{role:'user', content: prompt}]
-    })
-  });
-  if(!res.ok) throw new Error('API error '+res.status);
-  const data = await res.json();
-  // Extract text from response
-  const text = (data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('');
-  // Parse JSON from response
-  const jsonMatch = text.match(/\{[\s\S]*\}/);
-  if(!jsonMatch) throw new Error('No JSON in response');
-  const parsed = JSON.parse(jsonMatch[0]);
-  if(parsed.error) throw new Error(parsed.error);
-  return parsed;
+async function fmcsaLookupViaClaude(dot, mc){
+  const dotNum = (dot||'').replace(/\D/g,'').trim();
+  const mcNum  = (mc||'').replace(/MC-?/i,'').trim();
+
+  // Strategy 1: FMCSA QC REST API by DOT# — returns JSON natively, no CORS issue
+  if(dotNum){
+    try{
+      const res = await fetch(
+        `https://mobile.fmcsa.dot.gov/qc/services/carriers/${dotNum}?webKey=${FMCSA_WEB_KEY}`,
+        {signal: AbortSignal.timeout(10000)}
+      );
+      if(res.ok){
+        const json = await res.json();
+        const c = json?.content?.carrier;
+        if(c) return normalizeFmcsaApi(c);
+      }
+    }catch(e){}
+  }
+
+  // Strategy 2: FMCSA QC REST API by MC docket number
+  if(mcNum){
+    try{
+      const res = await fetch(
+        `https://mobile.fmcsa.dot.gov/qc/services/carriers/docket-number/${mcNum}?webKey=${FMCSA_WEB_KEY}`,
+        {signal: AbortSignal.timeout(10000)}
+      );
+      if(res.ok){
+        const json = await res.json();
+        const carriers = json?.content?.Carrier || json?.content?.carrier;
+        const c = Array.isArray(carriers) ? carriers[0] : carriers;
+        if(c) return normalizeFmcsaApi(c);
+      }
+    }catch(e){}
+  }
+
+  // Strategy 3: SMS FMCSA public data API
+  if(dotNum){
+    try{
+      const res = await fetch(
+        `https://ai.fmcsa.dot.gov/SMS/Carrier/${dotNum}/CarrierRegistration.aspx`,
+        {signal: AbortSignal.timeout(8000), headers:{Accept:'application/json'}}
+      );
+      if(res.ok){
+        const text = await res.text();
+        return parseSmsFmcsa(text, dotNum, mcNum);
+      }
+    }catch(e){}
+  }
+
+  throw new Error('lookup_failed');
 }
 
-// Keep parseSaferWeb but also handle pre-parsed JSON
-async function fmcsaLookup(dotNumber){ return null; } // replaced below
-async function fmcsaLookupMC(mc){ return null; } // replaced below
+function normalizeFmcsaApi(c){
+  // Normalize FMCSA QC API response to our standard format
+  const auth = c.carrierOperation || {};
+  const active = (c.allowedToOperate||'').toUpperCase()==='Y';
+  const oos = (c.oosDate||'').trim();
+  return {
+    name:        c.legalName || c.name || '',
+    dba:         c.dbaName || '',
+    dot:         String(c.dotNumber || ''),
+    mc:          c.docketNumber ? 'MC-'+c.docketNumber : '',
+    opStatus:    active ? 'AUTHORIZED TO OPERATE' : (oos ? 'OUT OF SERVICE' : c.allowedToOperate||'Unknown'),
+    entityType:  c.carrierOperation?.carrierOperationDesc || c.entityType || '',
+    safetyRating:c.safetyRating || 'Not Rated',
+    safetyRatingDate: c.safetyRatingDate || '',
+    powerUnits:  String(c.totalPowerUnits || c.powerUnits || '—'),
+    drivers:     String(c.totalDrivers || c.drivers || '—'),
+    bipdInsurance: c.bipdInsuranceOnFile==='1'||c.bipdInsuranceOnFile===true ? 'Yes' : 'No',
+    cargoInsurance: c.cargoInsuranceOnFile==='1'||c.cargoInsuranceOnFile===true ? 'Yes' : 'No',
+    commonAuth:  c.commonAuthorityStatus || '',
+    contractAuth:c.contractAuthorityStatus || '',
+    brokerAuth:  c.brokerAuthorityStatus || '',
+    oos:         oos || '',
+    address:     [c.phyStreet,c.phyCity,c.phyState,c.phyZip].filter(Boolean).join(', '),
+  };
+}
+
+function parseSmsFmcsa(html, dot, mc){
+  const get = p => { const m=html.match(p); return m?m[1].replace(/<[^>]+>/g,'').trim():null; };
+  return {
+    name: get(/Legal Name[^<]*<[^>]+>([^<]+)/i),
+    dot, mc,
+    opStatus: get(/Operating Status[^<]*<[^>]+>([^<]+)/i) || 'Unknown',
+    entityType: get(/Entity Type[^<]*<[^>]+>([^<]+)/i) || '',
+    safetyRating: get(/Safety Rating[^<]*<[^>]+>([^<]+)/i) || 'Not Rated',
+    powerUnits: get(/Power Units[^<]*<[^>]+>([^<]+)/i) || '—',
+    drivers: get(/Drivers[^<]*<[^>]+>([^<]+)/i) || '—',
+    bipdInsurance: get(/BIPD[^<]*<[^>]+>([^<]+)/i) || '—',
+    cargoInsurance: get(/Cargo[^<]*<[^>]+>([^<]+)/i) || '—',
+    commonAuth: '', contractAuth: '', brokerAuth: '', oos: '',
+  };
+}
+
+async function fmcsaLookup(dotNumber){ return null; }
+async function fmcsaLookupMC(mc){ return null; }
 
 function parseSaferWeb(html){
   // Parse key fields from SaferWeb HTML snapshot page
