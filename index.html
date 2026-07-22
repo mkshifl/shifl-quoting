@@ -157,7 +157,7 @@ tbody td{padding:9px 12px;color:var(--gray-700);vertical-align:middle}
 .badge.best{background:var(--navy);color:#fff}
 /* KPI */
 .kpi-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:16px}
-.kpi{background:var(--white);border:1px solid var(--gray-200);border-radius:var(--radius-lg);padding:14px 18px}
+.kpi{background:var(--white);border:1px solid var(--gray-200);border-radius:var(--radius-lg);padding:14px 18px;border-left:4px solid var(--steel);transition:box-shadow .15s}.kpi:hover{box-shadow:0 4px 16px rgba(30,58,95,.1)}
 .kpi-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-500);margin-bottom:5px}
 .kpi-val{font-size:24px;font-weight:700;line-height:1}
 .kpi-val.g{color:var(--green)}.kpi-val.b{color:var(--steel)}
@@ -369,7 +369,7 @@ body.screenshot-mode .money::after,body.screenshot-mode .kpi-val::after{content:
 
 /* ── KPI card accent bar ── */
 .kpi{border-left:3px solid var(--steel);padding:14px 18px 14px 16px}
-.kpi-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-500);margin-bottom:6px}
+.kpi-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-500);margin-bottom:6px}.kpi-delta{font-size:11px;margin-top:4px;color:var(--gray-400)}.kpi-delta.up{color:#16a34a}.kpi-delta.dn{color:#dc2626}
 .kpi-sub{font-size:11px;color:var(--gray-400);margin-top:4px}
 
 /* ── Input focus ring ── */
@@ -558,6 +558,34 @@ body.dark .status-popover button:hover{background:#243447}
 .tbl-wrap table thead th{font-size:10px;padding:6px 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 /* Quote builder flat charges compact layout */
 .charge-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px 16px}
+
+/* KPI card accent colors per type */
+.kpi.kpi-green{border-left-color:#16a34a}
+.kpi.kpi-amber{border-left-color:#d97706}
+.kpi.kpi-red{border-left-color:#dc2626}
+.kpi.kpi-navy{border-left-color:#1e3a5f}
+
+/* Standardized modal */
+.modal{background:#fff;border-radius:14px;box-shadow:0 8px 40px rgba(30,58,95,.18);max-width:90vw;max-height:88vh;overflow-y:auto;position:relative}
+.modal-title{font-size:15px;font-weight:700;color:#1e3a5f;padding:16px 18px 14px;border-bottom:1px solid #f3f4f6;display:flex;align-items:center;justify-content:space-between}
+.modal-title-sub{font-size:11px;color:#9ca3af;font-weight:400;margin-top:2px}
+.modal-close-x{width:28px;height:28px;border-radius:50%;background:#f3f4f6;border:none;cursor:pointer;font-size:16px;color:#6b7280;display:flex;align-items:center;justify-content:center;flex-shrink:0;line-height:1;font-family:inherit}
+.modal-close-x:hover{background:#e5e7eb;color:#374151}
+.modal-foot{padding:12px 18px;border-top:1px solid #f3f4f6;display:flex;gap:8px;justify-content:flex-end;background:#fff}
+.modal-body{padding:16px 18px}
+.field label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#9ca3af;display:block;margin-bottom:4px}
+.field input,.field select,.field textarea{border:1px solid #e5e7eb;border-radius:8px;padding:8px 10px;font-size:13px;color:#1e3a5f;background:#fff;width:100%;box-sizing:border-box}
+.field input:focus,.field select:focus,.field textarea:focus{border-color:#2563eb;outline:none;box-shadow:0 0 0 3px rgba(37,99,235,.1)}
+
+/* TMS load cards */
+.tms-load-card{background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:12px 14px;margin-bottom:8px;border-left:4px solid #2563eb}
+.tms-load-card.drayage{border-left-color:#1e3a5f}
+.tms-load-card.ftl{border-left-color:#2563eb}
+.tms-load-card.ltl{border-left-color:#7c3aed}
+.tms-load-card.air{border-left-color:#0369a1}
+.tms-load-card.transload{border-left-color:#d97706}
+.tms-load-card.late{border-left-color:#dc2626}
+.tms-ref-badge{font-size:10px;font-weight:700;color:#2563eb;background:#eff6ff;padding:2px 8px;border-radius:5px;flex-shrink:0}
 </style>
 <script>
 // Force clear service worker and caches
@@ -3275,18 +3303,25 @@ async function loadFqHistory(){
 function buildCustomerRows(){
   const s=S.cSearch.toLowerCase();
   const filtered=S.customers.filter(c=>!s||(c.company+c.name+c.email+c.phone).toLowerCase().includes(s));
-  if(!filtered.length) return `<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--gray-400)">No customers yet — click + Add customer to get started</td></tr>`;
-  return filtered.map(c=>`<tr>
-    <td class="bold">${c.company||'—'}</td>
-    <td>${c.name||'—'}</td>
-    <td><a href="mailto:${c.email}" style="color:var(--steel)">${c.email||'—'}</a></td>
-    <td>${c.phone||'—'}</td>
-    <td class="muted small">${c.notes||''}</td>
-    <td style="white-space:nowrap">
-      <button class="btn sm ico-btn" onclick="editCustomer('${c.id}')" title="Edit">✏️</button>
-      <button class="btn sm ico-btn" onclick="delCustomer('${c.id}')" title="Delete" style="margin-left:3px">🗑️</button>
-    </td>
-  </tr>`).join('');
+  if(!filtered.length) return `<div style="text-align:center;padding:40px"><div style="font-size:32px;margin-bottom:10px">👥</div><div style="font-size:14px;font-weight:600;color:#374151;margin-bottom:4px">No customers yet</div><div style="font-size:12px;color:#9ca3af;margin-bottom:14px">Add your first customer to get started</div><button class="btn blue" onclick="showAddCustomer()">+ Add customer</button></div>`;
+  const avatarColors=['linear-gradient(135deg,#1e3a5f,#2563eb)','linear-gradient(135deg,#065f46,#059669)','linear-gradient(135deg,#92400e,#d97706)','linear-gradient(135deg,#6d28d9,#8b5cf6)','linear-gradient(135deg,#991b1b,#dc2626)','linear-gradient(135deg,#0c4a6e,#0284c7)'];
+  return filtered.map((c,i)=>{
+    const initials=(c.company||'?').split(' ').slice(0,2).map(w=>w[0]).join('').toUpperCase();
+    const color=avatarColors[i%avatarColors.length];
+    const ytdRev=S.quotes.filter(q=>q.customer===c.company&&(q.status==='Booked'||q.status==='Delivered')).reduce((s,q)=>s+(q.customerRates?.total||0),0);
+    return `<div onclick="openCustomerDetail('${c.id}')" style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:10px 14px;margin-bottom:6px;display:flex;align-items:center;gap:10px;cursor:pointer;transition:box-shadow .12s" onmouseenter="this.style.boxShadow='0 2px 12px rgba(30,58,95,.1)'" onmouseleave="this.style.boxShadow='none'">
+      <div style="width:36px;height:36px;border-radius:50%;background:${color};display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff;flex-shrink:0">${initials}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:700;color:#1e3a5f;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${c.company||'—'}</div>
+        <div style="font-size:11px;color:#6b7280;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${c.name||''}${c.email?' · '+c.email:''}</div>
+      </div>
+      ${ytdRev>0?`<div style="text-align:right;flex-shrink:0"><div style="font-size:13px;font-weight:700;color:#2563eb">${fmtD(ytdRev)}</div><div style="font-size:9px;color:#9ca3af">YTD revenue</div></div>`:''}
+      <div onclick="event.stopPropagation()" style="display:flex;gap:4px;flex-shrink:0">
+        <button class="btn sm" onclick="editCustomer('${c.id}')" style="padding:4px 8px">✏️</button>
+        <button class="btn sm" onclick="deleteCustomer('${c.id}')" style="padding:4px 8px;color:#dc2626;border-color:#fca5a5">🗑️</button>
+      </div>
+    </div>`;
+  }).join('');
 }
 
 function renderCustomers(){
@@ -3294,10 +3329,12 @@ function renderCustomers(){
     <input type="text" id="cust-search" placeholder="Search customers…" value="${S.cSearch}"
       oninput="onCustSearch(this.value)" style="width:200px">
     <button class="btn blue" onclick="showAddCustomer()">+ Add customer</button><button class="btn" onclick="openVIPSpendAlert()">⚠️ VIP alerts</button><button class="btn" onclick="openCustomerHealthDashboard()">💚 Health</button>`;
-  $('page').innerHTML=`<div class="tbl-wrap"><table>
-    <thead><tr><th>Company</th><th>Contact name</th><th>Email</th><th>Phone</th><th>Notes</th><th></th></tr></thead>
-    <tbody id="cust-tbody">${buildCustomerRows()}</tbody>
-  </table></div>`;
+  const custCount=S.customers.length;
+  $('page').innerHTML=`
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <div style="font-size:13px;font-weight:600;color:#1e3a5f">${custCount} customer${custCount!==1?'s':''}</div>
+    </div>
+    <div id="cust-tbody">${buildCustomerRows()}</div>`;
 }
 
 function onCustSearch(v){S.cSearch=v;const t=$('cust-tbody');if(t) t.innerHTML=buildCustomerRows();}
@@ -6134,17 +6171,17 @@ function renderLog(){
   const pillBar=`<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:14px">
     <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;flex:1">
       ${[
-        {s:'all',    label:'All',       color:'#1a2e4a', bg:'#1a2e4a'},
-        {s:'Quoted', label:'Quoted',    color:'#1a2e4a', bg:'#1a2e4a'},
-        {s:'Booked', label:'Booked',    color:'#16a34a', bg:'#16a34a'},
-        {s:'Delivered',label:'Delivered',color:'#2e75b6',bg:'#2e75b6'},
-        {s:'Invoiced',label:'Invoiced', color:'#7c3aed', bg:'#7c3aed'},
-        {s:'Lost',   label:'Lost',      color:'#dc2626', bg:'#dc2626'},
-        {s:'Cancelled',label:'Cancelled',color:'#6b7280',bg:'#6b7280'},
-        {s:'Expired',label:'Expired',   color:'#d97706', bg:'#d97706'},
+        {s:'all',    label:'All',   activeBg:'#1e3a5f', inactiveBg:'#f3f4f6', inactiveColor:'#374151'},
+        {s:'Quoted', label:'Quoted', activeBg:'#2563eb', inactiveBg:'#dbeafe', inactiveColor:'#1d4ed8'},
+        {s:'Booked', label:'Booked', activeBg:'#16a34a', inactiveBg:'#dcfce7', inactiveColor:'#15803d'},
+        {s:'Delivered',label:'Delivered',activeBg:'#0d9488',inactiveBg:'#f0fdf4',inactiveColor:'#0f766e'},
+        {s:'Invoiced',label:'Invoiced',activeBg:'#7c3aed',inactiveBg:'#ede9fe',inactiveColor:'#6d28d9'},
+        {s:'Lost',   label:'Lost',  activeBg:'#dc2626', inactiveBg:'#fee2e2', inactiveColor:'#dc2626'},
+        {s:'Cancelled',label:'Cancelled',activeBg:'#6b7280',inactiveBg:'#f3f4f6',inactiveColor:'#6b7280'},
+        {s:'Expired',label:'Expired',activeBg:'#d97706',inactiveBg:'#fef3c7',inactiveColor:'#92400e'},
       ].map(p=>`<button onclick="onLogFilter('${p.s}')"
-        style="padding:5px 13px;border-radius:99px;border:1.5px solid;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .12s;${S.logFilter===p.s?`background:${p.bg};color:#fff;border-color:${p.bg};`:`color:${p.color};border-color:${p.color};background:transparent;`}">
-        ${p.label} <span style="font-size:10px;opacity:.75">${statCounts[p.s]||0}</span>
+        style="padding:5px 13px;border-radius:99px;border:none;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .12s;background:${S.logFilter===p.s?p.activeBg:p.inactiveBg};color:${S.logFilter===p.s?'#fff':p.inactiveColor}">
+        ${p.label} <span style="font-size:10px;opacity:.8">${statCounts[p.s]||0}</span>
       </button>`).join('')}
     </div>
     <div style="position:relative;min-width:200px">
@@ -6559,10 +6596,10 @@ function renderDash(){
       <div class="toggle-group"><button class="tgl${range==='week'?' on':''}" onclick="setDashFilter('week')">This week</button><button class="tgl${range==='month'?' on':''}" onclick="setDashFilter('month')">This month</button><button class="tgl${range==='lastmonth'?' on':''}" onclick="setDashFilter('lastmonth')">Last month</button><button class="tgl${range==='all'?' on':''}" onclick="setDashFilter('all')">All time</button></div>
     </div>
     <div class="kpi-grid">
-      <div class="kpi" style="cursor:pointer" onclick="setView('log');S.logFilter='all';render()"><div class="kpi-lbl">Quotes built</div><div class="kpi-val">${filtered.length}</div><div style="font-size:11px;color:var(--gray-400);margin-top:4px">click to view →</div></div>
-      <div class="kpi" style="cursor:pointer" onclick="setView('log');S.logFilter='Booked';render()"><div class="kpi-lbl">Booked</div><div class="kpi-val b">${booked.length}</div><div style="font-size:11px;color:var(--steel);margin-top:4px">${pct(winRate)} of all quotes</div></div>
-      <div class="kpi"><div class="kpi-lbl">Total Revenue</div><div class="kpi-val g">${rev>0?fmtD(rev):'—'}</div><div style="font-size:11px;color:var(--gray-400);margin-top:4px">booked only</div></div>
-      <div class="kpi"><div class="kpi-lbl">Total Profit</div><div class="kpi-val g">${prof>0?fmtD(prof):'—'}</div><div style="font-size:11px;color:${prof>0?'var(--green)':'var(--gray-400)'};margin-top:4px">${booked.length>0?'avg '+pct(booked.reduce((s,q)=>s+getShipmentProfit(q,'freight').margin,0)/booked.length)+' margin':'—'}</div></div>
+      <div class="kpi kpi-navy" style="cursor:pointer" onclick="setView('log');S.logFilter='all';render()"><div class="kpi-lbl">Quotes built</div><div class="kpi-val">${filtered.length}</div><div class="kpi-delta">click to view all →</div></div>
+      <div class="kpi kpi-green" style="cursor:pointer" onclick="setView('log');S.logFilter='Booked';render()"><div class="kpi-lbl">Booked</div><div class="kpi-val b">${booked.length}</div><div class="kpi-delta up">${pct(winRate)} win rate</div></div>
+      <div class="kpi kpi-green"><div class="kpi-lbl">Total revenue</div><div class="kpi-val g">${rev>0?fmtD(rev):'—'}</div><div class="kpi-delta">booked loads only</div></div>
+      <div class="kpi kpi-amber"><div class="kpi-lbl">Total profit</div><div class="kpi-val g">${prof>0?fmtD(prof):'—'}</div><div class="kpi-delta ${prof>0?'up':''}">${booked.length>0?'avg '+pct(booked.reduce((s,q)=>s+getShipmentProfit(q,'freight').margin,0)/booked.length)+' margin':'—'}</div></div>
     </div>
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px">
       <div class="kpi" style="border-left:3px solid var(--green)"><div class="kpi-lbl">Base Revenue</div><div class="kpi-val g" style="font-size:18px">${baseRev>0?fmtD(baseRev):'—'}</div><div style="font-size:11px;color:var(--gray-400);margin-top:4px">core freight only</div></div>
@@ -9425,38 +9462,63 @@ function getNotifications(){
 }
 
 function renderNotifDropdown(){
-  const notes=getNotifications();
-  const existing=$('notif-dropdown');
-  if(existing){existing.remove();return;}
-  const colors={danger:'#fee2e2',warning:'#fef3c7',info:'#dbeafe'};
-  const textC={danger:'#991b1b',warning:'#92400e',info:'#1e40af'};
-  const btn=$('notif-btn');
-  if(!btn) return;
-  const rect=btn.getBoundingClientRect();
-  const dd=document.createElement('div');
-  dd.id='notif-dropdown';
-  const leftPos=Math.max(rect.left, 230);
-  dd.style.cssText=`position:fixed;top:${rect.bottom+6}px;left:${leftPos}px;width:320px;background:var(--white);border:1px solid var(--gray-200);border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,.16);z-index:9999;overflow:hidden`;
-  dd.innerHTML=`
-    <div style="padding:12px 16px;border-bottom:1px solid var(--gray-100);display:flex;justify-content:space-between;align-items:center">
-      <span style="font-size:13px;font-weight:700;color:var(--navy)">🔔 Notifications</span>
-      <span style="font-size:11px;color:var(--gray-500)">${notes.length} alert${notes.length!==1?'s':''}</span>
-    </div>
-    ${notes.length?notes.map((n,i)=>`
-      <div onclick="window._notifActions&&window._notifActions[${i}]()" style="padding:12px 16px;border-bottom:1px solid var(--gray-100);cursor:pointer;background:${colors[n.type]||'#fff'};transition:opacity .12s" onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">
-        <div style="display:flex;align-items:flex-start;gap:10px">
-          <span style="font-size:18px;flex-shrink:0">${n.icon}</span>
-          <div>
-            <div style="font-size:12px;font-weight:700;color:${textC[n.type]||'#1a2e4a'}">${n.title}</div>
-            <div style="font-size:11px;color:${textC[n.type]||'#6b7280'};margin-top:2px;opacity:.8">${n.body}</div>
-          </div>
+  const notifs=JSON.parse(localStorage.getItem('shifl_notifs')||'[]').slice(0,20);
+  const unread=notifs.filter(n=>!n.read);
+  // Mark all as read on open
+  const marked=notifs.map(n=>({...n,read:true}));
+  localStorage.setItem('shifl_notifs',JSON.stringify(marked));
+  const badge=document.getElementById('notif-badge');
+  if(badge){badge.style.display='none';}
+
+  // Group by type
+  const groups={Loads:[],Billing:[],Carriers:[],General:[]};
+  notifs.forEach(n=>{
+    const t=n.type||'General';
+    const g=groups[t]||groups.General;
+    g.push(n);
+  });
+  // Add live system checks
+  const loads=JSON.parse(localStorage.getItem('tms_loads')||'[]');
+  const lateLoads=loads.filter(l=>{const m=JSON.parse(localStorage.getItem('tms_meta_'+l.id)||'{}');return m.expectedDelivery&&m.expectedDelivery<new Date().toISOString().slice(0,10)&&l.status!=='Delivered';});
+  const insKeys=Object.keys(localStorage).filter(k=>k.startsWith('carrier_ins_'));
+  const expiring=insKeys.filter(k=>{const d=JSON.parse(localStorage.getItem(k)||'{}');if(!d.expiry) return false;const days=Math.round((new Date(d.expiry)-new Date())/86400000);return days>=0&&days<=30;});
+
+  const systemItems=[
+    ...lateLoads.slice(0,3).map(l=>({ico:'⚠',color:'#dc2626',text:`Load <strong>${l.shiflRef||l.id}</strong> is <strong style="color:#dc2626">late</strong>`,time:'',group:'Loads',unread:true})),
+    ...expiring.slice(0,2).map(k=>{const name=k.replace('carrier_ins_','');const d=JSON.parse(localStorage.getItem(k)||'{}');const days=Math.round((new Date(d.expiry)-new Date())/86400000);return{ico:'🛡️',color:'#d97706',text:`COI expiring in <strong>${days}d</strong> — ${name}`,time:'',group:'Carriers',unread:days<=7};}),
+    ...(notifs.length===0?[{ico:'✓',color:'#9ca3af',text:'No new notifications',time:'',group:'General',unread:false}]:[]),
+  ];
+
+  const allItems=[...systemItems,...notifs.map(n=>({ico:n.icon||'🔔',color:n.color||'#6b7280',text:n.message||n.text||'',time:n.at?formatChatTime(n.at):'',group:n.type||'General',unread:!n.read}))];
+
+  const groupOrder=['Loads','Billing','Carriers','General'];
+  const grouped={};
+  allItems.forEach(item=>{const g=item.group||'General';if(!grouped[g]) grouped[g]=[];grouped[g].push(item);});
+
+  const groupHtml=groupOrder.filter(g=>grouped[g]&&grouped[g].length).map(g=>`
+    <div style="padding:5px 12px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#9ca3af;background:#fafafa;border-bottom:1px solid #f3f4f6;border-top:1px solid #f3f4f6">${g}</div>
+    ${grouped[g].map(item=>`
+      <div style="padding:9px 12px;border-bottom:1px solid #f9fafb;display:flex;gap:8px;align-items:flex-start;${item.unread?'border-left:3px solid #2563eb;':''};background:${item.unread?'#fafeff':'#fff'}">
+        <div style="width:7px;height:7px;border-radius:50%;background:${item.color};margin-top:4px;flex-shrink:0"></div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:11.5px;color:#374151;line-height:1.4">${item.text}</div>
+          ${item.time?`<div style="font-size:9px;color:#9ca3af;margin-top:2px">${item.time}</div>`:''}
         </div>
-      </div>`).join('')
-    :`<div style="padding:32px 16px;text-align:center;color:var(--gray-500)"><div style="font-size:24px;margin-bottom:8px">✅</div><div style="font-size:13px;font-weight:600">All clear!</div><div style="font-size:12px;margin-top:4px">No alerts right now</div></div>`}
-  `;
-  window._notifActions=notes.map(n=>()=>{dd.remove();n.action&&n.action();});
-  document.body.appendChild(dd);
-  setTimeout(()=>document.addEventListener('click',function h(e){if(!dd.contains(e.target)&&e.target.id!=='notif-btn'){dd.remove();document.removeEventListener('click',h);}},true),100);
+      </div>`).join('')}`).join('');
+
+  const html=`<div style="position:fixed;top:54px;left:${$('notif-btn')?.getBoundingClientRect().left||8}px;width:280px;background:#fff;border:1px solid #e5e7eb;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.12);z-index:9999;overflow:hidden">
+    <div style="padding:9px 12px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #f3f4f6;background:#f8f9fa">
+      <div style="font-size:12px;font-weight:700;color:#1e3a5f">Notifications ${unread.length>0?`<span style="background:#2563eb;color:#fff;border-radius:99px;font-size:9px;padding:1px 6px;font-weight:700">${unread.length} new</span>`:''}</div>
+      <button onclick="this.closest('[style*=fixed]').remove()" style="background:none;border:none;cursor:pointer;font-size:16px;color:#9ca3af;line-height:1">×</button>
+    </div>
+    ${groupHtml||'<div style="padding:24px;text-align:center;color:#9ca3af;font-size:12px">All clear — no notifications</div>'}
+    <div style="padding:8px 12px;background:#f8f9fa;border-top:1px solid #f3f4f6;text-align:center"><button onclick="localStorage.removeItem('shifl_notifs');this.closest('[style*=fixed]').remove()" style="font-size:11px;color:#2563eb;background:none;border:none;cursor:pointer;font-weight:600">Clear all</button></div>
+  </div>`;
+
+  // Remove any existing dropdown
+  document.querySelectorAll('[style*="position:fixed"][style*="280px"]').forEach(el=>el.remove());
+  document.body.insertAdjacentHTML('beforeend',html);
+  setTimeout(()=>document.addEventListener('click',function _close(e){if(!e.target.closest('[style*="280px"]')&&e.target.id!=='notif-btn'){document.querySelectorAll('[style*="position:fixed"][style*="280px"]').forEach(el=>el.remove());document.removeEventListener('click',_close);}},{ once:false }),50);
 }
 
 function updateNotifBadge(){
@@ -20662,20 +20724,38 @@ if(typeof _origOpenRLD==='function'){
 }
 
 // ── 68. Modal × close button ──
-// openModal: clean version with × button + auto-focus, no recursive wrap
+// openModal: standardized with × button + auto-focus
 (function(){
   const _base = window.openModal;
   if(!_base || window._openModalPatched) return;
   window._openModalPatched = true;
   window.openModal = function(html){
-    _base(
-      '<button onclick="closeModal()" style="position:absolute;top:12px;right:14px;background:none;border:none;cursor:pointer;font-size:20px;color:#9ca3af;line-height:1;z-index:1" title="Close (Esc)">×</button>' +
-      '<div style="position:relative">' + html + '</div>'
-    );
+    _base(html);
     setTimeout(()=>{
+      // Inject × close button into modal title if not already there
+      const modalTitle = document.querySelector('.modal-title');
+      if(modalTitle && !modalTitle.querySelector('.modal-close-x')){
+        const xBtn = document.createElement('button');
+        xBtn.className = 'modal-close-x';
+        xBtn.innerHTML = '×';
+        xBtn.title = 'Close (Esc)';
+        xBtn.onclick = closeModal;
+        modalTitle.appendChild(xBtn);
+      }
+      // If no modal-title, inject floating ×
+      const modal = document.querySelector('.modal');
+      if(modal && !modal.querySelector('.modal-close-x') && !modal.querySelector('.modal-title')){
+        const xBtn = document.createElement('button');
+        xBtn.className = 'modal-close-x';
+        xBtn.style.cssText = 'position:absolute;top:12px;right:14px;z-index:1';
+        xBtn.innerHTML = '×';
+        xBtn.onclick = closeModal;
+        modal.appendChild(xBtn);
+      }
+      // Auto-focus first input
       const first = document.querySelector('.modal input:not([type=checkbox]):not([type=radio]):not([type=hidden]), .modal select, .modal textarea');
       if(first) first.focus();
-    }, 150);
+    }, 80);
   };
 })();
 
