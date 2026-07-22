@@ -5803,7 +5803,7 @@ function buildRateRows(){
   const filtered=S.rates
     .filter(r=>{
       if(s&&!(r.carrier+r.zip+r.destination+r.region+r.notes).toLowerCase().includes(s)) return false;
-      if(isExportTab&&!r.exportBase) return false; // export tab: only show rates with export base
+      if(isExportTab&&!r.exportBase) return false;
       return true;
     })
     .sort((a,b)=>{
@@ -5811,26 +5811,75 @@ function buildRateRows(){
       if(z!==0) return z;
       return (a.carrier||'').localeCompare(b.carrier||'');
     });
-  if(!filtered.length) return `<tr><td colspan="${CHARGES.length+5}" style="text-align:center;padding:40px;color:var(--gray-400)">No rates found</td></tr>`;
-  return filtered.map((r,i)=>`<tr>
-    <td class="muted small" style="text-align:center;color:var(--gray-400);font-weight:600;width:30px">${i+1}</td>
-    <td><span class="badge ${regCol[r.region]||'gr'}">${r.region}</span></td>
-    <td class="bold">${r.carrier}${r.notes?`<div class="subtext">${r.notes}</div>`:''}</td>
-    <td>${r.destination}</td><td>${r.zip||'—'}</td>
-    <td><span class="badge ${ldCol[r.ld]||'gr'}">${r.ld||'—'}</span></td>
-    <td class="bold">${fmt(r.base)}</td><td>${fmt(r.chassis)}</td><td>${fmt(r.prepull)}</td>
-    <td>${fmt(r.det_port)}</td><td>${fmt(r.det_cust)}</td><td>${fmt(r.storage)}</td>
-    <td>${fmt(r.ovw43)}</td><td>${fmt(r.ovw48)}</td><td>${fmt(r.bobtail)}</td><td>${fmt(r.toll)}</td>
-    <td class="bold">${fmt(totAll(r))}</td>
-    <td><span class="badge ${r.active?'g':'gr'}">${r.active?'Active':'Off'}</span></td>
-    <td style="white-space:nowrap">
-      <button class="btn sm" onclick="toggleActive('${r.id}','${r.active}')">${r.active?'Deactivate':'Activate'}</button>
-      <button class="btn sm ico-btn" onclick="duplicateRate('${r.id}')" style="margin-left:3px" title="Duplicate">📋</button>
-      <button class="btn sm ico-btn" onclick="editRate('${r.id}')" style="margin-left:3px" title="Edit">✏️</button>
-      <button class="btn sm ico-btn" onclick="delRate('${r.id}')" style="margin-left:3px" title="Delete">🗑️</button>
-    </td>
-  </tr>`).join('');
+  if(!filtered.length) return `<div style="text-align:center;padding:40px;color:var(--gray-400);font-size:13px">No rates found</div>`;
+
+  const ldCol={Live:'live',Drop:'drop',Both:'both'};
+  const ldBadge=ld=>{
+    const map={Live:'background:#dcfce7;color:#15803d',Drop:'background:#dbeafe;color:#1d4ed8',Both:'background:#f3f4f6;color:#6b7280'};
+    return `<span style="font-size:9px;font-weight:700;padding:2px 7px;border-radius:99px;${map[ld]||map.Both}">${ld||'—'}</span>`;
+  };
+  const money=v=>v?`<span style="font-weight:700;color:#1e3a5f">$${Number(v).toLocaleString()}</span>`:`<span style="color:#d1d5db">—</span>`;
+  const chip=(lbl,v)=>`<div style="background:#fff;border:1px solid #e5e7eb;border-radius:7px;padding:7px 10px;text-align:center">
+    <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#9ca3af;margin-bottom:3px">${lbl}</div>
+    <div style="font-size:13px;font-weight:700;color:${v?'#1e3a5f':'#d1d5db'}">${v?'$'+Number(v).toLocaleString():'—'}</div>
+  </div>`;
+
+  return filtered.map((r,i)=>{
+    const total=totAll(r);
+    const rid=r.id.replace(/[^a-z0-9]/gi,'_');
+    const regBadge=r.region?`<span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;background:#dbeafe;color:#1d4ed8">${r.region}</span>`:'';
+    return `<div style="border-bottom:1px solid #f3f4f6">
+      <div onclick="toggleRateRow('${rid}')" style="display:grid;grid-template-columns:30px 28px 1fr 110px 58px 50px 80px 70px 80px 80px;gap:0;padding:10px 12px;align-items:center;cursor:pointer;transition:background .1s" onmouseenter="this.style.background='#f0f6ff'" onmouseleave="this.style.background=''">
+        <div style="text-align:center;font-size:11px;color:#9ca3af;font-weight:600">${i+1}</div>
+        <div>${regBadge}</div>
+        <div>
+          <div style="font-size:12px;font-weight:700;color:#1e3a5f">${r.carrier}</div>
+          ${r.destination?`<div style="font-size:10px;color:#9ca3af">${r.destination}</div>`:''}
+          ${r.notes?`<div style="font-size:10px;color:#d97706">${r.notes}</div>`:''}
+        </div>
+        <div style="font-size:12px;color:#374151">${r.zip||'—'}</div>
+        <div>${ldBadge(r.ld)}</div>
+        <div style="text-align:right;font-size:13px;font-weight:800;color:#1e3a5f">$${Number(r.base||0).toLocaleString()}</div>
+        <div style="text-align:right;font-size:12px;font-weight:600;color:#374151">${r.chassis?'$'+Number(r.chassis).toLocaleString():'<span style="color:#d1d5db">—</span>'}</div>
+        <div style="text-align:right;font-size:12px;font-weight:600;color:#374151">${r.prepull?'$'+Number(r.prepull).toLocaleString():'<span style="color:#d1d5db">—</span>'}</div>
+        <div style="text-align:right;font-size:13px;font-weight:800;color:#2563eb">$${Number(total||0).toLocaleString()}</div>
+        <div id="arr_${rid}" style="text-align:right;font-size:11px;color:#9ca3af">▼ expand</div>
+      </div>
+      <div id="det_${rid}" style="display:none;padding:10px 14px 14px 70px;background:#fafbfc;border-top:1px solid #f3f4f6">
+        <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-bottom:10px">
+          ${chip('Det. Port',r.det_port)}
+          ${chip('Det. Cust',r.det_cust)}
+          ${chip('Storage',r.storage)}
+          ${chip('OW 43k',r.ovw43)}
+          ${chip('OW 48k',r.ovw48)}
+          ${chip('Bobtail',r.bobtail)}
+          ${chip('Toll',r.toll)}
+          ${chip('Genset',r.genset)}
+          ${chip('Triaxle',r.triaxle)}
+          ${r.exportBase?chip('Export base',r.exportBase):''}
+        </div>
+        <div style="display:flex;align-items:center;gap:6px">
+          <button class="btn sm" onclick="event.stopPropagation();toggleActive('${r.id}','${r.active}')" style="${r.active?'color:#16a34a;border-color:#bbf7d0':'color:#6b7280'}">${r.active?'✅ Active':'○ Inactive'}</button>
+          <button class="btn sm ico-btn" onclick="event.stopPropagation();editRate('${r.id}')" title="Edit">✏️ Edit</button>
+          <button class="btn sm ico-btn" onclick="event.stopPropagation();duplicateRate('${r.id}')" title="Duplicate">📋 Duplicate</button>
+          <button class="btn sm ico-btn" onclick="event.stopPropagation();deleteRate('${r.id}')" style="color:#dc2626;border-color:#fca5a5" title="Delete">🗑️ Delete</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
 }
+
+function toggleRateRow(rid){
+  const det=document.getElementById('det_'+rid);
+  const arr=document.getElementById('arr_'+rid);
+  if(!det||!arr) return;
+  const isOpen=det.style.display!=='none';
+  det.style.display=isOpen?'none':'block';
+  arr.textContent=isOpen?'▼ expand':'▲ collapse';
+  arr.style.color=isOpen?'#9ca3af':'#2563eb';
+}
+
+
 function renderRates(){
   const matchCount=S.rSearch?S.rates.filter(r=>(r.carrier+r.zip+r.destination+r.region+r.notes).toLowerCase().includes(S.rSearch.toLowerCase())).length:S.rates.length;
   $('topbar-right').innerHTML=`
@@ -5851,35 +5900,22 @@ function renderRates(){
       <button onclick="S.rateTab='export';renderRates()" style="padding:6px 14px;border:none;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;background:${S.rateTab==='export'?'#92400e':'#fff'};color:${S.rateTab==='export'?'#fff':'var(--gray-500)'}">📤 Export</button>
     </div>
     <button class="btn blue" onclick="showAddRate()">+ Add rate</button>`;
-  $('page').innerHTML=`<div class="tbl-wrap" style="overflow-x:auto"><table style="width:100%;min-width:1100px;table-layout:fixed;font-size:12px"><colgroup>
-  <col style="width:34px"><col style="width:28px"><col style="width:140px"><col style="width:130px">
-  <col style="width:58px"><col style="width:48px"><col style="width:68px"><col style="width:68px">
-  <col style="width:62px"><col style="width:62px"><col style="width:62px"><col style="width:62px">
-  <col style="width:60px"><col style="width:60px"><col style="width:60px"><col style="width:60px">
-  <col style="width:56px"><col style="width:70px"><col style="width:66px"><col style="width:38px">
-</colgroup>
-<thead><tr>
-  <th style="text-align:center;padding:7px 4px">#</th>
-  <th style="padding:7px 4px" title="Region">Reg</th>
-  <th style="padding:7px 8px">Carrier</th>
-  <th style="padding:7px 8px">Destination</th>
-  <th style="padding:7px 6px">ZIP</th>
-  <th style="padding:7px 4px">Mode</th>
-  <th style="padding:7px 6px;text-align:right" title="Import base rate">Base</th>
-  <th style="padding:7px 6px;text-align:right" title="Export base rate">Export</th>
-  <th style="padding:7px 6px;text-align:right" title="Chassis">Chassis</th>
-  <th style="padding:7px 6px;text-align:right" title="Pre-pull">Pre-pull</th>
-  <th style="padding:7px 6px;text-align:right" title="Detention at port">Det.Port</th>
-  <th style="padding:7px 6px;text-align:right" title="Detention at customer">Det.Cust</th>
-  <th style="padding:7px 6px;text-align:right" title="Storage">Storage</th>
-  <th style="padding:7px 6px;text-align:right" title="Overweight 43k">OW 43k</th>
-  <th style="padding:7px 6px;text-align:right" title="Overweight 48k">OW 48k</th>
-  <th style="padding:7px 6px;text-align:right" title="Bobtail">Bobtail</th>
-  <th style="padding:7px 6px;text-align:right" title="Toll">Toll</th>
-  <th style="padding:7px 6px;text-align:right">Total</th>
-  <th style="padding:7px 4px">Status</th>
-  <th style="padding:7px 4px"></th>
-</tr></thead><tbody id="rates-tbody">${buildRateRows()}</tbody></table></div>`;
+  $('page').innerHTML=`
+    <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden">
+      <div style="display:grid;grid-template-columns:30px 28px 1fr 110px 58px 50px 80px 70px 80px 80px;gap:0;padding:8px 12px;background:#f8f9fa;border-bottom:1px solid #e5e7eb;align-items:center">
+        <div style="font-size:9px;font-weight:700;text-transform:uppercase;color:#9ca3af;text-align:center">#</div>
+        <div style="font-size:9px;font-weight:700;text-transform:uppercase;color:#9ca3af">Reg</div>
+        <div style="font-size:9px;font-weight:700;text-transform:uppercase;color:#9ca3af">Carrier · Destination</div>
+        <div style="font-size:9px;font-weight:700;text-transform:uppercase;color:#9ca3af">ZIP</div>
+        <div style="font-size:9px;font-weight:700;text-transform:uppercase;color:#9ca3af">Mode</div>
+        <div style="font-size:9px;font-weight:700;text-transform:uppercase;color:#9ca3af;text-align:right">Base</div>
+        <div style="font-size:9px;font-weight:700;text-transform:uppercase;color:#9ca3af;text-align:right">Chassis</div>
+        <div style="font-size:9px;font-weight:700;text-transform:uppercase;color:#9ca3af;text-align:right">Pre-pull</div>
+        <div style="font-size:9px;font-weight:700;text-transform:uppercase;color:#9ca3af;text-align:right">Total</div>
+        <div style="font-size:9px;font-weight:700;text-transform:uppercase;color:#9ca3af;text-align:right">▼ Details</div>
+      </div>
+      <div id="rates-tbody">${buildRateRows()}</div>
+    </div>`;
 }
 function onRateSearch(v){
   S.rSearch=v;
