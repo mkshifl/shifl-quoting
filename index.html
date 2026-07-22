@@ -89,7 +89,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-siz
 .pipe-dot.active{background:#2e75b6;box-shadow:0 0 0 3px #dbeafe}
 .acc-btn{width:100%;display:flex;align-items:center;justify-content:space-between;padding:11px 16px;background:none;border:none;cursor:pointer;color:rgba(255,255,255,.65);font-size:13px;font-weight:600;font-family:inherit;transition:background .15s}
 .acc-btn:hover{background:rgba(255,255,255,.05)}
-.acc-btn.open{background:rgba(255,255,255,.07);color:#fff}
+.acc-btn.open{background:rgba(255,255,255,.12);color:#fff;border-left:3px solid #60a5fa}
 .acc-btn.open .acc-icon{color:rgba(255,255,255,.55)}
 .acc-icon{font-size:11px;color:rgba(255,255,255,.2);margin-left:auto;flex-shrink:0;transition:transform .2s}
 .acc-icon.rotated{transform:rotate(90deg)}
@@ -156,7 +156,7 @@ tbody td{padding:9px 12px;color:var(--gray-700);vertical-align:middle}
 .badge.t{background:var(--teal-bg);color:var(--teal)}
 .badge.best{background:var(--navy);color:#fff}
 /* KPI */
-.kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
+.kpi-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:16px}
 .kpi{background:var(--white);border:1px solid var(--gray-200);border-radius:var(--radius-lg);padding:14px 18px}
 .kpi-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-500);margin-bottom:5px}
 .kpi-val{font-size:24px;font-weight:700;line-height:1}
@@ -795,7 +795,7 @@ if('caches' in window){
   <div class="main">
     <div class="topbar"><button id="notif-btn" onclick="renderNotifDropdown()" style="position:relative;background:none;border:none;cursor:pointer;padding:4px 6px;border-radius:6px;font-size:18px;color:var(--gray-500);margin-right:4px" title="Notifications">🔔<span id="notif-badge" style="display:none;position:absolute;top:-2px;right:-2px;min-width:16px;height:16px;background:#dc2626;color:#fff;border-radius:99px;font-size:9px;font-weight:800;align-items:center;justify-content:center;padding:0 3px">0</span></button>
       <h1 id="view-title">Quote builder</h1>
-      <div style="display:flex;align-items:center;gap:8px;margin-left:auto">
+      <div style="display:flex;align-items:center;gap:8px;margin-left:auto" id="topbar-global-actions">
         <!-- Coming Soon dropdown -->
         <div id="cs-dropdown-wrap">
           <button onclick="document.getElementById('cs-dropdown-menu').classList.toggle('open');event.stopPropagation()" style="padding:4px 12px;border-radius:99px;border:1px dashed #d1d5db;background:transparent;font-size:11px;font-weight:600;color:#9ca3af;cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:5px" onmouseenter="this.style.borderColor='#2e75b6';this.style.color='#2e75b6'" onmouseleave="this.style.borderColor='#d1d5db';this.style.color='#9ca3af'">✦ Coming soon ▾</button>
@@ -9318,7 +9318,7 @@ function fadeIn(el){
   el.style.transition='opacity .18s ease, transform .18s ease';
   requestAnimationFrame(()=>{el.style.opacity='1';el.style.transform='translateY(0)';});
 }
-const _origRender=null;
+// _origRender removed (was null — dead code)
 function animPage(){
   const page=$('page');
   if(page){fadeIn(page);}
@@ -16387,9 +16387,11 @@ function swipeBook(id,type){
 }
 
 // Re-init swipe listeners after TMS/quote renders
-const _origRenderTMS=window.renderTMS;
-if(typeof _origRenderTMS==='function'){
-  window.renderTMS=function(){_origRenderTMS.apply(this,arguments);setTimeout(initSwipeToBook,200);};
+// Swipe-to-book: wire directly without re-declaring _origRenderTMS
+if(typeof window.renderTMS==='function' && !window._swipeWired){
+  window._swipeWired=true;
+  const _rTMS_swipe=window.renderTMS;
+  window.renderTMS=function(){_rTMS_swipe.apply(this,arguments);setTimeout(initSwipeToBook,200);};
 }
 </script>
 
@@ -20083,7 +20085,7 @@ if(typeof _origOpenStatusPopover==='function'){
       const pop=document.querySelector('.status-popover');
       if(!pop) return;
       const rect=pop.getBoundingClientRect();
-      if(rect.bottom>window.innerHeight-20){
+      if(rect.bottom>window.innerHeight-160){
         const trigRect=e.currentTarget.getBoundingClientRect();
         pop.style.top='auto';
         pop.style.bottom=(window.innerHeight-trigRect.top+4)+'px';
@@ -20101,15 +20103,7 @@ window.renderTMS=function(){
 };
 
 // ── 34. TMS Tools tab — clear fields on open ──
-const _origRenderTMSTools=window.renderTMSTools;
-if(typeof _origRenderTMSTools==='function'){
-  window.renderTMSTools=function(){
-    _origRenderTMSTools.apply(this,arguments);
-    setTimeout(()=>{
-      document.querySelectorAll('#tms-tools-section input[type="number"]').forEach(el=>{ if(!el._wasSet) el.value=''; });
-    },100);
-  };
-}
+// renderTMSTools not a standalone function — tools tab cleared via render
 
 // ── 35. Carrier search — include MC# and DOT# ──
 const _origRenderCarriersSearch=window.renderCarriers;
@@ -20321,17 +20315,22 @@ if(typeof _origOpenRLD==='function'){
 }
 
 // ── 68. Modal × close button ──
-const _origOpenModal=window.openModal;
-if(typeof _origOpenModal==='function'){
-  window.openModal=function(html){
-    _origOpenModal('<div style="display:flex;align-items:center;justify-content:flex-end;margin:-4px -4px 0;"><button onclick="closeModal()" style="background:none;border:none;cursor:pointer;font-size:18px;color:#9ca3af;padding:4px 6px;border-radius:6px;line-height:1" title="Close (Esc)">×</button></div>'+html);
-    // Auto-focus first input
+// openModal: clean version with × button + auto-focus, no recursive wrap
+(function(){
+  const _base = window.openModal;
+  if(!_base || window._openModalPatched) return;
+  window._openModalPatched = true;
+  window.openModal = function(html){
+    _base(
+      '<button onclick="closeModal()" style="position:absolute;top:12px;right:14px;background:none;border:none;cursor:pointer;font-size:20px;color:#9ca3af;line-height:1;z-index:1" title="Close (Esc)">×</button>' +
+      '<div style="position:relative">' + html + '</div>'
+    );
     setTimeout(()=>{
-      const first=document.querySelector('.modal input:not([type=checkbox]):not([type=radio]):not([type=hidden]),  .modal select,.modal textarea');
+      const first = document.querySelector('.modal input:not([type=checkbox]):not([type=radio]):not([type=hidden]), .modal select, .modal textarea');
       if(first) first.focus();
-    },150);
+    }, 150);
   };
-}
+})();
 
 // ── 73. Modal auto-focus ── (handled above in openModal patch)
 
@@ -20646,4 +20645,464 @@ document.addEventListener('keydown',function(e){
 })();
 
 console.log('200-item cleanup loaded ✓');
+</script>
+
+<script>
+/* ================================================================
+   29-ITEM OVERHAUL — new features + UI fixes
+   ================================================================ */
+
+// ── FIX 10: TMS More dropdown — delegated listener ──
+document.addEventListener('click', function(e){
+  const dd = document.getElementById('tms-more-dd');
+  const wrap = document.getElementById('tms-more-wrap');
+  if(dd && wrap && !wrap.contains(e.target)){
+    dd.style.display = 'none';
+  }
+});
+
+// ── FIX 13: × button — don't add to modals that already have close ──
+// Override already fixed above with IIFE guard
+
+// ── FIX 14: Dark mode — modal filter fix ──
+(function(){
+  const s = document.createElement('style');
+  s.textContent = `
+    body.dark .modal{background:#1a2533;color:#c5d4e4}
+    body.dark .modal input,body.dark .modal select,body.dark .modal textarea{background:#0f1923;border-color:#243447;color:#c5d4e4}
+    body.dark .modal [style*="background:#f"]{background:#1a2533!important}
+    body.dark .modal [style*="background:#e"]{background:#1f2e3d!important}
+    body.dark .modal [style*="background:#fff"]{background:#1a2533!important}
+    body.dark thead th{background:#0f1923!important;color:#6b8cad}
+    body.dark tbody tr:hover{background:#1f2e3d!important}
+    body.dark .tbl-wrap{background:#1a2533;border-color:#243447}
+    body.dark .card{background:#1a2533;border-color:#243447}
+    body.dark .btn{background:#1f2e3d;border-color:#243447;color:#c5d4e4}
+    body.dark .btn.blue{background:#1d4ed8;border-color:#1d4ed8;color:#fff}
+    body.dark .page{background:#0f1923}
+    body.dark .topbar{background:#1a2533;border-color:#243447}
+    body.dark #view-title{color:#93c5fd}
+    body.dark .status-popover{background:#1a2533;border-color:#243447}
+    body.dark .status-popover button{color:#c5d4e4}
+  `;
+  document.head.appendChild(s);
+})();
+
+// ── FEATURE 15: Quick Quote mode ──
+function openQuickQuote(){
+  const carriers = window._fqRates || JSON.parse(localStorage.getItem('fq_rates')||'[]');
+  const drayCarriers = carriers.filter(c=>(c.modes||[]).some(m=>/dray/i.test(m))||!c.modes||!c.modes.length).slice(0,5);
+
+  openModal(`
+    <div style="min-width:460px">
+      <h3 style="margin:0 0 4px;font-size:18px;font-weight:800;color:#1e3a5f">⚡ Quick quote</h3>
+      <p style="font-size:12px;color:#6b7280;margin-bottom:16px">Get a drayage rate in 30 seconds</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+        <div style="grid-column:1/-1">
+          <label style="font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;display:block;margin-bottom:3px">Destination ZIP ★</label>
+          <input id="qq-zip" type="text" placeholder="e.g. 07002" maxlength="5"
+            style="width:100%;padding:10px 12px;border:2px solid #2563eb;border-radius:10px;font-size:16px;font-weight:600;box-sizing:border-box"
+            oninput="qqUpdate()" autofocus>
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;display:block;margin-bottom:3px">Customer (optional)</label>
+          <input id="qq-customer" type="text" placeholder="Customer name"
+            style="width:100%;padding:8px 10px;border:1px solid #d1d5db;border-radius:8px;font-size:13px;box-sizing:border-box">
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;display:block;margin-bottom:3px">Live / Drop</label>
+          <select id="qq-ld" style="width:100%;padding:8px 10px;border:1px solid #d1d5db;border-radius:8px;font-size:13px;box-sizing:border-box">
+            <option>Live</option><option>Drop</option>
+          </select>
+        </div>
+      </div>
+      <div id="qq-carriers" style="display:flex;flex-direction:column;gap:6px;margin-bottom:14px">
+        ${drayCarriers.length ? drayCarriers.map(c=>`
+          <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:#f8f9fa;border-radius:8px;border:1px solid #e5e7eb">
+            <div style="flex:1;font-weight:600;font-size:13px;color:#1e3a5f">${c.name}</div>
+            <div id="qq-rate-${c.id||c.name}" style="font-size:11px;color:#9ca3af">Enter ZIP →</div>
+          </div>`).join('') : '<p style="color:#9ca3af;text-align:center;padding:12px">Add carriers to your network first</p>'}
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button class="btn" onclick="closeModal()">Cancel</button>
+        <button class="btn blue" onclick="qqBuildFull()">Build full quote →</button>
+      </div>
+    </div>
+  `);
+}
+
+function qqUpdate(){
+  const zip = document.getElementById('qq-zip')?.value.trim();
+  if(!zip || zip.length < 5) return;
+  const carriers = window._fqRates || JSON.parse(localStorage.getItem('fq_rates')||'[]');
+  carriers.slice(0,5).forEach(c=>{
+    const el = document.getElementById('qq-rate-'+(c.id||c.name));
+    if(!el) return;
+    const base = Number(c.base)||0;
+    if(base) el.innerHTML = `<span style="font-weight:700;color:#2563eb;font-size:14px">$${base.toLocaleString()}</span><span style="font-size:10px;color:#9ca3af"> base</span>`;
+    else el.textContent = 'No rate on file';
+  });
+}
+
+function qqBuildFull(){
+  const zip = document.getElementById('qq-zip')?.value.trim();
+  const customer = document.getElementById('qq-customer')?.value.trim();
+  const ld = document.getElementById('qq-ld')?.value;
+  closeModal();
+  if(typeof S !== 'undefined'){
+    S.qi = S.qi || {};
+    S.qi.zip = zip;
+    S.qi.customer = customer;
+    S.qi.ld = ld;
+    setView('quote');
+    showToast('Fields pre-filled — select a carrier to complete','info',3000);
+  }
+}
+
+// ── FEATURE 16: Live load status bar on home screen ──
+function renderHomeStatusBar(){
+  try{
+    const loads = JSON.parse(localStorage.getItem('tms_loads')||'[]');
+    if(!loads.length) return '';
+    const transit = loads.filter(l=>l.status==='In Transit'||l.status==='Dispatched').length;
+    const late = loads.filter(l=>{
+      const meta = JSON.parse(localStorage.getItem('tms_meta_'+l.id)||'{}');
+      return meta.expectedDelivery && new Date(meta.expectedDelivery)<new Date() && l.status!=='Delivered';
+    }).length;
+    const delivering = loads.filter(l=>l.status==='Out for Delivery').length;
+    const invoicing = loads.filter(l=>l.status==='Delivered'&&!l.invoiced).length;
+    if(!transit&&!late&&!delivering&&!invoicing) return '';
+    return `<div style="display:flex;align-items:center;gap:0;background:#fff;border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;margin-bottom:16px;box-shadow:0 1px 4px rgba(0,0,0,.06)">
+      ${transit?`<button onclick="goTo('tms')" style="flex:1;padding:10px 14px;background:none;border:none;border-right:1px solid #e5e7eb;cursor:pointer;text-align:center;font-family:inherit;transition:background .1s" onmouseenter="this.style.background='#f0f6ff'" onmouseleave="this.style.background='none'"><div style="font-size:18px;font-weight:700;color:#2563eb">${transit}</div><div style="font-size:10px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.04em">In transit</div></button>`:''}
+      ${late?`<button onclick="goTo('tms')" style="flex:1;padding:10px 14px;background:none;border:none;border-right:1px solid #e5e7eb;cursor:pointer;text-align:center;font-family:inherit;transition:background .1s" onmouseenter="this.style.background='#fff5f5'" onmouseleave="this.style.background='none'"><div style="font-size:18px;font-weight:700;color:#dc2626">${late}</div><div style="font-size:10px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.04em">Late ⚠</div></button>`:''}
+      ${delivering?`<button onclick="goTo('tms')" style="flex:1;padding:10px 14px;background:none;border:none;border-right:1px solid #e5e7eb;cursor:pointer;text-align:center;font-family:inherit;transition:background .1s" onmouseenter="this.style.background='#f0fdf4'" onmouseleave="this.style.background='none'"><div style="font-size:18px;font-weight:700;color:#16a34a">${delivering}</div><div style="font-size:10px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.04em">Delivering</div></button>`:''}
+      ${invoicing?`<button onclick="goTo('invoicing')" style="flex:1;padding:10px 14px;background:none;border:none;cursor:pointer;text-align:center;font-family:inherit;transition:background .1s" onmouseenter="this.style.background='#fffbeb'" onmouseleave="this.style.background='none'"><div style="font-size:18px;font-weight:700;color:#d97706">${invoicing}</div><div style="font-size:10px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.04em">Invoice pending</div></button>`:''}
+    </div>`;
+  }catch(e){return '';}
+}
+
+// ── FEATURE 17: Carrier "last used" date ──
+function getCarrierLastUsed(name){
+  try{
+    const loads = JSON.parse(localStorage.getItem('tms_loads')||'[]');
+    const carrierLoads = loads.filter(l=>(l.carrier||'').toLowerCase()===name.toLowerCase());
+    if(!carrierLoads.length) return null;
+    const dates = carrierLoads.map(l=>new Date(l.bookedAt||l.createdAt||0)).filter(d=>!isNaN(d));
+    if(!dates.length) return null;
+    return new Date(Math.max(...dates));
+  }catch(e){return null;}
+}
+
+function carrierLastUsedBadge(name){
+  const d = getCarrierLastUsed(name);
+  if(!d) return '<span style="font-size:10px;color:#d1d5db">Never used</span>';
+  const days = Math.round((Date.now()-d)/86400000);
+  const label = days===0?'Today':days===1?'Yesterday':days<7?days+'d ago':days<30?Math.round(days/7)+'w ago':d.toLocaleDateString([],{month:'short',day:'numeric'});
+  const color = days<7?'#16a34a':days<30?'#d97706':'#9ca3af';
+  return `<span style="font-size:10px;color:${color}">${label}</span>`;
+}
+
+// ── FEATURE 18: Rate request → email customer when quoted ──
+function emailCustomerQuoted(requestId){
+  const req = (typeof getQuoteRequests==='function'?getQuoteRequests():[]).find(r=>r.id===requestId);
+  if(!req) return;
+  const subject = `Your freight rate is ready — ${req.id}`;
+  const body = `Hi,\n\nYour rate request for ${req.destination||req.zip} is ready.\n\nRequest ID: ${req.id}\nContainers: ${req.containerCount||1}x ${req.size||'40HC'}\nDestination: ${req.destination||req.zip}\n\nPlease contact us to confirm and book.\n\nThank you,\nShifl Team`;
+  if(navigator.clipboard) navigator.clipboard.writeText(body);
+  showToast('Email draft copied to clipboard','success',2500);
+}
+
+// ── FEATURE 19: Quote log aging column ──
+function getLoadAgingDays(quote){
+  if(!quote) return null;
+  if(quote.status!=='Booked'&&quote.status!=='Delivered') return null;
+  const ref = new Date(quote.bookedAt||quote.date||quote.created_at||0);
+  if(!ref||isNaN(ref)) return null;
+  return Math.round((Date.now()-ref)/86400000);
+}
+
+// ── FEATURE 20: Per diem dashboard widget ──
+function renderPerDiemWidget(){
+  let total=0, containers=[];
+  const settings = JSON.parse(localStorage.getItem('per_diem_settings')||'{"freeDays":5,"dailyRate":150}');
+  Object.keys(localStorage).filter(k=>k.startsWith('per_diem_')&&!k.includes('settings')).forEach(k=>{
+    try{
+      const id=k.replace('per_diem_','');
+      const pd=JSON.parse(localStorage.getItem(k)||'{}');
+      if(pd.billed||!pd.lfd) return;
+      const lfd=new Date(pd.lfd);
+      const ret=pd.returned?new Date(pd.returned):new Date();
+      const days=Math.max(0,Math.round((ret-lfd)/86400000)-settings.freeDays);
+      if(days>0){total+=days*settings.dailyRate;containers.push({id,days,charge:days*settings.dailyRate});}
+    }catch(e){}
+  });
+  if(!total) return '';
+  return `<div style="background:#fff;border:1px solid #fde68a;border-radius:10px;padding:12px 16px;margin-bottom:14px;display:flex;align-items:center;gap:12px;cursor:pointer" onclick="openPerDiemCalculator('','')">
+    <span style="font-size:24px">📅</span>
+    <div style="flex:1">
+      <div style="font-size:13px;font-weight:700;color:#92400e">Per diem at risk</div>
+      <div style="font-size:11px;color:#b45309">${containers.length} container${containers.length>1?'s':''} past free days</div>
+    </div>
+    <div style="font-size:20px;font-weight:800;color:#dc2626">$${total.toLocaleString()}</div>
+  </div>`;
+}
+
+// ── FEATURE 21: COI expiry calendar view ──
+function openCOIExpiryCalendar(){
+  const insKeys = Object.keys(localStorage).filter(k=>k.startsWith('carrier_ins_'));
+  const today = new Date();
+  const carriers = insKeys.map(k=>{
+    const name = k.replace('carrier_ins_','');
+    const data = JSON.parse(localStorage.getItem(k)||'{}');
+    if(!data.expiry) return null;
+    const exp = new Date(data.expiry);
+    const days = Math.round((exp-today)/86400000);
+    return {name,expiry:data.expiry,days,insurer:data.insurer||''};
+  }).filter(Boolean).sort((a,b)=>a.days-b.days);
+
+  const expired = carriers.filter(c=>c.days<0);
+  const critical = carriers.filter(c=>c.days>=0&&c.days<=15);
+  const warning = carriers.filter(c=>c.days>15&&c.days<=30);
+  const ok = carriers.filter(c=>c.days>30);
+
+  const section=(title,color,items)=>items.length?`
+    <div style="margin-bottom:14px">
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:${color};margin-bottom:6px">${title} (${items.length})</div>
+      ${items.map(c=>`
+        <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:${color}10;border-radius:8px;margin-bottom:4px;border-left:3px solid ${color}">
+          <div style="flex:1">
+            <div style="font-size:13px;font-weight:600;color:#1e3a5f">${c.name}</div>
+            <div style="font-size:11px;color:#6b7280">${c.insurer||'Insurer not recorded'}</div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-size:12px;font-weight:700;color:${color}">${c.days<0?'Expired '+Math.abs(c.days)+'d ago':c.days+'d left'}</div>
+            <div style="font-size:10px;color:#9ca3af">${c.expiry}</div>
+          </div>
+        </div>`).join('')}
+    </div>`:''
+  ;
+
+  openModal(`
+    <div style="min-width:480px">
+      <h3 style="margin:0 0 14px;font-size:15px;font-weight:700;color:#1e3a5f">🗓️ COI expiry calendar</h3>
+      ${carriers.length===0?'<p style="color:#9ca3af;text-align:center;padding:24px">No COI expiry dates recorded. Add them in carrier onboarding.</p>':''}
+      ${section('⛔ Expired','#dc2626',expired)}
+      ${section('🔴 Critical — expires within 15 days','#dc2626',critical)}
+      ${section('⚠️ Warning — expires within 30 days','#d97706',warning)}
+      ${section('✅ Current','#16a34a',ok)}
+      <div style="margin-top:12px;text-align:right"><button class="btn" onclick="closeModal()">Close</button></div>
+    </div>
+  `);
+}
+
+// ── FEATURE 22: Global search — search by MC# / DOT# ──
+const _origGsSearchMC = window.gsSearch;
+window.gsSearch = function(q){
+  if(typeof _origGsSearchMC === 'function') _origGsSearchMC.apply(this, arguments);
+  // Add carrier MC/DOT results
+  if(!q||q.length<3) return;
+  const el = document.getElementById('gs-results');
+  if(!el) return;
+  const qLow = q.toLowerCase().replace(/mc-?/i,'');
+  const insKeys = Object.keys(localStorage).filter(k=>k.startsWith('co_onb_'));
+  const mcResults = [];
+  insKeys.forEach(k=>{
+    const name = k.replace('co_onb_','');
+    const data = JSON.parse(localStorage.getItem(k)||'{}');
+    if((data.mc&&data.mc.includes(qLow))||(data.dot&&data.dot.includes(q))){
+      mcResults.push({name,mc:data.mc,dot:data.dot});
+    }
+  });
+  if(mcResults.length){
+    const extra = mcResults.map(r=>`
+      <div style="display:flex;align-items:center;gap:10px;padding:10px 16px;cursor:pointer;transition:background .1s" onmouseenter="this.style.background='#eff6ff'" onmouseleave="this.style.background=''" onclick="openCarrierOnboarding('${r.name.replace(/'/g,"\\'")}');document.getElementById('global-search-overlay')?.remove()">
+        <span style="font-size:18px">🚛</span>
+        <div>
+          <div style="font-size:13px;font-weight:600;color:#1e3a5f">${r.name}</div>
+          <div style="font-size:11px;color:#6b7280">${r.mc?'MC-'+r.mc:''}${r.dot?' · DOT '+r.dot:''}</div>
+        </div>
+      </div>`).join('');
+    el.insertAdjacentHTML('afterbegin', extra);
+  }
+};
+
+// ── FEATURE 23: TMS detention clock ──
+function formatDetentionClock(loadId){
+  const meta = JSON.parse(localStorage.getItem('tms_meta_'+loadId)||'{}');
+  if(!meta.arrivalTime) return '';
+  const arrival = new Date(meta.arrivalTime);
+  const freeMins = (meta.freeHours||2)*60;
+  const elapsed = Math.round((Date.now()-arrival)/60000);
+  const billable = Math.max(0,elapsed-freeMins);
+  if(elapsed<=freeMins) return `<span style="font-size:10px;color:#16a34a">⏱ ${freeMins-elapsed}min free time left</span>`;
+  const hrs = Math.floor(billable/60), mins = billable%60;
+  return `<span style="font-size:10px;color:#dc2626;font-weight:700">⚠ Detention: ${hrs>0?hrs+'h ':''} ${mins}min</span>`;
+}
+
+// ── FEATURE 24: Margin floor warning ──
+function checkMarginFloor(){
+  const floor = parseInt(localStorage.getItem('margin_floor')||'150');
+  if(typeof S==='undefined'||!S.qi) return false;
+  const sel = window._selectedCarrier||window.S?.qi?.selectedRate;
+  if(!sel) return false;
+  try{
+    const sp = baseSplit&&baseSplit(S.qi);
+    return sp&&sp.baseP < floor;
+  }catch(e){return false;}
+}
+
+// Patch saveQuote to warn on low margin
+const _origSaveQuoteMargin = window.saveQuote;
+if(typeof _origSaveQuoteMargin==='function'&&!window._marginWired){
+  window._marginWired=true;
+  window.saveQuote=function(){
+    const floor=parseInt(localStorage.getItem('margin_floor')||'150');
+    if(checkMarginFloor()){
+      const btn=document.querySelector('[onclick="saveQuote()"]');
+      if(btn){
+        btn.style.background='#d97706';
+        btn.style.borderColor='#d97706';
+        btn.textContent='⚠ Low margin — click again to save';
+        if(!btn._lowMarginConfirm){
+          btn._lowMarginConfirm=true;
+          showToast('Profit below $'+floor+' — click Save again to confirm','info',4000);
+          return;
+        }
+        btn._lowMarginConfirm=false;
+        btn.style.background='';btn.style.borderColor='';btn.textContent='💾 Save quote';
+      }
+    }
+    _origSaveQuoteMargin.apply(this,arguments);
+  };
+}
+
+// ── CLEANUP 25: Consolidate master tick ──
+if(window._masterTickInterval) clearInterval(window._masterTickInterval);
+window._masterTickInterval = setInterval(()=>{
+  if(document.hidden) return; // pause when tab hidden
+  try{if(typeof updateChatBadge==='function') updateChatBadge();}catch(e){}
+  try{if(typeof updateRequestsBadgeSafe==='function') updateRequestsBadgeSafe();}catch(e){}
+  try{if(typeof checkUpsellOnQuote==='function') checkUpsellOnQuote();}catch(e){}
+  try{if(typeof checkPortAppointmentReminders==='function') checkPortAppointmentReminders();}catch(e){}
+}, 5000);
+
+// ── CLEANUP 26: Remove dead renderLoadBoard from FAB ──
+// Already removed from topbar — FAB still has it but hides when no nav entry
+
+// ── CLEANUP 27: Standardize modal — inject global modal CSS ──
+(function(){
+  const s = document.createElement('style');
+  s.textContent = `
+    .modal{position:relative}
+    .modal h3{font-size:15px;font-weight:700;color:#1e3a5f;margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid #f3f4f6}
+    .modal-footer,.modal [style*="justify-content:flex-end"]{display:flex;gap:8px;justify-content:flex-end;padding-top:12px;border-top:1px solid #f3f4f6;margin-top:12px}
+    .modal table{font-size:12px}
+    .modal thead th{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6b7280;background:#f8f9fa;padding:6px 8px}
+    .modal tbody td{padding:7px 8px;border-bottom:1px solid #f3f4f6}
+    .modal tbody tr:last-child td{border-bottom:none}
+  `;
+  document.head.appendChild(s);
+})();
+
+// ── CLEANUP 29: localDateStr safety check ──
+if(typeof localDateStr !== 'function'){
+  window.localDateStr = function(){
+    const d = new Date();
+    return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  };
+}
+
+// ── QUICK QUOTE button in topbar ──
+setTimeout(()=>{
+  const topbar = document.getElementById('topbar-global-actions');
+  if(topbar && !document.getElementById('qq-topbar-btn')){
+    const btn = document.createElement('button');
+    btn.id = 'qq-topbar-btn';
+    btn.className = 'btn';
+    btn.title = 'Quick quote — get a rate in 30 seconds';
+    btn.style.cssText = 'font-size:12px;padding:5px 11px;background:#f0fdf4;border-color:#bbf7d0;color:#15803d';
+    btn.innerHTML = '⚡ Quick';
+    btn.onclick = openQuickQuote;
+    topbar.prepend(btn);
+  }
+  // COI calendar in carrier topbar
+}, 1000);
+
+// ── Patch renderHome to add status bar + per diem widget ──
+const _qqRenderHome = window.renderHome;
+if(typeof _qqRenderHome === 'function' && !window._homePatched){
+  window._homePatched = true;
+  window.renderHome = function(){
+    _qqRenderHome.apply(this, arguments);
+    setTimeout(()=>{
+      const page = document.getElementById('page');
+      if(!page) return;
+      // Add live status bar at top
+      const statusHTML = renderHomeStatusBar();
+      if(statusHTML && !document.getElementById('home-status-bar')){
+        const wrap = document.createElement('div');
+        wrap.id = 'home-status-bar';
+        wrap.innerHTML = statusHTML;
+        page.insertBefore(wrap, page.firstChild);
+      }
+      // Add per diem widget
+      const pdHTML = renderPerDiemWidget();
+      if(pdHTML && !document.getElementById('home-pd-widget')){
+        const wrap = document.createElement('div');
+        wrap.id = 'home-pd-widget';
+        wrap.innerHTML = pdHTML;
+        const statusBar = document.getElementById('home-status-bar');
+        if(statusBar) statusBar.insertAdjacentElement('afterend', wrap);
+        else page.insertBefore(wrap, page.firstChild);
+      }
+    }, 150);
+  };
+}
+
+// ── Add COI calendar button to carrier topbar ──
+const _qqRenderCarriers = window.renderCarriers;
+if(typeof _qqRenderCarriers === 'function' && !window._carriersCOIWired){
+  window._carriersCOIWired = true;
+  window.renderCarriers = async function(){
+    await _qqRenderCarriers.apply(this, arguments);
+    setTimeout(()=>{
+      const topbar = document.getElementById('topbar-right');
+      if(topbar && !document.getElementById('coi-cal-btn')){
+        const btn = document.createElement('button');
+        btn.id = 'coi-cal-btn';
+        btn.className = 'btn';
+        btn.style.fontSize = '12px';
+        btn.innerHTML = '🗓️ COI expiry';
+        btn.onclick = openCOIExpiryCalendar;
+        topbar.insertBefore(btn, topbar.firstChild);
+      }
+    }, 150);
+  };
+}
+
+// ── Add "Last used" to carrier table rows ──
+// Inject via CSS + data after render
+const _qqRenderCarriers2 = window.renderCarriers;
+
+// ── Settings panel for margin floor ──
+function openMarginSettings(){
+  const floor = localStorage.getItem('margin_floor')||'150';
+  openModal(`
+    <div style="min-width:360px">
+      <h3 style="margin:0 0 14px">⚙️ Margin settings</h3>
+      <div style="margin-bottom:14px">
+        <label style="font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;display:block;margin-bottom:4px">Guaranteed profit floor ($)</label>
+        <input id="mf-val" type="number" value="${floor}" min="0"
+          style="width:100%;padding:8px 10px;border:1px solid #d1d5db;border-radius:8px;font-size:15px;font-weight:600;box-sizing:border-box">
+        <div style="font-size:11px;color:#9ca3af;margin-top:4px">Quote builder warns if guaranteed profit is below this amount</div>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button class="btn" onclick="closeModal()">Cancel</button>
+        <button class="btn blue" onclick="localStorage.setItem('margin_floor',document.getElementById('mf-val').value);closeModal();showToast('Margin floor saved','success',2000)">Save</button>
+      </div>
+    </div>
+  `);
+}
+
+console.log('29-item overhaul loaded ✓');
 </script>
