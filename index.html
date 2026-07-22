@@ -8541,6 +8541,14 @@ function renderAqLog(){
   const rows=shown.map((q,i)=>`<tr>
     <td class="muted small">${q.date}</td>
     <td class="bold">${q.customer||'—'}</td>
+    <td onclick="event.stopPropagation()">
+      <input type="text" value="${q.shiflRef||''}" placeholder="Ref #"
+        onclick="event.stopPropagation()"
+        onchange="saveAqRef('${q.id}',this.value)"
+        style="border:none;background:${q.shiflRef?'var(--blue-bg,#eff6ff)':'transparent'};color:${q.shiflRef?'var(--steel,#2563eb)':'#9ca3af'};font-weight:${q.shiflRef?'600':'400'};font-size:11px;padding:2px 5px;border-radius:4px;width:80px;cursor:text;outline:none"
+        onfocus="this.style.background='var(--blue-bg,#eff6ff)';this.style.border='1px solid var(--steel,#2563eb)'"
+        onblur="this.style.border='none';this.style.background=this.value?'var(--blue-bg,#eff6ff)':'transparent'">
+    </td>
     <td><span style="font-size:11px;font-weight:700;background:#dbeafe;color:#1e40af;padding:2px 8px;border-radius:99px">✈️ ${q.originAirportCode||'—'}</span></td>
     <td class="muted">${q.originCity||'—'} → ${q.deliveryZip||'—'}</td>
     <td class="muted">${q.awbNumber||'—'}</td>
@@ -8551,7 +8559,7 @@ function renderAqLog(){
     <td style="color:var(--green);font-weight:600">+${fmtD(q.profit||0)}</td>
     <td><span class="badge ${q.status==='Booked'?'g':q.status==='Lost'?'r':'a'}">${q.status||'Quoted'}</span></td>
     <td onclick="event.stopPropagation()">
-      <select onchange="updateAqStatus(${i},this.value)" style="font-size:12px;padding:3px 6px;width:110px">
+      <select onchange="updateAqStatus(${i},this.value)" style="font-size:12px;padding:3px 6px;width:100px">
         ${['Quoted','Booked','Lost','Cancelled','Expired'].map(s=>`<option${q.status===s?' selected':''}>${s}</option>`).join('')}
       </select>
     </td>
@@ -8561,9 +8569,9 @@ function renderAqLog(){
   </tr>`).join('');
   $('page').innerHTML=kpis+`<div style="display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap">${tabs}</div>
   <div class="tbl-wrap"><table><thead><tr>
-    <th>Date</th><th>Customer</th><th>Airport</th><th>Lane</th><th>AWB#</th>
+    <th>Date</th><th>Customer</th><th>Ref #</th><th>Airport</th><th>Lane</th><th>AWB#</th>
     <th>Air Cost</th><th>Ground Carrier</th><th>Ground Rate</th><th>Cust. Rate</th><th>Profit</th><th>Status</th><th></th><th></th>
-  </tr></thead><tbody>${rows||'<tr><td colspan="13" style="text-align:center;padding:30px;color:var(--gray-400)">No quotes match filter</td></tr>'}</tbody></table></div>`;
+  </tr></thead><tbody>${rows||'<tr><td colspan="14" style="text-align:center;padding:30px;color:var(--gray-400)">No quotes match filter</td></tr>'}</tbody></table></div>`;
 }
 
 async function updateAqStatus(idx,status){
@@ -21883,9 +21891,15 @@ if(typeof window.renderActive==='function'&&!window._raSync){
   };
 }
 function saveAqRef(id,val){
-  var q2=JSON.parse(localStorage.getItem('air_quotes')||'[]');
-  var item=q2.find(function(x){return x.id===id;});
-  if(item){item.shiflRef=val;localStorage.setItem('air_quotes',JSON.stringify(q2));}
+  // Update in-memory
+  var hist=window._aqHistory||[];
+  var item=hist.find(function(x){return x.id===id;});
+  if(item){
+    item.shiflRef=val.trim();
+    try{localStorage.setItem('aq_history',JSON.stringify(hist));}catch(e){}
+    // Persist to Supabase
+    try{if(typeof db!=='undefined'&&db) db.from('fq_quotes').update({data:item}).eq('id',id).then(function(){});}catch(e){}
+  }
 }
 function openShipmentCloseout(loadId){
   var loads=JSON.parse(localStorage.getItem('tms_loads')||'[]');
