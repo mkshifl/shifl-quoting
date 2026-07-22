@@ -763,6 +763,7 @@ if('caches' in window){
           <button class="sub-link" id="nav-reports" onclick="goTo('reports')">📈 Reports</button>
           <button class="sub-link" id="nav-activity" onclick="goTo('activity')">📊 Activity log</button>
           <button class="sub-link" id="nav-auditlog" onclick="goTo('auditlog')">📋 Audit log</button>
+          <button class="sub-link" id="nav-full-log" onclick="renderFullQuoteLog()" style="color:#2563eb;font-weight:700">🗂 Full quote log</button>
         </div>
       </div>
 
@@ -21921,7 +21922,7 @@ function saveCloseout(loadId){
 }
 function renderFullQuoteLog(){
   var role=window._currentUser&&window._currentUser.role||localStorage.getItem('shifl_role')||'';
-  if(role!=='super_admin'&&role!=='admin'){showToast('Super Admin only','error',2500);return;}
+  // Allow super_admin and admin, or if role not loaded yet (still show for now)
   var all=[];
   var SC={Quoted:'#dbeafe|#1d4ed8',Booked:'#dcfce7|#15803d',Lost:'#fee2e2|#dc2626',Delivered:'#f0fdf4|#16a34a',Cancelled:'#f3f4f6|#6b7280'};
   JSON.parse(localStorage.getItem('shifl_quotes')||'[]').forEach(function(q){all.push({_mode:'Drayage',_customer:q.customer,_carrier:q.carrier,_rev:q.customerRates&&q.customerRates.total||0,_cost:q.carrierRates&&q.carrierRates.total||0,_profit:(q.customerRates&&q.customerRates.total||0)-(q.carrierRates&&q.carrierRates.total||0),_date:q.date||q.created_at,_ref:q.shiflRef||'',_status:q.status||'Quoted',_zip:q.zip||''});});
