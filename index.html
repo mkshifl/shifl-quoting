@@ -21106,3 +21106,737 @@ function openMarginSettings(){
 
 console.log('29-item overhaul loaded ✓');
 </script>
+
+<script>
+/* ================================================================
+   5 NEW FEATURES:
+   4. Daily ops briefing
+   5. Contract rate cards
+   6. Profit trend chart
+   7. Customer spend report PDF
+   9. Load cost calculator
+   ================================================================ */
+
+// ══════════════════════════════════════════════════════════════
+// FEATURE 4: DAILY OPS BRIEFING
+// ══════════════════════════════════════════════════════════════
+
+function buildOpsBriefing(){
+  const today = new Date();
+  const todayStr = today.toISOString().split('T')[0];
+  const sections = [];
+
+  // ── Loads delivering today ──
+  try{
+    const loads = JSON.parse(localStorage.getItem('tms_loads')||'[]');
+    const delivering = loads.filter(l=>{
+      const meta = JSON.parse(localStorage.getItem('tms_meta_'+l.id)||'{}');
+      return (meta.deliveryDate||meta.expectedDelivery||'').startsWith(todayStr) ||
+             l.deliveryDate?.startsWith(todayStr);
+    });
+    const late = loads.filter(l=>{
+      if(l.status==='Delivered') return false;
+      const meta = JSON.parse(localStorage.getItem('tms_meta_'+l.id)||'{}');
+      const exp = meta.expectedDelivery||meta.deliveryDate||l.deliveryDate||'';
+      return exp && exp < todayStr && l.status!=='Delivered';
+    });
+    if(delivering.length||late.length){
+      sections.push({
+        icon:'🚚', color:'#2563eb', title:'Loads today',
+        items:[
+          ...delivering.map(l=>`<span style="color:#16a34a">▶ ${l.id} — ${l.shipper||'?'} → ${l.deliveryZip||'?'} (delivering today)</span>`),
+          ...late.map(l=>`<span style="color:#dc2626">⚠ ${l.id} — ${l.shipper||'?'} — LATE</span>`)
+        ]
+      });
+    }
+  }catch(e){}
+
+  // ── Quotes expiring today / this week ──
+  try{
+    const quotes = JSON.parse(localStorage.getItem('shifl_quotes')||'[]');
+    const expiring = quotes.filter(q=>{
+      if(q.status!=='Quoted') return false;
+      const exp = new Date(q.date||q.created_at||0);
+      exp.setDate(exp.getDate()+7);
+      const diff = (exp-today)/86400000;
+      return diff>=0 && diff<=3;
+    });
+    if(expiring.length) sections.push({
+      icon:'⏰', color:'#d97706', title:'Quotes expiring soon',
+      items:expiring.map(q=>`${q.customer||'?'} — ${q.destination||q.zip||'?'} — expires ${new Date(new Date(q.date||q.created_at||0).getTime()+7*86400000).toLocaleDateString([],{month:'short',day:'numeric'})}`)
+    });
+  }catch(e){}
+
+  // ── Carriers with expired / expiring COIs ──
+  try{
+    const cois = [];
+    Object.keys(localStorage).filter(k=>k.startsWith('carrier_ins_')).forEach(k=>{
+      const name = k.replace('carrier_ins_','');
+      const data = JSON.parse(localStorage.getItem(k)||'{}');
+      if(!data.expiry) return;
+      const exp = new Date(data.expiry);
+      const days = Math.round((exp-today)/86400000);
+      if(days<=30) cois.push({name,days,expiry:data.expiry});
+    });
+    cois.sort((a,b)=>a.days-b.days);
+    if(cois.length) sections.push({
+      icon:'🛡️', color:'#dc2626', title:'COI alerts',
+      items:cois.map(c=>`<span style="color:${c.days<0?'#dc2626':'#d97706'}">${c.days<0?'⛔ EXPIRED':'⚠'} ${c.name} — ${c.days<0?'expired '+Math.abs(c.days)+'d ago':c.days+'d left'} (${c.expiry})</span>`)
+    });
+  }catch(e){}
+
+  // ── Overdue invoices ──
+  try{
+    const overdue = [];
+    Object.keys(localStorage).filter(k=>k.startsWith('net_terms_')).forEach(k=>{
+      const custId = k.replace('net_terms_','');
+      const data = JSON.parse(localStorage.getItem(k)||'{"terms":"Net30","invoices":[]}');
+      const termDays = parseInt((data.terms||'Net30').replace('Net',''))||30;
+      (data.invoices||[]).forEach(inv=>{
+        if(inv.paid||!inv.invoiceDate) return;
+        const due = new Date(new Date(inv.invoiceDate).getTime()+termDays*86400000);
+        const days = Math.round((today-due)/86400000);
+        if(days>0) overdue.push({custId,ref:inv.ref,amount:inv.amount,days});
+      });
+    });
+    overdue.sort((a,b)=>b.days-a.days);
+    if(overdue.length) sections.push({
+      icon:'💰', color:'#dc2626', title:'Overdue invoices',
+      items:overdue.slice(0,5).map(i=>`${i.ref||i.custId} — $${(i.amount||0).toLocaleString()} — ${i.days}d overdue`)
+    });
+  }catch(e){}
+
+  // ── Pending rate requests ──
+  try{
+    const pending = (typeof getQuoteRequests==='function'?getQuoteRequests():[]).filter(r=>r.status==='Pending');
+    if(pending.length) sections.push({
+      icon:'📋', color:'#7c3aed', title:'Rate requests awaiting pricing',
+      items:pending.slice(0,5).map(r=>`${r.customer||'?'} — ${r.destination||r.zip||'?'} — ×${r.containerCount||1} ${r.size||'40HC'} — received ${new Date(r.createdAt||0).toLocaleDateString([],{month:'short',day:'numeric'})}`)
+    });
+  }catch(e){}
+
+  // ── Per diem at risk ──
+  try{
+    const settings = JSON.parse(localStorage.getItem('per_diem_settings')||'{"freeDays":5,"dailyRate":150}');
+    let pdTotal=0, pdCount=0;
+    Object.keys(localStorage).filter(k=>k.startsWith('per_diem_')&&!k.includes('settings')).forEach(k=>{
+      const pd=JSON.parse(localStorage.getItem(k)||'{}');
+      if(pd.billed||!pd.lfd) return;
+      const days=Math.max(0,Math.round((today-new Date(pd.lfd))/86400000)-settings.freeDays);
+      if(days>0){pdTotal+=days*settings.dailyRate;pdCount++;}
+    });
+    if(pdTotal>0) sections.push({
+      icon:'📅', color:'#d97706', title:'Per diem at risk',
+      items:[`$${pdTotal.toLocaleString()} across ${pdCount} container${pdCount>1?'s':''} — click to view`]
+    });
+  }catch(e){}
+
+  return sections;
+}
+
+function renderOpsBriefing(){
+  const sections = buildOpsBriefing();
+  const hour = new Date().getHours();
+  const greeting = hour<12?'Good morning':'hour<17'?'Good afternoon':'Good evening';
+  const user = window._currentUser?.name?.split(' ')[0] || localStorage.getItem('shifl_user')?.split('@')[0] || 'Mendy';
+
+  if(!sections.length){
+    return `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:16px 20px;margin-bottom:16px;display:flex;align-items:center;gap:12px">
+      <span style="font-size:28px">☀️</span>
+      <div>
+        <div style="font-size:15px;font-weight:700;color:#15803d">All clear, ${user}!</div>
+        <div style="font-size:12px;color:#4ade80">No urgent items today — you're on top of it.</div>
+      </div>
+    </div>`;
+  }
+
+  return `
+    <div style="background:#fff;border:1px solid #e5e7eb;border-radius:14px;overflow:hidden;margin-bottom:16px;box-shadow:0 2px 8px rgba(0,0,0,.06)">
+      <div style="background:linear-gradient(135deg,#1e3a5f,#2563eb);padding:14px 18px;display:flex;align-items:center;justify-content:space-between">
+        <div>
+          <div style="color:rgba(255,255,255,.6);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px">Daily briefing</div>
+          <div style="color:#fff;font-size:15px;font-weight:700">${hour<12?'Good morning':'Good afternoon'}, ${user} ☀️</div>
+        </div>
+        <div style="color:rgba(255,255,255,.5);font-size:12px">${new Date().toLocaleDateString([],{weekday:'long',month:'long',day:'numeric'})}</div>
+      </div>
+      <div style="padding:14px 18px;display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px">
+        ${sections.map(s=>`
+          <div style="border-left:3px solid ${s.color};padding:10px 14px;background:${s.color}08;border-radius:0 8px 8px 0">
+            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:${s.color};margin-bottom:6px">${s.icon} ${s.title}</div>
+            ${s.items.slice(0,4).map(item=>`<div style="font-size:12px;color:#374151;padding:2px 0;line-height:1.4">${item}</div>`).join('')}
+            ${s.items.length>4?`<div style="font-size:11px;color:${s.color};margin-top:4px">+${s.items.length-4} more</div>`:''}
+          </div>`).join('')}
+      </div>
+    </div>`;
+}
+
+// Inject briefing into home page
+const _opsRenderHome = window.renderHome;
+if(typeof _opsRenderHome==='function'&&!window._opsBriefingWired){
+  window._opsBriefingWired=true;
+  window.renderHome=function(){
+    _opsRenderHome.apply(this,arguments);
+    setTimeout(()=>{
+      const page=document.getElementById('page');
+      if(!page||document.getElementById('ops-briefing')) return;
+      const wrap=document.createElement('div');
+      wrap.id='ops-briefing';
+      wrap.innerHTML=renderOpsBriefing();
+      // Insert as first child (before existing status bar)
+      page.insertBefore(wrap,page.firstChild);
+    },200);
+  };
+}
+
+// ══════════════════════════════════════════════════════════════
+// FEATURE 5: CONTRACT RATE CARDS
+// ══════════════════════════════════════════════════════════════
+
+function getContractRates(){
+  return JSON.parse(localStorage.getItem('contract_rates')||'[]');
+}
+function saveContractRates(rates){
+  localStorage.setItem('contract_rates',JSON.stringify(rates));
+}
+
+function findContractRate(customer,zip){
+  const contracts=getContractRates();
+  return contracts.find(c=>{
+    const custMatch=!c.customer||c.customer.toLowerCase()===customer.toLowerCase();
+    const zipMatch=!c.zip||(zip||'').startsWith(c.zip.slice(0,3));
+    return custMatch&&zipMatch&&c.active!==false;
+  });
+}
+
+function openContractRates(){
+  const rates=getContractRates();
+
+  openModal(`
+    <div style="min-width:560px">
+      <h3 style="margin:0 0 4px;font-size:16px;font-weight:800;color:#1e3a5f">📄 Contract rate cards</h3>
+      <p style="font-size:12px;color:#6b7280;margin-bottom:14px">Agreed lane rates per customer. Auto-fill in quote builder and flag when carrier costs exceed contract.</p>
+
+      ${rates.length===0?'<div class="empty" style="padding:24px;margin-bottom:14px"><div class="empty-ico">📄</div><p>No contract rates yet</p></div>':`
+      <div style="max-height:260px;overflow-y:auto;margin-bottom:14px">
+        <table style="width:100%;font-size:12px;border-collapse:collapse">
+          <thead><tr style="background:#f8f9fa">
+            <th style="padding:7px 10px;text-align:left;border-bottom:1px solid #e5e7eb">Customer</th>
+            <th style="padding:7px 10px;text-align:left">Destination</th>
+            <th style="padding:7px 10px;text-align:right">Contract rate</th>
+            <th style="padding:7px 10px;text-align:left">Mode</th>
+            <th style="padding:7px 10px;text-align:right">Expires</th>
+            <th style="padding:7px 10px"></th>
+          </tr></thead>
+          <tbody>${rates.map((r,i)=>`
+            <tr style="border-bottom:1px solid #f3f4f6">
+              <td style="padding:7px 10px;font-weight:600;color:#1e3a5f">${r.customer||'(any)'}</td>
+              <td style="padding:7px 10px">${r.zip?r.zip+' — ':''} ${r.destination||'(any)'}</td>
+              <td style="padding:7px 10px;text-align:right;font-weight:700;color:#2563eb">$${(r.rate||0).toLocaleString()}</td>
+              <td style="padding:7px 10px"><span style="font-size:10px;background:#dbeafe;color:#1d4ed8;padding:1px 7px;border-radius:99px">${r.mode||'Drayage'}</span></td>
+              <td style="padding:7px 10px;text-align:right;font-size:11px;color:${r.expires&&new Date(r.expires)<new Date()?'#dc2626':'#6b7280'}">${r.expires||'—'}</td>
+              <td style="padding:7px 10px;text-align:right">
+                <button onclick="deleteContractRate(${i})" style="background:none;border:none;cursor:pointer;color:#dc2626;font-size:13px">🗑️</button>
+              </td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>`}
+
+      <div style="background:#f8f9fa;border-radius:10px;padding:12px 14px;margin-bottom:14px">
+        <div style="font-size:11px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px">+ Add contract rate</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px">
+          <div>
+            <label style="font-size:10px;font-weight:600;color:#6b7280;display:block;margin-bottom:2px">Customer</label>
+            <input id="cr-customer" type="text" placeholder="e.g. Acme Corp" style="width:100%;padding:6px 9px;border:1px solid #d1d5db;border-radius:7px;font-size:12px;box-sizing:border-box">
+          </div>
+          <div>
+            <label style="font-size:10px;font-weight:600;color:#6b7280;display:block;margin-bottom:2px">Destination ZIP</label>
+            <input id="cr-zip" type="text" placeholder="e.g. 60601" style="width:100%;padding:6px 9px;border:1px solid #d1d5db;border-radius:7px;font-size:12px;box-sizing:border-box">
+          </div>
+          <div>
+            <label style="font-size:10px;font-weight:600;color:#6b7280;display:block;margin-bottom:2px">Contract rate ($)</label>
+            <input id="cr-rate" type="number" placeholder="1400" style="width:100%;padding:6px 9px;border:1px solid #d1d5db;border-radius:7px;font-size:12px;box-sizing:border-box">
+          </div>
+          <div>
+            <label style="font-size:10px;font-weight:600;color:#6b7280;display:block;margin-bottom:2px">Mode</label>
+            <select id="cr-mode" style="width:100%;padding:6px 9px;border:1px solid #d1d5db;border-radius:7px;font-size:12px;box-sizing:border-box">
+              <option>Drayage</option><option>FTL</option><option>LTL</option><option>LCL</option>
+            </select>
+          </div>
+          <div>
+            <label style="font-size:10px;font-weight:600;color:#6b7280;display:block;margin-bottom:2px">Destination city</label>
+            <input id="cr-dest" type="text" placeholder="e.g. Chicago, IL" style="width:100%;padding:6px 9px;border:1px solid #d1d5db;border-radius:7px;font-size:12px;box-sizing:border-box">
+          </div>
+          <div>
+            <label style="font-size:10px;font-weight:600;color:#6b7280;display:block;margin-bottom:2px">Expires</label>
+            <input id="cr-expires" type="date" style="width:100%;padding:6px 9px;border:1px solid #d1d5db;border-radius:7px;font-size:12px;box-sizing:border-box">
+          </div>
+        </div>
+        <div>
+          <label style="font-size:10px;font-weight:600;color:#6b7280;display:block;margin-bottom:2px">Notes (optional)</label>
+          <input id="cr-notes" type="text" placeholder="e.g. includes 2 chassis days, live only" style="width:100%;padding:6px 9px;border:1px solid #d1d5db;border-radius:7px;font-size:12px;box-sizing:border-box">
+        </div>
+      </div>
+
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button class="btn" onclick="closeModal()">Close</button>
+        <button class="btn blue" onclick="addContractRate()">Save contract rate</button>
+      </div>
+    </div>
+  `);
+}
+
+function addContractRate(){
+  const rate=parseFloat(document.getElementById('cr-rate')?.value)||0;
+  const customer=document.getElementById('cr-customer')?.value.trim();
+  if(!rate){showToast('Enter a contract rate','error',2500);return;}
+  const rates=getContractRates();
+  rates.push({
+    customer,
+    zip:document.getElementById('cr-zip')?.value.trim(),
+    destination:document.getElementById('cr-dest')?.value.trim(),
+    rate,
+    mode:document.getElementById('cr-mode')?.value||'Drayage',
+    expires:document.getElementById('cr-expires')?.value||'',
+    notes:document.getElementById('cr-notes')?.value.trim(),
+    createdAt:new Date().toISOString(),
+    active:true
+  });
+  saveContractRates(rates);
+  showToast('Contract rate saved','success',2000);
+  openContractRates();
+}
+
+function deleteContractRate(idx){
+  if(!confirm('Delete this contract rate?')) return;
+  const rates=getContractRates();
+  rates.splice(idx,1);
+  saveContractRates(rates);
+  openContractRates();
+}
+
+// Auto-apply contract rate when customer + ZIP match in quote builder
+function checkContractRate(customer,zip){
+  const contract=findContractRate(customer,zip);
+  if(!contract) return null;
+  const expired=contract.expires&&new Date(contract.expires)<new Date();
+  return {contract,expired};
+}
+
+// Hook into quote builder — show contract match alert
+function injectContractRateAlert(){
+  if(typeof S==='undefined'||!S.qi) return;
+  const {customer,zip}=S.qi;
+  if(!customer||!zip) return;
+  const match=checkContractRate(customer,zip);
+  if(!match) return;
+  const {contract,expired}=match;
+  const alertEl=document.getElementById('contract-rate-alert');
+  if(!alertEl) return;
+  if(expired){
+    alertEl.innerHTML=`<div style="background:#fef3c7;border:1px solid #fde68a;border-radius:8px;padding:8px 12px;font-size:12px;color:#92400e;display:flex;align-items:center;gap:8px"><span>⚠️</span><span>Contract rate expired: <strong>$${contract.rate.toLocaleString()}</strong> for ${contract.customer||'this customer'} → ${contract.destination||contract.zip||'this lane'}. Expired ${contract.expires}.</span></div>`;
+  } else {
+    alertEl.innerHTML=`<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:8px 12px;font-size:12px;color:#166534;display:flex;align-items:center;justify-content:space-between;gap:8px"><div><span>📄 </span><strong>Contract rate: $${contract.rate.toLocaleString()}</strong> — ${contract.customer||'this customer'} → ${contract.destination||contract.zip} ${contract.notes?'('+contract.notes+')':''}</div><button onclick="applyContractRate(${contract.rate})" style="padding:3px 10px;border-radius:6px;border:1px solid #16a34a;background:#fff;color:#16a34a;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap">Apply rate →</button></div>`;
+  }
+}
+
+function applyContractRate(rate){
+  if(typeof S==='undefined') return;
+  // Find the customer rate input and set it
+  const customerRateInput=document.getElementById('customer-rate')||document.querySelector('[id*="customerRate"],[name*="customerRate"]');
+  if(customerRateInput){customerRateInput.value=rate;customerRateInput.dispatchEvent(new Event('input'));}
+  showToast('Contract rate $'+rate.toLocaleString()+' applied','success',2500);
+}
+
+// Add Contract rates button to nav
+document.addEventListener('DOMContentLoaded',function(){
+  const ratesBtn=document.getElementById('nav-rates');
+  if(ratesBtn&&!document.getElementById('nav-contracts')){
+    const btn=document.createElement('button');
+    btn.id='nav-contracts';
+    btn.className='sub-link';
+    btn.innerHTML='📄 Contract rates';
+    btn.onclick=()=>{openContractRates();};
+    ratesBtn.insertAdjacentElement('afterend',btn);
+  }
+});
+
+// ══════════════════════════════════════════════════════════════
+// FEATURE 6: PROFIT TREND CHART (90-day rolling)
+// ══════════════════════════════════════════════════════════════
+
+function buildProfitTrendData(){
+  const quotes=JSON.parse(localStorage.getItem('shifl_quotes')||'[]');
+  const loads=JSON.parse(localStorage.getItem('tms_loads')||'[]');
+  const today=new Date();
+  const weeks=[];
+  for(let w=12;w>=0;w--){
+    const start=new Date(today-w*7*86400000);
+    const end=new Date(today-(w-1)*7*86400000);
+    const label=start.toLocaleDateString([],{month:'short',day:'numeric'});
+    let profit=0,count=0;
+    quotes.forEach(q=>{
+      const d=new Date(q.bookedAt||q.date||q.created_at||0);
+      if(d>=start&&d<end&&(q.status==='Booked'||q.status==='Delivered')){
+        try{const sp=baseSplit&&baseSplit(q);if(sp)profit+=(sp.baseP||0);count++;}catch(e){}
+      }
+    });
+    loads.forEach(l=>{
+      const d=new Date(l.bookedAt||l.createdAt||0);
+      if(d>=start&&d<end&&(l.status==='Booked'||l.status==='Delivered')){
+        const cr=parseFloat(l.customerRate)||0;
+        const car=parseFloat(l.carrierRate)||0;
+        if(cr&&car){profit+=(cr-car);count++;}
+      }
+    });
+    weeks.push({label,profit:Math.round(profit),count,start});
+  }
+  return weeks;
+}
+
+function openProfitTrendChart(){
+  const weeks=buildProfitTrendData();
+  const maxP=Math.max(...weeks.map(w=>Math.abs(w.profit)),1);
+  const total=weeks.reduce((s,w)=>s+w.profit,0);
+  const avg=Math.round(total/weeks.filter(w=>w.count>0).length||1);
+  const trend=weeks.slice(-4).reduce((s,w)=>s+w.profit,0)-weeks.slice(-8,-4).reduce((s,w)=>s+w.profit,0);
+
+  const W=580,H=180,PAD=40,BAR_W=32,GAP=(W-PAD*2-BAR_W*weeks.length)/(weeks.length-1);
+  const bars=weeks.map((w,i)=>{
+    const h=Math.round(Math.abs(w.profit)/maxP*(H-PAD-20));
+    const x=PAD+i*(BAR_W+GAP);
+    const isPos=w.profit>=0;
+    const color=isPos?(h>0?'#16a34a':'#d1fae5'):'#dc2626';
+    const y=isPos?H-PAD-h:H-PAD;
+    return `<g>
+      <rect x="${x}" y="${isPos?y:H-PAD}" width="${BAR_W}" height="${Math.max(h,2)}" fill="${color}" rx="3" opacity="${w.count?1:.3}">
+        <title>Week of ${w.label}: $${w.profit.toLocaleString()} (${w.count} loads)</title>
+      </rect>
+      ${i%3===0?`<text x="${x+BAR_W/2}" y="${H-2}" font-size="9" fill="#9ca3af" text-anchor="middle">${w.label}</text>`:''}
+    </g>`;
+  }).join('');
+
+  openModal(`
+    <div style="min-width:580px">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:16px">
+        <div>
+          <h3 style="margin:0 0 2px;font-size:16px;font-weight:800;color:#1e3a5f">📈 Profit trend — last 13 weeks</h3>
+          <p style="font-size:12px;color:#6b7280;margin:0">Guaranteed profit (base markup) from booked loads</p>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:22px;font-weight:800;color:${total>=0?'#16a34a':'#dc2626'}">${total>=0?'+':''}$${Math.abs(total).toLocaleString()}</div>
+          <div style="font-size:11px;color:#6b7280">90-day total · avg $${avg.toLocaleString()}/wk</div>
+          <div style="font-size:11px;font-weight:600;color:${trend>=0?'#16a34a':'#dc2626'};margin-top:2px">${trend>=0?'▲ trending up':'▼ trending down'} (last 4 wks vs prior 4)</div>
+        </div>
+      </div>
+
+      <svg viewBox="0 0 ${W} ${H}" style="width:100%;border-radius:10px;background:#f8f9fa">
+        <!-- Zero line -->
+        <line x1="${PAD}" y1="${H-PAD}" x2="${W-PAD}" y2="${H-PAD}" stroke="#e5e7eb" stroke-width="1"/>
+        <!-- Grid lines -->
+        ${[0.25,0.5,0.75,1].map(pct=>{
+          const y=H-PAD-Math.round(pct*(H-PAD-20));
+          const val=Math.round(pct*maxP);
+          return `<line x1="${PAD}" y1="${y}" x2="${W-PAD}" y2="${y}" stroke="#f3f4f6" stroke-width="1"/>
+          <text x="${PAD-4}" y="${y+4}" font-size="9" fill="#9ca3af" text-anchor="end">$${val>=1000?Math.round(val/100)/10+'k':val}</text>`;
+        }).join('')}
+        ${bars}
+      </svg>
+
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:14px">
+        ${weeks.slice(-4).map(w=>`
+          <div style="background:#f8f9fa;border-radius:8px;padding:8px 10px">
+            <div style="font-size:10px;color:#6b7280;margin-bottom:2px">${w.label}</div>
+            <div style="font-size:14px;font-weight:700;color:${w.profit>=0?'#16a34a':'#dc2626'}">${w.profit>=0?'+':''}$${w.profit.toLocaleString()}</div>
+            <div style="font-size:10px;color:#9ca3af">${w.count} load${w.count!==1?'s':''}</div>
+          </div>`).join('')}
+      </div>
+      <div style="margin-top:12px;text-align:right"><button class="btn" onclick="closeModal()">Close</button></div>
+    </div>
+  `);
+}
+
+// ══════════════════════════════════════════════════════════════
+// FEATURE 7: CUSTOMER SPEND REPORT — SHAREABLE PDF
+// ══════════════════════════════════════════════════════════════
+
+function openCustomerSpendReport(){
+  const quotes=JSON.parse(localStorage.getItem('shifl_quotes')||'[]');
+  const loads=JSON.parse(localStorage.getItem('tms_loads')||'[]');
+  const custMap={};
+  [...quotes,...loads].forEach(q=>{
+    const name=q.customer||q.shipper||'';
+    if(!name) return;
+    if(!custMap[name]) custMap[name]={name,loads:0,revenue:0,profit:0,lanes:{},statuses:{}};
+    custMap[name].loads++;
+    custMap[name].revenue+=(parseFloat(q.customerRate)||0);
+    try{if(typeof baseSplit==='function'){const sp=baseSplit(q);if(sp)custMap[name].profit+=(sp.baseP||0);}}catch(e){}
+    const lane=(q.zip||q.deliveryZip||'?');
+    custMap[name].lanes[lane]=(custMap[name].lanes[lane]||0)+1;
+    custMap[name].statuses[q.status||'Unknown']=(custMap[name].statuses[q.status||'Unknown']||0)+1;
+  });
+  const customers=Object.values(custMap).sort((a,b)=>b.revenue-a.revenue);
+
+  openModal(`
+    <div style="min-width:500px">
+      <h3 style="margin:0 0 14px;font-size:16px;font-weight:800;color:#1e3a5f">📊 Customer spend report</h3>
+      <div style="max-height:320px;overflow-y:auto;margin-bottom:14px">
+        ${customers.length===0?'<p style="color:#9ca3af;text-align:center;padding:24px">No customer data yet.</p>':customers.map(c=>`
+          <div style="border:1px solid #e5e7eb;border-radius:10px;padding:12px 14px;margin-bottom:8px">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+              <div style="font-size:14px;font-weight:700;color:#1e3a5f">${c.name}</div>
+              <button onclick="generateCustomerPDF('${c.name.replace(/'/g,"\\'")}')" style="padding:4px 12px;border-radius:7px;border:1px solid #2563eb;background:#eff6ff;color:#2563eb;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">📄 Generate PDF</button>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;font-size:12px">
+              <div style="background:#f8f9fa;border-radius:6px;padding:7px 10px">
+                <div style="color:#6b7280;font-size:10px;text-transform:uppercase;margin-bottom:2px">Loads</div>
+                <div style="font-weight:700;font-size:16px;color:#1e3a5f">${c.loads}</div>
+              </div>
+              <div style="background:#f0f6ff;border-radius:6px;padding:7px 10px">
+                <div style="color:#6b7280;font-size:10px;text-transform:uppercase;margin-bottom:2px">Revenue</div>
+                <div style="font-weight:700;font-size:16px;color:#2563eb">$${c.revenue.toLocaleString(undefined,{maximumFractionDigits:0})}</div>
+              </div>
+              <div style="background:#f0fdf4;border-radius:6px;padding:7px 10px">
+                <div style="color:#6b7280;font-size:10px;text-transform:uppercase;margin-bottom:2px">Profit</div>
+                <div style="font-weight:700;font-size:16px;color:#16a34a">$${c.profit.toLocaleString(undefined,{maximumFractionDigits:0})}</div>
+              </div>
+            </div>
+            <div style="margin-top:8px;font-size:11px;color:#6b7280">
+              Top lanes: ${Object.entries(c.lanes).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([z,n])=>z+' ('+n+')').join(' · ')||'—'}
+            </div>
+          </div>`).join('')}
+      </div>
+      <div style="text-align:right"><button class="btn" onclick="closeModal()">Close</button></div>
+    </div>
+  `);
+}
+
+function generateCustomerPDF(customerName){
+  const quotes=JSON.parse(localStorage.getItem('shifl_quotes')||'[]');
+  const loads=JSON.parse(localStorage.getItem('tms_loads')||'[]');
+  const all=[...quotes,...loads].filter(q=>(q.customer||q.shipper||'')=== customerName);
+  const revenue=all.reduce((s,q)=>s+(parseFloat(q.customerRate)||0),0);
+  const booked=all.filter(q=>q.status==='Booked'||q.status==='Delivered').length;
+  const onTime=Math.round(booked>0?(booked/all.length)*100:0);
+  const topLanes={};
+  all.forEach(q=>{const z=q.zip||q.deliveryZip||'?';topLanes[z]=(topLanes[z]||0)+1;});
+  const lanes=Object.entries(topLanes).sort((a,b)=>b[1]-a[1]).slice(0,5);
+  const dateRange=all.length?`${new Date(Math.min(...all.map(q=>new Date(q.date||q.bookedAt||q.created_at||Date.now())))).toLocaleDateString([],{month:'short',year:'numeric'})} – ${new Date().toLocaleDateString([],{month:'short',year:'numeric'})}`:new Date().getFullYear();
+
+  const html=`<!DOCTYPE html><html><head><meta charset="UTF-8">
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#1a1a1a;font-size:13px;padding:40px;max-width:720px;margin:0 auto}
+    .header{background:#1e3a5f;color:#fff;border-radius:12px;padding:24px 28px;margin-bottom:28px;display:flex;justify-content:space-between;align-items:flex-start}
+    .header h1{font-size:24px;font-weight:800;margin-bottom:4px}
+    .header p{color:rgba(255,255,255,.6);font-size:12px}
+    .header-right{text-align:right;color:rgba(255,255,255,.7);font-size:12px}
+    .section{margin-bottom:24px}
+    .section h2{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#6b7280;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid #e5e7eb}
+    .kpi-row{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px}
+    .kpi{border:1px solid #e5e7eb;border-radius:10px;padding:14px 16px}
+    .kpi-l{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6b7280;margin-bottom:5px}
+    .kpi-v{font-size:26px;font-weight:800}
+    .kpi-v.blue{color:#2563eb}.kpi-v.green{color:#16a34a}.kpi-v.navy{color:#1e3a5f}
+    table{width:100%;border-collapse:collapse;font-size:12px}
+    th{padding:8px 10px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6b7280;background:#f8f9fa;border-bottom:1px solid #e5e7eb}
+    td{padding:9px 10px;border-bottom:1px solid #f3f4f6}
+    tr:last-child td{border-bottom:none}
+    .footer{margin-top:32px;padding-top:16px;border-top:1px solid #e5e7eb;font-size:11px;color:#9ca3af;display:flex;justify-content:space-between}
+    @media print{@page{margin:18mm}body{padding:0}}
+  </style>
+  </head><body>
+  <div class="header">
+    <div>
+      <h1>Activity Report</h1>
+      <p>${customerName}</p>
+      <p style="margin-top:4px">${dateRange}</p>
+    </div>
+    <div class="header-right">
+      <div style="font-size:20px;font-weight:800;margin-bottom:4px">SHIFL</div>
+      <div>Generated ${new Date().toLocaleDateString([],{month:'long',day:'numeric',year:'numeric'})}</div>
+    </div>
+  </div>
+
+  <div class="kpi-row">
+    <div class="kpi"><div class="kpi-l">Total loads</div><div class="kpi-v navy">${all.length}</div></div>
+    <div class="kpi"><div class="kpi-l">Total spend</div><div class="kpi-v blue">$${revenue.toLocaleString(undefined,{maximumFractionDigits:0})}</div></div>
+    <div class="kpi"><div class="kpi-l">On-time rate</div><div class="kpi-v green">${onTime}%</div></div>
+  </div>
+
+  <div class="section">
+    <h2>Top lanes</h2>
+    <table>
+      <thead><tr><th>Destination ZIP</th><th style="text-align:right">Loads</th><th style="text-align:right">% of volume</th></tr></thead>
+      <tbody>${lanes.map(([z,n])=>`<tr><td>${z}</td><td style="text-align:right;font-weight:600">${n}</td><td style="text-align:right;color:#6b7280">${Math.round(n/all.length*100)}%</td></tr>`).join('')}</tbody>
+    </table>
+  </div>
+
+  <div class="section">
+    <h2>Recent activity</h2>
+    <table>
+      <thead><tr><th>Date</th><th>Lane</th><th>Mode</th><th style="text-align:right">Amount</th><th>Status</th></tr></thead>
+      <tbody>${all.slice(0,15).map(q=>`<tr>
+        <td>${new Date(q.date||q.bookedAt||q.created_at||0).toLocaleDateString([],{month:'short',day:'numeric'})}</td>
+        <td>${q.zip||q.deliveryZip||q.destination||'—'}</td>
+        <td>${q.ld||q.fqMode||'Drayage'}</td>
+        <td style="text-align:right;font-weight:600">$${(parseFloat(q.customerRate)||0).toLocaleString(undefined,{maximumFractionDigits:0})}</td>
+        <td><span style="background:${q.status==='Booked'||q.status==='Delivered'?'#dcfce7':q.status==='Quoted'?'#dbeafe':'#f3f4f6'};color:${q.status==='Booked'||q.status==='Delivered'?'#15803d':q.status==='Quoted'?'#1d4ed8':'#6b7280'};padding:2px 8px;border-radius:99px;font-size:10px;font-weight:600">${q.status||'—'}</span></td>
+      </tr>`).join('')}</tbody>
+    </table>
+  </div>
+
+  <div class="footer">
+    <span>Prepared by Shifl · shifl.com</span>
+    <span>Confidential — for ${customerName} only</span>
+  </div>
+  </body></html>`;
+
+  const win=window.open('','_blank');
+  if(win){win.document.write(html);win.document.close();setTimeout(()=>win.print(),500);}
+  showToast('Report generated — print or save as PDF','success',3000);
+}
+
+// ══════════════════════════════════════════════════════════════
+// FEATURE 9: LOAD COST CALCULATOR
+// ══════════════════════════════════════════════════════════════
+
+const TOLL_ESTIMATES={
+  '07':'$28','08':'$22','10':'$35','11':'$38','06':'$18',
+  '19':'$25','21':'$30','30':'$0','60':'$8','77':'$0',
+  '90':'$12','94':'$15','98':'$0'
+};
+const FUEL_RATE_PER_MILE=0.32; // $/mile FSC estimate
+
+function openLoadCostCalculator(preload){
+  const pld=preload||{};
+
+  openModal(`
+    <div style="min-width:520px">
+      <h3 style="margin:0 0 4px;font-size:16px;font-weight:800;color:#1e3a5f">🧮 Load cost calculator</h3>
+      <p style="font-size:12px;color:#6b7280;margin-bottom:16px">Full P&L breakdown before booking</p>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+        <div>
+          <label style="font-size:10px;font-weight:700;color:#6b7280;text-transform:uppercase;display:block;margin-bottom:3px">Carrier base rate ($)</label>
+          <input id="lcc-carrier" type="number" placeholder="0" value="${pld.carrierRate||''}" oninput="calcLCC()" style="width:100%;padding:7px 10px;border:1px solid #d1d5db;border-radius:8px;font-size:13px;box-sizing:border-box">
+        </div>
+        <div>
+          <label style="font-size:10px;font-weight:700;color:#6b7280;text-transform:uppercase;display:block;margin-bottom:3px">Customer rate ($) — your sell</label>
+          <input id="lcc-customer" type="number" placeholder="0" value="${pld.customerRate||''}" oninput="calcLCC()" style="width:100%;padding:7px 10px;border:1px solid #d1d5db;border-radius:8px;font-size:13px;box-sizing:border-box">
+        </div>
+        <div>
+          <label style="font-size:10px;font-weight:700;color:#6b7280;text-transform:uppercase;display:block;margin-bottom:3px">Chassis / day ($)</label>
+          <input id="lcc-chassis" type="number" placeholder="25" value="${pld.chassis||25}" oninput="calcLCC()" style="width:100%;padding:7px 10px;border:1px solid #d1d5db;border-radius:8px;font-size:13px;box-sizing:border-box">
+        </div>
+        <div>
+          <label style="font-size:10px;font-weight:700;color:#6b7280;text-transform:uppercase;display:block;margin-bottom:3px">Chassis days (est.)</label>
+          <input id="lcc-days" type="number" placeholder="1" value="${pld.days||1}" min="0" max="30" oninput="calcLCC()" style="width:100%;padding:7px 10px;border:1px solid #d1d5db;border-radius:8px;font-size:13px;box-sizing:border-box">
+        </div>
+        <div>
+          <label style="font-size:10px;font-weight:700;color:#6b7280;text-transform:uppercase;display:block;margin-bottom:3px">Fuel surcharge ($)</label>
+          <input id="lcc-fuel" type="number" placeholder="0" value="${pld.fuel||''}" oninput="calcLCC()" style="width:100%;padding:7px 10px;border:1px solid #d1d5db;border-radius:8px;font-size:13px;box-sizing:border-box">
+        </div>
+        <div>
+          <label style="font-size:10px;font-weight:700;color:#6b7280;text-transform:uppercase;display:block;margin-bottom:3px">Estimated tolls ($)</label>
+          <input id="lcc-tolls" type="number" placeholder="0" value="${pld.tolls||''}" oninput="calcLCC()" style="width:100%;padding:7px 10px;border:1px solid #d1d5db;border-radius:8px;font-size:13px;box-sizing:border-box">
+        </div>
+        <div>
+          <label style="font-size:10px;font-weight:700;color:#6b7280;text-transform:uppercase;display:block;margin-bottom:3px">Detention estimate ($)</label>
+          <input id="lcc-detention" type="number" placeholder="0" oninput="calcLCC()" style="width:100%;padding:7px 10px;border:1px solid #d1d5db;border-radius:8px;font-size:13px;box-sizing:border-box">
+        </div>
+        <div>
+          <label style="font-size:10px;font-weight:700;color:#6b7280;text-transform:uppercase;display:block;margin-bottom:3px">Other costs ($)</label>
+          <input id="lcc-other" type="number" placeholder="0" oninput="calcLCC()" style="width:100%;padding:7px 10px;border:1px solid #d1d5db;border-radius:8px;font-size:13px;box-sizing:border-box">
+        </div>
+      </div>
+
+      <div id="lcc-result" style="margin-bottom:14px"></div>
+
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button class="btn" onclick="closeModal()">Close</button>
+        <button class="btn" onclick="navigator.clipboard&&navigator.clipboard.writeText(document.getElementById('lcc-summary')?.textContent||'');showToast('P&L copied','success',2000)" style="color:#2563eb;border-color:#bfdbfe">Copy P&L</button>
+      </div>
+    </div>
+  `);
+  setTimeout(calcLCC,50);
+}
+
+function calcLCC(){
+  const carrier=parseFloat(document.getElementById('lcc-carrier')?.value)||0;
+  const customer=parseFloat(document.getElementById('lcc-customer')?.value)||0;
+  const chassis=parseFloat(document.getElementById('lcc-chassis')?.value)||0;
+  const days=parseFloat(document.getElementById('lcc-days')?.value)||0;
+  const fuel=parseFloat(document.getElementById('lcc-fuel')?.value)||0;
+  const tolls=parseFloat(document.getElementById('lcc-tolls')?.value)||0;
+  const detention=parseFloat(document.getElementById('lcc-detention')?.value)||0;
+  const other=parseFloat(document.getElementById('lcc-other')?.value)||0;
+
+  const chassisCost=chassis*days;
+  const totalCost=carrier+chassisCost+fuel+tolls+detention+other;
+  const grossProfit=customer-carrier;
+  const netProfit=customer-totalCost;
+  const margin=customer>0?netProfit/customer:0;
+  const breakEven=totalCost;
+
+  const el=document.getElementById('lcc-result');
+  if(!el) return;
+
+  const fmt=n=>'$'+Math.abs(n).toLocaleString(undefined,{maximumFractionDigits:0});
+  const color=n=>n>=0?'#16a34a':'#dc2626';
+
+  el.innerHTML=`
+    <div style="background:#f8f9fa;border-radius:10px;padding:14px 16px">
+      <table style="width:100%;font-size:12px;border-collapse:collapse">
+        <tbody>
+          ${[
+            ['Carrier base rate','cost',carrier],
+            ['Chassis ('+days+'d × $'+chassis+')','cost',chassisCost],
+            ['Fuel surcharge','cost',fuel],
+            ['Tolls','cost',tolls],
+            ['Detention (est.)','cost',detention],
+            ['Other costs','cost',other],
+          ].filter(r=>r[2]>0).map(([l,t,v])=>`
+            <tr style="border-bottom:1px solid #e5e7eb">
+              <td style="padding:5px 0;color:#374151">${l}</td>
+              <td style="padding:5px 0;text-align:right;color:#dc2626;font-weight:500">-${fmt(v)}</td>
+            </tr>`).join('')}
+          <tr style="border-bottom:2px solid #d1d5db">
+            <td style="padding:7px 0;font-weight:700;color:#1e3a5f">Total cost</td>
+            <td style="padding:7px 0;text-align:right;font-weight:700;color:#dc2626">-${fmt(totalCost)}</td>
+          </tr>
+          <tr>
+            <td style="padding:7px 0;color:#374151">Customer rate</td>
+            <td style="padding:7px 0;text-align:right;color:#2563eb;font-weight:600">+${fmt(customer)}</td>
+          </tr>
+          <tr style="border-top:1px solid #e5e7eb">
+            <td style="padding:7px 0;font-weight:700;color:#1e3a5f">Gross profit (base only)</td>
+            <td style="padding:7px 0;text-align:right;font-weight:700;color:${color(grossProfit)}">${grossProfit>=0?'+':''}${fmt(grossProfit)}</td>
+          </tr>
+          <tr>
+            <td style="padding:7px 0;font-weight:700;color:#1e3a5f">Net profit (all costs)</td>
+            <td style="padding:7px 0;text-align:right;font-weight:800;font-size:15px;color:${color(netProfit)}">${netProfit>=0?'+':''}${fmt(netProfit)}</td>
+          </tr>
+          <tr>
+            <td style="padding:5px 0;color:#6b7280">Net margin</td>
+            <td style="padding:5px 0;text-align:right;font-weight:700;color:${color(margin)}">${(margin*100).toFixed(1)}%</td>
+          </tr>
+        </tbody>
+      </table>
+      <div id="lcc-summary" style="display:none">Load P&L: Cost $${fmt(totalCost)} | Revenue $${fmt(customer)} | Net profit ${netProfit>=0?'+':''}$${fmt(netProfit)} (${(margin*100).toFixed(1)}%)</div>
+      ${netProfit<150&&customer>0?`<div style="background:#fef3c7;border-radius:7px;padding:8px 10px;margin-top:10px;font-size:11px;color:#92400e;font-weight:600">⚠ Net profit below $150 — consider raising your rate or reducing costs</div>`:''}
+      ${netProfit>=0&&margin>=0.15?`<div style="background:#f0fdf4;border-radius:7px;padding:8px 10px;margin-top:10px;font-size:11px;color:#166534;font-weight:600">✅ Healthy margin — good to book</div>`:''}
+    </div>`;
+}
+
+// Add Load Cost Calculator to AI FAB and quote builder topbar
+// Wire up to nav
+document.addEventListener('DOMContentLoaded',function(){
+  // Make accessible from quote builder via keyboard shortcut
+  document.addEventListener('keydown',function(e){
+    if(e.altKey&&e.key==='c') openLoadCostCalculator();
+  });
+});
+
+console.log('5 new features loaded: Ops Briefing, Contract Rates, Profit Trend, Customer PDF, Load Cost Calculator ✓');
+</script>
