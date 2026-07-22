@@ -809,6 +809,31 @@ if('caches' in window){
         <!-- TMS Button -->
         <button id="topbar-tms-btn" onclick="goTo('tms')" style="background:linear-gradient(135deg,#1a2e4a,#2e75b6);border:none;color:#fff;cursor:pointer;display:flex;align-items:center;gap:5px;border-radius:8px">🚚 TMS</button>
         <div class="topbar-right" id="topbar-right"></div>
+        <!-- Profile pill -->
+        <div id="profile-pill-wrap" style="position:relative;margin-left:6px">
+          <button id="profile-pill" onclick="toggleProfileMenu()" style="display:flex;align-items:center;gap:7px;padding:4px 10px 4px 4px;border-radius:99px;border:1px solid var(--gray-200);background:#fff;cursor:pointer;font-family:inherit;transition:all .15s" onmouseenter="this.style.borderColor='#2563eb';this.style.background='#eff6ff'" onmouseleave="this.style.borderColor='var(--gray-200)';this.style.background='#fff'">
+            <div id="topbar-avatar" style="width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,#1e3a5f,#2563eb);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;flex-shrink:0">MK</div>
+            <div style="text-align:left">
+              <div id="topbar-uname" style="font-size:12px;font-weight:600;color:#1e3a5f;line-height:1.1">Mendy K.</div>
+              <div id="topbar-urole" style="font-size:10px;color:#9ca3af;line-height:1.1">Super Admin</div>
+            </div>
+            <span style="font-size:10px;color:#9ca3af;margin-left:2px">▾</span>
+          </button>
+          <div id="profile-menu" style="display:none;position:absolute;top:42px;right:0;background:#fff;border:1px solid var(--gray-200);border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.12);width:220px;padding:8px;z-index:9999">
+            <div style="padding:10px 12px;border-bottom:1px solid var(--gray-100);margin-bottom:6px">
+              <div id="pm-name" style="font-size:13px;font-weight:700;color:#1e3a5f">Mendy Kornbluth</div>
+              <div id="pm-email" style="font-size:11px;color:#9ca3af;margin-top:1px">mk@shifl.com</div>
+              <div id="pm-role-badge" style="display:inline-block;margin-top:6px;font-size:9px;font-weight:700;padding:2px 8px;border-radius:99px;background:#dbeafe;color:#1d4ed8;text-transform:uppercase;letter-spacing:.05em">Super Admin</div>
+            </div>
+            <button onclick="showEditMyProfile();closeProfileMenu()" style="display:flex;align-items:center;gap:8px;width:100%;padding:7px 10px;border-radius:7px;border:none;background:none;font-size:12px;color:#374151;cursor:pointer;font-family:inherit;text-align:left" onmouseenter="this.style.background='#f9fafb'" onmouseleave="this.style.background='none'"><span>👤</span> Edit profile</button>
+            <button onclick="openAvatarPicker();closeProfileMenu()" style="display:flex;align-items:center;gap:8px;width:100%;padding:7px 10px;border-radius:7px;border:none;background:none;font-size:12px;color:#374151;cursor:pointer;font-family:inherit;text-align:left" onmouseenter="this.style.background='#f9fafb'" onmouseleave="this.style.background='none'"><span>🎨</span> Change avatar color</button>
+            <button onclick="renderNotifDropdown();closeProfileMenu()" style="display:flex;align-items:center;gap:8px;width:100%;padding:7px 10px;border-radius:7px;border:none;background:none;font-size:12px;color:#374151;cursor:pointer;font-family:inherit;text-align:left" onmouseenter="this.style.background='#f9fafb'" onmouseleave="this.style.background='none'"><span>🔔</span> Notifications</button>
+            <div style="height:1px;background:var(--gray-100);margin:4px 0"></div>
+            <button onclick="toggleDarkMode();closeProfileMenu()" style="display:flex;align-items:center;gap:8px;width:100%;padding:7px 10px;border-radius:7px;border:none;background:none;font-size:12px;color:#374151;cursor:pointer;font-family:inherit;text-align:left" onmouseenter="this.style.background='#f9fafb'" onmouseleave="this.style.background='none'"><span>🌙</span> Dark mode</button>
+            <div style="height:1px;background:var(--gray-100);margin:4px 0"></div>
+            <button onclick="logout();closeProfileMenu()" style="display:flex;align-items:center;gap:8px;width:100%;padding:7px 10px;border-radius:7px;border:none;background:none;font-size:12px;color:#dc2626;cursor:pointer;font-family:inherit;text-align:left" onmouseenter="this.style.background='#fff5f5'" onmouseleave="this.style.background='none'"><span>🚪</span> Sign out</button>
+          </div>
+        </div>
       </div>
     </div>
     <div class="page" id="page"></div>
@@ -1480,12 +1505,18 @@ function buildPricingSection(){
       style="padding:2px 8px;border-radius:4px;border:1px solid ${isPerCtr?'var(--steel)':'var(--amber)'};background:${isPerCtr?'var(--blue-bg)':'#fff8ed'};color:${isPerCtr?'var(--steel)':'#d97706'};font-size:10px;font-weight:700;cursor:pointer;white-space:nowrap">
       ${isPerCtr?'× per ctr':'flat'}
     </button>`:'';
-    return `<tr><td style="color:var(--gray-600);font-weight:500;padding:5px 0;width:160px">${LABELS[c]}${note?`<div class="cond-note">${note}</div>`:''}</td>
-      <td style="padding:5px 0"><div style="display:flex;align-items:center;gap:5px"><span style="color:var(--gray-400)">$</span>
-        <input type="number" value="${fr[c]||0}" min="0" oninput="setFlatRate('${c}',+this.value)" style="width:90px;padding:5px 8px;font-size:13px">
+    return `<div style="background:#fff;border:1px solid var(--gray-200);border-radius:8px;padding:10px 12px;display:flex;align-items:center;gap:10px">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12px;font-weight:600;color:#1e3a5f">${LABELS[c]}</div>
+        ${note?`<div style="font-size:10px;color:var(--gray-400);margin-top:1px">${note}</div>`:''}
+      </div>
+      <div style="display:flex;align-items:center;gap:5px;flex-shrink:0">
         ${toggleBtn}
-        ${ctrs>1&&(fr[c]||0)>0?`<span style="font-size:11px;color:var(--gray-400)">=&nbsp;${fmtD((fr[c]||0)*(isPerCtr?ctrs:1))}</span>`:''}
-      </div></td></tr>`;
+        <span style="color:var(--gray-400);font-size:12px;font-weight:700">$</span>
+        <input type="number" value="${fr[c]||0}" min="0" oninput="setFlatRate('${c}',+this.value)" style="width:72px;padding:4px 6px;font-size:13px;font-weight:600;text-align:right;border:1px solid var(--gray-200);border-radius:6px">
+        ${ctrs>1&&(fr[c]||0)>0?`<span style="font-size:10px;color:var(--gray-400)">=${fmtD((fr[c]||0)*(isPerCtr?ctrs:1))}</span>`:''}
+      </div>
+    </div>`;
   }).join('');
   return `<div style="margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid var(--gray-100)">
     <p style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-500);margin-bottom:8px">Base markup</p>
@@ -1498,11 +1529,10 @@ function buildPricingSection(){
       <span class="muted small">${bm.mode==='flat'?'flat $ added over carrier base':'% over carrier base'}</span>
     </div>
   </div>
-  <p style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-500);margin-bottom:4px">Your flat charges</p>
-  <p class="cond-note" style="margin-bottom:10px;font-size:11px">Enter the full amount you charge the customer · ${ld==='Live'?'Live mode: detention shown, bobtail hidden':ld==='Drop'?'Drop mode: bobtail shown, detention hidden':'All charges shown'}</p>
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 12px">${extraRows}</div>
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px"><p style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-500);margin:0">Your flat charges</p><span style="font-size:11px;color:var(--gray-400);background:var(--gray-50);padding:2px 10px;border-radius:99px;border:1px solid var(--gray-200)">${ld==='Live'?'Live mode':ld==='Drop'?'Drop mode':'Both modes'}</span></div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">${extraRows}</div>
   <div style="margin-top:14px">
-    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-500);margin-bottom:8px">Per-quote charges</div>
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-500);margin-bottom:8px;margin-top:4px">Per-quote charges</div>
 
     <!-- GENSET -->
     <div style="border:1px solid var(--gray-200);border-radius:var(--radius);padding:12px 14px;margin-bottom:8px;background:#fafafa">
@@ -16389,6 +16419,90 @@ setTimeout(function() {
   }
 }, 500);
 
+</script>
+
+<script>
+// ── Profile pill ──────────────────────────────────────────────
+function toggleProfileMenu(){
+  var m=document.getElementById('profile-menu');
+  if(!m) return;
+  m.style.display=m.style.display==='none'?'block':'none';
+}
+function closeProfileMenu(){
+  var m=document.getElementById('profile-menu');
+  if(m) m.style.display='none';
+}
+document.addEventListener('click',function(e){
+  if(!e.target.closest('#profile-pill-wrap')) closeProfileMenu();
+});
+
+// Populate profile pill from current user
+function updateProfilePill(){
+  try{
+    var u=window._currentUser||{};
+    var name=u.name||u.email||localStorage.getItem('shifl_user')||'';
+    var email=u.email||localStorage.getItem('shifl_user')||'';
+    var role=u.role||localStorage.getItem('shifl_role')||'';
+    // Initials
+    var parts=name.split(/\s+/);
+    var initials=parts.length>1?(parts[0][0]+parts[parts.length-1][0]).toUpperCase():name.slice(0,2).toUpperCase();
+    // Short name
+    var shortName=parts[0]+(parts.length>1?' '+parts[parts.length-1][0]+'.':'');
+    // Role label
+    var roleLabel=role==='super_admin'?'Super Admin':role==='admin'?'Admin':role==='team_member'?'Team Member':role||'';
+    // Update pill
+    var av=document.getElementById('topbar-avatar');
+    var un=document.getElementById('topbar-uname');
+    var ur=document.getElementById('topbar-urole');
+    if(av) av.textContent=initials||'MK';
+    if(un) un.textContent=shortName||'Mendy K.';
+    if(ur) ur.textContent=roleLabel;
+    // Update menu
+    var pn=document.getElementById('pm-name');
+    var pe=document.getElementById('pm-email');
+    var pb=document.getElementById('pm-role-badge');
+    if(pn) pn.textContent=name||'Mendy Kornbluth';
+    if(pe) pe.textContent=email;
+    if(pb) pb.textContent=roleLabel;
+    // Avatar color based on initials
+    if(av){
+      var colors=['linear-gradient(135deg,#1e3a5f,#2563eb)','linear-gradient(135deg,#6d28d9,#8b5cf6)','linear-gradient(135deg,#065f46,#059669)','linear-gradient(135deg,#92400e,#d97706)'];
+      var idx=(initials.charCodeAt(0)||0)%colors.length;
+      var saved=localStorage.getItem('avatar_color');
+      av.style.background=saved||colors[idx];
+    }
+  }catch(e){}
+}
+
+// Avatar color picker
+function openAvatarPicker(){
+  var colors=[
+    {bg:'linear-gradient(135deg,#1e3a5f,#2563eb)',label:'Navy'},
+    {bg:'linear-gradient(135deg,#6d28d9,#8b5cf6)',label:'Purple'},
+    {bg:'linear-gradient(135deg,#065f46,#059669)',label:'Green'},
+    {bg:'linear-gradient(135deg,#92400e,#d97706)',label:'Amber'},
+    {bg:'linear-gradient(135deg,#991b1b,#dc2626)',label:'Red'},
+    {bg:'linear-gradient(135deg,#0c4a6e,#0284c7)',label:'Sky'},
+  ];
+  openModal('<div style="min-width:320px"><h3 style="margin:0 0 14px;font-size:15px;font-weight:700;color:#1e3a5f">Choose avatar color</h3>'+
+    '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px">'+
+    colors.map(function(c){
+      return '<button onclick="localStorage.setItem(\'avatar_color\',\''+c.bg+'\');updateProfilePill();closeModal()" style="padding:14px 8px;border-radius:10px;border:2px solid transparent;background:'+c.bg+';cursor:pointer;color:#fff;font-size:11px;font-weight:600;transition:all .15s" onmouseenter="this.style.border=\'2px solid #fff\'" onmouseleave="this.style.border=\'2px solid transparent\'">'+c.label+'</button>';
+    }).join('')+
+    '</div><div style="text-align:right"><button class="btn" onclick="closeModal()">Cancel</button></div></div>');
+}
+
+// Run on auth
+setTimeout(updateProfilePill, 800);
+// Also update when _currentUser is set
+var _ppOrigInitApp=window.initApp;
+if(typeof _ppOrigInitApp==='function'&&!window._ppWired){
+  window._ppWired=true;
+  window.initApp=async function(){
+    await _ppOrigInitApp.apply(this,arguments);
+    updateProfilePill();
+  };
+}
 </script>
 </body>
 </html>
