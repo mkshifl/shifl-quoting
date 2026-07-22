@@ -553,7 +553,7 @@ body.dark .status-popover button:hover{background:#243447}
 .two-col table{table-layout:fixed;word-break:break-word}
 .two-col table td,.two-col table th{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:0}
 /* Rates table compact */
-#rates-tbody td{font-size:11px;padding:5px 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#rates-tbody td{font-size:12px;padding:7px 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}#rates-tbody td:nth-child(n+7):nth-child(-n+18){text-align:right}
 #rates-tbody td:nth-child(3),#rates-tbody td:nth-child(4){font-size:11px}
 .tbl-wrap table thead th{font-size:10px;padding:6px 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 /* Quote builder flat charges compact layout */
@@ -5851,22 +5851,34 @@ function renderRates(){
       <button onclick="S.rateTab='export';renderRates()" style="padding:6px 14px;border:none;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;background:${S.rateTab==='export'?'#92400e':'#fff'};color:${S.rateTab==='export'?'#fff':'var(--gray-500)'}">📤 Export</button>
     </div>
     <button class="btn blue" onclick="showAddRate()">+ Add rate</button>`;
-  $('page').innerHTML=`<div class="tbl-wrap" style="overflow-x:hidden"><table style="width:100%;table-layout:fixed;font-size:11px"><colgroup>
-  <col style="width:32px"><col style="width:26px"><col style="width:120px"><col style="width:120px">
-  <col style="width:52px"><col style="width:44px"><col style="width:56px"><col style="width:56px">
-  <col style="width:54px"><col style="width:54px"><col style="width:54px"><col style="width:54px">
-  <col style="width:52px"><col style="width:52px"><col style="width:52px"><col style="width:52px">
-  <col style="width:48px"><col style="width:60px"><col style="width:60px"><col style="width:36px">
+  $('page').innerHTML=`<div class="tbl-wrap" style="overflow-x:auto"><table style="width:100%;min-width:1100px;table-layout:fixed;font-size:12px"><colgroup>
+  <col style="width:34px"><col style="width:28px"><col style="width:140px"><col style="width:130px">
+  <col style="width:58px"><col style="width:48px"><col style="width:68px"><col style="width:68px">
+  <col style="width:62px"><col style="width:62px"><col style="width:62px"><col style="width:62px">
+  <col style="width:60px"><col style="width:60px"><col style="width:60px"><col style="width:60px">
+  <col style="width:56px"><col style="width:70px"><col style="width:66px"><col style="width:38px">
 </colgroup>
 <thead><tr>
-  <th style="text-align:center">#</th><th title="Region">Reg</th>
-  <th>Carrier</th><th>Destination</th><th>Zip</th><th>Mode</th>
-  <th title="Import base rate">Import</th><th title="Export base rate">Export</th>
-  <th title="Chassis">Chas.</th><th title="Pre-pull">Pre-pl</th>
-  <th title="Detention at port">Det.P</th><th title="Detention at customer">Det.C</th>
-  <th title="Storage">Stor.</th><th title="Overweight 43k">OW43</th>
-  <th title="Overweight 48k">OW48</th><th title="Bobtail">Bob.</th>
-  <th title="Toll">Toll</th><th>Total</th><th>Status</th><th></th>
+  <th style="text-align:center;padding:7px 4px">#</th>
+  <th style="padding:7px 4px" title="Region">Reg</th>
+  <th style="padding:7px 8px">Carrier</th>
+  <th style="padding:7px 8px">Destination</th>
+  <th style="padding:7px 6px">ZIP</th>
+  <th style="padding:7px 4px">Mode</th>
+  <th style="padding:7px 6px;text-align:right" title="Import base rate">Base</th>
+  <th style="padding:7px 6px;text-align:right" title="Export base rate">Export</th>
+  <th style="padding:7px 6px;text-align:right" title="Chassis">Chassis</th>
+  <th style="padding:7px 6px;text-align:right" title="Pre-pull">Pre-pull</th>
+  <th style="padding:7px 6px;text-align:right" title="Detention at port">Det.Port</th>
+  <th style="padding:7px 6px;text-align:right" title="Detention at customer">Det.Cust</th>
+  <th style="padding:7px 6px;text-align:right" title="Storage">Storage</th>
+  <th style="padding:7px 6px;text-align:right" title="Overweight 43k">OW 43k</th>
+  <th style="padding:7px 6px;text-align:right" title="Overweight 48k">OW 48k</th>
+  <th style="padding:7px 6px;text-align:right" title="Bobtail">Bobtail</th>
+  <th style="padding:7px 6px;text-align:right" title="Toll">Toll</th>
+  <th style="padding:7px 6px;text-align:right">Total</th>
+  <th style="padding:7px 4px">Status</th>
+  <th style="padding:7px 4px"></th>
 </tr></thead><tbody id="rates-tbody">${buildRateRows()}</tbody></table></div>`;
 }
 function onRateSearch(v){
@@ -11921,7 +11933,21 @@ let _screenshotMode=false;
 function toggleScreenshotMode(){
   _screenshotMode=!_screenshotMode;
   document.body.classList.toggle('screenshot-mode',_screenshotMode);
-  showToast(_screenshotMode?'📷 Screenshot mode ON — numbers hidden':'📷 Screenshot mode OFF',_screenshotMode?'info':'success',2500);
+  // Show clear banner when ON so user knows why numbers are hidden
+  let banner=document.getElementById('screenshot-banner');
+  if(_screenshotMode){
+    if(!banner){
+      banner=document.createElement('div');
+      banner.id='screenshot-banner';
+      banner.style.cssText='position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:#1e3a5f;color:#fff;padding:8px 20px;border-radius:99px;font-size:12px;font-weight:700;z-index:99999;display:flex;align-items:center;gap:8px;box-shadow:0 4px 16px rgba(0,0,0,.3)';
+      banner.innerHTML='📷 Screenshot mode ON — numbers hidden &nbsp;<button onclick="toggleScreenshotMode()" style="background:rgba(255,255,255,.2);border:none;color:#fff;border-radius:99px;padding:3px 10px;cursor:pointer;font-size:11px;font-weight:700;font-family:inherit">Turn off</button>';
+      document.body.appendChild(banner);
+    }
+    showToast('📷 Screenshot mode ON — numbers hidden','info',2000);
+  } else {
+    if(banner) banner.remove();
+    showToast('📷 Screenshot mode OFF — numbers visible','success',2000);
+  }
 }
 
 // ════════════════════════════════════════════════════════════════════
