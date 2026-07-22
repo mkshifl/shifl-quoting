@@ -16313,6 +16313,13 @@ function applyBulkStatus(){
 
 function saveTMSLoad(l){
   try{
+    // Auto-assign Shifl Ref# if not already set
+    if(!l.shiflRef){
+      const all_existing=JSON.parse(localStorage.getItem('tms_loads')||'[]');
+      const year=new Date().getFullYear().toString().slice(-2);
+      const seq=String(all_existing.length+1).padStart(4,'0');
+      l.shiflRef='SR-'+year+seq;
+    }
     const all=JSON.parse(localStorage.getItem('tms_loads')||'[]');
     const idx=all.findIndex(x=>x.id===l.id);
     if(idx>=0)all[idx]=l; else all.push(l);
@@ -21839,4 +21846,125 @@ document.addEventListener('DOMContentLoaded',function(){
 });
 
 console.log('5 new features loaded: Ops Briefing, Contract Rates, Profit Trend, Customer PDF, Load Cost Calculator ✓');
+</script>
+
+
+<script>
+function syncActiveShipments(){
+  var dray=JSON.parse(localStorage.getItem('shifl_quotes')||'[]').filter(function(q){return q.status==='Booked';});
+  var fq=JSON.parse(localStorage.getItem('fq_quotes')||'[]').filter(function(q){return q.status==='Booked';});
+  var loads=JSON.parse(localStorage.getItem('tms_loads')||'[]');
+  var added=0;
+  dray.forEach(function(q){
+    if(!loads.find(function(l){return l.sourceId===q.id||l.id===q.id;})){
+      saveTMSLoad({id:q.id,sourceId:q.id,type:'drayage',customer:q.customer,carrier:q.carrier,status:'Booked',pickupZip:q.zip,deliveryZip:q.destination||q.zip,shiflRef:q.shiflRef||'SR-'+new Date().getFullYear().toString().slice(-2)+String(loads.length+added+1).padStart(4,'0'),bookedAt:q.bookedAt||q.date||new Date().toISOString(),customerRate:q.customerRates&&q.customerRates.total||0,carrierRate:q.carrierRates&&q.carrierRates.total||0});added++;
+    }
+  });
+  fq.forEach(function(q){
+    if(!loads.find(function(l){return l.sourceId===q.id||l.id===q.id;})){
+      saveTMSLoad({id:q.id,sourceId:q.id,type:'freight',fqMode:q.fqMode||'FTL',customer:q.customer,carrier:q.carrier,status:'Booked',pickupZip:q.pickupZip,deliveryZip:q.deliveryZip,shiflRef:q.shiflRef||'SR-'+new Date().getFullYear().toString().slice(-2)+String(loads.length+added+1).padStart(4,'0'),bookedAt:q.bookedAt||q.date||new Date().toISOString(),customerRate:q.customerRate||0,carrierRate:q.carrierRate||0});added++;
+    }
+  });
+  showToast(added>0?added+' synced':'Already in sync','success',2500);
+  if(typeof renderActive==='function') renderActive();
+}
+if(typeof window.renderActive==='function'&&!window._raSync){
+  window._raSync=true;
+  var _raOrig=window.renderActive;
+  window.renderActive=function(){
+    _raOrig.apply(this,arguments);
+    setTimeout(function(){
+      var tb=document.getElementById('topbar-right');
+      if(tb&&!document.getElementById('active-sync-btn')){
+        var b=document.createElement('button');b.id='active-sync-btn';b.className='btn';b.innerHTML='Sync';b.style.fontSize='12px';b.onclick=syncActiveShipments;tb.appendChild(b);
+      }
+    },200);
+  };
+}
+function saveAqRef(id,val){
+  var q2=JSON.parse(localStorage.getItem('air_quotes')||'[]');
+  var item=q2.find(function(x){return x.id===id;});
+  if(item){item.shiflRef=val;localStorage.setItem('air_quotes',JSON.stringify(q2));}
+}
+function openShipmentCloseout(loadId){
+  var loads=JSON.parse(localStorage.getItem('tms_loads')||'[]');
+  var load=loads.find(function(l){return l.id===loadId;});
+  if(!load){showToast('Load not found','error',2000);return;}
+  var origQ=(JSON.parse(localStorage.getItem('shifl_quotes')||'[]')).find(function(q){return q.id===load.sourceId||q.id===loadId;});
+  var baseCarrier=origQ&&origQ.carrierRates&&origQ.carrierRates.base||load.carrierRate||0;
+  var baseCustomer=origQ&&origQ.customerRates&&origQ.customerRates.total||load.customerRate||0;
+  window._coCustRate=baseCustomer;
+  openModal('<div style="min-width:460px"><h3 style="margin:0 0 12px">Close out '+( load.shiflRef||loadId)+'</h3><p style="font-size:12px;color:#6b7280;margin-bottom:14px">Customer rate: $'+baseCustomer.toLocaleString()+'</p><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px"><div><label style="font-size:11px;font-weight:700;color:#6b7280;display:block;margin-bottom:3px">Carrier base</label><input id="co-base" type="number" value="'+baseCarrier+'" oninput="calcCO()" style="width:100%;padding:7px 10px;border:1px solid #d1d5db;border-radius:8px;font-size:13px;box-sizing:border-box"></div><div><label style="font-size:11px;font-weight:700;color:#6b7280;display:block;margin-bottom:3px">Chassis</label><input id="co-chassis" type="number" placeholder="0" oninput="calcCO()" style="width:100%;padding:7px 10px;border:1px solid #d1d5db;border-radius:8px;font-size:13px;box-sizing:border-box"></div><div><label style="font-size:11px;font-weight:700;color:#6b7280;display:block;margin-bottom:3px">Detention</label><input id="co-detention" type="number" placeholder="0" oninput="calcCO()" style="width:100%;padding:7px 10px;border:1px solid #d1d5db;border-radius:8px;font-size:13px;box-sizing:border-box"></div><div><label style="font-size:11px;font-weight:700;color:#6b7280;display:block;margin-bottom:3px">Overweight/Permit</label><input id="co-overweight" type="number" placeholder="0" oninput="calcCO()" style="width:100%;padding:7px 10px;border:1px solid #d1d5db;border-radius:8px;font-size:13px;box-sizing:border-box"></div><div><label style="font-size:11px;font-weight:700;color:#6b7280;display:block;margin-bottom:3px">Other charge</label><input id="co-extra" type="number" placeholder="0" oninput="calcCO()" style="width:100%;padding:7px 10px;border:1px solid #d1d5db;border-radius:8px;font-size:13px;box-sizing:border-box"></div><div><label style="font-size:11px;font-weight:700;color:#6b7280;display:block;margin-bottom:3px">Other description</label><input id="co-extra-l" type="text" placeholder="e.g. Storage" style="width:100%;padding:7px 10px;border:1px solid #d1d5db;border-radius:8px;font-size:13px;box-sizing:border-box"></div></div><div style="background:#1e3a5f;border-radius:10px;padding:12px 14px;margin-bottom:12px;display:grid;grid-template-columns:1fr 1fr;gap:4px"><div style="color:rgba(255,255,255,.6);font-size:12px">Total carrier cost</div><div id="co-total" style="text-align:right;color:#fff;font-weight:800;font-size:15px">$0</div><div style="color:rgba(255,255,255,.6);font-size:12px">Net profit</div><div id="co-net" style="text-align:right;font-weight:800;font-size:15px;color:#4ade80">--</div></div><textarea id="co-notes" rows="2" placeholder="Notes..." style="width:100%;padding:7px 10px;border:1px solid #d1d5db;border-radius:8px;font-size:12px;resize:none;box-sizing:border-box;margin-bottom:12px"></textarea><div style="display:flex;gap:8px;justify-content:flex-end"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn blue" onclick="saveCloseout(\''+loadId+'\')">Close shipment</button></div></div>');
+  setTimeout(calcCO,50);
+}
+function calcCO(){
+  var cr=window._coCustRate||0;
+  var total=['base','chassis','detention','overweight','extra'].reduce(function(s,k){var el=document.getElementById('co-'+k);return s+(parseFloat(el&&el.value)||0);},0);
+  var net=cr-total;
+  var te=document.getElementById('co-total');var ne=document.getElementById('co-net');
+  if(te) te.textContent='$'+total.toLocaleString();
+  if(ne){ne.textContent=(net>=0?'+':'')+'$'+Math.abs(net).toLocaleString();ne.style.color=net>=0?'#4ade80':'#f87171';}
+}
+function saveCloseout(loadId){
+  var keys=['base','chassis','detention','overweight','extra'];
+  var d={closedAt:new Date().toISOString(),notes:document.getElementById('co-notes')&&document.getElementById('co-notes').value||'',extraLabel:document.getElementById('co-extra-l')&&document.getElementById('co-extra-l').value||''};
+  keys.forEach(function(k){var v=parseFloat(document.getElementById('co-'+k)&&document.getElementById('co-'+k).value)||0;if(v) d[k]=v;});
+  d.totalCarrierCost=keys.reduce(function(s,k){return s+(d[k]||0);},0);
+  d.netProfit=(window._coCustRate||0)-d.totalCarrierCost;
+  localStorage.setItem('closeout_'+loadId,JSON.stringify(d));
+  var loads=JSON.parse(localStorage.getItem('tms_loads')||'[]');
+  var l=loads.find(function(x){return x.id===loadId;});
+  if(l){l.status='Delivered';l.closedAt=d.closedAt;l.actualCarrierCost=d.totalCarrierCost;saveTMSLoad(l);}
+  closeModal();
+  showToast('Closed - net profit $'+d.netProfit.toLocaleString(),'success',4000);
+  if(typeof renderActive==='function') renderActive();
+}
+function renderFullQuoteLog(){
+  var role=window._currentUser&&window._currentUser.role||localStorage.getItem('shifl_role')||'';
+  if(role!=='super_admin'&&role!=='admin'){showToast('Super Admin only','error',2500);return;}
+  var all=[];
+  var SC={Quoted:'#dbeafe|#1d4ed8',Booked:'#dcfce7|#15803d',Lost:'#fee2e2|#dc2626',Delivered:'#f0fdf4|#16a34a',Cancelled:'#f3f4f6|#6b7280'};
+  JSON.parse(localStorage.getItem('shifl_quotes')||'[]').forEach(function(q){all.push({_mode:'Drayage',_customer:q.customer,_carrier:q.carrier,_rev:q.customerRates&&q.customerRates.total||0,_cost:q.carrierRates&&q.carrierRates.total||0,_profit:(q.customerRates&&q.customerRates.total||0)-(q.carrierRates&&q.carrierRates.total||0),_date:q.date||q.created_at,_ref:q.shiflRef||'',_status:q.status||'Quoted',_zip:q.zip||''});});
+  JSON.parse(localStorage.getItem('fq_quotes')||'[]').forEach(function(q){all.push({_mode:q.fqMode||'FTL',_customer:q.customer,_carrier:q.carrier,_rev:q.customerRate||0,_cost:q.carrierRate||0,_profit:(q.customerRate||0)-(q.carrierRate||0),_date:q.date||q.bookedAt,_ref:q.shiflRef||'',_status:q.status||'Quoted',_zip:q.deliveryZip||''});});
+  JSON.parse(localStorage.getItem('air_quotes')||'[]').forEach(function(q){all.push({_mode:'Air',_customer:q.customer,_carrier:q.airline||'',_rev:q.customerRate||0,_cost:(q.airFreightCost||0)+(q.groundRate||0),_profit:(q.customerRate||0)-((q.airFreightCost||0)+(q.groundRate||0)),_date:q.date||q.created_at,_ref:q.shiflRef||'',_status:q.status||'Quoted',_zip:q.deliveryZip||''});});
+  JSON.parse(localStorage.getItem('tl_quotes')||'[]').forEach(function(q){all.push({_mode:'Transload',_customer:q.customer,_carrier:q.carrier||'',_rev:q.totalCustomer||0,_cost:q.totalCost||0,_profit:(q.totalCustomer||0)-(q.totalCost||0),_date:q.date||q.created_at,_ref:q.shiflRef||'',_status:q.status||'Quoted',_zip:q.outDeliveryZip||''});});
+  all.sort(function(a,b){return new Date(b._date||0)-new Date(a._date||0);});
+  window._fqlAll=all;
+  var rev=all.reduce(function(s,q){return s+q._rev;},0);
+  var profit=all.reduce(function(s,q){return s+q._profit;},0);
+  var booked=all.filter(function(q){return q._status==='Booked'||q._status==='Delivered';}).length;
+  var mkRow=function(q){var sc=(SC[q._status]||'#f3f4f6|#6b7280').split('|');var d=q._date?new Date(q._date).toLocaleDateString([],{month:'short',day:'numeric'}):'--';return '<tr><td style="font-size:11px;font-weight:600;color:#2563eb">'+q._ref+'</td><td style="font-size:11px;color:#6b7280">'+d+'</td><td><span style="font-size:10px;background:#dbeafe;color:#1d4ed8;padding:1px 6px;border-radius:99px;font-weight:600">'+q._mode+'</span></td><td style="font-size:12px;font-weight:600;color:#1e3a5f;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(q._customer||'--')+'</td><td style="font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(q._zip||'--')+'</td><td style="font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(q._carrier||'--')+'</td><td style="text-align:right;font-size:12px;font-weight:600;color:#2563eb">$'+Math.round(q._rev).toLocaleString()+'</td><td style="text-align:right;font-size:12px;color:#6b7280">$'+Math.round(q._cost).toLocaleString()+'</td><td style="text-align:right;font-size:12px;font-weight:700;color:'+(q._profit>=0?'#16a34a':'#dc2626')+'">'+(q._profit>=0?'+':'')+'$'+Math.round(Math.abs(q._profit)).toLocaleString()+'</td><td><span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:99px;background:'+sc[0]+';color:'+sc[1]+'">'+q._status+'</span></td></tr>';};
+  $('page').innerHTML='<div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px"><div><h2 style="font-size:20px;font-weight:800;color:#1e3a5f;margin:0 0 3px">Full quote log</h2><p style="font-size:12px;color:#6b7280;margin:0">'+all.length+' quotes all modes</p></div><div style="display:flex;gap:8px">'
+    +'<div style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:9px 14px;text-align:center"><div style="font-size:18px;font-weight:800;color:#6b7280">'+all.length+'</div><div style="font-size:10px;color:#6b7280;text-transform:uppercase">Total</div></div>'
+    +'<div style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:9px 14px;text-align:center"><div style="font-size:18px;font-weight:800;color:#16a34a">'+booked+'</div><div style="font-size:10px;color:#6b7280;text-transform:uppercase">Booked</div></div>'
+    +'<div style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:9px 14px;text-align:center"><div style="font-size:18px;font-weight:800;color:#2563eb">$'+Math.round(rev/1000)+'k</div><div style="font-size:10px;color:#6b7280;text-transform:uppercase">Revenue</div></div>'
+    +'<div style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:9px 14px;text-align:center"><div style="font-size:18px;font-weight:800;color:#16a34a">$'+Math.round(profit/1000)+'k</div><div style="font-size:10px;color:#6b7280;text-transform:uppercase">Profit</div></div>'
+    +'</div></div><div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">'
+    +'<input id="fql-search" type="search" placeholder="Search..." oninput="filterFQL()" style="flex:1;min-width:180px;padding:7px 12px;border:1px solid #d1d5db;border-radius:8px;font-size:13px">'
+    +'<select id="fql-mode" onchange="filterFQL()" style="padding:7px 10px;border:1px solid #d1d5db;border-radius:8px;font-size:12px"><option value="">All modes</option><option>Drayage</option><option>FTL</option><option>LTL</option><option>LCL</option><option>Air</option><option>Transload</option></select>'
+    +'<select id="fql-status" onchange="filterFQL()" style="padding:7px 10px;border:1px solid #d1d5db;border-radius:8px;font-size:12px"><option value="">All statuses</option><option>Quoted</option><option>Booked</option><option>Delivered</option><option>Lost</option><option>Cancelled</option></select>'
+    +'</div><div class="tbl-wrap"><table style="width:100%;table-layout:fixed"><colgroup><col style="width:68px"><col style="width:68px"><col style="width:75px"><col style="width:15%"><col style="width:12%"><col style="width:13%"><col style="width:76px"><col style="width:70px"><col style="width:70px"><col style="width:96px"></colgroup>'
+    +'<thead><tr><th>Ref #</th><th>Date</th><th>Mode</th><th>Customer</th><th>Lane</th><th>Carrier</th><th style="text-align:right">Revenue</th><th style="text-align:right">Cost</th><th style="text-align:right">Profit</th><th>Status</th></tr></thead>'
+    +'<tbody id="fql-tbody">'+all.map(mkRow).join('')+'</tbody></table></div>';
+}
+function filterFQL(){
+  var q=(document.getElementById('fql-search')&&document.getElementById('fql-search').value||'').toLowerCase();
+  var mode=document.getElementById('fql-mode')&&document.getElementById('fql-mode').value||'';
+  var status=document.getElementById('fql-status')&&document.getElementById('fql-status').value||'';
+  var SC={Quoted:'#dbeafe|#1d4ed8',Booked:'#dcfce7|#15803d',Lost:'#fee2e2|#dc2626',Delivered:'#f0fdf4|#16a34a',Cancelled:'#f3f4f6|#6b7280'};
+  var filtered=(window._fqlAll||[]).filter(function(r){return(!mode||r._mode===mode)&&(!status||r._status===status)&&(!q||(r._customer||'').toLowerCase().includes(q)||(r._carrier||'').toLowerCase().includes(q)||(r._ref||'').toLowerCase().includes(q)||(r._zip||'').includes(q));});
+  var tbody=document.getElementById('fql-tbody');
+  if(!tbody) return;
+  var mkRow=function(q){var sc=(SC[q._status]||'#f3f4f6|#6b7280').split('|');var d=q._date?new Date(q._date).toLocaleDateString([],{month:'short',day:'numeric'}):'--';return '<tr><td style="font-size:11px;font-weight:600;color:#2563eb">'+q._ref+'</td><td style="font-size:11px;color:#6b7280">'+d+'</td><td><span style="font-size:10px;background:#dbeafe;color:#1d4ed8;padding:1px 6px;border-radius:99px;font-weight:600">'+q._mode+'</span></td><td style="font-size:12px;font-weight:600;color:#1e3a5f;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(q._customer||'--')+'</td><td style="font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(q._zip||'--')+'</td><td style="font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(q._carrier||'--')+'</td><td style="text-align:right;font-size:12px;font-weight:600;color:#2563eb">$'+Math.round(q._rev).toLocaleString()+'</td><td style="text-align:right;font-size:12px;color:#6b7280">$'+Math.round(q._cost).toLocaleString()+'</td><td style="text-align:right;font-size:12px;font-weight:700;color:'+(q._profit>=0?'#16a34a':'#dc2626')+'">'+(q._profit>=0?'+':'')+'$'+Math.round(Math.abs(q._profit)).toLocaleString()+'</td><td><span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:99px;background:'+sc[0]+';color:'+sc[1]+'">'+q._status+'</span></td></tr>';};
+  tbody.innerHTML=filtered.map(mkRow).join('');
+}
+setTimeout(function(){
+  var role=window._currentUser&&window._currentUser.role||localStorage.getItem('shifl_role')||'';
+  if(role!=='super_admin'&&role!=='admin') return;
+  var adminBtn=document.getElementById('acc-admin');
+  var adminSub=adminBtn&&adminBtn.nextElementSibling;
+  if(adminSub&&!document.getElementById('nav-full-log')){
+    var b=document.createElement('button');b.id='nav-full-log';b.className='sub-link';b.innerHTML='Full quote log';b.onclick=renderFullQuoteLog;adminSub.appendChild(b);
+  }
+},2000);
 </script>
