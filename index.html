@@ -104,11 +104,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-siz
 .sync-dot.loading{background:#fbbf24;animation:pulse 1s infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
 .sync-label{font-size:11px;color:rgba(255,255,255,.4)}
-.main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
 .topbar{background:var(--white);border-bottom:1px solid var(--gray-200);padding:0 22px;height:54px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;box-shadow:var(--shadow-sm)}
 .topbar h1{font-size:15px;font-weight:600}
 .topbar-right{display:flex;gap:8px;align-items:center}
-.page{flex:1;overflow-y:auto;padding:20px 22px}
+.page{flex:1;overflow-y:auto;overflow-x:hidden;padding:20px 22px}
 .saving-badge{font-size:11px;color:var(--gray-500);animation:pulse 1s infinite}
 /* Buttons */
 .btn{display:inline-flex;align-items:center;gap:5px;padding:7px 14px;border-radius:var(--radius);font-size:13px;font-weight:500;cursor:pointer;border:1px solid var(--gray-200);background:var(--white);color:var(--gray-700);transition:all .12s;font-family:inherit;white-space:nowrap;line-height:1}
@@ -135,7 +135,7 @@ input[type=number]::-webkit-inner-spin-button{opacity:.4}
 .sec-head{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gray-500);margin-bottom:11px;padding-bottom:8px;border-bottom:1px solid var(--gray-100)}
 .charge-group-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gray-300);margin:12px 0 6px;padding-bottom:4px;border-bottom:1px dashed var(--gray-100)}
 /* Tables */
-.tbl-wrap{overflow-x:auto;border-radius:var(--radius-lg);border:1px solid var(--gray-200);background:var(--white);box-shadow:var(--shadow-sm)}
+.tbl-wrap{overflow-x:auto;border-radius:var(--radius-lg);border:1px solid var(--gray-200);background:var(--white);box-shadow:var(--shadow-sm);max-width:100%}
 table{width:100%;border-collapse:collapse;font-size:13px}
 thead th{padding:9px 12px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-500);background:var(--gray-50);border-bottom:1px solid var(--gray-200);white-space:nowrap}
 tbody tr{border-bottom:1px solid var(--gray-100)}
@@ -546,6 +546,18 @@ body.dark .status-popover button:hover{background:#243447}
   .card{break-inside:avoid;box-shadow:none;border:1px solid #ddd}
   table{font-size:11px}
 }
+
+/* ── Prevent horizontal scroll everywhere ── */
+.app{overflow:hidden}
+.two-col > div{min-width:0}
+.two-col table{table-layout:fixed;word-break:break-word}
+.two-col table td,.two-col table th{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:0}
+/* Rates table compact */
+#rates-tbody td{font-size:11px;padding:5px 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#rates-tbody td:nth-child(3),#rates-tbody td:nth-child(4){font-size:11px}
+.tbl-wrap table thead th{font-size:10px;padding:6px 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* Quote builder flat charges compact layout */
+.charge-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px 16px}
 </style>
 <script>
 // Force clear service worker and caches
@@ -1488,7 +1500,7 @@ function buildPricingSection(){
   </div>
   <p style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-500);margin-bottom:4px">Your flat charges</p>
   <p class="cond-note" style="margin-bottom:10px;font-size:11px">Enter the full amount you charge the customer · ${ld==='Live'?'Live mode: detention shown, bobtail hidden':ld==='Drop'?'Drop mode: bobtail shown, detention hidden':'All charges shown'}</p>
-  <table style="width:100%"><tbody>${extraRows}</tbody></table>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 12px">${extraRows}</div>
   <div style="margin-top:14px">
     <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-500);margin-bottom:8px">Per-quote charges</div>
 
@@ -5772,7 +5784,23 @@ function renderRates(){
       <button onclick="S.rateTab='export';renderRates()" style="padding:6px 14px;border:none;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;background:${S.rateTab==='export'?'#92400e':'#fff'};color:${S.rateTab==='export'?'#fff':'var(--gray-500)'}">📤 Export</button>
     </div>
     <button class="btn blue" onclick="showAddRate()">+ Add rate</button>`;
-  $('page').innerHTML=`<div class="tbl-wrap"><table><thead><tr><th style="width:30px;text-align:center">#</th><th>Region</th><th>Carrier</th><th>Destination</th><th>Zip</th><th>Mode</th><th>Import</th><th>Export</th><th>Chassis</th><th>Pre-pull</th><th>Det.Port</th><th>Det.Cust</th><th>Storage</th><th>OVW 43k</th><th>OVW 48k</th><th>Bobtail</th><th>Toll</th><th>Total</th><th>Status</th><th></th></tr></thead><tbody id="rates-tbody">${buildRateRows()}</tbody></table></div>`;
+  $('page').innerHTML=`<div class="tbl-wrap" style="overflow-x:hidden"><table style="width:100%;table-layout:fixed;font-size:11px"><colgroup>
+  <col style="width:32px"><col style="width:26px"><col style="width:120px"><col style="width:120px">
+  <col style="width:52px"><col style="width:44px"><col style="width:56px"><col style="width:56px">
+  <col style="width:54px"><col style="width:54px"><col style="width:54px"><col style="width:54px">
+  <col style="width:52px"><col style="width:52px"><col style="width:52px"><col style="width:52px">
+  <col style="width:48px"><col style="width:60px"><col style="width:60px"><col style="width:36px">
+</colgroup>
+<thead><tr>
+  <th style="text-align:center">#</th><th title="Region">Reg</th>
+  <th>Carrier</th><th>Destination</th><th>Zip</th><th>Mode</th>
+  <th title="Import base rate">Import</th><th title="Export base rate">Export</th>
+  <th title="Chassis">Chas.</th><th title="Pre-pull">Pre-pl</th>
+  <th title="Detention at port">Det.P</th><th title="Detention at customer">Det.C</th>
+  <th title="Storage">Stor.</th><th title="Overweight 43k">OW43</th>
+  <th title="Overweight 48k">OW48</th><th title="Bobtail">Bob.</th>
+  <th title="Toll">Toll</th><th>Total</th><th>Status</th><th></th>
+</tr></thead><tbody id="rates-tbody">${buildRateRows()}</tbody></table></div>`;
 }
 function onRateSearch(v){
   S.rSearch=v;
