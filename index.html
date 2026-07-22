@@ -763,34 +763,21 @@ if('caches' in window){
           <button class="sub-link" id="nav-reports" onclick="goTo('reports')">📈 Reports</button>
           <button class="sub-link" id="nav-activity" onclick="goTo('activity')">📊 Activity log</button>
           <button class="sub-link" id="nav-auditlog" onclick="goTo('auditlog')">📋 Audit log</button>
+          <button class="sub-link" id="nav-full-log" onclick="renderFullQuoteLog()" style="color:#60a5fa;font-weight:700">🗂 Full quote log</button>
         </div>
       </div>
 
     </nav>
-    <div class="sidebar-foot" style="display:flex;flex-direction:column;gap:8px">
-      <button id="dark-toggle" onclick="toggleDarkMode()" style="background:rgba(255,255,255,.07);border:none;border-radius:6px;color:rgba(255,255,255,.6);font-size:12px;font-weight:600;padding:7px 12px;cursor:pointer;font-family:inherit;text-align:left;width:100%">🌙 Dark mode</button>
-      <button onclick="toggleScreenshotMode()" style="background:rgba(255,255,255,.07);border:none;border-radius:6px;color:rgba(255,255,255,.6);font-size:12px;font-weight:600;padding:7px 12px;cursor:pointer;font-family:inherit;text-align:left;width:100%">📷 Screenshot mode</button>
-      <button onclick="openAIChat()" style="background:rgba(46,117,182,.25);border:none;border-radius:6px;color:#93c5fd;font-size:12px;font-weight:700;padding:7px 12px;cursor:pointer;font-family:inherit;text-align:left;width:100%">🤖 AI Assistant</button>
-      <button id="chat-nav-btn" onclick="toggleChat()" style="background:rgba(255,255,255,.07);border:none;border-left:3px solid transparent;border-radius:6px;color:rgba(255,255,255,.6);font-size:12px;font-weight:600;padding:7px 12px;cursor:pointer;font-family:inherit;text-align:left;width:100%;display:flex;align-items:center;justify-content:space-between">💬 Team Chat <span id="chat-badge" style="display:none;background:#dc2626;color:#fff;border-radius:99px;font-size:10px;font-weight:700;padding:1px 7px">0</span></button>
-      <!-- User info block -->
-      <div id="user-info" style="display:none;margin-bottom:10px;padding:9px 11px;background:rgba(255,255,255,.07);border-radius:var(--radius);cursor:pointer" onclick="showEditMyProfile()" title="Edit your profile">
-        <div style="display:flex;align-items:center;justify-content:space-between">
-          <div>
-            <div id="user-name-display" style="font-size:12px;font-weight:700;color:#fff"></div>
-            <div id="user-role-display" style="font-size:10px;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.05em;margin-top:1px"></div>
-          </div>
-          <button onclick="event.stopPropagation();logout()" style="background:rgba(255,255,255,.08);border:none;color:rgba(255,255,255,.5);padding:4px 9px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600">Out</button>
-        </div>
-      </div>
-      <div style="display:flex;align-items:center;margin-bottom:4px">
-        <span class="sync-dot" id="sync-dot"></span>
-        <span class="sync-label" id="sync-label">Connected</span>
-      </div>
-      <div style="font-size:10px;color:rgba(255,255,255,.2)">
-        <span style="cursor:pointer;text-decoration:underline" onclick="disconnectSupabase()">Change connection</span>
+    <div class="sidebar-foot" style="padding:0">
+      <button onclick="var p=document.getElementById('sf-panel'),i=document.getElementById('sf-icon'),o=p.style.display!=='none';p.style.display=o?'none':'flex';i.textContent=o?'&#9658;':'&#9660;';localStorage.setItem('sf_open',String(!o))" style="width:100%;background:rgba(255,255,255,.05);border:none;border-top:1px solid rgba(255,255,255,.07);color:rgba(255,255,255,.4);font-size:11px;font-weight:600;padding:9px 18px;cursor:pointer;font-family:inherit;text-align:left;display:flex;align-items:center;justify-content:space-between;text-transform:uppercase;letter-spacing:.06em"><span>&#9881; Settings</span><span id="sf-icon">&#9658;</span></button>
+      <div id="sf-panel" style="display:none;flex-direction:column;gap:6px;padding:8px 12px 10px">
+        <button id="dark-toggle" onclick="toggleDarkMode()" style="background:rgba(255,255,255,.07);border:none;border-radius:6px;color:rgba(255,255,255,.6);font-size:12px;font-weight:600;padding:7px 12px;cursor:pointer;font-family:inherit;text-align:left;width:100%">&#127769; Dark mode</button>
+        <button onclick="toggleScreenshotMode()" style="background:rgba(255,255,255,.07);border:none;border-radius:6px;color:rgba(255,255,255,.6);font-size:12px;font-weight:600;padding:7px 12px;cursor:pointer;font-family:inherit;text-align:left;width:100%">&#128247; Screenshot mode</button>
+        <button onclick="openAIChat()" style="background:rgba(46,117,182,.25);border:none;border-radius:6px;color:#93c5fd;font-size:12px;font-weight:700;padding:7px 12px;cursor:pointer;font-family:inherit;text-align:left;width:100%">&#129302; AI Assistant</button>
+        <button id="chat-nav-btn" onclick="toggleChat()" style="background:rgba(255,255,255,.07);border:none;border-left:3px solid transparent;border-radius:6px;color:rgba(255,255,255,.6);font-size:12px;font-weight:600;padding:7px 12px;cursor:pointer;font-family:inherit;text-align:left;width:100%;display:flex;align-items:center;justify-content:space-between">&#128172; Team Chat <span id="chat-badge" style="display:none;background:#dc2626;color:#fff;border-radius:99px;font-size:10px;font-weight:700;padding:1px 7px">0</span></button>
       </div>
     </div>
-  </aside>
+    </aside>
 
   <div class="main">
     <div class="topbar"><button id="notif-btn" onclick="renderNotifDropdown()" style="position:relative;background:none;border:none;cursor:pointer;padding:4px 6px;border-radius:6px;font-size:18px;color:var(--gray-500);margin-right:4px" title="Notifications">🔔<span id="notif-badge" style="display:none;position:absolute;top:-2px;right:-2px;min-width:16px;height:16px;background:#dc2626;color:#fff;border-radius:99px;font-size:9px;font-weight:800;align-items:center;justify-content:center;padding:0 3px">0</span></button>
@@ -8540,6 +8527,7 @@ function renderAqLog(){
   const rows=shown.map((q,i)=>`<tr>
     <td class="muted small">${q.date}</td>
     <td class="bold">${q.customer||'—'}</td>
+    <td onclick="event.stopPropagation()"><input type="text" value="${q.shiflRef||''}" placeholder="Ref #" onclick="event.stopPropagation()" onchange="saveAqRef('${q.id}',this.value)" style="border:none;background:${q.shiflRef?'var(--blue-bg,#eff6ff)':'transparent'};color:${q.shiflRef?'var(--steel,#2563eb)':'#9ca3af'};font-weight:${q.shiflRef?'600':'400'};font-size:11px;padding:2px 5px;border-radius:4px;width:78px;cursor:text;outline:none" onfocus="this.style.background='var(--blue-bg,#eff6ff)';this.style.border='1px solid var(--steel,#2563eb)'" onblur="this.style.border='none';this.style.background=this.value?'var(--blue-bg,#eff6ff)':'transparent'"></td>
     <td><span style="font-size:11px;font-weight:700;background:#dbeafe;color:#1e40af;padding:2px 8px;border-radius:99px">✈️ ${q.originAirportCode||'—'}</span></td>
     <td class="muted">${q.originCity||'—'} → ${q.deliveryZip||'—'}</td>
     <td class="muted">${q.awbNumber||'—'}</td>
@@ -8560,7 +8548,7 @@ function renderAqLog(){
   </tr>`).join('');
   $('page').innerHTML=kpis+`<div style="display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap">${tabs}</div>
   <div class="tbl-wrap"><table><thead><tr>
-    <th>Date</th><th>Customer</th><th>Airport</th><th>Lane</th><th>AWB#</th>
+    <th>Date</th><th>Customer</th><th>Ref #</th><th>Airport</th><th>Lane</th><th>AWB#</th>
     <th>Air Cost</th><th>Ground Carrier</th><th>Ground Rate</th><th>Cust. Rate</th><th>Profit</th><th>Status</th><th></th><th></th>
   </tr></thead><tbody>${rows||'<tr><td colspan="13" style="text-align:center;padding:30px;color:var(--gray-400)">No quotes match filter</td></tr>'}</tbody></table></div>`;
 }
@@ -13614,7 +13602,8 @@ function openTMSLoadDetail(id){
     <button onclick="S.tmsTab='loads';renderTMS()" style="border:none;background:transparent;cursor:pointer;font-size:20px;color:var(--gray-400);padding:4px">←</button>
     <div>
       <div style="font-size:20px;font-weight:900;color:var(--navy)">${escH(q.customer||'—')}</div>
-      <div style="display:flex;align-items:center;gap:8px;margin-top:2px">
+      <div style="display:flex;align-items:center;gap:8px;margin-top:4px;flex-wrap:wrap">
+        ${q.shiflRef?`<span style="font-size:12px;font-weight:800;color:#2563eb;background:#eff6ff;padding:2px 10px;border-radius:6px">${escH(q.shiflRef)}</span>`:''}
         ${meta.bookingNum?`<span style="font-size:12px;font-weight:700;color:var(--steel)">${escH(meta.bookingNum)}</span>`:''}
         <span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px;background:${tmsStatusColor(q.status)}18;color:${tmsStatusColor(q.status)}">${q.status}</span>
         <span style="font-size:11px;color:var(--gray-400)">${q.fqMode} · ${q.date}</span>
@@ -16162,6 +16151,217 @@ const hash = location.hash;
 if(hash === '#drayage') window.addEventListener('DOMContentLoaded', () => setTimeout(() => goTo('quote'), 1000));
 if(hash === '#freight') window.addEventListener('DOMContentLoaded', () => setTimeout(() => goTo('freight','builder'), 1000));
 </script>
+
+<script>
+
+// ── Air freight Ref# save ──
+function saveAqRef(id, val) {
+  var hist = window._aqHistory || [];
+  var item = hist.find(function(x) { return x.id === id; });
+  if (item) {
+    item.shiflRef = val.trim();
+    try { localStorage.setItem('aq_history', JSON.stringify(hist)); } catch(e) {}
+    try { if (typeof db !== 'undefined' && db) db.from('fq_quotes').update({data: item}).eq('id', id).then(function(){}); } catch(e) {}
+  }
+}
+
+// ── Shipment closeout modal ──
+function openShipmentCloseout(loadId) {
+  var loads = JSON.parse(localStorage.getItem('tms_loads') || '[]');
+  var load = loads.find(function(l) { return l.id === loadId; });
+  if (!load) { showToast('Load not found', 'error', 2000); return; }
+  var origQ = (JSON.parse(localStorage.getItem('shifl_quotes_cache') || '[]')).find(function(q) { return q.id === load.sourceId || q.id === loadId; });
+  var baseCarrier = (origQ && origQ.carrierRates && origQ.carrierRates.base) || load.carrierRate || 0;
+  var baseCustomer = (origQ && origQ.customerRates && origQ.customerRates.total) || load.customerRate || 0;
+  window._coCustRate = baseCustomer;
+  var existing = JSON.parse(localStorage.getItem('closeout_' + loadId) || '{}');
+  openModal(
+    '<div style="min-width:460px">' +
+    '<h3 style="margin:0 0 12px;font-size:15px;font-weight:700;color:#1e3a5f">Close out — ' + (load.shiflRef || loadId) + '</h3>' +
+    '<p style="font-size:12px;color:#6b7280;margin-bottom:14px">' + (load.customer || '') + ' &nbsp;|&nbsp; Customer rate: <strong>$' + baseCustomer.toLocaleString() + '</strong></p>' +
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">' +
+    '<div><label style="font-size:11px;font-weight:700;color:#6b7280;display:block;margin-bottom:3px">Carrier base (actual)</label><input id="co-base" type="number" value="' + (existing.base || baseCarrier) + '" oninput="calcCO()" style="width:100%;padding:7px 10px;border:1px solid #d1d5db;border-radius:8px;font-size:13px;box-sizing:border-box"></div>' +
+    '<div><label style="font-size:11px;font-weight:700;color:#6b7280;display:block;margin-bottom:3px">Chassis</label><input id="co-chassis" type="number" value="' + (existing.chassis || '') + '" placeholder="0" oninput="calcCO()" style="width:100%;padding:7px 10px;border:1px solid #d1d5db;border-radius:8px;font-size:13px;box-sizing:border-box"></div>' +
+    '<div><label style="font-size:11px;font-weight:700;color:#6b7280;display:block;margin-bottom:3px">Detention</label><input id="co-detention" type="number" value="' + (existing.detention || '') + '" placeholder="0" oninput="calcCO()" style="width:100%;padding:7px 10px;border:1px solid #d1d5db;border-radius:8px;font-size:13px;box-sizing:border-box"></div>' +
+    '<div><label style="font-size:11px;font-weight:700;color:#6b7280;display:block;margin-bottom:3px">Overweight / Permit</label><input id="co-overweight" type="number" value="' + (existing.overweight || '') + '" placeholder="0" oninput="calcCO()" style="width:100%;padding:7px 10px;border:1px solid #d1d5db;border-radius:8px;font-size:13px;box-sizing:border-box"></div>' +
+    '<div><label style="font-size:11px;font-weight:700;color:#6b7280;display:block;margin-bottom:3px">Other charge</label><input id="co-extra" type="number" value="' + (existing.extra || '') + '" placeholder="0" oninput="calcCO()" style="width:100%;padding:7px 10px;border:1px solid #d1d5db;border-radius:8px;font-size:13px;box-sizing:border-box"></div>' +
+    '<div><label style="font-size:11px;font-weight:700;color:#6b7280;display:block;margin-bottom:3px">Other description</label><input id="co-extra-l" type="text" value="' + (existing.extraLabel || '') + '" placeholder="e.g. Storage" style="width:100%;padding:7px 10px;border:1px solid #d1d5db;border-radius:8px;font-size:13px;box-sizing:border-box"></div>' +
+    '</div>' +
+    '<div style="background:#1e3a5f;border-radius:10px;padding:12px 14px;margin-bottom:12px;display:grid;grid-template-columns:1fr 1fr;gap:4px">' +
+    '<div style="color:rgba(255,255,255,.6);font-size:12px">Total carrier cost</div><div id="co-total" style="text-align:right;color:#fff;font-weight:800;font-size:15px">$0</div>' +
+    '<div style="color:rgba(255,255,255,.6);font-size:12px">Net profit</div><div id="co-net" style="text-align:right;font-weight:800;font-size:15px;color:#4ade80">--</div>' +
+    '</div>' +
+    '<textarea id="co-notes" rows="2" placeholder="Notes, disputes, issues..." style="width:100%;padding:7px 10px;border:1px solid #d1d5db;border-radius:8px;font-size:12px;resize:none;box-sizing:border-box;margin-bottom:12px">' + (existing.notes || '') + '</textarea>' +
+    '<div style="display:flex;gap:8px;justify-content:flex-end">' +
+    '<button class="btn" onclick="closeModal()">Cancel</button>' +
+    '<button class="btn blue" onclick="saveCloseout(\'' + loadId + '\')">Close shipment</button>' +
+    '</div></div>'
+  );
+  setTimeout(calcCO, 50);
+}
+
+function calcCO() {
+  var cr = window._coCustRate || 0;
+  var total = ['base','chassis','detention','overweight','extra'].reduce(function(s, k) {
+    var el = document.getElementById('co-' + k);
+    return s + (parseFloat(el && el.value) || 0);
+  }, 0);
+  var net = cr - total;
+  var te = document.getElementById('co-total');
+  var ne = document.getElementById('co-net');
+  if (te) te.textContent = '$' + total.toLocaleString();
+  if (ne) { ne.textContent = (net >= 0 ? '+' : '') + '$' + Math.abs(net).toLocaleString(); ne.style.color = net >= 0 ? '#4ade80' : '#f87171'; }
+}
+
+function saveCloseout(loadId) {
+  var keys = ['base','chassis','detention','overweight','extra'];
+  var d = { closedAt: new Date().toISOString(), notes: (document.getElementById('co-notes') || {}).value || '', extraLabel: (document.getElementById('co-extra-l') || {}).value || '' };
+  keys.forEach(function(k) { var v = parseFloat((document.getElementById('co-' + k) || {}).value) || 0; if (v) d[k] = v; });
+  d.totalCarrierCost = keys.reduce(function(s, k) { return s + (d[k] || 0); }, 0);
+  d.netProfit = (window._coCustRate || 0) - d.totalCarrierCost;
+  localStorage.setItem('closeout_' + loadId, JSON.stringify(d));
+  var loads = JSON.parse(localStorage.getItem('tms_loads') || '[]');
+  var l = loads.find(function(x) { return x.id === loadId; });
+  if (l) { l.status = 'Delivered'; l.closedAt = d.closedAt; l.actualCarrierCost = d.totalCarrierCost; saveTMSLoad(l); }
+  closeModal();
+  showToast('Closed — net profit $' + d.netProfit.toLocaleString(), 'success', 4000);
+  if (typeof renderActive === 'function') renderActive();
+}
+
+// ── Full Quote Log (Super Admin) ──
+function renderFullQuoteLog() {
+  var all = [];
+  var SC = { Quoted:'#dbeafe|#1d4ed8', Booked:'#dcfce7|#15803d', Lost:'#fee2e2|#dc2626', Delivered:'#f0fdf4|#16a34a', Cancelled:'#f3f4f6|#6b7280' };
+  var dray = (typeof S !== 'undefined' && S.quotes && S.quotes.length) ? S.quotes : JSON.parse(localStorage.getItem('shifl_quotes_cache') || '[]');
+  dray.forEach(function(q) { var rev = (q.customerRates && q.customerRates.total) || 0; var cost = (q.carrierRates && q.carrierRates.total) || 0; all.push({_mode:'Drayage',_customer:q.customer,_carrier:q.carrier,_rev:rev,_cost:cost,_profit:rev-cost,_date:q.date||q.created_at,_ref:q.shiflRef||'',_status:q.status||'Quoted',_zip:q.zip||''}); });
+  var fqh = (window._fqHistory && window._fqHistory.length) ? window._fqHistory : JSON.parse(localStorage.getItem('fq_history') || '[]');
+  fqh.forEach(function(q) { var rev = q.customerRate || 0; var cost = q.carrierRate || 0; all.push({_mode:q.fqMode||'FTL',_customer:q.customer,_carrier:q.carrier,_rev:rev,_cost:cost,_profit:rev-cost,_date:q.date||q.bookedAt||q.created_at,_ref:q.shiflRef||'',_status:q.status||'Quoted',_zip:q.deliveryZip||q.pickupZip||''}); });
+  var aqh = (window._aqHistory && window._aqHistory.length) ? window._aqHistory : JSON.parse(localStorage.getItem('aq_history') || '[]');
+  aqh.forEach(function(q) { var rev = q.customerRate || 0; var cost = (q.airFreightCost || 0) + (q.groundRate || 0); all.push({_mode:'Air',_customer:q.customer,_carrier:q.airline||q.carrier||'',_rev:rev,_cost:cost,_profit:rev-cost,_date:q.date||q.created_at,_ref:q.shiflRef||'',_status:q.status||'Quoted',_zip:q.deliveryZip||''}); });
+  var tlh = (window._tlHistory && window._tlHistory.length) ? window._tlHistory : JSON.parse(localStorage.getItem('tl_history') || '[]');
+  tlh.forEach(function(q) { var rev = q.totalCustomer || 0; var cost = q.totalCost || 0; all.push({_mode:'Transload',_customer:q.customer,_carrier:q.carrier||'',_rev:rev,_cost:cost,_profit:rev-cost,_date:q.date||q.created_at,_ref:q.shiflRef||'',_status:q.status||'Quoted',_zip:q.outDeliveryZip||''}); });
+  all.sort(function(a, b) { return new Date(b._date || 0) - new Date(a._date || 0); });
+  window._fqlAll = all;
+  var rev = all.reduce(function(s, q) { return s + q._rev; }, 0);
+  var profit = all.reduce(function(s, q) { return s + q._profit; }, 0);
+  var booked = all.filter(function(q) { return q._status === 'Booked' || q._status === 'Delivered'; }).length;
+  function mkRow(q) {
+    var sc = (SC[q._status] || '#f3f4f6|#6b7280').split('|');
+    var d = q._date ? new Date(q._date).toLocaleDateString([], {month:'short', day:'numeric'}) : '--';
+    return '<tr><td style="font-size:11px;font-weight:600;color:#2563eb;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + (q._ref||'--') + '</td><td style="font-size:11px;color:#6b7280">' + d + '</td><td><span style="font-size:10px;background:#dbeafe;color:#1d4ed8;padding:1px 6px;border-radius:99px;font-weight:600">' + q._mode + '</span></td><td style="font-size:12px;font-weight:600;color:#1e3a5f;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + (q._customer||'--') + '</td><td style="font-size:12px;color:#374151;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + (q._zip||'--') + '</td><td style="font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + (q._carrier||'--') + '</td><td style="text-align:right;font-size:12px;font-weight:600;color:#2563eb">$' + Math.round(q._rev).toLocaleString() + '</td><td style="text-align:right;font-size:12px;color:#6b7280">$' + Math.round(q._cost).toLocaleString() + '</td><td style="text-align:right;font-size:12px;font-weight:700;color:' + (q._profit >= 0 ? '#16a34a' : '#dc2626') + '">' + (q._profit >= 0 ? '+' : '') + '$' + Math.round(Math.abs(q._profit)).toLocaleString() + '</td><td><span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:99px;background:' + sc[0] + ';color:' + sc[1] + '">' + q._status + '</span></td></tr>';
+  }
+  document.getElementById('page').innerHTML =
+    '<div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">' +
+    '<div><h2 style="font-size:20px;font-weight:800;color:#1e3a5f;margin:0 0 3px">🗂 Full quote log</h2><p style="font-size:12px;color:#6b7280;margin:0">' + all.length + ' quotes · all modes</p></div>' +
+    '<div style="display:flex;gap:8px">' +
+    '<div style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:9px 14px;text-align:center"><div style="font-size:18px;font-weight:800;color:#6b7280">' + all.length + '</div><div style="font-size:10px;color:#6b7280;text-transform:uppercase">Total</div></div>' +
+    '<div style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:9px 14px;text-align:center"><div style="font-size:18px;font-weight:800;color:#16a34a">' + booked + '</div><div style="font-size:10px;color:#6b7280;text-transform:uppercase">Booked</div></div>' +
+    '<div style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:9px 14px;text-align:center"><div style="font-size:18px;font-weight:800;color:#2563eb">$' + Math.round(rev/1000) + 'k</div><div style="font-size:10px;color:#6b7280;text-transform:uppercase">Revenue</div></div>' +
+    '<div style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:9px 14px;text-align:center"><div style="font-size:18px;font-weight:800;color:#16a34a">$' + Math.round(profit/1000) + 'k</div><div style="font-size:10px;color:#6b7280;text-transform:uppercase">Profit</div></div>' +
+    '</div></div>' +
+    '<div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">' +
+    '<input id="fql-search" type="search" placeholder="Search customer, carrier, ref..." oninput="filterFQL()" style="flex:1;min-width:180px;padding:7px 12px;border:1px solid #d1d5db;border-radius:8px;font-size:13px">' +
+    '<select id="fql-mode" onchange="filterFQL()" style="padding:7px 10px;border:1px solid #d1d5db;border-radius:8px;font-size:12px"><option value="">All modes</option><option>Drayage</option><option>FTL</option><option>LTL</option><option>LCL</option><option>Air</option><option>Transload</option></select>' +
+    '<select id="fql-status" onchange="filterFQL()" style="padding:7px 10px;border:1px solid #d1d5db;border-radius:8px;font-size:12px"><option value="">All statuses</option><option>Quoted</option><option>Booked</option><option>Delivered</option><option>Lost</option><option>Cancelled</option></select>' +
+    '</div>' +
+    '<div class="tbl-wrap"><table style="width:100%;table-layout:fixed"><colgroup><col style="width:68px"><col style="width:68px"><col style="width:75px"><col style="width:15%"><col style="width:12%"><col style="width:13%"><col style="width:76px"><col style="width:70px"><col style="width:70px"><col style="width:96px"></colgroup>' +
+    '<thead><tr><th>Ref #</th><th>Date</th><th>Mode</th><th>Customer</th><th>Lane</th><th>Carrier</th><th style="text-align:right">Revenue</th><th style="text-align:right">Cost</th><th style="text-align:right">Profit</th><th>Status</th></tr></thead>' +
+    '<tbody id="fql-tbody">' + all.map(mkRow).join('') + '</tbody></table></div>';
+}
+
+function filterFQL() {
+  var q = ((document.getElementById('fql-search') || {}).value || '').toLowerCase();
+  var mode = (document.getElementById('fql-mode') || {}).value || '';
+  var status = (document.getElementById('fql-status') || {}).value || '';
+  var SC = { Quoted:'#dbeafe|#1d4ed8', Booked:'#dcfce7|#15803d', Lost:'#fee2e2|#dc2626', Delivered:'#f0fdf4|#16a34a', Cancelled:'#f3f4f6|#6b7280' };
+  var filtered = (window._fqlAll || []).filter(function(r) {
+    return (!mode || r._mode === mode) && (!status || r._status === status) &&
+      (!q || (r._customer||'').toLowerCase().includes(q) || (r._carrier||'').toLowerCase().includes(q) || (r._ref||'').toLowerCase().includes(q) || (r._zip||'').includes(q));
+  });
+  var tbody = document.getElementById('fql-tbody');
+  if (!tbody) return;
+  tbody.innerHTML = filtered.map(function(q) {
+    var sc = (SC[q._status] || '#f3f4f6|#6b7280').split('|');
+    var d = q._date ? new Date(q._date).toLocaleDateString([], {month:'short', day:'numeric'}) : '--';
+    return '<tr><td style="font-size:11px;font-weight:600;color:#2563eb;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + (q._ref||'--') + '</td><td style="font-size:11px;color:#6b7280">' + d + '</td><td><span style="font-size:10px;background:#dbeafe;color:#1d4ed8;padding:1px 6px;border-radius:99px;font-weight:600">' + q._mode + '</span></td><td style="font-size:12px;font-weight:600;color:#1e3a5f;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + (q._customer||'--') + '</td><td style="font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + (q._zip||'--') + '</td><td style="font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + (q._carrier||'--') + '</td><td style="text-align:right;font-size:12px;font-weight:600;color:#2563eb">$' + Math.round(q._rev).toLocaleString() + '</td><td style="text-align:right;font-size:12px;color:#6b7280">$' + Math.round(q._cost).toLocaleString() + '</td><td style="text-align:right;font-size:12px;font-weight:700;color:' + (q._profit>=0?'#16a34a':'#dc2626') + '">' + (q._profit>=0?'+':'') + '$' + Math.round(Math.abs(q._profit)).toLocaleString() + '</td><td><span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:99px;background:' + sc[0] + ';color:' + sc[1] + '">' + q._status + '</span></td></tr>';
+  }).join('');
+}
+
+// ── Customer spend report PDF ──
+function openCustomerSpendReport() {
+  var quotes = (typeof S !== 'undefined' && S.quotes && S.quotes.length) ? S.quotes : JSON.parse(localStorage.getItem('shifl_quotes_cache') || '[]');
+  var fqh = (window._fqHistory && window._fqHistory.length) ? window._fqHistory : JSON.parse(localStorage.getItem('fq_history') || '[]');
+  var custMap = {};
+  [].concat(quotes, fqh).forEach(function(q) {
+    var name = q.customer || q.shipper || ''; if (!name) return;
+    if (!custMap[name]) custMap[name] = {name:name, loads:0, revenue:0, lanes:{}};
+    custMap[name].loads++;
+    custMap[name].revenue += (q.customerRates && q.customerRates.total) || q.customerRate || 0;
+    var lane = q.zip || q.deliveryZip || '?';
+    custMap[name].lanes[lane] = (custMap[name].lanes[lane] || 0) + 1;
+  });
+  var customers = Object.values(custMap).sort(function(a,b){return b.revenue - a.revenue;});
+  openModal(
+    '<div style="min-width:480px"><h3 style="margin:0 0 14px;font-size:15px;font-weight:700;color:#1e3a5f">Customer spend report</h3>' +
+    '<div style="max-height:320px;overflow-y:auto;margin-bottom:14px">' +
+    (customers.length === 0 ? '<p style="color:#9ca3af;text-align:center;padding:24px">No customer data yet.</p>' :
+    customers.map(function(c) {
+      return '<div style="border:1px solid #e5e7eb;border-radius:10px;padding:12px 14px;margin-bottom:8px">' +
+        '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">' +
+        '<div style="font-size:14px;font-weight:700;color:#1e3a5f">' + c.name + '</div>' +
+        '<button onclick="generateCustomerPDF(\'' + c.name.replace(/'/g, "\\'") + '\')" style="padding:4px 12px;border-radius:7px;border:1px solid #2563eb;background:#eff6ff;color:#2563eb;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">Generate PDF</button>' +
+        '</div>' +
+        '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;font-size:12px">' +
+        '<div style="background:#f8f9fa;border-radius:6px;padding:7px 10px"><div style="color:#6b7280;font-size:10px;text-transform:uppercase;margin-bottom:2px">Loads</div><div style="font-weight:700;font-size:16px;color:#1e3a5f">' + c.loads + '</div></div>' +
+        '<div style="background:#f0f6ff;border-radius:6px;padding:7px 10px"><div style="color:#6b7280;font-size:10px;text-transform:uppercase;margin-bottom:2px">Revenue</div><div style="font-weight:700;font-size:16px;color:#2563eb">$' + Math.round(c.revenue).toLocaleString() + '</div></div>' +
+        '</div><div style="margin-top:8px;font-size:11px;color:#6b7280">Top lanes: ' + Object.entries(c.lanes).sort(function(a,b){return b[1]-a[1];}).slice(0,3).map(function(e){return e[0]+' ('+e[1]+')';}).join(' · ') + '</div>' +
+        '</div>';
+    }).join('')) +
+    '</div><div style="text-align:right"><button class="btn" onclick="closeModal()">Close</button></div></div>'
+  );
+}
+
+function generateCustomerPDF(customerName) {
+  var quotes = (typeof S !== 'undefined' && S.quotes && S.quotes.length) ? S.quotes : JSON.parse(localStorage.getItem('shifl_quotes_cache') || '[]');
+  var fqh = (window._fqHistory && window._fqHistory.length) ? window._fqHistory : JSON.parse(localStorage.getItem('fq_history') || '[]');
+  var all = [].concat(quotes, fqh).filter(function(q) { return (q.customer || q.shipper || '') === customerName; });
+  var revenue = all.reduce(function(s,q){return s + ((q.customerRates&&q.customerRates.total)||q.customerRate||0);}, 0);
+  var booked = all.filter(function(q){return q.status==='Booked'||q.status==='Delivered';}).length;
+  var onTime = all.length > 0 ? Math.round(booked/all.length*100) : 0;
+  var topLanes = {};
+  all.forEach(function(q){var z=q.zip||q.deliveryZip||'?';topLanes[z]=(topLanes[z]||0)+1;});
+  var lanes = Object.entries(topLanes).sort(function(a,b){return b[1]-a[1];}).slice(0,5);
+  var html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;color:#1a1a1a;font-size:13px;padding:40px;max-width:720px;margin:0 auto}.header{background:#1e3a5f;color:#fff;border-radius:12px;padding:24px 28px;margin-bottom:28px;display:flex;justify-content:space-between;align-items:flex-start}.header h1{font-size:22px;font-weight:800}.header p{color:rgba(255,255,255,.6);font-size:12px;margin-top:4px}.kpi-row{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:24px}.kpi{border:1px solid #e5e7eb;border-radius:10px;padding:14px}.kpi-l{font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;margin-bottom:5px}.kpi-v{font-size:24px;font-weight:800}.blue{color:#2563eb}.green{color:#16a34a}.navy{color:#1e3a5f}table{width:100%;border-collapse:collapse;font-size:12px;margin-top:12px}th{padding:8px 10px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280;background:#f8f9fa;border-bottom:1px solid #e5e7eb}td{padding:9px 10px;border-bottom:1px solid #f3f4f6}.footer{margin-top:32px;padding-top:16px;border-top:1px solid #e5e7eb;font-size:11px;color:#9ca3af;display:flex;justify-content:space-between}h2{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#6b7280;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid #e5e7eb}section{margin-bottom:24px}@media print{@page{margin:18mm}body{padding:0}}</style></head><body>' +
+    '<div class="header"><div><h1>Activity Report</h1><p>' + customerName + '</p><p style="margin-top:2px">' + new Date().getFullYear() + '</p></div><div style="text-align:right;color:rgba(255,255,255,.7);font-size:12px"><div style="font-size:18px;font-weight:800;margin-bottom:4px">SHIFL</div><div>Generated ' + new Date().toLocaleDateString([],{month:'long',day:'numeric',year:'numeric'}) + '</div></div></div>' +
+    '<div class="kpi-row"><div class="kpi"><div class="kpi-l">Total loads</div><div class="kpi-v navy">' + all.length + '</div></div><div class="kpi"><div class="kpi-l">Total spend</div><div class="kpi-v blue">$' + Math.round(revenue).toLocaleString() + '</div></div><div class="kpi"><div class="kpi-l">On-time rate</div><div class="kpi-v green">' + onTime + '%</div></div></div>' +
+    '<section><h2>Top lanes</h2><table><thead><tr><th>Destination ZIP</th><th style="text-align:right">Loads</th><th style="text-align:right">% of volume</th></tr></thead><tbody>' +
+    lanes.map(function(e){return '<tr><td>'+e[0]+'</td><td style="text-align:right;font-weight:600">'+e[1]+'</td><td style="text-align:right;color:#6b7280">'+Math.round(e[1]/all.length*100)+'%</td></tr>';}).join('') +
+    '</tbody></table></section>' +
+    '<section><h2>Recent activity</h2><table><thead><tr><th>Date</th><th>Lane</th><th>Mode</th><th style="text-align:right">Amount</th><th>Status</th></tr></thead><tbody>' +
+    all.slice(0,15).map(function(q){
+      var amt = (q.customerRates&&q.customerRates.total)||q.customerRate||0;
+      var d = new Date(q.date||q.bookedAt||q.created_at||0).toLocaleDateString([],{month:'short',day:'numeric'});
+      var sc = q.status==='Booked'||q.status==='Delivered'?'background:#dcfce7;color:#15803d':q.status==='Quoted'?'background:#dbeafe;color:#1d4ed8':'background:#f3f4f6;color:#6b7280';
+      return '<tr><td>'+d+'</td><td>'+(q.zip||q.deliveryZip||'--')+'</td><td>'+(q.ld||q.fqMode||'Drayage')+'</td><td style="text-align:right;font-weight:600">$'+Math.round(amt).toLocaleString()+'</td><td><span style="'+sc+';padding:2px 8px;border-radius:99px;font-size:10px;font-weight:600">'+(q.status||'--')+'</span></td></tr>';
+    }).join('') +
+    '</tbody></table></section>' +
+    '<div class="footer"><span>Prepared by Shifl</span><span>Confidential — for ' + customerName + ' only</span></div>' +
+    '</body></html>';
+  var win = window.open('', '_blank');
+  if (win) { win.document.write(html); win.document.close(); setTimeout(function(){win.print();}, 500); }
+  showToast('Report generated — print or save as PDF', 'success', 3000);
+}
+
+// ── Settings panel restore state on load ──
+setTimeout(function() {
+  if (localStorage.getItem('sf_open') === 'true') {
+    var p = document.getElementById('sf-panel');
+    var i = document.getElementById('sf-icon');
+    if (p) { p.style.display = 'flex'; if (i) i.innerHTML = '&#9660;'; }
+  }
+}, 500);
+
+</script>
 </body>
 </html>
 <script>
@@ -16313,6 +16513,11 @@ function applyBulkStatus(){
 
 function saveTMSLoad(l){
   try{
+    if(!l.shiflRef){
+      const existing=JSON.parse(localStorage.getItem('tms_loads')||'[]');
+      const yr=new Date().getFullYear().toString().slice(-2);
+      l.shiflRef='SR-'+yr+String(existing.length+1).padStart(4,'0');
+    }
     const all=JSON.parse(localStorage.getItem('tms_loads')||'[]');
     const idx=all.findIndex(x=>x.id===l.id);
     if(idx>=0)all[idx]=l; else all.push(l);
