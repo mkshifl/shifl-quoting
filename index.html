@@ -1625,7 +1625,13 @@ function buildPreviewHTML(sel){
     <th style="text-align:left;padding:5px 0;width:80px;color:var(--gray-400)">Carrier</th>
     <th style="text-align:left;padding:5px 0;width:80px;color:var(--steel)">Your price</th>
     <th style="text-align:right;padding:5px 0;color:var(--green)">Profit</th>
-  </tr></thead><tbody>${rows}
+  </tr></thead><tbody>${rows}${(()=>{
+    const pqr=[];
+    if(S.qi.bobtailEnabled){const ca=S.qi.bobtailScope==='customer_only'?0:(Number(S.qi.bobtailCarrierRate)||0);const cu=Number(S.qi.bobtailCustomerRate)||0;if(ca||cu)pqr.push({label:'Bobtail',ca,cu});}
+    if(S.qi.gensetEnabled){const ca=S.qi.gensetScope==='customer_only'?0:(Number(S.qi.gensetCarrierRate)||0);const cu=Number(S.qi.gensetCustomerRate)||0;if(ca||cu)pqr.push({label:'Genset',ca,cu});}
+    if(S.qi.triaxleEnabled){const ca=S.qi.triaxleScope==='customer_only'?0:(Number(S.qi.triaxleCarrierRate)||0);const cu=Number(S.qi.triaxleCustomerRate)||0;if(ca||cu)pqr.push({label:'Triaxle',ca,cu});}
+    return pqr.map(r=>`<tr class="prev-row"><td>${r.label}</td><td class="muted">${r.ca?fmtD(r.ca):'—'}</td><td>${r.cu?fmtD(r.cu):'—'}</td><td style="color:var(--amber)">+${fmtD(r.cu-r.ca)}</td></tr>`).join('');
+  })()}
     <tr class="prev-total"><td>Total</td><td class="muted">${fmtD(ctCarrier)}</td>
       <td style="font-size:18px;color:var(--steel)">${fmtD(cu)}</td>
       <td style="text-align:right"><div style="color:var(--green);font-weight:700">+${fmtD(totalProfit)}</div><span class="badge ${margin>=0.10?'g':'r'}">${pct(margin)}</span></td>
@@ -1907,6 +1913,14 @@ function emailQuote(){
     accessorials.forEach(c=>{
       const desc=CHARGE_DESC[c]?` (${CHARGE_DESC[c]})`:'';
       lines.push(`  ${LABELS[c]}: ${fmtD(cuRate(Number(sel[c])||0,c))}${desc}`);
+    });
+    lines.push('');
+  }
+  // Per-quote charges (bobtail/genset/triaxle) — customer sees only cuAmt
+  if(extraCharges.length){
+    lines.push('');
+    extraCharges.forEach(function(ec){
+      if(ec.cuAmt>0) lines.push('  '+ec.label+': '+fmtD(ec.cuAmt));
     });
     lines.push('');
   }
@@ -3746,7 +3760,7 @@ async function saveQuote(){
 // ═══════════════════════════════════════════════════════
 function getQuoteData(){const qi=S.qi;const sel=S.rates.find(r=>r.id===S.selId);if(!qi.zip||!sel){alert('Enter a zip and select a carrier first.');return null;}return{qi,sel,cu:cuTot(sel),ct:totMode(sel,qi.ld)};}
 
-function buildPrintHTML(customer, carrier, port, zip, destination, ld, date, quoteNum, customerRates, notes){
+function buildPrintHTML(customer, carrier, port, zip, destination, ld, date, quoteNum, customerRates, notes, perQuote){
   const baseAmt = customerRates?.base||0;
   const isBoth = ld==='Both';
   const liveOnly=['det_port','det_cust'];
@@ -3815,7 +3829,7 @@ function buildPrintHTML(customer, carrier, port, zip, destination, ld, date, quo
   <div class="base-box">
     <div><div class="lbl">Base Rate</div><div class="amt">${fmtD(baseAmt)}</div></div>
   </div>
-  ${chargesHtml}
+  ${chargesHtml}${(perQuote&&perQuote.length)?`<div style="margin-bottom:16px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6b7280;margin-bottom:8px">Per-shipment charges</div><table style="width:100%"><tbody>${perQuote.map(r=>`<tr><td style="padding:5px 0;font-size:13px">${r.label}</td><td style="text-align:right;font-weight:700;color:#1a2e4a;font-size:13px">${fmtD(r.amount)}</td><td></td></tr>`).join('')}</tbody></table></div>`:''}
   ${notes&&notes.trim()?`<div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:14px 16px;margin-bottom:16px;font-size:12px;color:#1e3a5f;line-height:1.7">
     <strong style="color:#1d4ed8;text-transform:uppercase;letter-spacing:.04em;font-size:10px">Notes &amp; Conditions</strong><br>
     ${notes.trim().split('\n').map(l=>`· ${l}`).join('<br>')}
@@ -3844,7 +3858,10 @@ function printQuote(){
 async function downloadPDF(){
   const d=getQuoteData();if(!d) return;const{qi,sel,cu,ct}=d;
   if(typeof window.jspdf==='undefined'){try{await new Promise((res,rej)=>{const s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';s.onload=res;s.onerror=rej;document.head.appendChild(s);});}catch(e){printQuote();return;}}
-  _generatePDF({quoteNum:'—',date:localDateStr(),customer:qi.customer,port:qi.port,zip:qi.zip,destination:sel.destination,ld:qi.ld,carrier:sel.carrier,status:'Quote',notes:qi.notes||'',carrierRates:{...CHARGES.reduce((o,c)=>{o[c]=sel[c]||0;return o;},{}),total:ct},customerRates:{...CHARGES.reduce((o,c)=>{o[c]=cuRate(Number(sel[c])||0,c);return o;},{}),total:cu},profit:cu-ct,profitPct:cu>0?(cu-ct)/cu:0});
+  _generatePDF({quoteNum:'—',date:localDateStr(),customer:qi.customer,port:qi.port,zip:qi.zip,destination:sel.destination,ld:qi.ld,carrier:sel.carrier,status:'Quote',notes:qi.notes||'',carrierRates:{...CHARGES.reduce((o,c)=>{o[c]=sel[c]||0;return o;},{}),total:ct},customerRates:{...CHARGES.reduce((o,c)=>{o[c]=cuRate(Number(sel[c])||0,c);return o;},{}),total:cu},profit:cu-ct,profitPct:cu>0?(cu-ct)/cu:0,
+    bobtailEnabled:qi.bobtailEnabled,bobtailCustomerRate:qi.bobtailCustomerRate,
+    gensetEnabled:qi.gensetEnabled,gensetCustomerRate:qi.gensetCustomerRate,
+    triaxleEnabled:qi.triaxleEnabled,triaxleCustomerRate:qi.triaxleCustomerRate});
 }
 
 const CHARGE_DESC={
@@ -3964,7 +3981,25 @@ function _generatePDF(q, existingDoc){
   doc.setDrawColor(200,215,235);doc.setLineWidth(.3);doc.line(12,y,W-12,y);y+=7;
   doc.setFont('helvetica','italic');doc.setFontSize(8);doc.setTextColor(140,150,165);
   doc.text('All rates are per container. Accessorial charges are billed only when the service is used.',12,y);y+=5;
-  doc.text('Detention: first 2 hours are free. Storage and chassis are billed per calendar day.',12,y);
+  doc.text('Detention: first 2 hours are free. Storage and chassis are billed per calendar day.',12,y);y+=10;
+
+  // ─── Per-shipment charges (bobtail/genset/triaxle) — customer price only ───
+  const _pqc=[];
+  if(q.bobtailEnabled&&q.bobtailCustomerRate>0) _pqc.push({label:'Bobtail',amount:q.bobtailCustomerRate});
+  if(q.gensetEnabled&&q.gensetCustomerRate>0) _pqc.push({label:'Genset',amount:q.gensetCustomerRate});
+  if(q.triaxleEnabled&&q.triaxleCustomerRate>0) _pqc.push({label:'Triaxle',amount:q.triaxleCustomerRate});
+  if(_pqc.length){
+    doc.setFont('helvetica','bold');doc.setFontSize(9);doc.setTextColor(107,114,128);
+    doc.text('PER-SHIPMENT CHARGES',12,y);y+=7;
+    _pqc.forEach(function(r,i){
+      if(i%2===0){doc.setFillColor(248,250,252);doc.rect(11,y-4,W-22,8,'F');}
+      doc.setFont('helvetica','normal');doc.setFontSize(10);doc.setTextColor(55,65,81);
+      doc.text(r.label,15,y);
+      doc.setFont('helvetica','bold');doc.setTextColor(26,46,74);
+      doc.text(fmtD(r.amount),W-15,y,{align:'right'});
+      y+=8;
+    });
+  }
 
   // ── Page footer ───────────────────────────────────────
   doc.setFontSize(8);doc.setFont('helvetica','normal');doc.setTextColor(190,195,200);
