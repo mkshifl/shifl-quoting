@@ -1334,11 +1334,43 @@ async function initApp(){
     try{S.quotes=JSON.parse(localStorage.getItem('shifl_quotes_cache')||'[]');}catch(e){S.quotes=[];}
     try{S.customers=JSON.parse(localStorage.getItem('shifl_customers_cache')||'[]');}catch(e){S.customers=[];}
     setLiquidProgress(30);
-  try{window._fqHistory=JSON.parse(localStorage.getItem('fq_history')||'[]');}catch(e){window._fqHistory=[];}
+  // Load FQ quotes from Supabase (shared across all users) + merge with local
+  try{
+    const dbFq = await dbLoadFqQuotes();
+    const localFq = JSON.parse(localStorage.getItem('fq_history')||'[]');
+    // Merge: DB is source of truth, local fills any gaps
+    const merged = [...dbFq];
+    const dbIds = new Set(dbFq.map(q=>q.id));
+    localFq.forEach(q=>{ if(!dbIds.has(q.id)) merged.push(q); });
+    window._fqHistory = merged.sort((a,b)=>new Date(b.date||0)-new Date(a.date||0));
+    // Sync local to match
+    try{localStorage.setItem('fq_history',JSON.stringify(window._fqHistory.slice(0,500)));}catch(e){}
+  }catch(e){
+    try{window._fqHistory=JSON.parse(localStorage.getItem('fq_history')||'[]');}catch(e2){window._fqHistory=[];}
+  }
     try{window._fqRates=JSON.parse(localStorage.getItem('fq_rates')||'[]');}catch(e){window._fqRates=[];}
-    try{window._aqHistory=JSON.parse(localStorage.getItem('aq_history')||'[]');}catch(e){window._aqHistory=[];}
+    // Load AQ quotes from Supabase
+  try{
+    const{data:aqData}=await db.from('aq_history').select('*').order('created_at',{ascending:false});
+    const dbAq=(aqData||[]).map(r=>typeof r.data==='object'?r.data:JSON.parse(r.data||'{}'));
+    const localAq=JSON.parse(localStorage.getItem('aq_history')||'[]');
+    const aqIds=new Set(dbAq.map(q=>q.id));
+    window._aqHistory=[...dbAq,...localAq.filter(q=>!aqIds.has(q.id))].sort((a,b)=>new Date(b.date||0)-new Date(a.date||0));
+    try{localStorage.setItem('aq_history',JSON.stringify(window._aqHistory.slice(0,500)));}catch(e){}
+  }catch(e){
+    try{window._aqHistory=JSON.parse(localStorage.getItem('aq_history')||'[]');}catch(e2){window._aqHistory=[];}
+  }
     setLiquidProgress(60);
-  try{window._tlHistory=JSON.parse(localStorage.getItem('tl_history')||'[]');}catch(e){window._tlHistory=[];}
+  // Load TL quotes from Supabase
+  try{
+    const dbTl = await dbLoadTlQuotes();
+    const localTl = JSON.parse(localStorage.getItem('tl_history')||'[]');
+    const tlIds = new Set(dbTl.map(q=>q.id));
+    window._tlHistory=[...dbTl,...localTl.filter(q=>!tlIds.has(q.id))].sort((a,b)=>new Date(b.date||0)-new Date(a.date||0));
+    try{localStorage.setItem('tl_history',JSON.stringify(window._tlHistory.slice(0,500)));}catch(e){}
+  }catch(e){
+    try{window._tlHistory=JSON.parse(localStorage.getItem('tl_history')||'[]');}catch(e2){window._tlHistory=[];}
+  }
     try{window._tlWarehouses=JSON.parse(localStorage.getItem('tl_warehouses')||'[]');}catch(e){window._tlWarehouses=[];}
     try{await withTimeout(loadShipmentMeta(),8000,null);}catch(e){}
     try{loadSpecialZips();}catch(e){}
