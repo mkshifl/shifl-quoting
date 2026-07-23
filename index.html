@@ -1899,9 +1899,9 @@ function emailQuote(){
   const accessorials=CHARGES.filter(c=>c!=='base'&&isApplicable(c,ld)&&cuRate(Number(sel[c])||0,c)>0);
   // Add genset/triaxle/bobtail if enabled
   const extraCharges=[];
-  if(qi.gensetEnabled&&qi.gensetCustomerRate>0) extraCharges.push({label:'Genset',cuAmt:qi.gensetCustomerRate,caAmt:qi.gensetScope==='customer_only'?0:qi.gensetCarrierRate});
-  if(qi.bobtailEnabled&&qi.bobtailCustomerRate>0) extraCharges.push({label:'Bobtail',cuAmt:qi.bobtailCustomerRate,caAmt:qi.bobtailScope==='customer_only'?0:qi.bobtailCarrierRate});
-  if(qi.triaxleEnabled&&qi.triaxleCustomerRate>0) extraCharges.push({label:'Triaxle',cuAmt:qi.triaxleCustomerRate,caAmt:qi.triaxleScope==='customer_only'?0:qi.triaxleCarrierRate});
+  if(qi.gensetEnabled&&(qi.gensetCustomerRate>0||qi.gensetCarrierRate>0)) extraCharges.push({label:'Genset',cuAmt:qi.gensetCustomerRate||0,caAmt:qi.gensetScope==='customer_only'?0:(qi.gensetCarrierRate||0)});
+  if(qi.bobtailEnabled&&(qi.bobtailCustomerRate>0||qi.bobtailCarrierRate>0)) extraCharges.push({label:'Bobtail',cuAmt:qi.bobtailCustomerRate||0,caAmt:qi.bobtailScope==='customer_only'?0:(qi.bobtailCarrierRate||0)});
+  if(qi.triaxleEnabled&&(qi.triaxleCustomerRate>0||qi.triaxleCarrierRate>0)) extraCharges.push({label:'Triaxle',cuAmt:qi.triaxleCustomerRate||0,caAmt:qi.triaxleScope==='customer_only'?0:(qi.triaxleCarrierRate||0)});
   if(accessorials.length){
     lines.push('The following charges will apply when applicable:');
     accessorials.forEach(c=>{
@@ -11814,16 +11814,19 @@ function getShipmentProfit(q, type) {
   if(type==='drayage') {
     const cr = q.carrierRates||{};
     const cu = q.customerRates||{};
-    // Base + 1 day chassis
-    const cuBase = cu.base||0;
-    const cuChassis = cu.chassis||0;
-    const caBase = cr.base||0;
-    const caChassis = cr.chassis||0;
-    const revenue = cuBase + cuChassis;
-    const cost = caBase + caChassis;
-    const profit = revenue - cost;
-    return {profit, revenue, cost, margin: revenue>0?profit/revenue:0, isActual:false,
-      breakdown:`Base $${caBase>0?Math.round(cuBase-caBase):'—'} + chassis $${caChassis>0?Math.round(cuChassis-caChassis):'—'}`};
+    // Use stored totals if available (includes bobtail, genset, triaxle, all charges)
+    if(cu.total && cr.total) {
+      const revenue = cu.total;
+      const cost = cr.total;
+      const profit = revenue - cost;
+      return {profit, revenue, cost, margin: revenue>0?profit/revenue:0, isActual:false};
+    }
+    // Fallback: sum all charge keys on both sides
+    const CHARGE_KEYS = ['base','chassis','prepull','det_port','det_cust','storage','ovw43','ovw48','bobtail','toll','genset','triaxle'];
+    const revenue = CHARGE_KEYS.reduce((s,k)=>s+(Number(cu[k])||0), 0);
+    const cost    = CHARGE_KEYS.reduce((s,k)=>s+(Number(cr[k])||0), 0);
+    const profit  = revenue - cost;
+    return {profit, revenue, cost, margin: revenue>0?profit/revenue:0, isActual:false};
   }
   
   if(type==='freight') {
