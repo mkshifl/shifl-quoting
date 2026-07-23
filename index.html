@@ -1412,38 +1412,73 @@ function getMatches(){
 }
 function buildCarrierComparison(matches){
   const qi=S.qi;
-  const searchZip=S.qi?.drayType==='export'?(S.qi.pickupZip||qi.zip):qi.zip;
-  if(!searchZip) return `<div class="empty"><div class="empty-ico">🔍</div><p>${S.qi?.drayType==='export'?'Enter pickup ZIP':'Enter a zip code'}</p></div>`;
+  const searchZip=qi?.drayType==='export'?(qi.pickupZip||qi.zip):qi.zip;
+  if(!searchZip) return `<div class="empty"><div class="empty-ico">🔍</div><p>${qi?.drayType==='export'?'Enter pickup ZIP':'Enter a delivery ZIP to see carrier rates'}</p></div>`;
   if(!matches.length){
     const total=S.rates.filter(r=>r.active).length;
     const zipMatches=S.rates.filter(r=>r.active&&r.zip===qi.zip).length;
     return `<div class="empty"><div class="empty-ico">🚚</div>
       <p style="font-weight:700;color:var(--gray-600)">No carriers found</p>
       <p style="font-size:12px;color:var(--gray-400);margin-top:4px">
-        Searching: <strong>${searchZip}</strong> · <strong>${qi.ld}</strong>${S.qi.drayType==='export'?' (Export)':' (Import)'}<br>
+        Searching: <strong>${searchZip}</strong> · <strong>${qi.ld}</strong>${qi.drayType==='export'?' (Export)':' (Import)'}<br>
         ${total===0
-          ?'<span style="color:var(--red)">⚠ No active rates in system — go to Carrier Rates and add rates</span>'
+          ?'<span style="color:var(--red)">⚠ No active rates — go to Carrier Rates and add rates</span>'
           :zipMatches===0
-          ?`<span style="color:var(--amber)">⚠ ${total} rate${total!==1?'s':''} exist but none for ZIP <strong>${qi.zip}</strong> — check the ZIP or add a rate for this lane</span>`
-          :`<span style="color:var(--amber)">⚠ ${zipMatches} rate${zipMatches!==1?'s':''} found for ZIP ${qi.zip} but none match move type <strong>${qi.ld}</strong></span>`
+          ?`<span style="color:var(--amber)">⚠ ${total} rate${total!==1?'s':''} exist but none for ZIP <strong>${qi.zip}</strong></span>`
+          :`<span style="color:var(--amber)">⚠ ${zipMatches} rate${zipMatches!==1?'s':''} for ZIP ${qi.zip} but none match <strong>${qi.ld}</strong></span>`
         }
-      </p>
-    </div>`;
+      </p></div>`;
   }
-  const vis=CHARGES.filter(c=>c!=='base'&&isApplicable(c,qi.ld));
+
   const multiPort=[...new Set(matches.map(r=>r.port).filter(Boolean))].length>1;
-  const rows=matches.map((r,i)=>`
-    <tr class="carrier-row${r.id===S.selId?' sel':''}" data-cid="${r.id}" onclick="selCarrier('${r.id}')">
-      <td style="text-align:center;font-weight:700;color:${r.id===S.selId?'var(--steel)':'var(--gray-300)'}">${i+1}</td>
-      <td><span class="bold">${r.carrier}</span>${i===0?' <span class="badge best">Best</span>':''}${r.ld==='Both'?' <span class="badge t" style="margin-left:3px">Both</span>':''}${r.notes?`<div class="subtext">${r.notes}</div>`:''}</td>
-      ${multiPort?`<td class="muted small" style="color:var(--amber);font-size:11px">${r.port||'—'}</td>`:''}
-      <td class="muted small">${r.destination}</td>
-      <td class="bold">${fmt(S.qi?.drayType==='export'?(r.exportBase||r.base):r.base)}</td>
-      ${vis.map(c=>`<td>${fmt(r[c])}</td>`).join('')}
-      <td class="bold">${fmt(totMode(r,qi.ld)*getMultiplier('base')+(CHARGES.filter(c=>c!=='base'&&isApplicable(c,qi.ld)).reduce((s,c)=>s+(Number(r[c])||0)*getMultiplier(c),0)))}${(qi.containerCount||1)>1?`<div style="font-size:10px;color:var(--gray-400)">${fmt(totMode(r,qi.ld))} base each</div>`:''}</td>
-    </tr>`).join('');
-  return `<div class="tbl-wrap"><table><thead><tr><th>#</th><th>Carrier</th><th>Destination</th>${multiPort?'<th style="color:var(--amber)">Port</th>':''}<th>Base</th>${vis.map(c=>`<th>${LABELS[c]}</th>`).join('')}<th>Total (${qi.ld})</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  const ldBadge=ld=>{
+    if(ld==='Live') return '<span style="font-size:9px;font-weight:700;padding:2px 7px;border-radius:99px;background:#dcfce7;color:#15803d">Live</span>';
+    if(ld==='Drop') return '<span style="font-size:9px;font-weight:700;padding:2px 7px;border-radius:99px;background:#dbeafe;color:#1d4ed8">Drop</span>';
+    return '<span style="font-size:9px;font-weight:700;padding:2px 7px;border-radius:99px;background:#f3f4f6;color:#6b7280">Both</span>';
+  };
+
+  return matches.map((r,i)=>{
+    const isSel=r.id===S.selId;
+    // Carrier cost (what we pay)
+    const carrierBase=Number(qi.drayType==='export'?(r.exportBase||r.base):r.base)||0;
+    const vis=CHARGES.filter(c=>c!=='base'&&isApplicable(c,qi.ld));
+    const carrierAccessorials=vis.reduce((s,c)=>s+(Number(r[c])||0),0);
+    const carrierTotal=(carrierBase+carrierAccessorials)*(qi.containerCount||1);
+    // Customer rate (what we charge)
+    const markup=Number(qi.flatRates?.markup)||Number(qi.markup)||0;
+    const isPercent=qi.markupType==='percent';
+    const custBase=isPercent?carrierBase*(1+markup/100):carrierBase+markup;
+    const custAccessorials=vis.reduce((s,c)=>s+(Number(S.qi.flatRates?.[c]??r[c])||0),0);
+    const custTotal=(custBase+custAccessorials)*(qi.containerCount||1);
+    const profit=custTotal-carrierTotal;
+    const profitColor=profit>100?'#16a34a':profit>0?'#d97706':'#dc2626';
+    const profitLabel=profit>=0?'+'+fmtD(profit):fmtD(profit);
+
+    return `<div onclick="selCarrier('${r.id}')"
+      style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid #f9fafb;cursor:pointer;transition:background .1s;${isSel?'background:#eff6ff;border-left:3px solid #2563eb;':'border-left:3px solid transparent;'}"
+      onmouseenter="if('${r.id}'!==S.selId)this.style.background='#f8faff'"
+      onmouseleave="if('${r.id}'!==S.selId)this.style.background=''">
+      <div style="width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0;background:${isSel?'#2563eb':'#f3f4f6'};color:${isSel?'#fff':'#9ca3af'}">${i+1}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:700;color:#1e3a5f;display:flex;align-items:center;gap:5px">
+          ${r.carrier}
+          ${i===0?'<span style="font-size:9px;font-weight:700;padding:1px 6px;border-radius:99px;background:#1e3a5f;color:#fff">Best</span>':''}
+          ${ldBadge(r.ld)}
+        </div>
+        <div style="font-size:10px;color:#9ca3af;margin-top:1px">${r.destination||''}${multiPort&&r.port?` · ${r.port}`:''}${r.notes?` · <span style="color:#d97706">${r.notes}</span>`:''}</div>
+      </div>
+      <div style="text-align:right;flex-shrink:0;padding-right:10px;border-right:1px solid #f3f4f6">
+        <div style="font-size:14px;font-weight:800;color:#1e3a5f">${fmtD(carrierBase)}</div>
+        <div style="font-size:9px;color:#9ca3af">carrier base</div>
+      </div>
+      <div style="text-align:right;flex-shrink:0;min-width:90px">
+        <div style="font-size:15px;font-weight:800;color:${isSel?'#2563eb':'#374151'}">${fmtD(custTotal)}</div>
+        <div style="font-size:10px;font-weight:600;color:${profitColor}">${profitLabel} profit</div>
+      </div>
+    </div>`;
+  }).join('');
 }
+
 function buildPreviewHTML(sel){
   if(!sel) return `<div class="empty" style="padding:30px"><p>Select a carrier above</p></div>`;
   const ld=S.qi.ld;
@@ -1697,8 +1732,11 @@ function renderQuote(){
         <div id="lane-history-body">${buildLaneHistory(qi.zip,qi.ld)}</div>
       </div>
       <div class="card">
-        <div class="sec-head" id="carriers-head">Carriers · ${qi.zip||'—'} · ${qi.ld}${(qi.containerCount||1)>1?` <span class="badge" style="background:#f59e0b;color:#fff">×${qi.containerCount}</span>`:''}${matches.length?` <span class="badge b">${matches.length} found</span>`:''}</div>
-        <div id="carriers-body">${buildCarrierComparison(matches)}</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0" id="carriers-head-wrap">
+          <div class="sec-head" id="carriers-head" style="margin-bottom:0">Carriers · ${qi.zip||'—'} · ${qi.ld}${(qi.containerCount||1)>1?` <span class="badge" style="background:#f59e0b;color:#fff">×${qi.containerCount}</span>`:''}</div>
+          ${matches.length?`<span style="font-size:10px;font-weight:700;padding:2px 9px;border-radius:99px;background:#dbeafe;color:#1d4ed8">${matches.length} match${matches.length!==1?'es':''}</span>`:''}
+        </div>
+        <div id="carriers-body" style="margin:0 -14px">${buildCarrierComparison(matches)}</div>
       </div>
     </div>
     <div class="sticky-top">
@@ -1719,7 +1757,7 @@ function renderQuote(){
 function refreshCarriersAndPreview(){
   const matches=getMatches();if(!S.selId&&matches.length) S.selId=matches[0].id;
   const sel=matches.find(r=>r.id===S.selId)||matches[0]||null;const qi=S.qi;
-  const h=$('carriers-head');if(h) h.innerHTML=`Carriers · ${qi.zip||'—'} · ${qi.ld}${matches.length?` <span class="badge b">${matches.length} found</span>`:''}`;
+  const h=$('carriers-head');if(h) h.innerHTML=`Carriers · ${qi.zip||'—'} · ${qi.ld}${(qi.containerCount||1)>1?` <span class="badge" style="background:#f59e0b;color:#fff">×${qi.containerCount}</span>`:''}`;
   const b=$('carriers-body');if(b) b.innerHTML=buildCarrierComparison(matches);
   const p=$('preview-body');if(p) p.innerHTML=buildPreviewHTML(sel);
 }
