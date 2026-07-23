@@ -550,8 +550,9 @@ body.dark .status-popover button:hover{background:#243447}
 /* ── Prevent horizontal scroll everywhere ── */
 .app{overflow:hidden}
 .two-col > div{min-width:0}
-.two-col table{table-layout:fixed;word-break:break-word}
-.two-col table td,.two-col table th{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:0}
+/* two-col carrier comparison table — not the preview table */
+.two-col .tbl-wrap table{table-layout:fixed;word-break:break-word}
+.two-col .tbl-wrap table td,.two-col .tbl-wrap table th{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:0}
 /* Rates table compact */
 #rates-tbody td{font-size:12px;padding:7px 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}#rates-tbody td:nth-child(n+7):nth-child(-n+18){text-align:right}
 #rates-tbody td:nth-child(3),#rates-tbody td:nth-child(4){font-size:11px}
