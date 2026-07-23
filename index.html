@@ -1720,15 +1720,20 @@ function buildPricingSection(){
           <input type="checkbox" ${S.qi.bobtailEnabled?'checked':''} onchange="S.qi.bobtailEnabled=this.checked;if(!S.qi.bobtailScope)S.qi.bobtailScope='both';document.getElementById('bobtail-fields').style.display=this.checked?'flex':'none';refreshPreviewOnly()" style="width:16px;height:16px;cursor:pointer;accent-color:var(--navy)">
           🔁 Bobtail
         </label>
-        ${S.qi.bobtailEnabled?`
-        <div style="display:flex;gap:5px">
-          <button onclick="S.qi.bobtailScope='both';refreshPreviewOnly()" style="padding:3px 10px;border-radius:var(--radius);border:1px solid var(--gray-300);background:${S.qi.bobtailScope!=='customer_only'?'var(--navy)':'#fff'};color:${S.qi.bobtailScope!=='customer_only'?'#fff':'var(--gray-500)'};font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">Carrier + Customer</button>
-          <button onclick="S.qi.bobtailScope='customer_only';refreshPreviewOnly()" style="padding:3px 10px;border-radius:var(--radius);border:1px solid var(--gray-300);background:${S.qi.bobtailScope==='customer_only'?'var(--navy)':'#fff'};color:${S.qi.bobtailScope==='customer_only'?'#fff':'var(--gray-500)'};font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">Customer Only</button>
+        <div id="bobtail-fields" style="display:${S.qi.bobtailEnabled?'flex':'none'};align-items:center;gap:10px;flex-wrap:wrap">
+          <div style="display:flex;gap:5px">
+            <button onclick="S.qi.bobtailScope='both';this.style.background='var(--navy)';this.style.color='#fff';this.nextElementSibling.style.background='#fff';this.nextElementSibling.style.color='var(--gray-500)';document.getElementById('bobtail-carrier-wrap').style.display='flex';refreshPreviewOnly()" style="padding:3px 10px;border-radius:var(--radius);border:1px solid var(--gray-300);background:${S.qi.bobtailScope!=='customer_only'?'var(--navy)':'#fff'};color:${S.qi.bobtailScope!=='customer_only'?'#fff':'var(--gray-500)'};font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">Carrier + Customer</button>
+            <button onclick="S.qi.bobtailScope='customer_only';this.style.background='var(--navy)';this.style.color='#fff';this.previousElementSibling.style.background='#fff';this.previousElementSibling.style.color='var(--gray-500)';document.getElementById('bobtail-carrier-wrap').style.display='none';refreshPreviewOnly()" style="padding:3px 10px;border-radius:var(--radius);border:1px solid var(--gray-300);background:${S.qi.bobtailScope==='customer_only'?'var(--navy)':'#fff'};color:${S.qi.bobtailScope==='customer_only'?'#fff':'var(--gray-500)'};font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">Customer Only</button>
+          </div>
+          <div id="bobtail-carrier-wrap" style="display:${S.qi.bobtailScope!=='customer_only'?'flex':'none'};align-items:center;gap:5px">
+            <span style="font-size:11px;font-weight:700;color:var(--gray-400)">CARRIER $</span>
+            <input type="number" value="${S.qi.bobtailCarrierRate||0}" min="0" oninput="S.qi.bobtailCarrierRate=+this.value;refreshPreviewOnly()" style="width:80px;padding:4px 8px;font-size:13px;border:1px solid var(--gray-300);border-radius:var(--radius)">
+          </div>
+          <div style="display:flex;align-items:center;gap:5px">
+            <span style="font-size:11px;font-weight:700;color:var(--gray-400)">CUSTOMER $</span>
+            <input type="number" value="${S.qi.bobtailCustomerRate||0}" min="0" oninput="S.qi.bobtailCustomerRate=+this.value;refreshPreviewOnly()" style="width:80px;padding:4px 8px;font-size:13px;border:1px solid var(--gray-300);border-radius:var(--radius)">
+          </div>
         </div>
-        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-          ${S.qi.bobtailScope!=='customer_only'?`<div style="display:flex;align-items:center;gap:5px"><span style="font-size:11px;font-weight:700;color:var(--gray-400)">CARRIER $</span><input type="number" value="${S.qi.bobtailCarrierRate||0}" min="0" oninput="S.qi.bobtailCarrierRate=+this.value;refreshPreviewOnly()" style="width:80px;padding:4px 8px;font-size:13px;border:1px solid var(--gray-300);border-radius:var(--radius)"></div>`:''}
-          <div style="display:flex;align-items:center;gap:5px"><span style="font-size:11px;font-weight:700;color:var(--gray-400)">CUSTOMER $</span><input type="number" value="${S.qi.bobtailCustomerRate||0}" min="0" oninput="S.qi.bobtailCustomerRate=+this.value;refreshPreviewOnly()" style="width:80px;padding:4px 8px;font-size:13px;border:1px solid var(--gray-300);border-radius:var(--radius)"></div>
-        </div>`:''}
       </div>
     </div>
 
