@@ -1456,7 +1456,7 @@ function buildCarrierComparison(matches){
     const profitLabel=profit>=0?'+'+fmtD(profit):fmtD(profit);
 
     return `<div onclick="selCarrier('${r.id}')"
-      style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid #f9fafb;cursor:pointer;transition:background .1s;${isSel?'background:#eff6ff;border-left:3px solid #2563eb;':'border-left:3px solid transparent;'}"
+      style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid #f9fafb;cursor:pointer;transition:all .1s;${isSel?'background:#eff6ff;border-left:5px solid #2563eb;box-shadow:inset 0 0 0 1px #bfdbfe;':'border-left:5px solid transparent;'}"
       onmouseenter="if('${r.id}'!==S.selId)this.style.background='#f8faff'"
       onmouseleave="if('${r.id}'!==S.selId)this.style.background=''">
       <div style="width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0;background:${isSel?'#2563eb':'#f3f4f6'};color:${isSel?'#fff':'#9ca3af'}">${i+1}</div>
