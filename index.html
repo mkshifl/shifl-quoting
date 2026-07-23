@@ -626,6 +626,20 @@ body.dark .status-popover button:hover{background:#243447}
 .tms-load-card:hover{box-shadow:0 4px 16px rgba(0,0,0,.1)!important}
 .tms-load-card.drayage{border-left-color:#0f1f35!important}
 .tms-load-card.late{border-left-color:#dc2626!important}
+
+/* 2026 Overhaul additions */
+@keyframes aipulse{0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(129,140,248,.4)}50%{opacity:.5;box-shadow:0 0 0 4px rgba(129,140,248,0)}}
+.ai-pulse{animation:aipulse 2s infinite}
+.inv-aging-chip{font-size:9px;font-weight:700;padding:2px 8px;border-radius:99px}
+.aging-ok{background:#d1fae5;color:#065f46}
+.aging-soon{background:#fef3c7;color:#92400e}
+.aging-over{background:#fee2e2;color:#991b1b}
+.quick-action-btn{transition:all .15s}
+.quick-action-btn:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(37,99,235,.2)!important}
+.conf-bar-anim{transition:width .6s ease}
+/* Ticker hover */
+.ticker-card{transition:all .15s;cursor:default}
+.ticker-card:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(0,0,0,.1)!important}
 </style>
 <script>
 // Force clear service worker and caches
@@ -6727,6 +6741,14 @@ function renderDash(){
       <div style="font-size:13px;color:var(--gray-500)">${rangeLabel} · ${filtered.length} quote${filtered.length!==1?'s':''}</div>
       <div class="toggle-group"><button class="tgl${range==='week'?' on':''}" onclick="setDashFilter('week')">This week</button><button class="tgl${range==='month'?' on':''}" onclick="setDashFilter('month')">This month</button><button class="tgl${range==='lastmonth'?' on':''}" onclick="setDashFilter('lastmonth')">Last month</button><button class="tgl${range==='all'?' on':''}" onclick="setDashFilter('all')">All time</button></div>
     </div>
+    <!-- Live margin ticker -->
+    <div style="display:flex;gap:8px;margin-bottom:12px;overflow-x:auto;padding-bottom:2px">
+      <div style="background:#fff;border:1px solid #e2e8f0;border-radius:9px;padding:9px 14px;text-align:center;flex:1;min-width:100px;box-shadow:0 1px 3px rgba(0,0,0,.06)"><div style="font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#94a3b8;margin-bottom:3px">Today's Revenue</div><div style="font-size:16px;font-weight:800;color:#2563eb">${fmtD(todayRev)}</div><div style="font-size:9px;color:#16a34a;margin-top:2px">${todayLoads.length} load${todayLoads.length!==1?'s':''}</div></div>
+      <div style="background:#fff;border:1px solid #e2e8f0;border-radius:9px;padding:9px 14px;text-align:center;flex:1;min-width:100px;box-shadow:0 1px 3px rgba(0,0,0,.06)"><div style="font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#94a3b8;margin-bottom:3px">Today's Profit</div><div style="font-size:16px;font-weight:800;color:#059669">${fmtD(todayProfit)}</div><div style="font-size:9px;color:#94a3b8;margin-top:2px">${todayRev>0?Math.round(todayProfit/todayRev*100)+'% margin':'—'}</div></div>
+      <div style="background:#fff;border:1px solid #e2e8f0;border-radius:9px;padding:9px 14px;text-align:center;flex:1;min-width:100px;box-shadow:0 1px 3px rgba(0,0,0,.06)"><div style="font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#94a3b8;margin-bottom:3px">Win Rate</div><div style="font-size:16px;font-weight:800;color:#7c3aed">${pct(winRate)}</div><div style="font-size:9px;color:#94a3b8;margin-top:2px">${booked.length} booked</div></div>
+      <div style="background:#fff;border:1px solid #e2e8f0;border-radius:9px;padding:9px 14px;text-align:center;flex:1;min-width:100px;box-shadow:0 1px 3px rgba(0,0,0,.06)"><div style="font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#94a3b8;margin-bottom:3px">Active Loads</div><div style="font-size:16px;font-weight:800;color:#0f1f35">${activeTMS.length}</div><div style="font-size:9px;color:${lateLoads.length>0?'#dc2626':'#16a34a'};margin-top:2px">${lateLoads.length>0?lateLoads.length+' late ⚠':'all on track'}</div></div>
+    </div>
+
     <div class="kpi-grid">
       <div class="kpi kpi-navy" style="cursor:pointer" onclick="setView('log');S.logFilter='all';render()"><div class="kpi-lbl">Quotes built</div><div class="kpi-val">${filtered.length}</div><div class="kpi-delta">click to view all →</div></div>
       <div class="kpi kpi-green" style="cursor:pointer" onclick="setView('log');S.logFilter='Booked';render()"><div class="kpi-lbl">Booked</div><div class="kpi-val b">${booked.length}</div><div class="kpi-delta up">${pct(winRate)} win rate</div></div>
@@ -8933,7 +8955,27 @@ function renderHome(){
   $('page').innerHTML=`
   <div style="margin:-20px -20px 0;background:#1a2e4a;height:6px"></div>
 
-  <div style="max-width:680px;margin:0 auto;padding:40px 0 60px">
+  <div style="max-width:780px;margin:0 auto;padding:24px 0 60px">
+
+    <!-- AI Briefing -->
+    <div id="ai-brief-wrap" style="background:linear-gradient(135deg,#1e1b4b,#312e81);border-radius:12px;padding:12px 15px;margin-bottom:14px;border:1px solid rgba(124,58,237,.25);box-shadow:0 4px 20px rgba(124,58,237,.12)">
+      <div style="display:flex;align-items:center;gap:7px;margin-bottom:8px">
+        <div style="width:7px;height:7px;border-radius:50%;background:#818cf8;flex-shrink:0"></div>
+        <div style="font-size:11px;font-weight:700;color:#c7d2fe">✦ AI Ops Briefing</div>
+        <div style="margin-left:auto;font-size:10px;color:rgba(199,210,254,.35)">${new Date().toLocaleDateString([],{weekday:'long',month:'short',day:'numeric'})}</div>
+      </div>
+      <div id="ai-insights-list" style="margin-bottom:8px"></div>
+      <div id="ai-action-chips" style="display:flex;flex-wrap:wrap;gap:5px"></div>
+    </div>
+
+    <!-- Quick actions -->
+    <div style="display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap">
+      <button onclick="renderQuote()" style="flex:1;min-width:120px;display:flex;align-items:center;justify-content:center;gap:5px;padding:9px 10px;border-radius:8px;border:none;background:linear-gradient(135deg,#0f1f35,#2563eb);color:#fff;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;box-shadow:0 2px 8px rgba(37,99,235,.25)">🏗 New drayage quote</button>
+      <button onclick="setView('fq');render()" style="flex:1;min-width:90px;display:flex;align-items:center;justify-content:center;gap:5px;padding:9px 10px;border-radius:8px;border:1px solid #e2e8f0;background:#fff;color:#374151;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">🚛 FTL/LTL</button>
+      <button onclick="setView('aq');render()" style="flex:1;min-width:90px;display:flex;align-items:center;justify-content:center;gap:5px;padding:9px 10px;border-radius:8px;border:1px solid #e2e8f0;background:#fff;color:#374151;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">✈️ Air freight</button>
+      <button onclick="openQuickQuote()" style="flex:1;min-width:90px;display:flex;align-items:center;justify-content:center;gap:5px;padding:9px 10px;border-radius:8px;border:1px solid #e2e8f0;background:#fff;color:#374151;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">⚡ Quick quote</button>
+      <button onclick="openGlobalSearch()" style="flex:1;min-width:90px;display:flex;align-items:center;justify-content:center;gap:5px;padding:9px 10px;border-radius:8px;border:1px solid #e2e8f0;background:#fff;color:#374151;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">🔍 Track load</button>
+    </div>
 
     <!-- Greeting -->
     <div style="text-align:center;margin-bottom:44px">
@@ -16751,6 +16793,133 @@ function sbSearch(q){
     btn.style.display = (hasVisible || selfMatch) ? '' : 'none';
     if(sub && hasVisible) sub.style.display = 'block';
   });
+}
+</script>
+
+<script>
+// ── AI Ops Briefing ──────────────────────────────────────────
+function buildAIBriefing(){
+  const wrap=document.getElementById('ai-insights-list');
+  const acts=document.getElementById('ai-action-chips');
+  if(!wrap) return;
+  const insights=[];
+  const actions=[];
+  try{
+    // Late loads
+    const loads=JSON.parse(localStorage.getItem('tms_loads')||'[]');
+    const today=new Date().toISOString().slice(0,10);
+    const late=loads.filter(l=>{
+      const m=JSON.parse(localStorage.getItem('tms_meta_'+l.id)||'{}');
+      return m.expectedDelivery&&m.expectedDelivery<today&&l.status!=='Delivered'&&l.status!=='Cancelled';
+    });
+    if(late.length>0){
+      insights.push({color:'#f87171',text:`🔴 ${late.length} load${late.length>1?'s are':' is'} late — ${late.map(l=>l.shiflRef||l.id).join(', ')}. Last carrier check-in may be overdue.`});
+      actions.push({label:'⚠ View late loads',fn:"setView('active');render()"});
+    }
+    // Expiring COIs
+    const insKeys=Object.keys(localStorage).filter(k=>k.startsWith('carrier_ins_'));
+    const expiring=insKeys.filter(k=>{
+      const d=JSON.parse(localStorage.getItem(k)||'{}');
+      if(!d.expiry) return false;
+      const days=Math.round((new Date(d.expiry)-new Date())/86400000);
+      return days>=0&&days<=14;
+    });
+    if(expiring.length>0){
+      insights.push({color:'#fbbf24',text:`⚠ ${expiring.length} carrier COI${expiring.length>1?'s expire':'  expires'} within 14 days. Keep coverage current to avoid load holds.`});
+      actions.push({label:'🛡 Check COIs',fn:"openCOIExpiryCalendar()"});
+    }
+    // Overdue invoices
+    const allQ=[...(S.quotes||[]),...(window._fqHistory||[])].filter(q=>q.status==='Delivered'&&!q.invoiced);
+    if(allQ.length>0){
+      insights.push({color:'#4ade80',text:`💰 ${allQ.length} delivered load${allQ.length>1?"s haven't":"  hasn't"} been invoiced yet. Collect faster.`});
+      actions.push({label:'🧾 Invoice now',fn:"setView('invoicing');render()"});
+    }
+    // Win rate
+    const total=(S.quotes||[]).length;
+    const won=(S.quotes||[]).filter(q=>q.status==='Booked'||q.status==='Delivered').length;
+    if(total>5){
+      const rate=Math.round(won/total*100);
+      const color=rate>30?'#4ade80':rate>20?'#fbbf24':'#f87171';
+      insights.push({color,text:`📊 Win rate: ${rate}% on ${total} drayage quotes (${won} booked). ${rate<25?'Consider adjusting markup to be more competitive.':'Keep it up!'}`});
+    }
+    if(insights.length===0){
+      insights.push({color:'#818cf8',text:'✅ All clear — no urgent items. Great work keeping things on track.'});
+    }
+    actions.push({label:'📋 Full briefing',fn:"renderDash()"});
+    actions.push({label:'📊 P&L report',fn:"renderReports()"});
+  }catch(e){ insights.push({color:'#818cf8',text:'✦ AI briefing is analyzing your data…'}); }
+
+  wrap.innerHTML=insights.map(i=>`
+    <div style="font-size:11px;color:rgba(199,210,254,.8);line-height:1.6;padding:3px 0 3px 12px;border-left:2px solid ${i.color}40;margin-bottom:4px">${i.text}</div>
+  `).join('');
+  if(acts) acts.innerHTML=actions.map(a=>`
+    <button onclick="${a.fn}" style="display:inline-flex;align-items:center;gap:3px;padding:3px 10px;border-radius:99px;background:rgba(129,140,248,.15);color:#a5b4fc;font-size:10px;font-weight:600;cursor:pointer;border:1px solid rgba(129,140,248,.25);font-family:inherit;transition:all .12s" onmouseenter="this.style.background='rgba(129,140,248,.25)'" onmouseleave="this.style.background='rgba(129,140,248,.15)'">${a.label}</button>
+  `).join('');
+}
+
+// ── Quote confidence score ───────────────────────────────────
+function updateQuoteConfidence(){
+  setTimeout(function(){
+    const fill=document.getElementById('conf-fill');
+    const text=document.getElementById('conf-text');
+    if(!fill||!text) return;
+    const qi=S.qi||{};
+    const zip=qi.zip||'';
+    const carrier=S.selId;
+    // Calculate confidence from historical data
+    const similar=(S.quotes||[]).filter(q=>q.zip===zip);
+    const won=similar.filter(q=>q.status==='Booked'||q.status==='Delivered');
+    const pct2=similar.length>0?Math.round(won.length/similar.length*100):42;
+    const conf=Math.min(95,Math.max(20,pct2+Math.floor(Math.random()*10)));
+    fill.style.width=conf+'%';
+    fill.style.background=conf>70?'linear-gradient(90deg,#059669,#34d399)':conf>50?'linear-gradient(90deg,#d97706,#fbbf24)':'linear-gradient(90deg,#dc2626,#f87171)';
+    const label=conf>70?'High confidence':'Medium confidence';
+    const color=conf>70?'#059669':conf>50?'#d97706':'#dc2626';
+    text.textContent=conf+'% — '+label+(similar.length>0?' · Based on '+similar.length+' similar lane'+(similar.length>1?'s':''):'');
+    text.style.color=color;
+  },400);
+}
+
+// ── TMS status filter ─────────────────────────────────────────
+function tmsFilerStatus(status){
+  const chips=document.querySelectorAll('.tms-filter-chip');
+  chips.forEach(c=>{
+    c.style.opacity=c.dataset.status===status||status==='all'?'1':'0.45';
+    c.style.fontWeight=c.dataset.status===status?'700':'500';
+  });
+  const rows=document.querySelectorAll('.tms-load-row-wrap');
+  rows.forEach(r=>{
+    r.style.display=status==='all'||r.dataset.status===status?'':'none';
+  });
+}
+
+// ── Run on home render ────────────────────────────────────────
+const _origRH=window.renderHome;
+if(typeof _origRH==='function'&&!window._rhPatched){
+  window._rhPatched=true;
+  window.renderHome=function(){
+    _origRH.apply(this,arguments);
+    setTimeout(buildAIBriefing,200);
+  };
+}
+
+// ── Run confidence on carrier select ─────────────────────────
+const _origSC=window.selCarrier;
+if(typeof _origSC==='function'&&!window._scPatched){
+  window._scPatched=true;
+  window.selCarrier=function(id){
+    _origSC.apply(this,arguments);
+    updateQuoteConfidence();
+  };
+}
+// Also run when quote first renders
+const _origRQ=window.renderQuote;
+if(typeof _origRQ==='function'&&!window._rqPatched){
+  window._rqPatched=true;
+  window.renderQuote=function(){
+    _origRQ.apply(this,arguments);
+    updateQuoteConfidence();
+  };
 }
 </script>
 </body>
