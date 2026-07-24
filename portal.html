@@ -323,14 +323,17 @@ async function init(){
   try{
     const {createClient} = window.supabase;
     db = createClient(_pUrl, _pKey);
-    const {data:{session}} = await db.auth.getSession();
-    if(session){
-      currentUser = session.user;
-      await loadCustomerProfile();
-      showApp();
-    } else {
-      showLogin();
+    // Check for saved portal session
+    const savedUser = sessionStorage.getItem('portal_user');
+    if(savedUser){
+      try{
+        currentUser = JSON.parse(savedUser);
+        await loadCustomerProfile();
+        showApp();
+        return;
+      }catch(e){ sessionStorage.removeItem('portal_user'); }
     }
+    showLogin();
   } catch(e){
     console.error(e);
     showLogin();
@@ -419,34 +422,59 @@ async function loadCustomerProfile(){
 }
 
 // ── Auth ──────────────────────────────────────────────────────
+async function hashPassword(email, pw){
+  const data = email.toLowerCase().trim() + ':' + pw;
+  const encoded = new TextEncoder().encode(data);
+  const hash = await crypto.subtle.digest('SHA-256', encoded);
+  return Array.from(new Uint8Array(hash)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+
 async function doLogin(){
-  const email = document.getElementById('login-email').value.trim();
+  const email = document.getElementById('login-email').value.trim().toLowerCase();
   const pass = document.getElementById('login-pass').value;
   const errEl = document.getElementById('login-err');
   errEl.style.display = 'none';
   if(!email||!pass){ errEl.style.display='block'; errEl.textContent='Please enter email and password.'; return; }
+
+  const creds = getSupabaseCreds();
+  if(!creds.url || !creds.key){
+    errEl.style.display='block';
+    errEl.textContent='Portal not configured. Please use the link sent by Shifl.';
+    return;
+  }
+
   try{
     const {createClient} = window.supabase;
-    const creds = getSupabaseCreds();
-    if(!creds.url || !creds.key){
-      errEl.style.display='block';
-      errEl.textContent='Portal not configured. Please contact mk@shifl.com.';
-      return;
-    }
     db = createClient(creds.url, creds.key);
-    const {data, error} = await db.auth.signInWithPassword({email, password:pass});
+
+    // Use same auth as main app — check app_users table with SHA-256 hash
+    const hash = await hashPassword(email, pass);
+    const {data: users, error} = await db.from('app_users').select('*').ilike('email', email).limit(1);
     if(error) throw error;
-    currentUser = data.user;
+
+    const user = users && users[0];
+    if(!user){ errEl.style.display='block'; errEl.textContent='No account found for this email.'; return; }
+    if(!user.active){ errEl.style.display='block'; errEl.textContent='Account is inactive. Contact mk@shifl.com.'; return; }
+    if(user.password_hash !== hash){ errEl.style.display='block'; errEl.textContent='Incorrect password. Please try again.'; return; }
+    if(user.role !== 'customer'){ errEl.style.display='block'; errEl.textContent='This portal is for customer accounts only.'; return; }
+
+    // Success — set session
+    currentUser = {id: user.id, email: user.email, name: user.name, role: user.role};
+    sessionStorage.setItem('portal_user', JSON.stringify(currentUser));
+
+    // Update last login
+    db.from('app_users').update({last_login: new Date().toISOString()}).eq('id', user.id).then(()=>{});
+
     await loadCustomerProfile();
     showApp();
   }catch(e){
     errEl.style.display = 'block';
-    errEl.textContent = e.message || 'Login failed. Check your credentials.';
+    errEl.textContent = e.message || 'Login failed. Please try again.';
   }
 }
 
-async function doLogout(){
-  if(db) await db.auth.signOut();
+function doLogout(){
+  sessionStorage.removeItem('portal_user');
   location.reload();
 }
 
