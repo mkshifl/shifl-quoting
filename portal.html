@@ -642,25 +642,33 @@ async function loadAllData(){
 
 // ── Quote Requests ────────────────────────────────────────────
 async function loadRequests(){
-  const company = (currentCustomer && currentCustomer.company) ? currentCustomer.company : (currentUser ? currentUser.email : '');
+  const email = currentUser ? currentUser.email : '';
+  const company = (currentCustomer && currentCustomer.company) ? currentCustomer.company : email;
   let requests = [];
 
-  // Try quote_requests table
-  const r1 = await db.from('quote_requests').select('*')
-    .eq('customer', company).order('created_at',{ascending:false}).limit(20);
+  // Try quote_requests by email first (most reliable), then by company name
+  const r1 = await db.from('quote_requests')
+    .select('*')
+    .or('customer_email.eq.'+email+',customer.eq.'+company)
+    .neq('type','dispute')
+    .order('created_at',{ascending:false})
+    .limit(50);
+
   if(!r1.error){
     requests = r1.data || [];
   } else {
-    // Fallback: read from chat_messages using real column names
-    const customerName = (currentCustomer && currentCustomer.company) ? currentCustomer.company : (currentUser ? currentUser.email : '');
+    // quote_requests table may not exist yet — try chat_messages fallback
     const r2 = await db.from('chat_messages').select('*')
-      .eq('channel','quote_requests').eq('user_name', customerName).order('created_at',{ascending:false}).limit(20);
+      .eq('channel','quote_requests')
+      .order('created_at',{ascending:false}).limit(50);
     if(!r2.error && r2.data){
-      requests = r2.data.map(function(m){
-        try{ return Object.assign(JSON.parse(m.message),{id:m.created_at,created_at:m.created_at}); }catch(e){return null;}
-      }).filter(Boolean);
+      requests = r2.data
+        .filter(function(m){ try{ const d=JSON.parse(m.message); return d.customer_email===email||d.customer===company; }catch(e){return false;} })
+        .map(function(m){ try{ return Object.assign(JSON.parse(m.message),{id:m.created_at,created_at:m.created_at}); }catch(e){return null;} })
+        .filter(Boolean);
     }
   }
+
   renderRequests(requests);
 }
 
