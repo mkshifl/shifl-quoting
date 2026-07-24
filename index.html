@@ -7213,8 +7213,13 @@ async function createUser(){
   if(role==='customer'&&!company){alert('Company name is required for customer accounts.');return;}
   try{
     const hash=await hashPassword(email,pw);
-    const{error}=await db.from('app_users').insert({id:uid(),name,email,password_hash:hash,role,active:true,company:company||null,portal_level:role==='customer'?portalLevel:null});
+    const newUserId = uid();
+    const{error}=await db.from('app_users').insert({id:newUserId,name,email,password_hash:hash,role,active:true});
     if(error) throw error;
+    // For customer accounts, store company + portal_level in customers table
+    if(role==='customer' && company){
+      await db.from('customers').upsert({id:newUserId,company,email,contact:name,portal_level:portalLevel,portal_user:true});
+    }
     logAction('user_added',`${name} (${email}) — Role: ${role}${company?' | '+company:''}`);
     closeModal();renderAdmin();
     // Email credentials via mailto
@@ -7267,8 +7272,12 @@ async function saveEditUser(id){
   const company2 = ($('eu-company')||{}).value?.trim()||null;
   const portalLevel2 = ($('eu-portal-level')||{}).value||'full';
   try{
-    const{error}=await db.from('app_users').update({name,email,role,company:company2,portal_level:role==='customer'?portalLevel2:null}).eq('id',id);
+    const{error}=await db.from('app_users').update({name,email,role}).eq('id',id);
     if(error) throw error;
+    // Update company + portal_level in customers table
+    if(role==='customer' && company2){
+      await db.from('customers').upsert({id,company:company2,email,contact:name,portal_level:portalLevel2,portal_user:true});
+    }
     closeModal();renderAdmin();showToast('✅ User updated.');
   }catch(e){alert('Error: '+e.message);}
 }
