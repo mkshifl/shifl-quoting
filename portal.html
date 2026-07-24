@@ -329,6 +329,13 @@ function showApp(){
   document.getElementById('loading').style.display = 'none';
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('app').style.display = 'flex';
+  // Enforce access level
+  const level = currentCustomer?.portal_level || 'full';
+  if(level === 'quotes_only'){
+    document.querySelectorAll('.pnav-item').forEach((tab,i)=>{ if(i>0) tab.style.display='none'; });
+    const sub = document.querySelector('.page-sub');
+    if(sub) sub.textContent = 'Submit a freight quote request — our team will respond within 2 hours.';
+  }
   loadAllData();
 }
 
@@ -336,8 +343,14 @@ async function loadCustomerProfile(){
   if(!currentUser) return;
   const email = currentUser.email || '';
   // Find matching customer by email
-  const {data} = await db.from('customers').select('*').ilike('email', email).limit(1);
-  currentCustomer = (data && data[0]) || {company: email.split('@')[0], email};
+  // First check app_users for portal-level customer account
+  const {data: userData} = await db.from('app_users').select('*').ilike('email', email).eq('role','customer').limit(1);
+  if(userData && userData[0]){
+    currentCustomer = {company: userData[0].company||email.split('@')[0], email, portal_level: userData[0].portal_level||'full', name: userData[0].name};
+  } else {
+    const {data} = await db.from('customers').select('*').ilike('email', email).limit(1);
+    currentCustomer = (data && data[0]) || {company: email.split('@')[0], email, portal_level:'full'};
+  }
   const initials = (currentCustomer.company||email).split(' ').slice(0,2).map(w=>w[0]).join('').toUpperCase().slice(0,2);
   document.getElementById('user-av').textContent = initials;
   document.getElementById('user-name').textContent = currentCustomer.company || email;
@@ -408,7 +421,18 @@ function renderRequests(requests){
         <div style="margin-bottom:4px">${statusPill(r.status||'new')}</div>
         <div style="font-size:10px;color:var(--g4)">${r.created_at?new Date(r.created_at).toLocaleDateString([],{month:'short',day:'numeric'}):'—'}</div>
       </div>
-      ${r.quoted_amount?`<div style="text-align:right;flex-shrink:0;margin-left:8px"><div style="font-size:16px;font-weight:800;color:var(--blue)">$${Number(r.quoted_amount).toLocaleString()}</div><button onclick="bookQuote('${r.id}')" style="margin-top:4px;padding:4px 12px;border-radius:6px;border:none;background:var(--green);color:#fff;font-size:10px;font-weight:700;cursor:pointer">Book it</button></div>`:''}
+      ${r.quoted_amount?`<div style="text-align:right;flex-shrink:0;margin-left:8px;min-width:160px">
+        <div style="font-size:18px;font-weight:800;color:var(--blue);margin-bottom:6px">$${Number(r.quoted_amount).toLocaleString()}</div>
+        ${r.quote_message?`<div style="font-size:11px;color:#475569;background:#f0f6ff;border-radius:6px;padding:5px 8px;margin-bottom:8px;line-height:1.4;text-align:left">"${r.quote_message}"</div>`:''}
+        ${r.negotiation_status==='approved'?'<div style="font-size:11px;font-weight:700;color:var(--green)">✓ You approved this</div>':
+          r.negotiation_status==='denied'?'<div style="font-size:11px;font-weight:700;color:var(--red)">✗ You declined this</div>':
+          r.negotiation_status==='counter'?'<div style="font-size:11px;font-weight:700;color:var(--amber)">💬 Counter sent</div>':
+          `<div style="display:flex;flex-direction:column;gap:5px">
+            <button onclick="respondToQuote('${r.id}','approved')" style="padding:6px 0;border-radius:7px;border:none;background:var(--green);color:#fff;font-size:11px;font-weight:700;cursor:pointer;width:100%">✓ Approve</button>
+            <button onclick="showCounterOffer('${r.id}',${r.quoted_amount})" style="padding:6px 0;border-radius:7px;border:1px solid var(--amber);background:#fffbeb;color:var(--amber);font-size:11px;font-weight:700;cursor:pointer;width:100%">💬 Negotiate</button>
+            <button onclick="respondToQuote('${r.id}','denied')" style="padding:6px 0;border-radius:7px;border:1px solid #fca5a5;background:#fff5f5;color:var(--red);font-size:11px;font-weight:600;cursor:pointer;width:100%">✗ Decline</button>
+          </div>`}
+      </div>`:''}
     </div>
   `).join('');
 }
@@ -450,7 +474,35 @@ async function submitQuoteRequest(){
 
 async function bookQuote(reqId){
   await db.from('quote_requests').update({status:'booked'}).eq('id', reqId);
-  showToast('✓ Quote booked! We\'ll be in touch shortly.');
+  showToast("✓ Quote booked! We'll be in touch shortly.");
+  await loadRequests();
+}
+
+async function respondToQuote(reqId, response){
+  await db.from('quote_requests').update({
+    negotiation_status: response,
+    status: response==='approved' ? 'booked' : 'declined',
+    customer_responded_at: new Date().toISOString()
+  }).eq('id', reqId);
+  showToast(response==='approved' ? "✓ Quote approved! Our team will confirm your booking." : "Quote declined. Submit a new request anytime.");
+  await loadRequests();
+}
+
+function showCounterOffer(reqId, currentAmt){
+  const counter = prompt('Your counter-offer price ($):', currentAmt);
+  if(!counter || isNaN(parseFloat(counter))) return;
+  const note = prompt('Any message for the Shifl team? (optional):', '') || '';
+  submitCounter(reqId, parseFloat(counter), note);
+}
+
+async function submitCounter(reqId, counterAmt, note){
+  await db.from('quote_requests').update({
+    negotiation_status: 'counter',
+    counter_offer: counterAmt,
+    counter_note: note,
+    customer_responded_at: new Date().toISOString()
+  }).eq('id', reqId);
+  showToast('💬 Counter-offer of $'+counterAmt.toLocaleString()+' sent to Shifl!');
   await loadRequests();
 }
 
