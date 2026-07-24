@@ -7119,7 +7119,13 @@ async function renderAdmin(){
   if(!can('view_admin')){
     $('page').innerHTML='<div class="empty"><p>Admin access only.</p></div>';return;
   }
-  $('topbar-right').innerHTML='<button class="btn blue" onclick="showCreateUser()">+ Add user</button>';
+  const _sbUrl = localStorage.getItem('sb_url')||'';
+  const _sbKey = localStorage.getItem('sb_key')||'';
+  const _portalBase = 'https://mkshifl.github.io/shifl-quoting/portal.html';
+  const _portalLink = _sbUrl&&_sbKey ? _portalBase+'?su='+encodeURIComponent(_sbUrl)+'&sk='+encodeURIComponent(_sbKey) : _portalBase+'?setup=1';
+  $('topbar-right').innerHTML=`
+    <button class="btn" onclick="navigator.clipboard.writeText('${_portalLink}').then(()=>showToast('✓ Portal link copied!'))" title="Copy this link to send to customers">🔗 Copy portal link</button>
+    <button class="btn blue" onclick="showCreateUser()" style="margin-left:6px">+ Add user</button>`;
   const{data:users}=await db.from('app_users').select('*').order('created_at',{ascending:true});
   const rows=(users||[]).map(u=>`<tr>
     <td class="bold">${u.name}</td>
