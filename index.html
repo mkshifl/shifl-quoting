@@ -1339,6 +1339,29 @@ async function initApp(){
     setTimeout(async()=>{try{const r=await withTimeout(dbLoadRates(),10000,null);if(r&&r.length>0){S.rates=r;localStorage.setItem('shifl_rates_cache',JSON.stringify(r));if(S.view==='rates')renderRates();if($('carriers-body'))refreshCarriersAndPreview();}}catch(e){}},1200);
     try{S.quotes=JSON.parse(localStorage.getItem('shifl_quotes_cache')||'[]');}catch(e){S.quotes=[];}
     try{S.customers=JSON.parse(localStorage.getItem('shifl_customers_cache')||'[]');}catch(e){S.customers=[];}
+    // Create quote_requests table if it doesn't exist
+    try{
+      await db.rpc('exec_sql', {sql:`
+        CREATE TABLE IF NOT EXISTS public.quote_requests (
+          id text PRIMARY KEY DEFAULT gen_random_uuid()::text,
+          customer text, customer_email text, mode text DEFAULT 'drayage',
+          port text, zip text, destination text, size text, ctrs int DEFAULT 1,
+          ld text, commodity text, weight text, eta text, booking text,
+          pallets int, pieces int, cbm text, dims text, freight_class text,
+          service_type text, incoterms text, notes text,
+          status text DEFAULT 'new', type text DEFAULT 'quote_request',
+          quoted_amount numeric, quote_ref text, quote_message text,
+          quoted_at timestamptz, negotiation_status text,
+          counter_offer numeric, counter_note text,
+          customer_responded_at timestamptz,
+          dis_ref text, dis_type text, dis_amount numeric, dis_status text,
+          created_at timestamptz DEFAULT now()
+        );
+        ALTER TABLE public.quote_requests ENABLE ROW LEVEL SECURITY;
+        DROP POLICY IF EXISTS allow_all ON public.quote_requests;
+        CREATE POLICY allow_all ON public.quote_requests FOR ALL USING (true) WITH CHECK (true);
+      `}).catch(()=>{});
+    }catch(e){}
     setLiquidProgress(30);
   // Load FQ quotes from Supabase (shared across all users) + merge with local
   try{
