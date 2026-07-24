@@ -115,6 +115,11 @@ body{background:var(--bg);min-height:100vh;font-size:13px;color:#1e293b}
 .empty-icon{font-size:40px;margin-bottom:12px}
 .empty-title{font-size:14px;font-weight:600;color:#374151;margin-bottom:6px}
 .empty-sub{font-size:12px;margin-bottom:16px}
+
+/* MODE BUTTONS */
+.mode-btn{background:var(--w);border:2px solid var(--g2);border-radius:10px;padding:16px 10px;cursor:pointer;text-align:center;transition:all .15s;font-family:inherit}
+.mode-btn:hover{border-color:var(--blue);background:#f0f6ff;transform:translateY(-2px);box-shadow:0 4px 12px rgba(37,99,235,.1)}
+.mode-btn.selected{border-color:var(--blue);background:#eff6ff;box-shadow:0 0 0 3px rgba(37,99,235,.15)}
 </style>
 </head>
 <body>
@@ -177,50 +182,199 @@ body{background:var(--bg);min-height:100vh;font-size:13px;color:#1e293b}
             <div class="sec-label" style="margin:0">New quote request</div>
             <button class="cancel-btn" style="font-size:11px;padding:6px 12px" onclick="showQuoteForm(false)">Cancel</button>
           </div>
-          <div class="form-grid">
-            <div class="field-sm"><label>Port / Rail origin *</label>
-              <select id="qr-port">
-                <option value="New York / Newark, NJ">New York / Newark, NJ</option>
-                <option value="Los Angeles, CA">Los Angeles, CA</option>
-                <option value="Long Beach, CA">Long Beach, CA</option>
-                <option value="Savannah, GA">Savannah, GA</option>
-                <option value="Houston, TX">Houston, TX</option>
-                <option value="Charleston, SC">Charleston, SC</option>
-                <option value="Baltimore, MD">Baltimore, MD</option>
-                <option value="Norfolk, VA">Norfolk, VA</option>
-                <option value="Seattle, WA">Seattle, WA</option>
-                <option value="Other">Other</option>
-              </select>
+
+          <!-- STEP 1: Mode selection -->
+          <div id="qr-step1">
+            <div style="font-size:13px;font-weight:600;color:var(--navy);margin-bottom:12px">What type of freight?</div>
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:4px">
+              <button class="mode-btn" onclick="selectMode('drayage')" data-mode="drayage">
+                <div style="font-size:22px;margin-bottom:6px">🚢</div>
+                <div style="font-weight:700;color:var(--navy)">Drayage</div>
+                <div style="font-size:11px;color:var(--g4);margin-top:2px">Port to door</div>
+              </button>
+              <button class="mode-btn" onclick="selectMode('ftl')" data-mode="ftl">
+                <div style="font-size:22px;margin-bottom:6px">🚛</div>
+                <div style="font-weight:700;color:var(--navy)">FTL</div>
+                <div style="font-size:11px;color:var(--g4);margin-top:2px">Full truckload</div>
+              </button>
+              <button class="mode-btn" onclick="selectMode('ltl')" data-mode="ltl">
+                <div style="font-size:22px;margin-bottom:6px">📦</div>
+                <div style="font-weight:700;color:var(--navy)">LTL</div>
+                <div style="font-size:11px;color:var(--g4);margin-top:2px">Less than truckload</div>
+              </button>
+              <button class="mode-btn" onclick="selectMode('air')" data-mode="air">
+                <div style="font-size:22px;margin-bottom:6px">✈️</div>
+                <div style="font-weight:700;color:var(--navy)">Air Freight</div>
+                <div style="font-size:11px;color:var(--g4);margin-top:2px">Express air</div>
+              </button>
+              <button class="mode-btn" onclick="selectMode('lcl')" data-mode="lcl">
+                <div style="font-size:22px;margin-bottom:6px">🛳️</div>
+                <div style="font-weight:700;color:var(--navy)">LCL / Ocean</div>
+                <div style="font-size:11px;color:var(--g4);margin-top:2px">Less than container</div>
+              </button>
+              <button class="mode-btn" onclick="selectMode('other')" data-mode="other">
+                <div style="font-size:22px;margin-bottom:6px">📋</div>
+                <div style="font-weight:700;color:var(--navy)">Other</div>
+                <div style="font-size:11px;color:var(--g4);margin-top:2px">Box truck / specialty</div>
+              </button>
             </div>
-            <div class="field-sm"><label>Delivery ZIP *</label><input type="text" id="qr-zip" placeholder="e.g. 07728" maxlength="10"></div>
-            <div class="field-sm"><label>Destination city</label><input type="text" id="qr-dest" placeholder="e.g. Lakewood, NJ"></div>
-            <div class="field-sm"><label>Container type</label>
-              <select id="qr-size">
-                <option value="40HC">40HC (High Cube)</option>
-                <option value="40ST">40ST (Standard)</option>
-                <option value="20ST">20ST</option>
-                <option value="45HC">45HC</option>
-              </select>
-            </div>
-            <div class="field-sm"><label>Number of containers</label><input type="number" id="qr-ctrs" value="1" min="1" max="50"></div>
-            <div class="field-sm"><label>Live or Drop</label>
-              <select id="qr-ld">
-                <option value="Live">Live (driver waits)</option>
-                <option value="Drop">Drop (driver drops)</option>
-                <option value="Either">Either</option>
-              </select>
-            </div>
-            <div class="field-sm"><label>Commodity</label><input type="text" id="qr-commodity" placeholder="e.g. Furniture, Apparel…"></div>
-            <div class="field-sm"><label>Weight per container</label><input type="text" id="qr-weight" placeholder="e.g. 38,000 lb"></div>
-            <div class="field-sm"><label>Needed by date</label><input type="date" id="qr-eta"></div>
-            <div class="field-sm"><label>Booking / container # (if known)</label><input type="text" id="qr-booking" placeholder="e.g. MAEU1234567"></div>
           </div>
-          <div class="field-sm" style="margin-bottom:14px"><label>Special requirements / notes</label>
-            <textarea id="qr-notes" rows="3" placeholder="Overweight? Genset needed? Hazmat? Inside delivery? Any special requirements…" style="resize:none"></textarea>
-          </div>
-          <div style="display:flex;justify-content:flex-end;gap:8px">
-            <button class="cancel-btn" onclick="showQuoteForm(false)">Cancel</button>
-            <button class="submit-btn" onclick="submitQuoteRequest()">Submit request →</button>
+
+          <!-- STEP 2: Mode-specific fields (hidden until mode selected) -->
+          <div id="qr-step2" style="display:none">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--g2)">
+              <button onclick="backToModeSelect()" style="padding:4px 10px;border-radius:6px;border:1px solid var(--g2);background:var(--w);font-size:11px;font-weight:600;cursor:pointer;color:#374151">← Back</button>
+              <div id="qr-mode-label" style="font-size:13px;font-weight:700;color:var(--navy)"></div>
+            </div>
+
+            <!-- Shared fields (all modes) -->
+            <div class="form-grid" id="qr-shared-fields">
+              <div class="field-sm"><label>Origin / pickup *</label><input type="text" id="qr-origin" placeholder="City, state or port name"></div>
+              <div class="field-sm"><label>Destination *</label><input type="text" id="qr-dest" placeholder="City, state or ZIP"></div>
+              <div class="field-sm"><label>Commodity *</label><input type="text" id="qr-commodity" placeholder="e.g. Furniture, Electronics…"></div>
+              <div class="field-sm"><label>Needed by date</label><input type="date" id="qr-eta"></div>
+            </div>
+
+            <!-- DRAYAGE fields -->
+            <div id="qr-fields-drayage" style="display:none">
+              <div class="form-grid">
+                <div class="field-sm"><label>Port</label>
+                  <select id="qr-port">
+                    <option value="New York / Newark, NJ">New York / Newark, NJ</option>
+                    <option value="Los Angeles, CA">Los Angeles, CA</option>
+                    <option value="Long Beach, CA">Long Beach, CA</option>
+                    <option value="Savannah, GA">Savannah, GA</option>
+                    <option value="Houston, TX">Houston, TX</option>
+                    <option value="Charleston, SC">Charleston, SC</option>
+                    <option value="Baltimore, MD">Baltimore, MD</option>
+                    <option value="Norfolk, VA">Norfolk, VA</option>
+                    <option value="Seattle, WA">Seattle, WA</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+                <div class="field-sm"><label>Delivery ZIP *</label><input type="text" id="qr-zip" placeholder="e.g. 07728" maxlength="10"></div>
+                <div class="field-sm"><label>Container type</label>
+                  <select id="qr-size">
+                    <option value="40HC">40HC (High Cube)</option>
+                    <option value="40ST">40ST (Standard)</option>
+                    <option value="20ST">20ST</option>
+                    <option value="45HC">45HC</option>
+                  </select>
+                </div>
+                <div class="field-sm"><label>Number of containers</label><input type="number" id="qr-ctrs" value="1" min="1" max="50"></div>
+                <div class="field-sm"><label>Live or Drop</label>
+                  <select id="qr-ld">
+                    <option value="Live">Live (driver waits)</option>
+                    <option value="Drop">Drop (driver drops)</option>
+                    <option value="Either">Either</option>
+                  </select>
+                </div>
+                <div class="field-sm"><label>Weight per container</label><input type="text" id="qr-weight" placeholder="e.g. 38,000 lb"></div>
+                <div class="field-sm"><label>Booking / container # (optional)</label><input type="text" id="qr-booking" placeholder="e.g. MAEU1234567"></div>
+              </div>
+            </div>
+
+            <!-- FTL fields -->
+            <div id="qr-fields-ftl" style="display:none">
+              <div class="form-grid">
+                <div class="field-sm"><label>Equipment type</label>
+                  <select id="qr-equipment">
+                    <option value="Dry Van 53'">Dry Van 53'</option>
+                    <option value="Reefer 53'">Reefer 53'</option>
+                    <option value="Flatbed 48'">Flatbed 48'</option>
+                    <option value="Flatbed 53'">Flatbed 53'</option>
+                    <option value="Step Deck">Step Deck</option>
+                    <option value="Box Truck">Box Truck</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+                <div class="field-sm"><label>Total weight (lbs)</label><input type="text" id="qr-weight" placeholder="e.g. 42,000 lb"></div>
+                <div class="field-sm"><label>Pickup date</label><input type="date" id="qr-pickup-date"></div>
+                <div class="field-sm"><label>Hazmat?</label>
+                  <select id="qr-hazmat"><option value="No">No</option><option value="Yes">Yes — UN # in notes</option></select>
+                </div>
+              </div>
+            </div>
+
+            <!-- LTL fields -->
+            <div id="qr-fields-ltl" style="display:none">
+              <div class="form-grid">
+                <div class="field-sm"><label>Pallets</label><input type="number" id="qr-pallets" placeholder="e.g. 6" min="1"></div>
+                <div class="field-sm"><label>Total weight (lbs)</label><input type="text" id="qr-weight" placeholder="e.g. 4,200 lb"></div>
+                <div class="field-sm"><label>Freight class (if known)</label>
+                  <select id="qr-class">
+                    <option value="">Unknown</option>
+                    <option value="50">50</option><option value="55">55</option><option value="60">60</option>
+                    <option value="65">65</option><option value="70">70</option><option value="85">85</option>
+                    <option value="92.5">92.5</option><option value="100">100</option><option value="125">125</option>
+                    <option value="150">150</option><option value="175">175</option><option value="200">200</option>
+                  </select>
+                </div>
+                <div class="field-sm"><label>Liftgate needed?</label>
+                  <select id="qr-liftgate"><option value="No">No</option><option value="Pickup">At pickup</option><option value="Delivery">At delivery</option><option value="Both">Both</option></select>
+                </div>
+              </div>
+            </div>
+
+            <!-- AIR fields -->
+            <div id="qr-fields-air" style="display:none">
+              <div class="form-grid">
+                <div class="field-sm"><label>Origin airport / city</label><input type="text" id="qr-air-origin" placeholder="e.g. JFK, Newark"></div>
+                <div class="field-sm"><label>Destination airport / city</label><input type="text" id="qr-air-dest" placeholder="e.g. LAX, Chicago"></div>
+                <div class="field-sm"><label>Total weight (lbs)</label><input type="text" id="qr-weight" placeholder="e.g. 500 lb"></div>
+                <div class="field-sm"><label>Dimensions (L×W×H per piece)</label><input type="text" id="qr-dims" placeholder="e.g. 24×20×18 in"></div>
+                <div class="field-sm"><label>Number of pieces</label><input type="number" id="qr-pieces" placeholder="e.g. 3" min="1"></div>
+                <div class="field-sm"><label>Service level</label>
+                  <select id="qr-air-service">
+                    <option value="Standard">Standard (2-3 days)</option>
+                    <option value="Express">Express (next day)</option>
+                    <option value="Economy">Economy (4-5 days)</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <!-- LCL / Ocean fields -->
+            <div id="qr-fields-lcl" style="display:none">
+              <div class="form-grid">
+                <div class="field-sm"><label>Origin port / city</label><input type="text" id="qr-lcl-origin" placeholder="e.g. Shanghai, Ningbo"></div>
+                <div class="field-sm"><label>Destination port</label>
+                  <select id="qr-lcl-dest">
+                    <option value="New York / Newark, NJ">New York / Newark, NJ</option>
+                    <option value="Los Angeles, CA">Los Angeles, CA</option>
+                    <option value="Long Beach, CA">Long Beach, CA</option>
+                    <option value="Savannah, GA">Savannah, GA</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+                <div class="field-sm"><label>CBM (cubic meters)</label><input type="text" id="qr-cbm" placeholder="e.g. 8 CBM"></div>
+                <div class="field-sm"><label>Total weight (kg)</label><input type="text" id="qr-weight" placeholder="e.g. 1,200 kg"></div>
+                <div class="field-sm"><label>Incoterms</label>
+                  <select id="qr-incoterms">
+                    <option value="FOB">FOB</option><option value="CIF">CIF</option><option value="EXW">EXW</option><option value="DDP">DDP</option><option value="Other">Other</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <!-- OTHER fields -->
+            <div id="qr-fields-other" style="display:none">
+              <div class="form-grid">
+                <div class="field-sm"><label>Service type</label><input type="text" id="qr-service-type" placeholder="e.g. Box truck, Sprinter van, Specialized…"></div>
+                <div class="field-sm"><label>Approximate weight / size</label><input type="text" id="qr-weight" placeholder="e.g. 2,000 lb / 10 pallets"></div>
+              </div>
+            </div>
+
+            <!-- Notes (all modes) -->
+            <div class="field-sm" style="margin-top:10px;margin-bottom:14px">
+              <label>Special requirements / notes</label>
+              <textarea id="qr-notes" rows="3" placeholder="Hazmat, oversize, inside delivery, liftgate, appointment required, genset, etc." style="resize:none"></textarea>
+            </div>
+
+            <div style="display:flex;justify-content:flex-end;gap:8px">
+              <button class="cancel-btn" onclick="showQuoteForm(false)">Cancel</button>
+              <button class="submit-btn" onclick="submitQuoteRequest()">Submit request →</button>
+            </div>
           </div>
         </div>
       </div>
@@ -488,10 +642,24 @@ async function loadAllData(){
 
 // ── Quote Requests ────────────────────────────────────────────
 async function loadRequests(){
-  const company = currentCustomer?.company || '';
-  const {data, error} = await db.from('quote_requests').select('*')
-    .eq('customer', company).order('created_at', {ascending:false}).limit(20);
-  const requests = data || [];
+  const company = (currentCustomer && currentCustomer.company) ? currentCustomer.company : (currentUser ? currentUser.email : '');
+  let requests = [];
+
+  // Try quote_requests table
+  const r1 = await db.from('quote_requests').select('*')
+    .eq('customer', company).order('created_at',{ascending:false}).limit(20);
+  if(!r1.error){
+    requests = r1.data || [];
+  } else {
+    // Fallback: read from chat_messages where room='quote_requests'
+    const r2 = await db.from('chat_messages').select('*')
+      .eq('room','quote_requests').eq('sender', currentUser?currentUser.email:'').order('created_at',{ascending:false}).limit(20);
+    if(!r2.error && r2.data){
+      requests = r2.data.map(function(m){
+        try{ return Object.assign(JSON.parse(m.message),{id:m.id,created_at:m.created_at}); }catch(e){return null;}
+      }).filter(Boolean);
+    }
+  }
   renderRequests(requests);
 }
 
@@ -539,34 +707,85 @@ function showQuoteForm(show){
   if(show) document.getElementById('qr-zip').focus();
 }
 
+let _selectedMode = '';
+
+function selectMode(mode){
+  _selectedMode = mode;
+  document.querySelectorAll('.mode-btn').forEach(b=>b.classList.remove('selected'));
+  const btn = document.querySelector('.mode-btn[data-mode="'+mode+'"]');
+  if(btn) btn.classList.add('selected');
+  document.getElementById('qr-step1').style.display='none';
+  document.getElementById('qr-step2').style.display='block';
+  const labels={drayage:'🚢 Drayage — Port to door',ftl:'🚛 FTL — Full truckload',ltl:'📦 LTL — Less than truckload',air:'✈️ Air freight',lcl:'🛳️ LCL / Ocean freight',other:'📋 Other / Specialty'};
+  document.getElementById('qr-mode-label').textContent = labels[mode]||mode;
+  ['drayage','ftl','ltl','air','lcl','other'].forEach(function(m2){
+    const el=document.getElementById('qr-fields-'+m2);
+    if(el) el.style.display = m2===mode?'block':'none';
+  });
+}
+
+function backToModeSelect(){
+  _selectedMode='';
+  document.getElementById('qr-step1').style.display='block';
+  document.getElementById('qr-step2').style.display='none';
+}
+
+function gv(id){ const el=document.getElementById(id); return el?(el.value||'').trim():''; }
+function gi(id,def){ const el=document.getElementById(id); return el?parseInt(el.value)||def:def; }
+
 async function submitQuoteRequest(){
-  const zip = document.getElementById('qr-zip').value.trim();
-  if(!zip){ showToast('Please enter a delivery ZIP'); return; }
+  if(!_selectedMode){ showToast('Please select a freight type'); return; }
+  const commodity = gv('qr-commodity');
+  if(!commodity){ showToast('Please enter a commodity'); return; }
+
   const req = {
-    customer: currentCustomer?.company || currentUser?.email || '',
-    customer_email: currentUser?.email || '',
-    port: document.getElementById('qr-port').value,
-    zip,
-    destination: document.getElementById('qr-dest').value.trim(),
-    size: document.getElementById('qr-size').value,
-    ctrs: parseInt(document.getElementById('qr-ctrs').value)||1,
-    ld: document.getElementById('qr-ld').value,
-    commodity: document.getElementById('qr-commodity').value.trim(),
-    weight: document.getElementById('qr-weight').value.trim(),
-    eta: document.getElementById('qr-eta').value || null,
-    booking: document.getElementById('qr-booking').value.trim(),
-    notes: document.getElementById('qr-notes').value.trim(),
+    customer: currentCustomer ? currentCustomer.company||currentCustomer.email : (currentUser?currentUser.email:''),
+    customer_email: currentUser ? currentUser.email : '',
+    mode: _selectedMode,
+    port: gv('qr-port')||gv('qr-air-origin')||gv('qr-lcl-origin')||gv('qr-origin'),
+    zip: gv('qr-zip'),
+    destination: gv('qr-dest')||gv('qr-lcl-dest'),
+    size: gv('qr-size')||gv('qr-equipment')||'',
+    ctrs: gi('qr-ctrs',1),
+    ld: gv('qr-ld')||'',
+    commodity: commodity,
+    weight: gv('qr-weight')||'',
+    eta: gv('qr-eta')||null,
+    booking: gv('qr-booking')||'',
+    pallets: gi('qr-pallets',0)||null,
+    pieces: gi('qr-pieces',0)||null,
+    cbm: gv('qr-cbm')||null,
+    dims: gv('qr-dims')||null,
+    freight_class: gv('qr-class')||null,
+    service_type: gv('qr-air-service')||gv('qr-service-type')||null,
+    incoterms: gv('qr-incoterms')||null,
+    notes: gv('qr-notes'),
     status: 'new',
+    type: 'quote_request',
     created_at: new Date().toISOString()
   };
-  const {error} = await db.from('quote_requests').insert(req);
-  if(error){ showToast('Error: '+error.message, true); return; }
-  showToast('✓ Request submitted! We\'ll respond within 2 hours.');
+
+  // Try quote_requests table first
+  const r1 = await db.from('quote_requests').insert(req);
+  if(r1.error){
+    // Fallback: save as chat_message (always exists)
+    const msg = JSON.stringify(req);
+    const r2 = await db.from('chat_messages').insert({
+      id: 'QR'+Date.now(),
+      room: 'quote_requests',
+      sender: req.customer_email,
+      message: msg,
+      created_at: new Date().toISOString()
+    });
+    if(r2.error){ showToast('Error: '+r2.error.message, true); return; }
+  }
+
+  showToast("✓ Request submitted! We'll respond within 2 hours.");
   showQuoteForm(false);
-  // Clear form
-  ['qr-zip','qr-dest','qr-commodity','qr-weight','qr-booking','qr-notes'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+  backToModeSelect();
   await loadRequests();
 }
+
 
 async function bookQuote(reqId){
   await db.from('quote_requests').update({status:'booked'}).eq('id', reqId);
