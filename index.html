@@ -3787,7 +3787,35 @@ async function saveQuote(){
     await dbSaveQuote(q);
     upsertCarrier(sel.carrier,'Drayage');
     S.quotes.unshift(q);
-    alert(`Quote #${q.quoteNum} saved!\n\nCustomer total: ${fmtD(cu)}\nProfit: ${fmtD(profit)} (${pct(q.profitPct)})`);
+    // Show success modal with option to post to portal
+    const fromReq = S.qi&&S.qi.fromRequestId ? S.qi.fromRequestId : '';
+    const fromEmail = S.qi&&S.qi.fromRequestEmail ? S.qi.fromRequestEmail : '';
+    window._savedQuote = q;
+    window._pReqId = fromReq;
+    var html = '<div style="min-width:420px">'
+      + '<div class="modal-title">Quote #' + q.quoteNum + ' saved!</div>'
+      + '<div class="modal-body">'
+      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">'
+      + '<div style="background:#f0fdf4;border-radius:8px;padding:12px;text-align:center"><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#16a34a;margin-bottom:4px">Customer total</div><div style="font-size:22px;font-weight:800;color:#15803d">' + fmtD(cu) + '</div></div>'
+      + '<div style="background:#eff6ff;border-radius:8px;padding:12px;text-align:center"><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#2563eb;margin-bottom:4px">Profit</div><div style="font-size:22px;font-weight:800;color:#1d4ed8">' + fmtD(profit) + ' <span style="font-size:13px">(' + pct(q.profitPct) + ')</span></div></div>'
+      + '</div>'
+      + '<div style="background:#faf5ff;border:1px solid #ddd6fe;border-radius:10px;padding:14px">'
+      + '<div style="font-size:12px;font-weight:700;color:#5b21b6;margin-bottom:8px">📤 Post to customer portal?</div>'
+      + '<div style="font-size:11px;color:#6b7280;margin-bottom:10px">Let the customer approve, deny, or negotiate this quote directly on their portal.</div>'
+      + '<div class="field" style="margin-bottom:8px"><label style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#94a3b8;display:block;margin-bottom:3px">Customer email</label>'
+      + '<input type="email" id="pqemail" value="' + fromEmail + '" placeholder="customer@company.com" style="width:100%;padding:7px 10px;border:1.5px solid #e2e8f0;border-radius:7px;font-size:12px">'
+      + '</div>'
+      + '<div class="field" style="margin-bottom:8px"><label style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#94a3b8;display:block;margin-bottom:3px">Message to customer (optional)</label>'
+      + '<textarea id="pqmsg" rows="2" placeholder="Rate valid 30 days. Includes chassis." style="width:100%;padding:7px 10px;border:1.5px solid #e2e8f0;border-radius:7px;font-size:12px;resize:none;font-family:inherit"></textarea>'
+      + '</div>'
+      + '</div>'
+      + '</div>'
+      + '<div class="modal-foot">'
+      + '<button class="btn" onclick="closeModal()">Skip for now</button>'
+      + '<button class="btn" onclick="downloadPDF();closeModal()" style="margin-left:auto">📄 PDF only</button>'
+      + '<button class="btn" style="background:linear-gradient(135deg,#059669,#34d399);border-color:#059669;color:#fff;font-weight:700" onclick="doPostToPortal()">📤 Post to portal</button>'
+      + '</div></div>';
+    openModal(html);
   }catch(e){alert('Error saving quote: '+e.message);}finally{setSaving(false);}
 }
 
