@@ -647,6 +647,7 @@ async function loadRequests(){
   let requests = [];
 
   // Try quote_requests by email first (most reliable), then by company name
+  console.log('loadRequests: email='+email+' company='+company);
   const r1 = await db.from('quote_requests')
     .select('*')
     .or('customer_email.eq.'+email+',customer.eq.'+company)
@@ -654,8 +655,12 @@ async function loadRequests(){
     .order('created_at',{ascending:false})
     .limit(50);
 
+  console.log('quote_requests result:', r1.error ? 'ERROR: '+r1.error.message : (r1.data||[]).length+' rows');
   if(!r1.error){
     requests = r1.data || [];
+    // Also try unfiltered to see ALL rows in the table
+    const rAll = await db.from('quote_requests').select('*').limit(5);
+    console.log('ALL quote_requests (first 5):', JSON.stringify(rAll.data));
   } else {
     // quote_requests table may not exist yet — try chat_messages fallback
     const r2 = await db.from('chat_messages').select('*')
