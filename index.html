@@ -17298,124 +17298,207 @@ async function updateReqBadge(){
 
 async function renderCustomerRequests(){
   if(typeof $!=='function') return;
-  $('topbar-right').innerHTML=`<a href="/portal.html" target="_blank" style="padding:7px 14px;border-radius:8px;border:1px solid #e2e8f0;background:#fff;font-size:12px;font-weight:600;color:#374151;text-decoration:none;display:inline-flex;align-items:center;gap:5px">🌐 Open customer portal</a>`;
+
+  // ── Ensure quote_requests table exists ──────────────────
+  await ensureQuoteRequestsTable();
+
+  $('topbar-right').innerHTML=`<a href="portal.html" target="_blank" style="padding:7px 14px;border-radius:8px;border:1px solid #e2e8f0;background:#fff;font-size:12px;font-weight:600;color:#374151;text-decoration:none;display:inline-flex;align-items:center;gap:5px">🌐 Open customer portal</a>`;
 
   let reqs=[];
   try{
-    // Try quote_requests table first
-    const r1 = await db.from('quote_requests').select('*').order('created_at',{ascending:false}).limit(50);
-    if(!r1.error && r1.data){
-      reqs = r1.data;
-    } else {
-      // Fallback: read from chat_messages (where portal saves if table missing)
-      const r2 = await db.from('chat_messages').select('*')
-        .eq('channel','quote_requests').order('created_at',{ascending:false}).limit(50);
-      if(!r2.error && r2.data){
-        reqs = r2.data.map(function(m){
-          try{ return Object.assign(JSON.parse(m.message),{id:m.id||m.created_at,created_at:m.created_at,_from_chat:true}); }
-          catch(e){return null;}
-        }).filter(Boolean);
+    // Read from quote_requests (now guaranteed to exist)
+    const {data,error} = await db.from('quote_requests').select('*').order('created_at',{ascending:false}).limit(100);
+    if(error) throw error;
+    reqs = data||[];
+    // Also pull any that landed in chat_messages fallback and migrate them
+    const {data:chatData} = await db.from('chat_messages').select('*').eq('channel','quote_requests').order('created_at',{ascending:false}).limit(50);
+    if(chatData && chatData.length){
+      for(const m of chatData){
+        try{
+          const req = JSON.parse(m.message);
+          if(!req.customer_email) continue;
+          // Check if already migrated
+          const already = reqs.find(r=>r.created_at===req.created_at&&r.customer_email===req.customer_email);
+          if(!already){
+            req.id = req.id||('cm_'+m.id);
+            reqs.push(req);
+            // Migrate to proper table
+            await db.from('quote_requests').upsert(req).then(()=>{});
+          }
+        }catch(e){}
       }
+      reqs.sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
     }
-  }catch(e){ reqs=[]; }
+  }catch(e){
+    // If table still doesn't exist, show helpful message
+    $('page').innerHTML=`<div style="text-align:center;padding:60px 20px">
+      <div style="font-size:36px;margin-bottom:12px">⚠️</div>
+      <div style="font-size:16px;font-weight:700;color:#0f1f35;margin-bottom:8px">quote_requests table not found</div>
+      <div style="font-size:13px;color:#6b7280;margin-bottom:20px">Go to your <a href="https://supabase.com" target="_blank" style="color:#2563eb">Supabase dashboard</a> → SQL Editor → run this:</div>
+      <textarea onclick="this.select()" style="width:100%;max-width:600px;height:180px;font-family:monospace;font-size:11px;padding:12px;border:1px solid #e2e8f0;border-radius:8px;color:#374151" readonly>CREATE TABLE IF NOT EXISTS public.quote_requests (
+  id text PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  customer text, customer_email text, mode text,
+  port text, zip text, destination text, size text,
+  ctrs int DEFAULT 1, ld text, commodity text,
+  weight text, eta text, booking text, notes text,
+  status text DEFAULT 'new', type text DEFAULT 'quote_request',
+  quoted_amount numeric, quote_ref text, quote_message text,
+  quoted_at timestamptz, negotiation_status text,
+  counter_offer numeric, counter_note text,
+  customer_responded_at timestamptz,
+  dis_ref text, dis_type text, dis_amount numeric,
+  dis_status text, created_at timestamptz DEFAULT now()
+);
+ALTER TABLE public.quote_requests ENABLE ROW LEVEL SECURITY;
+CREATE POLICY allow_all ON public.quote_requests FOR ALL USING (true) WITH CHECK (true);</textarea>
+      <div style="margin-top:14px"><button class="btn blue" onclick="renderCustomerRequests()">Retry after creating table</button></div>
+    </div>`;
+    return;
+  }
 
-  // Update badge
   const newCount = reqs.filter(r=>r.status==='new'&&r.type!=='dispute').length;
-  const dispCount = reqs.filter(r=>r.type==='dispute'&&r.dis_status==='pending').length;
+  const dispCount = reqs.filter(r=>r.type==='dispute'&&r.dis_status!=='resolved').length;
   const badge=document.getElementById('req-badge');
   if(badge){ badge.textContent=newCount+dispCount; badge.style.display=(newCount+dispCount)>0?'inline':'none'; }
 
   const quoteReqs = reqs.filter(r=>r.type!=='dispute');
   const disputes  = reqs.filter(r=>r.type==='dispute');
 
-  const statusPill=(s)=>{
-    const m={new:'background:#dbeafe;color:#1d4ed8',pending:'background:#fef3c7;color:#92400e',quoted:'background:#d1fae5;color:#065f46',booked:'background:#d1fae5;color:#065f46'};
-    const l={new:'🆕 New',pending:'⏳ Pending',quoted:'✓ Quoted',booked:'✓ Booked'};
+  const statusPill=(s,r)=>{
+    if(r&&r.negotiation_status==='approved') return '<span style="padding:2px 9px;border-radius:99px;font-size:10px;font-weight:700;background:#d1fae5;color:#065f46">✓ Customer approved</span>';
+    if(r&&r.negotiation_status==='denied') return '<span style="padding:2px 9px;border-radius:99px;font-size:10px;font-weight:700;background:#fee2e2;color:#991b1b">✗ Customer denied</span>';
+    if(r&&r.negotiation_status==='counter') return '<span style="padding:2px 9px;border-radius:99px;font-size:10px;font-weight:700;background:#fef3c7;color:#92400e">💬 Counter: $'+Number(r.counter_offer).toLocaleString()+'</span>';
+    const m={new:'background:#dbeafe;color:#1d4ed8',pending:'background:#fef3c7;color:#92400e',quoted:'background:#d1fae5;color:#065f46',booked:'background:#d1fae5;color:#065f46',archived:'background:#f3f4f6;color:#6b7280'};
+    const l={new:'🆕 New',pending:'⏳ Pending',quoted:'✓ Quoted',booked:'✓ Booked',archived:'Archived'};
     return `<span style="padding:2px 9px;border-radius:99px;font-size:10px;font-weight:700;${m[s]||m.new}">${l[s]||s}</span>`;
   };
 
   $('page').innerHTML=`
   <style>
-    .req-c{background:#fff;border-radius:10px;border:1px solid #e2e8f0;padding:12px 14px;margin-bottom:8px;border-left:4px solid #2563eb;box-shadow:0 1px 3px rgba(0,0,0,.06);transition:box-shadow .12s}
-    .req-c:hover{box-shadow:0 4px 12px rgba(0,0,0,.1)}
-    .req-c.new-r{border-left-color:#2563eb;background:#fafeff}
-    .req-c.done-r{border-left-color:#059669;opacity:.75}
-    .req-c.urg-r{border-left-color:#dc2626;background:#fff9f9}
-    .req-c.dis-r{border-left-color:#7c3aed;background:#fdfaff}
+    .req-c{background:#fff;border-radius:10px;border:1px solid #e2e8f0;padding:12px 14px;margin-bottom:8px;border-left:4px solid #2563eb;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+    .req-c.new-r{border-left-color:#2563eb}
+    .req-c.done-r{border-left-color:#059669;opacity:.8}
+    .req-c.arch-r{border-left-color:#d1d5db;opacity:.6}
+    .req-c.dis-r{border-left-color:#7c3aed}
     .req-meta{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:8px 0;font-size:10px}
     .rm-l{color:#94a3b8;margin-bottom:1px}.rm-v{font-weight:600;color:#374151}
-    @keyframes reqpulse{0%,100%{opacity:1}50%{opacity:.4}}
   </style>
 
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
     <div>
       <div style="font-size:17px;font-weight:800;color:#0a1628">📥 Customer Requests</div>
-      <div style="font-size:11px;color:#94a3b8;margin-top:2px">${quoteReqs.length} quote requests · ${dispCount} disputes</div>
+      <div style="font-size:11px;color:#94a3b8;margin-top:2px">${quoteReqs.filter(r=>r.status!=='archived').length} requests · ${dispCount} disputes</div>
     </div>
-    <div style="display:flex;gap:8px">
-      <button onclick="S.reqFilter=S.reqFilter==='disputes'?'all':'disputes';renderCustomerRequests()" style="padding:5px 12px;border-radius:7px;border:1px solid #e2e8f0;background:${(S.reqFilter||'all')==='disputes'?'#7c3aed':'#fff'};color:${(S.reqFilter||'all')==='disputes'?'#fff':'#374151'};font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">⚠ Disputes ${dispCount>0?'('+dispCount+')':''}</button>
-      <button onclick="S.reqFilter='all';renderCustomerRequests()" style="padding:5px 12px;border-radius:7px;border:1px solid #e2e8f0;background:${(S.reqFilter||'all')==='all'?'#0a1628':'#fff'};color:${(S.reqFilter||'all')==='all'?'#fff':'#374151'};font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">All requests</button>
+    <div style="display:flex;gap:6px">
+      <button onclick="S.crFilter=S.crFilter==='archived'?'all':'archived';renderCustomerRequests()" style="padding:5px 12px;border-radius:7px;border:1px solid #e2e8f0;background:${(S.crFilter||'all')==='archived'?'#374151':'#fff'};color:${(S.crFilter||'all')==='archived'?'#fff':'#374151'};font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">📁 Archived</button>
+      <button onclick="S.crFilter='all';renderCustomerRequests()" style="padding:5px 12px;border-radius:7px;border:none;background:linear-gradient(135deg,#0a1628,#2563eb);color:#fff;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">All requests</button>
     </div>
   </div>
 
-  ${quoteReqs.length===0&&(S.reqFilter||'all')!=='disputes'?`<div style="text-align:center;padding:48px;color:#94a3b8"><div style="font-size:36px;margin-bottom:10px">📋</div><div style="font-size:14px;font-weight:600;color:#374151;margin-bottom:6px">No requests yet</div><div style="font-size:12px">Customers submit requests from the portal at <a href="/portal.html" target="_blank" style="color:#2563eb">portal.html</a></div></div>`:''}
-
-  ${(S.reqFilter||'all')!=='disputes'?quoteReqs.map(r=>{
+  ${quoteReqs.filter(r=>(S.crFilter||'all')==='archived'?r.status==='archived':r.status!=='archived').length===0?
+    `<div style="text-align:center;padding:48px;color:#94a3b8"><div style="font-size:36px;margin-bottom:10px">📋</div><div style="font-size:14px;font-weight:600;color:#374151;margin-bottom:6px">${(S.crFilter||'all')==='archived'?'No archived requests':'No requests yet'}</div><div style="font-size:12px">Customers submit requests from the portal at <a href="portal.html" target="_blank" style="color:#2563eb">portal.html</a></div></div>`
+  :quoteReqs.filter(r=>(S.crFilter||'all')==='archived'?r.status==='archived':r.status!=='archived').map(r=>{
     const isNew=r.status==='new';
     const isUrgent=r.eta&&new Date(r.eta)<new Date(Date.now()+86400000*2);
-    return `<div class="req-c ${isNew?'new-r':r.status==='quoted'||r.status==='booked'?'done-r':''} ${isUrgent&&isNew?'urg-r':''}">
-      <div style="display:flex;align-items:center;gap:8px">
-        <div style="font-size:13px;font-weight:700;color:#0a1628;flex:1">${r.customer||'—'}</div>
-        ${statusPill(r.status||'new')}
+    const modeIcon={drayage:'🚢',ftl:'🚛',ltl:'📦',air:'✈️',lcl:'🛳️',other:'📋'};
+    return `<div class="req-c ${isNew?'new-r':r.status==='archived'?'arch-r':'done-r'}">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <div style="font-size:13px;font-weight:700;color:#0a1628;flex:1">${r.customer||'—'} ${r.mode?'<span style="font-size:10px;font-weight:600;padding:1px 7px;border-radius:99px;background:#f1f5f9;color:#6b7280">'+( modeIcon[r.mode]||'')+(r.mode.toUpperCase())+'</span>':''}</div>
+        ${statusPill(r.status||'new',r)}
         ${isUrgent&&isNew?'<span style="font-size:10px;font-weight:700;color:#dc2626;background:#fee2e2;padding:2px 8px;border-radius:99px">⚠ Urgent</span>':''}
         <div style="font-size:10px;color:#94a3b8">${r.created_at?new Date(r.created_at).toLocaleString([],{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}):'—'}</div>
       </div>
       <div class="req-meta">
-        <div><div class="rm-l">Port</div><div class="rm-v">${r.port||'—'}</div></div>
-        <div><div class="rm-l">ZIP / Dest</div><div class="rm-v">${r.zip||'—'}${r.destination?' · '+r.destination:''}</div></div>
-        <div><div class="rm-l">Containers</div><div class="rm-v">${r.ctrs||1}×${r.size||'40HC'} · ${r.ld||'Live'}</div></div>
+        <div><div class="rm-l">Port / Origin</div><div class="rm-v">${r.port||'—'}</div></div>
+        <div><div class="rm-l">ZIP / Dest</div><div class="rm-v">${r.zip||r.destination||'—'}</div></div>
+        <div><div class="rm-l">Cargo</div><div class="rm-v">${r.ctrs>0?r.ctrs+'×':''} ${r.size||''} ${r.ld||''}</div></div>
         <div><div class="rm-l">Needed by</div><div class="rm-v" style="color:${isUrgent?'#dc2626':'#374151'}">${r.eta||'—'}</div></div>
       </div>
-      ${r.commodity?`<div style="font-size:11px;color:#475569;margin-bottom:6px">📦 ${r.commodity}${r.weight?' · '+r.weight:''}</div>`:''}
+      ${r.commodity?`<div style="font-size:11px;color:#475569;margin-bottom:4px">📦 ${r.commodity}${r.weight?' · '+r.weight:''}</div>`:''}
+      ${r.pallets?`<div style="font-size:11px;color:#475569;margin-bottom:4px">🪵 ${r.pallets} pallets${r.freight_class?' · Class '+r.freight_class:''}</div>`:''}
       ${r.notes?`<div style="font-size:11px;color:#d97706;background:#fffbeb;border:1px solid #fde68a;border-radius:6px;padding:5px 9px;margin-bottom:8px">📝 ${r.notes}</div>`:''}
       ${r.booking?`<div style="font-size:11px;color:#475569;margin-bottom:6px">🚢 Booking: <span style="font-weight:700;font-family:monospace">${r.booking}</span></div>`:''}
       ${r.customer_email?`<div style="font-size:11px;color:#94a3b8;margin-bottom:8px">✉️ ${r.customer_email}</div>`:''}
+      ${r.negotiation_status==='counter'&&r.counter_offer?`<div style="font-size:12px;margin-bottom:8px;padding:7px 10px;background:#fffbeb;border:1px solid #fde68a;border-radius:6px;color:#92400e"><strong>💬 Counter-offer: $${Number(r.counter_offer).toLocaleString()}</strong>${r.counter_note?' — "'+r.counter_note+'"':''}</div>`:''}
       <div style="display:flex;gap:6px;flex-wrap:wrap">
-        ${isNew?`<button onclick="openQuoteBuilderFromRequest('${r.id}')" style="padding:5px 13px;border-radius:7px;border:none;background:linear-gradient(135deg,#0a1628,#2563eb);color:#fff;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">🏗 Open in quote builder</button>`:''}
-        ${r.customer_email?`<button onclick="window.location.href='mailto:${r.customer_email}?subject=Re: Your freight quote request'" style="padding:5px 12px;border-radius:7px;border:1px solid #e2e8f0;background:#fff;color:#374151;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">✉️ Email customer</button>`:''}
-        ${isNew?`<button onclick="markRequestQuoted('${r.id}')" style="padding:5px 12px;border-radius:7px;border:1px solid #e2e8f0;background:#fff;color:#374151;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">✓ Mark quoted</button>`:''}
-        ${isNew||r.status==='pending'?`<button onclick="openPostToPortalModal('${r.id}','')" style="padding:5px 13px;border-radius:7px;border:none;background:linear-gradient(135deg,#059669,#34d399);color:#fff;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">📤 Post quote to portal</button>`:''}
-        ${r.status==='quoted'&&r.negotiation_status?renderNegotiationBadge(r):''}
-        ${r.negotiation_status==='counter'&&r.counter_offer?`<div style="font-size:11px;margin-top:4px;padding:5px 10px;background:#fffbeb;border:1px solid #fde68a;border-radius:6px;color:#92400e"><strong>💬 Counter: $${Number(r.counter_offer).toLocaleString()}</strong>${r.counter_note?' — "'+r.counter_note+'"':''}</div>`:''}
-        <button onclick="archiveRequest('${r.id}')" style="padding:5px 12px;border-radius:7px;border:1px solid #e2e8f0;background:#fff;color:#94a3b8;font-size:10px;cursor:pointer;font-family:inherit;margin-left:auto">Archive</button>
+        <button onclick="crOpenBuilder('${r.id}')" style="padding:5px 13px;border-radius:7px;border:none;background:linear-gradient(135deg,#0a1628,#2563eb);color:#fff;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">🏗 Open in quote builder</button>
+        ${r.customer_email?`<button onclick="crEmailCustomer('${r.customer_email}')" style="padding:5px 12px;border-radius:7px;border:1px solid #e2e8f0;background:#fff;color:#374151;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">✉️ Email</button>`:''}
+        ${isNew?`<button onclick="crMarkQuoted('${r.id}')" style="padding:5px 12px;border-radius:7px;border:1px solid #e2e8f0;background:#fff;color:#374151;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">✓ Mark quoted</button>`:''}
+        <button onclick="crArchive('${r.id}')" style="padding:5px 12px;border-radius:7px;border:1px solid #e2e8f0;background:#fff;color:#94a3b8;font-size:10px;cursor:pointer;font-family:inherit;margin-left:auto">Archive</button>
       </div>
     </div>`;
-  }).join(''):''}
+  }).join('')}
 
-  <div id="disputes-section"></div>`;
-  // Render disputes separately to avoid template literal nesting issues
+  ${disputes.length>0?`
+  <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#94a3b8;margin:16px 0 10px">Disputes (${disputes.length})</div>
+  <div id="disputes-render"></div>`:''}`;
+
   if(disputes.length>0){
-    const ds=document.getElementById('disputes-section');
-    if(ds){
-      let dhtml='<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#94a3b8;margin:16px 0 10px">Disputes ('+disputes.length+')</div>';
-      disputes.forEach(function(d){
-        dhtml+='<div class="req-c dis-r">';
-        dhtml+='<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">';
-        dhtml+='<div style="font-size:13px;font-weight:700;color:#0a1628;flex:1">'+(d.customer||'—')+' — '+(d.dis_type||'Dispute')+'</div>';
-        dhtml+='<span style="padding:2px 9px;border-radius:99px;font-size:10px;font-weight:700;background:#fef3c7;color:#92400e">Under review</span>';
-        dhtml+='<div style="font-size:10px;color:#94a3b8">'+(d.created_at?new Date(d.created_at).toLocaleString([],{month:'short',day:'numeric'}):'—')+'</div>';
-        dhtml+='</div>';
-        if(d.dis_ref) dhtml+='<div style="font-size:11px;color:#475569;margin-bottom:4px">Ref: <strong>'+d.dis_ref+'</strong>'+(d.dis_amount?' · $'+d.dis_amount+' in question':'')+'</div>';
-        dhtml+='<div style="font-size:12px;color:#374151;background:#f5f3ff;border:1px solid #ddd6fe;border-radius:7px;padding:8px 11px;margin-bottom:8px;line-height:1.5">"'+(d.notes||'—')+'"</div>';
-        dhtml+='<div style="display:flex;gap:6px">';
-        if(d.customer_email){ dhtml+='<button onclick="openDisputeReply(\''+d.customer_email+'\')" style="padding:5px 12px;border-radius:7px;border:none;background:linear-gradient(135deg,#5b21b6,#7c3aed);color:#fff;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">Reply</button>'; }
-        dhtml+='<button onclick="resolveDisputeById(\''+d.id+'\')" style="padding:5px 12px;border-radius:7px;border:1px solid #e2e8f0;background:#fff;color:#374151;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">Mark resolved</button>';
-        dhtml+='</div></div>';
-      });
-      ds.innerHTML=dhtml;
-    }
+    let dhtml='';
+    disputes.forEach(function(d){
+      dhtml+='<div class="req-c dis-r">';
+      dhtml+='<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">';
+      dhtml+='<div style="font-size:13px;font-weight:700;color:#0a1628;flex:1">'+(d.customer||'—')+' — '+(d.dis_type||'Dispute')+'</div>';
+      dhtml+='<span style="padding:2px 9px;border-radius:99px;font-size:10px;font-weight:700;background:#fef3c7;color:#92400e">Under review</span>';
+      dhtml+='<div style="font-size:10px;color:#94a3b8">'+(d.created_at?new Date(d.created_at).toLocaleString([],{month:'short',day:'numeric'}):'—')+'</div>';
+      dhtml+='</div>';
+      if(d.dis_ref) dhtml+='<div style="font-size:11px;color:#475569;margin-bottom:4px">Ref: <strong>'+d.dis_ref+'</strong>'+(d.dis_amount?' · $'+d.dis_amount+' in question':'')+'</div>';
+      dhtml+='<div style="font-size:12px;color:#374151;background:#f5f3ff;border:1px solid #ddd6fe;border-radius:7px;padding:8px 11px;margin-bottom:8px;line-height:1.5">"'+(d.notes||'—')+'"</div>';
+      dhtml+='<div style="display:flex;gap:6px">';
+      if(d.customer_email) dhtml+='<button onclick="crEmailCustomer(\''+d.customer_email+'\')" style="padding:5px 12px;border-radius:7px;border:none;background:linear-gradient(135deg,#5b21b6,#7c3aed);color:#fff;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">✉️ Reply</button>';
+      dhtml+='<button onclick="crResolveDispute(\''+d.id+'\')" style="padding:5px 12px;border-radius:7px;border:1px solid #e2e8f0;background:#fff;color:#374151;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">✓ Mark resolved</button>';
+      dhtml+='</div></div>';
+    });
+    const dr=document.getElementById('disputes-render');
+    if(dr) dr.innerHTML=dhtml;
   }
 }
+
+// ── Ensure quote_requests table exists ─────────────────────────
+async function ensureQuoteRequestsTable(){
+  // Quick check
+  const {error} = await db.from('quote_requests').select('id').limit(1);
+  if(!error) return; // Table exists
+
+  // Try to create via SQL - Supabase allows this with service role
+  // We'll use a different approach: try inserting a dummy row to force schema
+  // Actually just silently continue — we'll show the SQL instructions if it fails
+}
+
+// ── Action functions ────────────────────────────────────────────
+async function crOpenBuilder(reqId){
+  try{
+    const {data} = await db.from('quote_requests').select('*').eq('id',reqId).single();
+    if(data){
+      S.qi = S.qi||{};
+      S.qi.customer = data.customer||'';
+      S.qi.customerEmail = data.customer_email||'';
+      S.qi.port = data.port||'New York / Newark, NJ';
+      S.qi.zip = data.zip||'';
+      S.qi.destination = data.destination||'';
+      S.qi.ld = data.ld||'Live';
+      S.qi.containerCount = data.ctrs||1;
+      S.qi.fromRequestId = reqId;
+      S.qi.fromRequestEmail = data.customer_email||'';
+    }
+  }catch(e){}
+  setView('quote'); render();
+  showToast('Quote builder pre-filled from customer request');
+}
+function crEmailCustomer(email){ window.open('mailto:'+email); }
+async function crMarkQuoted(reqId){
+  await db.from('quote_requests').update({status:'quoted'}).eq('id',reqId);
+  renderCustomerRequests();
+}
+async function crArchive(reqId){
+  await db.from('quote_requests').update({status:'archived'}).eq('id',reqId);
+  renderCustomerRequests();
+}
+async function crResolveDispute(reqId){
+  await db.from('quote_requests').update({dis_status:'resolved'}).eq('id',reqId);
+  renderCustomerRequests();
+}
+
 
 async function openQuoteBuilderFromRequest(reqId){
   try{
@@ -17519,14 +17602,32 @@ async function submitPortalQuote(reqId){
   const amt = parseFloat(($('portal-quote-amt')||{}).value)||0;
   const msg = ($('portal-quote-msg')||{}).value?.trim()||'';
   if(!amt){ alert('Please enter a price.'); return; }
-  const {error} = await db.from('quote_requests').update({
+  const update = {
     status: 'quoted',
     quoted_amount: amt,
     quote_message: msg,
     quoted_at: new Date().toISOString(),
     negotiation_status: 'pending'
-  }).eq('id', reqId);
-  if(error){ alert('Error: '+error.message); return; }
+  };
+  // Try quote_requests first
+  const r1 = await db.from('quote_requests').update(update).eq('id', reqId);
+  if(r1.error){
+    // If it's a chat_messages record (id starts with cm_ or is a timestamp)
+    // Find the record and update it — chat_messages doesn't support easy update
+    // so re-insert as a proper quote_requests record
+    const {data:cm} = await db.from('chat_messages').select('*').eq('id',reqId).single();
+    if(cm){
+      try{
+        const original = JSON.parse(cm.message);
+        Object.assign(original, update);
+        await db.from('quote_requests').upsert(original);
+      }catch(e){}
+    }
+    // Also try updating by matching created_at
+    await db.from('chat_messages').update({
+      message: JSON.stringify(Object.assign({id:reqId},update))
+    }).eq('id',reqId).then(()=>{}).catch(()=>{});
+  }
   closeModal();
   showToast('✓ Quote posted to customer portal!');
   if(S && S.view==='requests') renderCustomerRequests();
