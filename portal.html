@@ -343,13 +343,17 @@ async function loadCustomerProfile(){
   if(!currentUser) return;
   const email = currentUser.email || '';
   // Find matching customer by email
-  // First check app_users for portal-level customer account
-  const {data: userData} = await db.from('app_users').select('*').ilike('email', email).eq('role','customer').limit(1);
-  if(userData && userData[0]){
-    currentCustomer = {company: userData[0].company||email.split('@')[0], email, portal_level: userData[0].portal_level||'full', name: userData[0].name};
+  // Load company + portal_level from customers table (set when customer account was created)
+  const {data: custData} = await db.from('customers').select('*').ilike('email', email).limit(1);
+  if(custData && custData[0]){
+    currentCustomer = {
+      company: custData[0].company || email.split('@')[0],
+      email,
+      portal_level: custData[0].portal_level || 'full',
+      name: custData[0].contact || email.split('@')[0]
+    };
   } else {
-    const {data} = await db.from('customers').select('*').ilike('email', email).limit(1);
-    currentCustomer = (data && data[0]) || {company: email.split('@')[0], email, portal_level:'full'};
+    currentCustomer = {company: email.split('@')[0], email, portal_level:'full'};
   }
   const initials = (currentCustomer.company||email).split(' ').slice(0,2).map(w=>w[0]).join('').toUpperCase().slice(0,2);
   document.getElementById('user-av').textContent = initials;
