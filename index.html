@@ -7119,13 +7119,14 @@ async function renderAdmin(){
   if(!can('view_admin')){
     $('page').innerHTML='<div class="empty"><p>Admin access only.</p></div>';return;
   }
-  const _sbUrl = localStorage.getItem('sb_url')||'';
-  const _sbKey = localStorage.getItem('sb_key')||'';
-  const _portalBase = 'https://mkshifl.github.io/shifl-quoting/portal.html';
-  const _portalLink = _sbUrl&&_sbKey ? _portalBase+'?su='+encodeURIComponent(_sbUrl)+'&sk='+encodeURIComponent(_sbKey) : _portalBase+'?setup=1';
-  $('topbar-right').innerHTML=`
-    <button class="btn" onclick="navigator.clipboard.writeText('${_portalLink}').then(()=>showToast('✓ Portal link copied!'))" title="Copy this link to send to customers">🔗 Copy portal link</button>
-    <button class="btn blue" onclick="showCreateUser()" style="margin-left:6px">+ Add user</button>`;
+  // Store portal link in a global so the button can access it safely
+  window._adminPortalLink = (function(){
+    const u=localStorage.getItem('sb_url')||'';
+    const k=localStorage.getItem('sb_key')||'';
+    const base='https://mkshifl.github.io/shifl-quoting/portal.html';
+    return u&&k ? base+'?su='+encodeURIComponent(u)+'&sk='+encodeURIComponent(k) : base+'?setup=1';
+  })();
+  $('topbar-right').innerHTML='<button class="btn" onclick="copyPortalLink()" title="Copy pre-configured portal link to send to customers">🔗 Copy portal link</button> <button class="btn blue" onclick="showCreateUser()" style="margin-left:6px">+ Add user</button>';
   const{data:users}=await db.from('app_users').select('*').order('created_at',{ascending:true});
   const rows=(users||[]).map(u=>`<tr>
     <td class="bold">${u.name}</td>
@@ -7169,6 +7170,14 @@ async function renderAdmin(){
   </div>`;
 }
 
+function copyPortalLink(){
+  const link = window._adminPortalLink || 'https://mkshifl.github.io/shifl-quoting/portal.html?setup=1';
+  navigator.clipboard.writeText(link).then(()=>{
+    showToast('✓ Portal link copied! Send this to your customer.');
+  }).catch(()=>{
+    prompt('Copy this link and send to your customer:', link);
+  });
+}
 function showCreateUser(){
   if(_currentUser?.role!=='super_admin'){alert('Only a Super Admin can create new users.');return;}
   $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
