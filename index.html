@@ -17302,8 +17302,21 @@ async function renderCustomerRequests(){
 
   let reqs=[];
   try{
-    const {data} = await db.from('quote_requests').select('*').order('created_at',{ascending:false}).limit(50);
-    reqs = data||[];
+    // Try quote_requests table first
+    const r1 = await db.from('quote_requests').select('*').order('created_at',{ascending:false}).limit(50);
+    if(!r1.error && r1.data){
+      reqs = r1.data;
+    } else {
+      // Fallback: read from chat_messages (where portal saves if table missing)
+      const r2 = await db.from('chat_messages').select('*')
+        .eq('channel','quote_requests').order('created_at',{ascending:false}).limit(50);
+      if(!r2.error && r2.data){
+        reqs = r2.data.map(function(m){
+          try{ return Object.assign(JSON.parse(m.message),{id:m.id||m.created_at,created_at:m.created_at,_from_chat:true}); }
+          catch(e){return null;}
+        }).filter(Boolean);
+      }
+    }
   }catch(e){ reqs=[]; }
 
   // Update badge
