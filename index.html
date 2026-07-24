@@ -7124,7 +7124,7 @@ async function renderAdmin(){
   const rows=(users||[]).map(u=>`<tr>
     <td class="bold">${u.name}</td>
     <td class="muted">${u.email}</td>
-    <td><span class="badge ${u.role==='admin'?'b':'gr'}">${u.role==='admin'?'Admin':'User'}</span></td>
+    <td>${u.role==='customer'?`<span class="badge" style="background:#dbeafe;color:#1d4ed8">🌐 Customer${u.company?' · '+u.company:''}</span>`:u.role==='super_admin'?'<span class="badge" style="background:#ede9fe;color:#5b21b6">Super Admin</span>':u.role==='admin'?'<span class="badge b">Admin</span>':'<span class="badge gr">Team Member</span>'}</td>
     <td><span class="badge ${u.active?'g':'r'}">${u.active?'Active':'Inactive'}</span></td>
     <td class="muted small">${u.last_login?new Date(u.last_login).toLocaleDateString():'Never'}</td>
     <td style="white-space:nowrap">
@@ -7140,7 +7140,7 @@ async function renderAdmin(){
   $('page').innerHTML=`<div class="card">
     <div class="sec-head">Team members</div>
     <div class="tbl-wrap" style="box-shadow:none;border:none;margin:0">
-      <table><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Last login</th><th></th></tr></thead>
+      <table><thead><tr><th>Name</th><th>Email</th><th>Role / Company</th><th>Status</th><th>Last login</th><th></th></tr></thead>
       <tbody>${rows||'<tr><td colspan="6" style="text-align:center;padding:30px;color:var(--gray-400)">No users yet</td></tr>'}</tbody>
       </table>
     </div>
@@ -7174,7 +7174,26 @@ function showCreateUser(){
     <div class="g2">
       <div class="field"><label>Password *</label><input type="password" id="nu-pw" placeholder="Set a temporary password"></div>
       <div class="field"><label>Role</label>
-        <select id="nu-role"><option value="team_member">Team Member</option><option value="admin">Admin</option><option value="super_admin">Super Admin</option></select>
+        <select id="nu-role" onchange="toggleCustomerFields(this.value)">
+          <option value="team_member">Team Member</option>
+          <option value="admin">Admin</option>
+          <option value="super_admin">Super Admin</option>
+          <option value="customer">🌐 Customer (portal access)</option>
+        </select>
+      </div>
+    </div>
+    <div id="customer-fields" style="display:none;background:#f0f6ff;border:1px solid #bfdbfe;border-radius:8px;padding:12px 14px;margin-top:4px">
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#1d4ed8;margin-bottom:10px">Customer portal settings</div>
+      <div class="field"><label>Company name *</label><input type="text" id="nu-company" placeholder="e.g. TJB Linens Corp"></div>
+      <div class="field" style="margin-top:8px"><label>Portal access level</label>
+        <select id="nu-portal-level">
+          <option value="full">Full access — quotes, tracking, invoices, disputes</option>
+          <option value="quotes_only">Quotes only — can only request freight quotes</option>
+        </select>
+      </div>
+      <div style="font-size:11px;color:#3b82f6;margin-top:8px">
+        ✓ Customer will log in at <strong>portal.html</strong> with the email + password above<br>
+        ✓ They will only see their own company's data
       </div>
     </div>
     <div class="modal-foot">
@@ -7189,15 +7208,20 @@ async function createUser(){
   const pw=($('nu-pw')||{}).value;
   const role=($('nu-role')||{}).value||'user';
   if(!name||!email||!pw){alert('Name, email and password are all required.');return;}
+  const company = ($('nu-company')||{}).value?.trim()||'';
+  const portalLevel = ($('nu-portal-level')||{}).value||'full';
+  if(role==='customer'&&!company){alert('Company name is required for customer accounts.');return;}
   try{
     const hash=await hashPassword(email,pw);
-    const{error}=await db.from('app_users').insert({id:uid(),name,email,password_hash:hash,role,active:true});
+    const{error}=await db.from('app_users').insert({id:uid(),name,email,password_hash:hash,role,active:true,company:company||null,portal_level:role==='customer'?portalLevel:null});
     if(error) throw error;
-    logAction('user_added',`${name} (${email}) — Role: ${role}`);
+    logAction('user_added',`${name} (${email}) — Role: ${role}${company?' | '+company:''}`);
     closeModal();renderAdmin();
     // Email credentials via mailto
-    const subj=encodeURIComponent('Your Shifl account is ready');
-    const body=encodeURIComponent('Hi '+name+',\n\nYour Shifl Freight Quoting account has been created.\n\nLogin: https://mkshifl.github.io/shifl-quoting/\nEmail: '+email+'\nPassword: '+pw+'\n\nPlease change your password after first login.\n\nThanks,\nShifl Team');
+    const isCustomer = role==='customer';
+    const loginUrl = isCustomer ? 'https://mkshifl.github.io/shifl-quoting/portal.html' : 'https://mkshifl.github.io/shifl-quoting/';
+    const subj=encodeURIComponent(isCustomer?'Your Shifl customer portal is ready':'Your Shifl account is ready');
+    const body=encodeURIComponent('Hi '+name+','+(isCustomer?'\n\nYour '+company+' customer portal account has been set up.\n\nPortal: '+loginUrl:'\n\nYour Shifl Freight Quoting account has been created.\n\nLogin: '+loginUrl)+'\nEmail: '+email+'\nPassword: '+pw+'\n\nPlease change your password after first login.\n\nThanks,\nShifl Team');
     window.open('mailto:'+email+'?subject='+subj+'&body='+body);
   }catch(e){alert('Error creating user: '+e.message);}
 }
@@ -7212,11 +7236,22 @@ async function showEditUser(id){
       <div class="field"><label>Email</label><input type="email" id="eu-email" value="${u.email}" placeholder="email@company.com"></div>
     </div>
     <div class="field"><label>Role</label>
-      <select id="eu-role">
+      <select id="eu-role" onchange="toggleCustomerFields(this.value,'eu-')">
         <option value="team_member" ${u.role==='team_member'||u.role==='user'?'selected':''}>Team Member</option>
         <option value="admin" ${u.role==='admin'?'selected':''}>Admin</option>
         <option value="super_admin" ${u.role==='super_admin'?'selected':''}>Super Admin</option>
+        <option value="customer" ${u.role==='customer'?'selected':''}>🌐 Customer (portal access)</option>
       </select>
+    </div>
+    <div id="customer-fields" style="display:${u.role==='customer'?'block':'none'};background:#f0f6ff;border:1px solid #bfdbfe;border-radius:8px;padding:12px 14px;margin-top:4px">
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#1d4ed8;margin-bottom:10px">Customer portal settings</div>
+      <div class="field"><label>Company name *</label><input type="text" id="eu-company" value="${u.company||''}" placeholder="e.g. TJB Linens Corp"></div>
+      <div class="field" style="margin-top:8px"><label>Portal access level</label>
+        <select id="eu-portal-level">
+          <option value="full" ${(u.portal_level||'full')==='full'?'selected':''}>Full access — quotes, tracking, invoices, disputes</option>
+          <option value="quotes_only" ${u.portal_level==='quotes_only'?'selected':''}>Quotes only — can only request freight quotes</option>
+        </select>
+      </div>
     </div>
     <div class="modal-foot">
       <button class="btn" onclick="closeModal()">Cancel</button>
@@ -7229,10 +7264,12 @@ async function saveEditUser(id){
   const email=($('eu-email')||{}).value?.trim().toLowerCase();
   const role=($('eu-role')||{}).value||'user';
   if(!name||!email){alert('Name and email are required.');return;}
+  const company2 = ($('eu-company')||{}).value?.trim()||null;
+  const portalLevel2 = ($('eu-portal-level')||{}).value||'full';
   try{
-    const{error}=await db.from('app_users').update({name,email,role}).eq('id',id);
+    const{error}=await db.from('app_users').update({name,email,role,company:company2,portal_level:role==='customer'?portalLevel2:null}).eq('id',id);
     if(error) throw error;
-    closeModal();renderAdmin();alert('✅ User updated.');
+    closeModal();renderAdmin();showToast('✅ User updated.');
   }catch(e){alert('Error: '+e.message);}
 }
 async function toggleUserActive(id,currentActive){
@@ -17287,6 +17324,9 @@ async function renderCustomerRequests(){
         ${isNew?`<button onclick="openQuoteBuilderFromRequest('${r.id}')" style="padding:5px 13px;border-radius:7px;border:none;background:linear-gradient(135deg,#0a1628,#2563eb);color:#fff;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">🏗 Open in quote builder</button>`:''}
         ${r.customer_email?`<button onclick="window.location.href='mailto:${r.customer_email}?subject=Re: Your freight quote request'" style="padding:5px 12px;border-radius:7px;border:1px solid #e2e8f0;background:#fff;color:#374151;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">✉️ Email customer</button>`:''}
         ${isNew?`<button onclick="markRequestQuoted('${r.id}')" style="padding:5px 12px;border-radius:7px;border:1px solid #e2e8f0;background:#fff;color:#374151;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">✓ Mark quoted</button>`:''}
+        ${isNew||r.status==='pending'?`<button onclick="openPostToPortalModal('${r.id}','')" style="padding:5px 13px;border-radius:7px;border:none;background:linear-gradient(135deg,#059669,#34d399);color:#fff;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">📤 Post quote to portal</button>`:''}
+        ${r.status==='quoted'&&r.negotiation_status?renderNegotiationBadge(r):''}
+        ${r.negotiation_status==='counter'&&r.counter_offer?`<div style="font-size:11px;margin-top:4px;padding:5px 10px;background:#fffbeb;border:1px solid #fde68a;border-radius:6px;color:#92400e"><strong>💬 Counter: $${Number(r.counter_offer).toLocaleString()}</strong>${r.counter_note?' — "'+r.counter_note+'"':''}</div>`:''}
         <button onclick="archiveRequest('${r.id}')" style="padding:5px 12px;border-radius:7px;border:1px solid #e2e8f0;background:#fff;color:#94a3b8;font-size:10px;cursor:pointer;font-family:inherit;margin-left:auto">Archive</button>
       </div>
     </div>`;
@@ -17365,6 +17405,82 @@ if(typeof _origInitApp === 'function' && !window._reqSubPatched){
 function openDisputeReply(email){ window.open('mailto:'+email); }
 </script>
 <script>function resolveDisputeById(id){ resolveDispute(id); }</script>
+
+<script>
+// Toggle customer-specific fields when role dropdown changes
+function toggleCustomerFields(role, prefix){
+  const el = document.getElementById('customer-fields');
+  if(el) el.style.display = role==='customer' ? 'block' : 'none';
+}
+
+// ── Quote negotiation — post quoted amount to portal and allow approve/deny/negotiate ──
+async function postQuoteToPortal(reqId, quotedAmount, quoteRef){
+  if(!reqId){ alert('No portal request linked to this quote.'); return; }
+  const {error} = await db.from('quote_requests').update({
+    status: 'quoted',
+    quoted_amount: quotedAmount,
+    quote_ref: quoteRef||'',
+    quoted_at: new Date().toISOString(),
+    negotiation_status: 'pending'
+  }).eq('id', reqId);
+  if(error){ alert('Error: '+error.message); return; }
+  showToast('✓ Quote posted to customer portal — they can now approve, deny or negotiate');
+  // Refresh if on requests view
+  if(S && S.view==='requests') renderCustomerRequests();
+}
+
+// Open negotiation modal when building a quote from a portal request
+function openPostToPortalModal(reqId, suggestedAmt){
+  if(!reqId) return;
+  openModal(`
+    <div style="min-width:420px">
+      <div class="modal-title">📤 Post quote to customer portal</div>
+      <div class="modal-body">
+        <p style="font-size:12px;color:#6b7280;margin-bottom:14px">The customer will see this on their portal and can <strong>approve</strong>, <strong>deny</strong>, or <strong>make a counter-offer</strong>.</p>
+        <div class="field"><label>Customer price to show</label>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-size:18px;color:#94a3b8">$</span>
+            <input type="number" id="portal-quote-amt" value="${suggestedAmt||''}" placeholder="e.g. 1580" style="font-size:18px;font-weight:700;width:150px">
+          </div>
+        </div>
+        <div class="field" style="margin-top:10px"><label>Message to customer (optional)</label>
+          <textarea id="portal-quote-msg" rows="2" placeholder="e.g. Rate is valid for 30 days. Includes chassis." style="width:100%;font-family:inherit"></textarea>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn" onclick="closeModal()">Cancel</button>
+        <button class="btn blue" onclick="submitPortalQuote('${reqId}')">📤 Post to portal</button>
+      </div>
+    </div>
+  `);
+}
+
+async function submitPortalQuote(reqId){
+  const amt = parseFloat(($('portal-quote-amt')||{}).value)||0;
+  const msg = ($('portal-quote-msg')||{}).value?.trim()||'';
+  if(!amt){ alert('Please enter a price.'); return; }
+  const {error} = await db.from('quote_requests').update({
+    status: 'quoted',
+    quoted_amount: amt,
+    quote_message: msg,
+    quoted_at: new Date().toISOString(),
+    negotiation_status: 'pending'
+  }).eq('id', reqId);
+  if(error){ alert('Error: '+error.message); return; }
+  closeModal();
+  showToast('✓ Quote posted to customer portal!');
+  if(S && S.view==='requests') renderCustomerRequests();
+}
+
+// Show negotiation responses in the requests view — called from renderCustomerRequests
+function renderNegotiationBadge(req){
+  if(req.negotiation_status==='approved') return '<span style="font-size:10px;font-weight:700;padding:2px 9px;border-radius:99px;background:#d1fae5;color:#065f46">✓ Customer approved</span>';
+  if(req.negotiation_status==='denied') return '<span style="font-size:10px;font-weight:700;padding:2px 9px;border-radius:99px;background:#fee2e2;color:#991b1b">✗ Customer denied</span>';
+  if(req.negotiation_status==='counter' && req.counter_offer) return '<span style="font-size:10px;font-weight:700;padding:2px 9px;border-radius:99px;background:#fef3c7;color:#92400e">💬 Counter: $'+Number(req.counter_offer).toLocaleString()+'</span>';
+  if(req.status==='quoted') return '<span style="font-size:10px;font-weight:700;padding:2px 9px;border-radius:99px;background:#dbeafe;color:#1d4ed8">⏳ Awaiting customer response</span>';
+  return '';
+}
+</script>
 </body>
 </html>
 <script>
