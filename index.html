@@ -1798,7 +1798,7 @@ function renderQuote(){
   const isExport=qi.drayType==='export';const matches=getMatches();
   if(!S.selId&&matches.length) S.selId=matches[0].id;
   const sel=matches.find(r=>r.id===S.selId)||matches[0]||null;
-  $('topbar-right').innerHTML='<button class="btn" onclick="showRepeatPicker()" title="Load a previous quote">&#x1F501; Repeat</button><button class="btn" onclick="saveDraft(\'drayage\')">&#x1F4CB; Draft</button><span id="upsell-badge" style="display:none;background:#dc2626;color:#fff;border-radius:99px;font-size:9px;font-weight:800;padding:2px 7px"></span><button class="btn" onclick="printQuote()">&#x1F5A8; Print</button><button class="btn" onclick="downloadPDF()">&#x1F4C4; PDF</button><button class="btn blue" onclick="saveQuote()">&#x1F4BE; Save quote</button>';  $('page').innerHTML=draftBanner('drayage','drayage')+`<div class="two-col">
+  $('topbar-right').innerHTML='<button class="btn" onclick="showRepeatPicker()" title="Load a previous quote">&#x1F501; Repeat</button><button class="btn" onclick="saveDraft(\'drayage\')">&#x1F4CB; Draft</button><span id="upsell-badge" style="display:none;background:#dc2626;color:#fff;border-radius:99px;font-size:9px;font-weight:800;padding:2px 7px"></span><button class="btn" onclick="printQuote()">&#x1F5A8; Print</button><button class="btn" onclick="downloadPDF()">&#x1F4C4; PDF</button><button class="btn blue" onclick="saveQuote()">&#x1F4BE; Save quote</button>${S.qi&&S.qi.fromRequestId?`<button class="btn" onclick="openPostToPortalFromBuilder()" style="background:linear-gradient(135deg,#059669,#34d399);border-color:#059669;color:#fff">&#x1F4E4; Post to portal</button>`:''}';  $('page').innerHTML=draftBanner('drayage','drayage')+`<div class="two-col">
     <div>
       <div class="card">
         <div class="sec-head" style="display:flex;align-items:center;justify-content:space-between">
@@ -17640,6 +17640,129 @@ function renderNegotiationBadge(req){
   if(req.negotiation_status==='counter' && req.counter_offer) return '<span style="font-size:10px;font-weight:700;padding:2px 9px;border-radius:99px;background:#fef3c7;color:#92400e">💬 Counter: $'+Number(req.counter_offer).toLocaleString()+'</span>';
   if(req.status==='quoted') return '<span style="font-size:10px;font-weight:700;padding:2px 9px;border-radius:99px;background:#dbeafe;color:#1d4ed8">⏳ Awaiting customer response</span>';
   return '';
+}
+</script>
+
+<script>
+// ── Post to portal FROM quote builder ─────────────────────────
+function openPostToPortalFromBuilder(){
+  const qi = S.qi||{};
+  const reqId = qi.fromRequestId;
+
+  // Get current customer total from preview
+  let suggestedAmt = 0;
+  try{
+    const totalEl = document.getElementById('preview-customer-total');
+    if(totalEl) suggestedAmt = parseFloat(totalEl.textContent.replace(/[^0-9.]/g,''))||0;
+    // Fallback: compute from carrier selection
+    if(!suggestedAmt && S.selId && S.rates){
+      const sel = S.rates.find(r=>r.id===S.selId);
+      if(sel){
+        const CHARGE_KEYS=['base','chassis','prepull','det_port','det_cust','storage','ovw43','ovw48','bobtail','toll','genset','triaxle'];
+        suggestedAmt = CHARGE_KEYS.reduce((s,k)=>s+(Number(sel[k])||0),0);
+      }
+    }
+    // Try cu variable if accessible
+    if(!suggestedAmt){
+      const cuEl = document.querySelector('.prev-total [style*="font-size:18px"],.preview-total [style*="font-size:18px"]');
+      if(cuEl) suggestedAmt = parseFloat(cuEl.textContent.replace(/[^0-9.]/g,''))||0;
+    }
+  }catch(e){}
+
+  openModal(`
+    <div style="min-width:440px">
+      <div class="modal-title">📤 Post quote to customer portal</div>
+      <div class="modal-body">
+        <p style="font-size:12px;color:#6b7280;margin-bottom:14px">
+          The customer will see this on their portal and can <strong>approve</strong>, <strong>deny</strong>, or <strong>negotiate</strong>.
+          ${reqId?'':'<br><span style="color:#d97706">⚠ This quote was not opened from a customer request — the customer won't see it unless linked to their account.</span>'}
+        </p>
+        <div class="field">
+          <label>Customer price to show *</label>
+          <div style="display:flex;align-items:center;gap:8px;margin-top:4px">
+            <span style="font-size:20px;color:#94a3b8;font-weight:700">$</span>
+            <input type="number" id="portal-quote-amt" value="${suggestedAmt||''}" placeholder="e.g. 1580"
+              style="font-size:20px;font-weight:800;width:180px;padding:8px 12px;border:2px solid #e2e8f0;border-radius:8px;color:#0a1628">
+          </div>
+        </div>
+        <div class="field" style="margin-top:12px">
+          <label>Breakdown (optional — customer will see this)</label>
+          <textarea id="portal-quote-msg" rows="3" placeholder="e.g. Includes chassis, live unload. Detention: $100/hr after 2 free hours. Quote valid 30 days."
+            style="width:100%;padding:8px 10px;border:1.5px solid #e2e8f0;border-radius:7px;font-size:12px;resize:none;font-family:inherit;margin-top:4px"></textarea>
+        </div>
+        ${!reqId?`
+        <div class="field" style="margin-top:12px">
+          <label>Customer email (to link to their portal account)</label>
+          <input type="email" id="portal-customer-email" value="${qi.customerEmail||qi.customer||''}" placeholder="customer@company.com"
+            style="width:100%;padding:8px 10px;border:1.5px solid #e2e8f0;border-radius:7px;font-size:12px">
+        </div>`:''}
+      </div>
+      <div class="modal-foot">
+        <button class="btn" onclick="closeModal()">Cancel</button>
+        <button class="btn" style="background:linear-gradient(135deg,#059669,#34d399);border-color:#059669;color:#fff;font-weight:700"
+          onclick="submitPortalQuoteFromBuilder('${reqId||''}')">📤 Post to portal</button>
+      </div>
+    </div>
+  `);
+}
+
+async function submitPortalQuoteFromBuilder(reqId){
+  const amt = parseFloat(($('portal-quote-amt')||{}).value)||0;
+  const msg = ($('portal-quote-msg')||{}).value?.trim()||'';
+  const emailInput = $('portal-customer-email');
+  const customerEmail = emailInput ? emailInput.value.trim() : (S.qi?.fromRequestEmail||S.qi?.customerEmail||'');
+  if(!amt){ alert('Please enter a price.'); return; }
+
+  const update = {
+    status: 'quoted',
+    quoted_amount: amt,
+    quote_message: msg,
+    quoted_at: new Date().toISOString(),
+    negotiation_status: 'pending'
+  };
+
+  if(reqId){
+    // Update existing request
+    const r = await db.from('quote_requests').update(update).eq('id', reqId);
+    if(r.error){
+      // Try chat_messages migration
+      const {data:cm} = await db.from('chat_messages').select('*').eq('channel','quote_requests').order('created_at',{ascending:false}).limit(20);
+      if(cm && cm.length){
+        for(const m of cm){
+          try{
+            const d = JSON.parse(m.message);
+            if(d.customer_email===customerEmail){
+              // Insert as proper record
+              await db.from('quote_requests').upsert(Object.assign({},d,update,{id:d.id||('cm_'+m.id)}));
+              break;
+            }
+          }catch(e){}
+        }
+      }
+    }
+  } else if(customerEmail){
+    // No request ID — create a new quote_requests entry for this customer
+    const qi = S.qi||{};
+    const newReq = Object.assign({
+      id: 'qb_'+Date.now(),
+      customer: qi.customer||customerEmail,
+      customer_email: customerEmail,
+      mode: 'drayage',
+      port: qi.port||'',
+      zip: qi.zip||'',
+      destination: qi.destination||'',
+      size: qi.containerSize||'40HC',
+      ctrs: qi.containerCount||1,
+      ld: qi.ld||'Live',
+      commodity: qi.commodity||'',
+      notes: '',
+      created_at: new Date().toISOString()
+    }, update);
+    await db.from('quote_requests').upsert(newReq);
+  }
+
+  closeModal();
+  showToast('✓ Quote posted to customer portal! They can now approve, deny, or negotiate.');
 }
 </script>
 </body>
