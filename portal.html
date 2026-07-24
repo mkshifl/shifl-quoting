@@ -651,12 +651,13 @@ async function loadRequests(){
   if(!r1.error){
     requests = r1.data || [];
   } else {
-    // Fallback: read from chat_messages where room='quote_requests'
+    // Fallback: read from chat_messages using real column names
+    const customerName = (currentCustomer && currentCustomer.company) ? currentCustomer.company : (currentUser ? currentUser.email : '');
     const r2 = await db.from('chat_messages').select('*')
-      .eq('room','quote_requests').eq('sender', currentUser?currentUser.email:'').order('created_at',{ascending:false}).limit(20);
+      .eq('channel','quote_requests').eq('user_name', customerName).order('created_at',{ascending:false}).limit(20);
     if(!r2.error && r2.data){
       requests = r2.data.map(function(m){
-        try{ return Object.assign(JSON.parse(m.message),{id:m.id,created_at:m.created_at}); }catch(e){return null;}
+        try{ return Object.assign(JSON.parse(m.message),{id:m.created_at,created_at:m.created_at}); }catch(e){return null;}
       }).filter(Boolean);
     }
   }
@@ -768,14 +769,13 @@ async function submitQuoteRequest(){
   // Try quote_requests table first
   const r1 = await db.from('quote_requests').insert(req);
   if(r1.error){
-    // Fallback: save as chat_message (always exists)
-    const msg = JSON.stringify(req);
+    // Fallback: save as chat_message using real schema columns
     const r2 = await db.from('chat_messages').insert({
-      id: 'QR'+Date.now(),
-      room: 'quote_requests',
-      sender: req.customer_email,
-      message: msg,
-      created_at: new Date().toISOString()
+      user_id: null,
+      user_name: req.customer || req.customer_email,
+      user_role: 'customer',
+      channel: 'quote_requests',
+      message: JSON.stringify(req)
     });
     if(r2.error){ showToast('Error: '+r2.error.message, true); return; }
   }
