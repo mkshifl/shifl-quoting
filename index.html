@@ -4199,7 +4199,7 @@ function showBolModal(idx, source){
     </div></div>`;
 }
 
-async function downloadBOL(idx, source){
+async async function downloadBOL(idx, source){
   if(!await loadJsPDF()) return;
   let q = null;
   if(source==='fq') q=(window._fqHistory||[])[idx];
@@ -6502,7 +6502,7 @@ function buildLogRows(){
             <button class="btn sm" onclick="event.stopPropagation();downloadSavedPDF('${q.id}')" style="font-size:11px">📄 PDF</button>
             <button class="btn sm" onclick="event.stopPropagation();repeatDrayageQuote('${q.id}')" style="font-size:11px">🔁 Repeat</button>
             <button class="btn sm" onclick="event.stopPropagation();showQuoteModal('${q.id}')" style="font-size:11px">✏️ Edit</button>
-            <div style="position:relative;display:inline-block"><button class="btn sm" onclick="event.stopPropagation();showBolOptions(S.quotes.findIndex(x=>x.id==='${q.id}'),'drayage',this)" style="font-size:11px">📝 BOL ▾</button></div>
+            <div style="position:relative;display:inline-block">${(()=>{const _b=getBolUpload(q.id);return _b?'<a href="'+_b.data+'" download="'+_b.name+'" style="display:inline-flex;align-items:center;gap:4px;padding:5px 10px;border-radius:7px;border:1px solid #86efac;background:#f0fdf4;font-size:11px;font-weight:700;color:#16a34a;text-decoration:none">✅ BOL</a>':'<button class="btn sm" onclick="event.stopPropagation();showBolOptions(S.quotes.findIndex(x=>x.id===\''+q.id+'\'),\'drayage\',this)" style="font-size:11px">📝 BOL ▾</button>';})()}</div>
           </div>
         </div>
       </td>
@@ -13623,8 +13623,7 @@ function renderTMSDispatch(tabBar,kpis,loads){
           ${l.customerRate?` · <span style="color:var(--steel);font-weight:700">${fmtD(l.customerRate)}</span>`:''}
         </div>
         ${meta.bookingNum?`<div style="font-size:10px;color:var(--steel);font-weight:700;margin-bottom:2px">${meta.bookingNum}</div>`:''}        ${(()=>{
-  const _b=localStorage.getItem('bol_upload_tms_'+s.id);
-  const _bd=_b?JSON.parse(_b):null;
+  const _bd=getBolUpload(s.id);
   const _num=meta.bolNum?`<div style="font-size:10px;color:var(--gray-500);margin-bottom:4px">BOL: ${meta.bolNum}</div>`:'';
   const _uploaded=_bd?`<div style="margin-bottom:6px"><a href="${_bd.data}" download="${_bd.name}" style="display:inline-flex;align-items:center;gap:4px;background:#d1fae5;color:#065f46;border-radius:6px;padding:3px 8px;font-size:10px;font-weight:700;text-decoration:none">✅ BOL uploaded — tap to view</a></div>`:'';
   return _num+_uploaded;
@@ -13785,8 +13784,22 @@ function renderTMSBol(tabBar,loads){
 
 // BOL Builder Modal
 function openBOLBuilder(id){
-  const q=(window._fqHistory||[]).find(q=>q.id===id);
-  if(!q){showToast('Load not found','error');return;}
+  // Support FQ, TMS, and drayage loads
+  let q = (window._fqHistory||[]).find(x=>x.id===id);
+  if(!q){
+    // Try drayage quotes
+    const dq = (S.quotes||[]).find(x=>x.id===id);
+    if(dq) q = {id:dq.id, customer:dq.customer, pickupZip:dq.port||'', deliveryZip:dq.zip||'', carrier:dq.carrier||'', fqMode:'Drayage', weight:'', palletCount:'', commodity:dq.commodity||''};
+  }
+  if(!q){
+    // Try TMS loads
+    const tmsLoads = JSON.parse(localStorage.getItem('tms_loads')||'[]');
+    const tl = tmsLoads.find(x=>x.id===id);
+    if(tl) q = {id:tl.id, customer:tl.customer||tl.shipper||'', pickupZip:tl.pickupZip||'', deliveryZip:tl.deliveryZip||'', carrier:tl.carrier||'', fqMode:tl.mode||'Freight', weight:tl.weight||'', palletCount:tl.pallets||'', commodity:tl.commodity||''};
+  }
+  if(!q){showToast('Load not found — fill in BOL details manually','warn');
+    q={id:id,customer:'',pickupZip:'',deliveryZip:'',carrier:'',fqMode:'',weight:'',palletCount:'',commodity:''};
+  }
   const meta=getTMSMeta(id);
   const bolNum=meta.bolNum||'BOL-'+Date.now().toString().slice(-6);
   $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
@@ -14080,8 +14093,7 @@ function openTMSLoadDetail(id){
       <button class="btn" onclick="closeModal()">Close</button>
       <div style="position:relative;display:inline-block" id="tms-bol-wrap-${id}">
         ${(()=>{
-          const _bolData=localStorage.getItem('bol_upload_tms_'+id);
-          const _bol=_bolData?JSON.parse(_bolData):null;
+          const _bol=getBolUpload(id);
           if(_bol) return '<div style="display:flex;align-items:center;gap:6px">'
             +'<span style="background:#d1fae5;color:#065f46;border-radius:7px;padding:4px 10px;font-size:11px;font-weight:700">✅ BOL uploaded</span>'
             +'<a href="'+_bol.data+'" download="'+_bol.name+'" style="padding:4px 10px;border-radius:7px;border:1px solid #e2e8f0;background:#fff;font-size:11px;font-weight:600;color:#2563eb;text-decoration:none;cursor:pointer">⬇ View / Download</a>'
@@ -14375,7 +14387,7 @@ function openTMSLoadDetail(id){
   const hasCInv=!!getInvoice(id),hasCarrI=!!getCarrierInvoice(id);
 
   // Doc checklist
-  const _bolUpload=JSON.parse(localStorage.getItem('bol_upload_tms_'+id)||'null');
+  const _bolUpload=getBolUpload(id);
   const docs=[
     {label:'Rate confirmation',key:'rateCon',icon:'📧'},
     {label:'BOL',key:'bolNum',check:!!meta.bolNum||!!_bolUpload,icon:'📄',uploaded:!!_bolUpload,uploadData:_bolUpload},
@@ -17986,21 +17998,35 @@ function showBolOptions(idx, source, btn){
 }
 
 function uploadBOL(idx, source){
+  // Resolve to a stable ID
+  var id = idx;
+  if(source==='fq'){ var _fq=(window._fqHistory||[])[idx]; if(_fq) id=_fq.id||idx; }
+  else if(source==='drayage'){ var _dq=(S.quotes||[])[idx]; if(_dq) id=_dq.id||idx; }
+  var key = 'bol_upload_'+id;
   var input = document.createElement('input');
   input.type = 'file';
-  input.accept = '.pdf,.jpg,.jpeg,.png';
+  input.accept = '.pdf,.jpg,.jpeg,.png,.doc,.docx';
   input.onchange = function(){
     var file = input.files[0];
     if(!file) return;
-    var key = 'bol_upload_'+(source||'fq')+'_'+idx;
     var reader = new FileReader();
     reader.onload = function(e){
       localStorage.setItem(key, JSON.stringify({name:file.name,data:e.target.result,uploaded:new Date().toISOString()}));
-      showToast('BOL uploaded: '+file.name);
+      showToast('✅ BOL uploaded: '+file.name);
+      // Refresh current view
+      if(typeof renderLog==='function') try{ var t=$('log-tbody'); if(t) t.innerHTML=buildLogRows(); }catch(e){}
     };
     reader.readAsDataURL(file);
   };
   input.click();
+}
+
+// Unified BOL getter - works for any source
+function getBolUpload(id){
+  // Try new unified key first, then TMS key, then old fq/drayage keys
+  var d = localStorage.getItem('bol_upload_'+id)
+       || localStorage.getItem('bol_upload_tms_'+id);
+  return d ? JSON.parse(d) : null;
 }
 
 // ── Invoice split menu ──────────────────────────────────────
@@ -18477,14 +18503,20 @@ function showTmsBolMenu(loadId, btn){
 function uploadTmsBOL(loadId){
   var input = document.createElement('input');
   input.type = 'file';
-  input.accept = '.pdf,.jpg,.jpeg,.png';
+  input.accept = '.pdf,.jpg,.jpeg,.png,.doc,.docx';
   input.onchange = function(){
     var file = input.files[0];
     if(!file) return;
     var reader = new FileReader();
     reader.onload = function(e){
-      localStorage.setItem('bol_upload_tms_'+loadId, JSON.stringify({name:file.name, data:e.target.result, uploaded:new Date().toISOString()}));
-      showToast('BOL uploaded: '+file.name);
+      var bolData = JSON.stringify({name:file.name, data:e.target.result, uploaded:new Date().toISOString()});
+      // Save to both keys for compatibility
+      localStorage.setItem('bol_upload_tms_'+loadId, bolData);
+      localStorage.setItem('bol_upload_'+loadId, bolData);
+      showToast('✅ BOL uploaded: '+file.name);
+      closeModal();
+      // Refresh TMS view
+      if(typeof render==='function') try{ render(); }catch(e){}
     };
     reader.readAsDataURL(file);
   };
