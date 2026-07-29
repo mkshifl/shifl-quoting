@@ -13708,7 +13708,7 @@ function renderTMSLoads(tabBar,kpis,loads){
     }).join('')+
     '</div>'+
     '<div style="position:relative;min-width:220px"><span style="position:absolute;left:10px;top:50%;transform:translateY(-50%)">🔍</span>'+
-    '<input type="text" placeholder="Customer, booking#, carrier, ZIP…" value="'+(S.tmsLoadsSearch||'')+'" oninput="S.tmsLoadsSearch=this.value;var _tb=document.getElementById('tms-tbody');if(_tb){_tb.innerHTML=buildTMSRows();}else{renderTMS();}" style="padding:7px 12px 7px 32px;border-radius:99px;border:1.5px solid var(--gray-200);font-size:12px;width:100%;box-sizing:border-box"></div>'+
+    '<input type="text" placeholder="Customer, booking#, carrier, ZIP…" value="'+(S.tmsLoadsSearch||'')+'" oninput=\"tmsSearch(this.value)\" style="padding:7px 12px 7px 32px;border-radius:99px;border:1.5px solid var(--gray-200);font-size:12px;width:100%;box-sizing:border-box"></div>'+
     '<button onclick="exportTMSLoads()" style="padding:7px 14px;border:1px solid var(--gray-200);border-radius:var(--radius);background:transparent;font-size:12px;cursor:pointer;font-family:inherit;color:var(--gray-600)">📥 CSV</button>'+
     '<button onclick="openBulkAdvance()" style="padding:7px 14px;border:1px solid var(--steel);border-radius:var(--radius);background:transparent;font-size:12px;cursor:pointer;font-family:inherit;color:var(--steel)">☑️ Bulk advance</button>'+
     '<button onclick="openLoadMerge()" style="padding:7px 14px;border:1px solid var(--gray-200);border-radius:var(--radius);background:transparent;font-size:12px;cursor:pointer;font-family:inherit;color:var(--gray-600)">🔀 Merge</button>'+
@@ -19195,6 +19195,12 @@ function brokerCarrierActions(carrierName){
 
 <script>
 // Search helpers — update lists without destroying the input focus
+function tmsSearch(val){
+  S.tmsLoadsSearch=val;
+  var _tb=document.getElementById('tms-tbody');
+  if(_tb) _tb.innerHTML=buildTMSRows();
+  else renderTMS();
+}
 function renderSearchResults(key){
   // Map search key to the right partial update function
   var m = {
