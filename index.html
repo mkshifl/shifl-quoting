@@ -3364,8 +3364,8 @@ function renderFqDashboard(){
   const all=window._fqHistory||[];
   const booked=all.filter(q=>q.status==='Booked');
   const won=all.filter(q=>['Booked','Delivered','Invoiced','Paid'].includes(q.status));
-  const rev=booked.reduce((s,q)=>s+getShipmentProfit(q,'freight').revenue,0);
-  const prof=booked.reduce((s,q)=>s+getShipmentProfit(q,'drayage').profit,0);
+  const rev=won.reduce((s,q)=>s+getShipmentProfit(q,'freight').revenue,0);
+  const prof=won.reduce((s,q)=>s+getShipmentProfit(q,'freight').profit,0);
   const winRate=all.length>0?won.length/all.length:0;
 
   // Bar chart race section added below
@@ -3374,18 +3374,18 @@ function renderFqDashboard(){
   const modeStats=modes.map(m=>({
     mode:m,
     total:all.filter(q=>q.fqMode===m).length,
-    booked:booked.filter(q=>q.fqMode===m).length,
-    revenue:booked.filter(q=>q.fqMode===m).reduce((s,q)=>s+(q.customerRate||0),0),
+    booked:won.filter(q=>q.fqMode===m).length,
+    revenue:won.filter(q=>q.fqMode===m).reduce((s,q)=>s+(q.customerRate||0),0),
   }));
 
   // Top carriers
   const cMap={};
-  booked.forEach(q=>{if(!cMap[q.carrier])cMap[q.carrier]={n:0,rev:0,profit:0};cMap[q.carrier].n++;cMap[q.carrier].rev+=(q.customerRate||0);cMap[q.carrier].profit+=(q.profit||0);});
+  won.forEach(q=>{if(!cMap[q.carrier])cMap[q.carrier]={n:0,rev:0,profit:0};cMap[q.carrier].n++;cMap[q.carrier].rev+=(q.customerRate||0);cMap[q.carrier].profit+=(q.profit||0);});
   const topC=Object.entries(cMap).sort((a,b)=>b[1].n-a[1].n).slice(0,5);
 
   // Top customers
   const custMap={};
-  booked.forEach(q=>{const k=q.customer||'—';if(!custMap[k])custMap[k]={n:0,rev:0};custMap[k].n++;custMap[k].rev+=(q.customerRate||0);});
+  won.forEach(q=>{const k=q.customer||'—';if(!custMap[k])custMap[k]={n:0,rev:0};custMap[k].n++;custMap[k].rev+=(q.customerRate||0);});
   const topCust=Object.entries(custMap).sort((a,b)=>b[1].rev-a[1].rev).slice(0,5);
 
   // Recent 5 quotes
@@ -3396,7 +3396,7 @@ function renderFqDashboard(){
     <div class="kpi-grid" style="margin-bottom:16px">
       <div class="kpi"><div class="kpi-lbl">Total quotes</div><div class="kpi-val">${all.length}</div><div style="font-size:11px;color:var(--gray-400);margin-top:4px">${booked.length} booked</div></div>
       <div class="kpi"><div class="kpi-lbl">Win rate</div><div class="kpi-val b">${all.length>0?pct(winRate):'—'}</div><div style="font-size:11px;color:var(--gray-400);margin-top:4px">of all quotes</div></div>
-      <div class="kpi"><div class="kpi-lbl">Revenue</div><div class="kpi-val g">${rev>0?fmtD(rev):'—'}</div><div style="font-size:11px;color:var(--gray-400);margin-top:4px">booked only</div></div>
+      <div class="kpi"><div class="kpi-lbl">Revenue</div><div class="kpi-val g">${rev>0?fmtD(rev):'—'}</div><div style="font-size:11px;color:var(--gray-400);margin-top:4px">booked + delivered</div></div>
       <div class="kpi"><div class="kpi-lbl">Profit</div><div class="kpi-val g">${prof>0?fmtD(prof):'—'}</div><div style="font-size:11px;color:${prof>0?'var(--green)':'var(--gray-400)'};margin-top:4px">${booked.length>0?'avg '+(booked.length>0?Math.round(booked.reduce((s,q)=>s+(q.profitPct||0),0)/booked.length):0)+'% margin':'—'}</div></div>
     </div>
 
@@ -3425,7 +3425,7 @@ function renderFqDashboard(){
             <td style="text-align:center"><span class="badge b">${s.n}</span></td>
             <td style="text-align:right;color:var(--green);font-weight:600">${fmtD(s.profit)}</td>
           </tr>`).join('')}</tbody></table>`
-        :`<p class="muted small" style="margin-top:8px">Mark quotes as Booked to see carrier stats</p>`}
+        :`<p class="muted small" style="margin-top:8px">No completed loads yet — book and deliver loads to see carrier stats</p>`}
       </div>
 
       <!-- Top customers -->
@@ -3438,7 +3438,7 @@ function renderFqDashboard(){
             <td style="text-align:center"><span class="badge b">${s.n}</span></td>
             <td style="text-align:right;color:var(--steel);font-weight:600">${fmtD(s.rev)}</td>
           </tr>`).join('')}</tbody></table>`
-        :`<p class="muted small" style="margin-top:8px">Mark quotes as Booked to see customer stats</p>`}
+        :`<p class="muted small" style="margin-top:8px">No completed loads yet — book and deliver loads to see customer stats</p>`}
       </div>
     </div>
 
