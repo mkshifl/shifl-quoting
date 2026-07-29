@@ -697,6 +697,15 @@ function renderRequests(requests){
       ${r.quoted_amount?`<div style="text-align:right;flex-shrink:0;margin-left:8px;min-width:160px">
         <div style="font-size:18px;font-weight:800;color:var(--blue);margin-bottom:6px">$${Number(r.quoted_amount).toLocaleString()}</div>
         ${r.quote_message?`<div style="font-size:11px;color:#475569;background:#f0f6ff;border-radius:6px;padding:5px 8px;margin-bottom:8px;line-height:1.4;text-align:left">"${r.quote_message}"</div>`:''}
+        ${(()=>{
+          if(!r.quote_charges) return '';
+          try{
+            const ch=JSON.parse(r.quote_charges);
+            const LABELS={base:'Base rate',chassis:'Chassis',prepull:'Pre-pull',det_port:'Detention (Port)',det_cust:'Detention (Customer)',storage:'Storage',ovw43:'Overweight 43k',ovw48:'Overweight 48k',bobtail:'Bobtail',toll:'Toll',genset:'Genset',triaxle:'Triaxle'};
+            const rows=Object.entries(ch).filter(e=>e[1]>0).map(e=>`<div style="display:flex;justify-content:space-between;padding:3px 0;font-size:11px;border-bottom:1px solid #f0f4f8"><span style="color:#6b7280">${LABELS[e[0]]||e[0]}</span><span style="font-weight:700;color:#0a1628">$${Number(e[1]).toLocaleString()}</span></div>`).join('');
+            return rows ? `<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:7px;padding:8px 10px;margin-bottom:8px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#94a3b8;margin-bottom:5px">Charge breakdown</div>${rows}</div>` : '';
+          }catch(e){return '';}
+        })()}
         ${r.negotiation_status==='approved'?'<div style="font-size:11px;font-weight:700;color:var(--green)">✓ You approved this</div>':
           r.negotiation_status==='denied'?'<div style="font-size:11px;font-weight:700;color:var(--red)">✗ You declined this</div>':
           r.negotiation_status==='counter'?'<div style="font-size:11px;font-weight:700;color:var(--amber)">💬 Counter sent</div>':
