@@ -4199,7 +4199,7 @@ function showBolModal(idx, source){
     </div></div>`;
 }
 
-async async function downloadBOL(idx, source){
+async function downloadBOL(idx, source){
   if(!await loadJsPDF()) return;
   let q = null;
   if(source==='fq') q=(window._fqHistory||[])[idx];
