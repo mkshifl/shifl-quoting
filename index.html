@@ -108,7 +108,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-siz
 .topbar{background:var(--white);border-bottom:1px solid var(--gray-200);padding:0 22px;height:54px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;box-shadow:var(--shadow-sm)}
 .topbar h1{font-size:15px;font-weight:600}
 .topbar-right{display:flex;gap:8px;align-items:center}
-.page{flex:1;overflow-y:scroll;overflow-x:hidden;padding:20px 16px;scrollbar-width:thin;scrollbar-color:#cbd5e1 transparent}.page::-webkit-scrollbar{width:6px}.page::-webkit-scrollbar-track{background:transparent}.page::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:99px}
+.page{flex:1;overflow-y:scroll;overflow-x:hidden;padding:16px 12px;scrollbar-width:thin;scrollbar-color:#cbd5e1 transparent}.page::-webkit-scrollbar{width:6px}.page::-webkit-scrollbar-track{background:transparent}.page::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:99px}
 .saving-badge{font-size:11px;color:var(--gray-500);animation:pulse 1s infinite}
 /* Buttons */
 .btn{display:inline-flex;align-items:center;gap:5px;padding:7px 14px;border-radius:var(--radius);font-size:13px;font-weight:500;cursor:pointer;border:1px solid var(--gray-200);background:var(--white);color:var(--gray-700);transition:all .12s;font-family:inherit;white-space:nowrap;line-height:1}
@@ -164,7 +164,7 @@ tbody td{padding:9px 12px;color:var(--gray-700);vertical-align:middle}
 /* Layout */
 .g2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
-.g4{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.g4{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}
 .two-col{display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start}
 .sticky-top{position:sticky;top:0}
 /* Preview */
@@ -9262,7 +9262,7 @@ function renderHome(){
   $('page').innerHTML=`
   <div style="margin:-20px -28px 0;background:linear-gradient(90deg,#2563eb,#7c3aed);height:4px"></div>
 
-  <div style="max-width:860px;margin:0 auto;padding:24px 0 60px">
+  <div style="width:100%;padding:24px 0 40px">
 
     <!-- AI Briefing -->
     <div id="ai-brief-wrap" style="background:linear-gradient(135deg,#1e1b4b,#312e81);border-radius:12px;padding:12px 15px;margin-bottom:14px;border:1px solid rgba(124,58,237,.25);box-shadow:0 4px 20px rgba(124,58,237,.12)">
