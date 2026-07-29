@@ -7573,7 +7573,7 @@ async function renderCarriers(){
       const statusDot=isOnboarded
         ?'<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#16a34a;margin-right:6px" title="Onboarded"></span>'
         :'<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#f59e0b;margin-right:6px" title="Incomplete onboarding"></span>';
-      return `<tr onclick="showCarrierDetail('${c.id}')" style="cursor:pointer">
+      return `<tr class="carrier-row" onclick="showCarrierDetail('${c.id}')" style="cursor:pointer">
         <td style="min-width:180px">
           <div style="display:flex;align-items:center">
             ${statusDot}
@@ -7612,7 +7612,7 @@ async function renderCarriers(){
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap">
         <div style="display:flex;align-items:center;gap:6px;background:#fff;border:1px solid var(--gray-200);border-radius:var(--radius);padding:6px 12px;flex:1;max-width:280px">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="8" stroke="var(--gray-400)" stroke-width="2"/><path d="m21 21-4.35-4.35" stroke="var(--gray-400)" stroke-width="2" stroke-linecap="round"/></svg>
-          <input type="text" placeholder="Search by name or contact..." value="${_carrierSearch}" oninput="_carrierSearch=this.value;renderCarriers()" style="border:none;outline:none;font-size:13px;font-family:inherit;color:var(--navy);background:none;width:100%">
+          <input type="text" placeholder="Search by name or contact..." value="${_carrierSearch}" oninput="_carrierSearch=this.value;filterCarrierRows()" style="border:none;outline:none;font-size:13px;font-family:inherit;color:var(--navy);background:none;width:100%">
         </div>
         <div style="display:flex;gap:6px;flex-wrap:wrap">${modeTabs}</div>
       </div>
@@ -12220,7 +12220,7 @@ function buildPillBar(filterKey, searchKey, counts, searchPlaceholder){
     <div style="position:relative;min-width:200px">
       <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:13px;pointer-events:none">🔍</span>
       <input type="text" placeholder="${searchPlaceholder}" value="${S[searchKey]||''}"
-        oninput="S.${searchKey}=this.value;render()"
+        oninput="S['${searchKey}']=this.value;renderSearchResults('${searchKey}')"
         style="padding:7px 12px 7px 32px;border-radius:99px;border:1.5px solid var(--gray-200);font-size:12px;width:100%;box-sizing:border-box">
     </div>
   </div>`;
@@ -13708,7 +13708,7 @@ function renderTMSLoads(tabBar,kpis,loads){
     }).join('')+
     '</div>'+
     '<div style="position:relative;min-width:220px"><span style="position:absolute;left:10px;top:50%;transform:translateY(-50%)">🔍</span>'+
-    '<input type="text" placeholder="Customer, booking#, carrier, ZIP…" value="'+(S.tmsLoadsSearch||'')+'" oninput="S.tmsLoadsSearch=this.value;renderTMS()" style="padding:7px 12px 7px 32px;border-radius:99px;border:1.5px solid var(--gray-200);font-size:12px;width:100%;box-sizing:border-box"></div>'+
+    '<input type="text" placeholder="Customer, booking#, carrier, ZIP…" value="'+(S.tmsLoadsSearch||'')+'" oninput="S.tmsLoadsSearch=this.value;var _tb=document.getElementById('tms-tbody');if(_tb){_tb.innerHTML=buildTMSRows();}else{renderTMS();}" style="padding:7px 12px 7px 32px;border-radius:99px;border:1.5px solid var(--gray-200);font-size:12px;width:100%;box-sizing:border-box"></div>'+
     '<button onclick="exportTMSLoads()" style="padding:7px 14px;border:1px solid var(--gray-200);border-radius:var(--radius);background:transparent;font-size:12px;cursor:pointer;font-family:inherit;color:var(--gray-600)">📥 CSV</button>'+
     '<button onclick="openBulkAdvance()" style="padding:7px 14px;border:1px solid var(--steel);border-radius:var(--radius);background:transparent;font-size:12px;cursor:pointer;font-family:inherit;color:var(--steel)">☑️ Bulk advance</button>'+
     '<button onclick="openLoadMerge()" style="padding:7px 14px;border:1px solid var(--gray-200);border-radius:var(--radius);background:transparent;font-size:12px;cursor:pointer;font-family:inherit;color:var(--gray-600)">🔀 Merge</button>'+
@@ -19193,6 +19193,27 @@ function brokerCarrierActions(carrierName){
 }
 </script>
 
+<script>
+// Search helpers — update lists without destroying the input focus
+function renderSearchResults(key){
+  // Map search key to the right partial update function
+  var m = {
+    'logSearch': function(){ var t=document.getElementById('log-tbody'); if(t) t.innerHTML=buildLogRows(); },
+    'fqLogSearch': function(){ if(typeof renderFqLog==='function') renderFqLog(); },
+    'cSearch': function(){ if(typeof renderCustomers==='function') renderCustomers(); },
+  };
+  if(m[key]) m[key]();
+  else { if(typeof render==='function') render(); }
+}
+
+function filterCarrierRows(){
+  var q=(_carrierSearch||'').toLowerCase();
+  document.querySelectorAll('.carrier-row').forEach(function(row){
+    var txt=row.textContent.toLowerCase();
+    row.style.display=(!q||txt.includes(q))?'':'none';
+  });
+}
+</script>
 </body>
 </html>
 <script>
