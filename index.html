@@ -13622,7 +13622,13 @@ function renderTMSDispatch(tabBar,kpis,loads){
           ${l.weight?` · ${Number(l.weight).toLocaleString()} lbs`:''}
           ${l.customerRate?` · <span style="color:var(--steel);font-weight:700">${fmtD(l.customerRate)}</span>`:''}
         </div>
-        ${meta.bookingNum?`<div style="font-size:10px;color:var(--steel);font-weight:700;margin-bottom:2px">${meta.bookingNum}</div>`:''}        ${meta.bolNum?`<div style="font-size:10px;color:var(--gray-500);margin-bottom:6px">BOL: ${meta.bolNum}</div>`:''}
+        ${meta.bookingNum?`<div style="font-size:10px;color:var(--steel);font-weight:700;margin-bottom:2px">${meta.bookingNum}</div>`:''}        ${(()=>{
+  const _b=localStorage.getItem('bol_upload_tms_'+s.id);
+  const _bd=_b?JSON.parse(_b):null;
+  const _num=meta.bolNum?`<div style="font-size:10px;color:var(--gray-500);margin-bottom:4px">BOL: ${meta.bolNum}</div>`:'';
+  const _uploaded=_bd?`<div style="margin-bottom:6px"><a href="${_bd.data}" download="${_bd.name}" style="display:inline-flex;align-items:center;gap:4px;background:#d1fae5;color:#065f46;border-radius:6px;padding:3px 8px;font-size:10px;font-weight:700;text-decoration:none">✅ BOL uploaded — tap to view</a></div>`:'';
+  return _num+_uploaded;
+})()}
         ${meta.pickupAppt?`<div style="font-size:10px;color:var(--amber);font-weight:600">PU: ${meta.pickupAppt}</div>`:''}
         <div style="display:flex;gap:4px;margin-bottom:4px">${hasCInv?'<span style="font-size:10px;background:#f0fdf4;color:#16a34a;padding:1px 6px;border-radius:99px;font-weight:700">🧾 ✓</span>':'<span style="font-size:10px;background:#f9fafb;color:#9ca3af;padding:1px 6px;border-radius:99px">🧾</span>'}${hasCarrI?'<span style="font-size:10px;background:#fffbeb;color:#d97706;padding:1px 6px;border-radius:99px;font-weight:700">🚛 ✓</span>':'<span style="font-size:10px;background:#f9fafb;color:#9ca3af;padding:1px 6px;border-radius:99px">🚛</span>'}</div>
         <div style="display:flex;gap:4px;margin-top:8px;flex-wrap:wrap">
@@ -14072,8 +14078,17 @@ function openTMSLoadDetail(id){
     </div>
     <div class="modal-foot">
       <button class="btn" onclick="closeModal()">Close</button>
-      <div style="position:relative;display:inline-block">
-        <button class="btn" onclick="showTmsBolMenu('${id}',this)">📝 BOL ▾</button>
+      <div style="position:relative;display:inline-block" id="tms-bol-wrap-${id}">
+        ${(()=>{
+          const _bolData=localStorage.getItem('bol_upload_tms_'+id);
+          const _bol=_bolData?JSON.parse(_bolData):null;
+          if(_bol) return '<div style="display:flex;align-items:center;gap:6px">'
+            +'<span style="background:#d1fae5;color:#065f46;border-radius:7px;padding:4px 10px;font-size:11px;font-weight:700">✅ BOL uploaded</span>'
+            +'<a href="'+_bol.data+'" download="'+_bol.name+'" style="padding:4px 10px;border-radius:7px;border:1px solid #e2e8f0;background:#fff;font-size:11px;font-weight:600;color:#2563eb;text-decoration:none;cursor:pointer">⬇ View / Download</a>'
+            +'<button onclick="if(confirm(\'Remove this BOL?\')){{localStorage.removeItem(\'bol_upload_tms_'+id+'\');document.getElementById(\'tms-bol-wrap-'+id+'\').outerHTML=\'<div style=\"position:relative;display:inline-block\"><button class=\"btn\" onclick=\"showTmsBolMenu(\\\'' +id+ '\\\',this)\">📝 BOL ▾</button></div>\';}}" style="padding:4px 8px;border-radius:7px;border:1px solid #fecaca;background:#fff;font-size:11px;color:#dc2626;cursor:pointer;font-family:inherit">✕</button>'
+            +'</div>';
+          return '<button class="btn" onclick="showTmsBolMenu(\'${id}\',this)">📝 BOL ▾</button>';
+        })()}
       </div>
       ${TMS_STATUSES.indexOf(q.status)<TMS_STATUSES.length-1?`<button class="btn blue" onclick="closeModal();advanceTMSLoad('${id}','${nextTMSStatus(q.status)}')">→ Move to ${nextTMSStatus(q.status)}</button>`:'<button class="btn" style="color:var(--green);border-color:var(--green)" disabled>✓ Delivered</button>'}
     </div>
