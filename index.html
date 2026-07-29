@@ -14375,9 +14375,10 @@ function openTMSLoadDetail(id){
   const hasCInv=!!getInvoice(id),hasCarrI=!!getCarrierInvoice(id);
 
   // Doc checklist
+  const _bolUpload=JSON.parse(localStorage.getItem('bol_upload_tms_'+id)||'null');
   const docs=[
     {label:'Rate confirmation',key:'rateCon',icon:'📧'},
-    {label:'BOL',key:'bolNum',check:!!meta.bolNum,icon:'📄'},
+    {label:'BOL',key:'bolNum',check:!!meta.bolNum||!!_bolUpload,icon:'📄',uploaded:!!_bolUpload,uploadData:_bolUpload},
     {label:'POD',key:'podUploaded',check:!!meta.podUploaded,icon:'✅'},
     {label:'Customer invoice',key:'custInv',check:hasCInv,icon:'🧾'},
     {label:'Carrier invoice',key:'carrInv',check:hasCarrI,icon:'🚛'},
@@ -14453,7 +14454,7 @@ function openTMSLoadDetail(id){
         ${docs.map(d=>`<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--gray-100)">
           <span style="font-size:14px">${d.icon}</span>
           <span style="font-size:13px;font-weight:600;flex:1;color:var(--navy)">${d.label}</span>
-          <span style="font-size:12px;font-weight:700;color:${d.check?'#16a34a':'var(--gray-300)'}">${d.check?'✓ Done':'—'}</span>
+          ${d.uploaded&&d.uploadData?`<a href='${d.uploadData.data}' download='${d.uploadData.name}' style='font-size:11px;font-weight:700;color:#16a34a;text-decoration:none;background:#f0fdf4;border-radius:5px;padding:2px 8px'>⬇ View</a>`:''}\n          <span style="font-size:12px;font-weight:700;color:${d.check?'#16a34a':'var(--gray-300)'}">${d.check?'✓ Done':'—'}</span>
         </div>`).join('')}
         <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px">
           <button onclick="openTMSRateCon('${id}')" style="font-size:11px;padding:5px 10px;border:1px solid var(--gray-200);border-radius:var(--radius);background:transparent;cursor:pointer;font-family:inherit">📧 Rate con</button>
@@ -14462,7 +14463,9 @@ function openTMSLoadDetail(id){
           <button onclick="toggleBlindMode('${id}');openTMSLoadDetail('${id}')" style="font-size:11px;padding:5px 10px;border:1px solid ${meta.isBlind?'#7c3aed':'var(--gray-200)'};border-radius:var(--radius);background:${meta.isBlind?'#f5f3ff':'transparent'};cursor:pointer;font-family:inherit;color:${meta.isBlind?'#7c3aed':'inherit'}">🙈 Blind</button>
           <button onclick="aiMatchCarrier('${id}')" style="font-size:11px;padding:5px 10px;border:1px solid var(--steel);border-radius:var(--radius);background:var(--blue-bg);cursor:pointer;font-family:inherit;color:var(--steel)">🤖 AI match</button>
           <button onclick="noteTemplateMenu('tms-notes-${id}')" style="font-size:11px;padding:5px 10px;border:1px solid var(--gray-200);border-radius:var(--radius);background:transparent;cursor:pointer;font-family:inherit">📝 Templates</button>
-          <button onclick="openBOLBuilder('${id}')" style="font-size:11px;padding:5px 10px;border:1px solid var(--gray-200);border-radius:var(--radius);background:transparent;cursor:pointer;font-family:inherit">📄 BOL</button>
+          ${_bolUpload?
+  `<a href="${_bolUpload.data}" download="${_bolUpload.name}" style="font-size:11px;padding:5px 10px;border:1px solid #86efac;border-radius:var(--radius);background:#f0fdf4;cursor:pointer;font-family:inherit;color:#16a34a;text-decoration:none;display:inline-flex;align-items:center;gap:3px">✅ BOL — View</a>`
+  :`<button onclick="showTmsBolMenu('${id}',this)" style="font-size:11px;padding:5px 10px;border:1px solid var(--gray-200);border-radius:var(--radius);background:transparent;cursor:pointer;font-family:inherit">📝 BOL ▾</button>`}
           <button onclick="tmsInvOpen('${id}')" style="font-size:11px;padding:5px 10px;border:1px solid var(--gray-200);border-radius:var(--radius);background:transparent;cursor:pointer;font-family:inherit">🧾 Invoice</button>
           <button onclick="openFqCarrierInvById('${id}')" style="font-size:11px;padding:5px 10px;border:1px solid var(--gray-200);border-radius:var(--radius);background:transparent;cursor:pointer;font-family:inherit">🚛 Carrier inv</button>
           <button onclick="openPODUpload('${id}')" style="font-size:11px;padding:5px 10px;border:1px solid ${meta.podUploaded?'#86efac':'var(--gray-200)'};border-radius:var(--radius);background:${meta.podUploaded?'#f0fdf4':'transparent'};cursor:pointer;font-family:inherit;color:${meta.podUploaded?'#16a34a':'inherit'}">📎 ${meta.podUploaded?'POD ✓':'Upload POD'}</button>
