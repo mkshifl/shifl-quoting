@@ -10805,7 +10805,7 @@ async function saveInvoiceData(type, id){
       savedCustomCharges.push({desc:desc?.value?.trim()||'Custom charge',amount:amt,enabled:true});
       accTotal+=amt;
     }
-  });
+  });}
   const inv={invNum:num,invDate:($('inv-date')||{}).value||localDateStr(),invDue:($('inv-due')||{}).value||'',notes:($('inv-notes')||{}).value?.trim()||'',baseTotal:base,accTotal,grandTotal:base+accTotal,accessorials,customCharges:savedCustomCharges,type,savedAt:localDateStr()};
   saveInvoice(id,inv);
   // Update shipment status to Invoiced
