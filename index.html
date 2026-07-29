@@ -2,6 +2,9 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%230a1628'/><text y='22' x='5' font-size='20' font-family='sans-serif'>🚢</text></svg>">
+<link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%230a1628'/><text y='22' x='5' font-size='20'>🚢</text></svg>">
+<meta name="theme-color" content="#0a1628">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -1459,7 +1462,7 @@ const $=id=>document.getElementById(id);
 const $v=id=>($('f-'+id)||{}).value||'';
 const fmt=v=>(v&&v>0)?'$'+Math.round(v).toLocaleString():'—';
 const fmtD=v=>'$'+Number(v).toFixed(2);
-const pct=v=>Math.round(v*100)+'%';
+const pct=v=>v>0&&v<0.01?'<1%':Math.round(v*100)+'%';
 function totAll(r){return CHARGES.reduce((s,c)=>s+(Number(r[c])||0),0);}
 function totMode(r,ld){
   let t=CHARGES.reduce((s,c)=>isApplicable(c,ld)?s+(Number(r[c])||0):s,0);
@@ -3101,6 +3104,7 @@ function showFqQuoteModal(idx){
         <button class="btn" onclick="closeModal()">Close</button>
         ${carrierBtn}
         ${bolBtn}
+        <button class="btn" onclick="duplicateFqQuote(${idx})">⧉ Duplicate</button>
         <button class="btn" onclick="printFqQuote(${idx})">🖨️ Print</button>
         <button class="btn blue" onclick="downloadFqPDF(${idx})">📄 Download PDF</button>
       </div>
@@ -3364,9 +3368,10 @@ function renderFqDashboard(){
   const all=window._fqHistory||[];
   const booked=all.filter(q=>q.status==='Booked');
   const won=all.filter(q=>['Booked','Delivered','Invoiced','Paid'].includes(q.status));
+  const countable=all.filter(q=>q.status!=='Cancelled');
   const rev=won.reduce((s,q)=>s+getShipmentProfit(q,'freight').revenue,0);
   const prof=won.reduce((s,q)=>s+getShipmentProfit(q,'freight').profit,0);
-  const winRate=all.length>0?won.length/all.length:0;
+  const winRate=countable.length>0?won.length/countable.length:0;
 
   // Bar chart race section added below
   // Mode breakdown
@@ -6046,15 +6051,15 @@ function renderActive(){
               style="padding:7px 10px;background:${isFlagged(s.id)?'#fef2f2':'transparent'};color:${isFlagged(s.id)?'#dc2626':'#9ca3af'};border:1px solid ${isFlagged(s.id)?'#fca5a5':'#e5e7eb'};border-radius:var(--radius);cursor:pointer;font-size:13px">
               🚨
             </button>
-            <button onclick="showTrackingModal('${s.type}','${s.id}')" title="Tracking / Booking #"
+            <button onclick="showTrackingModal('${s.type}','${s.id}')" title="Set tracking link or booking number"
               style="padding:7px 10px;background:${getTrackingLink(s.id)?'var(--blue-bg)':'transparent'};color:${getTrackingLink(s.id)?'var(--steel)':'#9ca3af'};border:1px solid ${getTrackingLink(s.id)?'var(--steel)':'#e5e7eb'};border-radius:var(--radius);cursor:pointer;font-size:13px">
               ${getTrackingLink(s.id)?'📍':'🔗'}
             </button>
-            <button onclick="promptBookingNum('${s.type}','${s.id}')" title="Booking / Container #"
+            <button onclick="promptBookingNum('${s.type}','${s.id}')" title="Set booking or container number"
               style="padding:7px 10px;background:${s.bookingNum?'var(--blue-bg)':'transparent'};color:${s.bookingNum?'var(--steel)':'#9ca3af'};border:1px solid ${s.bookingNum?'var(--steel)':'#e5e7eb'};border-radius:var(--radius);cursor:pointer;font-size:13px">
               📦
             </button>
-            <button onclick="toggleFlag('${s.type}','${s.id}')" title="Flag issue" style="padding:7px 10px;background:${isFlagged(s.id)?'#fef2f2':'transparent'};color:${isFlagged(s.id)?'#dc2626':'#9ca3af'};border:1px solid ${isFlagged(s.id)?'#fca5a5':'#e5e7eb'};border-radius:var(--radius);cursor:pointer;font-size:13px">🚨</button>
+            <button onclick="toggleFlag('${s.type}','${s.id}')" title="Flag an issue with this load" style="padding:7px 10px;background:${isFlagged(s.id)?'#fef2f2':'transparent'};color:${isFlagged(s.id)?'#dc2626':'#9ca3af'};border:1px solid ${isFlagged(s.id)?'#fca5a5':'#e5e7eb'};border-radius:var(--radius);cursor:pointer;font-size:13px">🚨</button>
             <button onclick="showTrackingModal('${s.type}','${s.id}')" title="Tracking / Booking" style="padding:7px 10px;background:${getTrackingLink(s.id)?'var(--blue-bg)':'transparent'};color:${getTrackingLink(s.id)?'var(--steel)':'#9ca3af'};border:1px solid ${getTrackingLink(s.id)?'var(--steel)':'#e5e7eb'};border-radius:var(--radius);cursor:pointer;font-size:13px">${getTrackingLink(s.id)?'📍':'🔗'}</button>
             <button onclick="promptBookingNum('${s.type}','${s.id}')" title="Booking # / Container #" style="padding:7px 10px;background:${s.bookingNum?'var(--blue-bg)':'transparent'};color:${s.bookingNum?'var(--steel)':'#9ca3af'};border:1px solid ${s.bookingNum?'var(--steel)':'#e5e7eb'};border-radius:var(--radius);cursor:pointer;font-size:13px">📦</button>
             ${can('delete_quotes')?`<button onclick="deleteShipment('${s.type}','${s.id}')"
@@ -6456,7 +6461,7 @@ function buildLogRows(){
     const sp = baseSplit(q);
     const pc = sp.isActual?'var(--green)':sp.baseP>=0?'var(--amber)':'var(--red)';
     const statusSel = can('update_status')
-      ?`<select onchange="updateStatus('${q.id}',this.value)" onclick="event.stopPropagation()" style="font-size:11px;padding:2px 4px;width:100%;border-radius:4px;border:1px solid var(--gray-200)">
+      ?`<select onchange="updateStatus('${q.id}',this.value)" onclick="event.stopPropagation()" style="font-size:12px;padding:4px 6px;width:100%;border-radius:6px;border:1px solid var(--gray-200);cursor:pointer">
           <option${q.status==='Quoted'?' selected':''}>Quoted</option>
           <option${q.status==='Booked'?' selected':''}>Booked</option>
           <option${q.status==='Lost'?' selected':''}>Lost</option>
@@ -6479,7 +6484,7 @@ function buildLogRows(){
           onfocus="this.style.background='var(--blue-bg)';this.style.border='1px solid var(--steel)'" onblur="this.style.border='none';this.style.background=this.value?'var(--blue-bg)':'transparent'">
       </td>
       <td style="font-weight:600;padding:8px 8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${q.customer}</td>
-      <td style="padding:8px 6px;overflow:hidden"><div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px">${q.zip} · ${q.ld}</div><div style="font-size:10px;color:var(--gray-400);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${q.destination||''}</div></td>
+      <td style="padding:8px 6px;overflow:hidden"><div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px">${(q.port||'').split(',')[0].replace('Port Newark Container Terminal','Newark')||q.zip} → ${q.zip}</div><div style="font-size:10px;color:var(--gray-400);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${q.destination||''}</div></td>
       <td style="padding:8px 6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px">${q.carrier}</td>
       <td style="font-weight:600;color:var(--steel);padding:8px 6px;font-size:13px">${fmtD(q.customerRates?.total||0)}</td>
       <td style="padding:8px 6px"><div style="color:${pc};font-weight:600;font-size:13px">${sp.isActual?'':'+'}${fmtD(sp.baseP)}</div><div style="font-size:10px;color:${pc}">${pct(sp.baseM)}</div></td>
@@ -6494,6 +6499,7 @@ function buildLogRows(){
         <div style="display:flex;flex-wrap:wrap;gap:16px;align-items:center">
 
           <div style="font-size:11px;color:var(--gray-600)"><span style="font-weight:600">Cost:</span> ${fmtD(q.carrierRates?.total||0)}</div>
+          ${q.email?`<div style="font-size:11px;color:var(--gray-600)"><span style="font-weight:600">Email:</span> <a href="mailto:${q.email}" style="color:#2563eb">${q.email}</a></div>`:''}
           <div style="font-size:11px;color:var(--gray-600)"><span style="font-weight:600">Port:</span> ${q.port||'—'}</div>
           <div style="font-size:11px;color:var(--gray-600)"><span style="font-weight:600">Containers:</span> ${q.containerCount||1}×${q.containerSize||'40HC'}</div>
           <div style="flex:1"></div>
@@ -6502,6 +6508,7 @@ function buildLogRows(){
             <button class="btn sm" onclick="event.stopPropagation();downloadSavedPDF('${q.id}')" style="font-size:11px">📄 PDF</button>
             <button class="btn sm" onclick="event.stopPropagation();repeatDrayageQuote('${q.id}')" style="font-size:11px">🔁 Repeat</button>
             <button class="btn sm" onclick="event.stopPropagation();showQuoteModal('${q.id}')" style="font-size:11px">✏️ Edit</button>
+            <button onclick="event.stopPropagation();if(confirm('Delete quote #${q.quoteNum}?')){S.quotes=S.quotes.filter(x=>x.id!==\'${q.id}\');try{localStorage.setItem(\'drayage_quotes\',JSON.stringify(S.quotes));}catch(e){}const t=$(\'log-tbody\');if(t)t.innerHTML=buildLogRows();showToast(\'Quote deleted\');}" style="font-size:11px;color:#dc2626;border-color:#fecaca">🗑 Delete</button>
             <div style="position:relative;display:inline-block">${(()=>{const _b=getBolUpload(q.id);return _b?'<a href="'+_b.data+'" download="'+_b.name+'" style="display:inline-flex;align-items:center;gap:4px;padding:5px 10px;border-radius:7px;border:1px solid #86efac;background:#f0fdf4;font-size:11px;font-weight:700;color:#16a34a;text-decoration:none">✅ BOL</a>':'<button class="btn sm" onclick="event.stopPropagation();showBolOptions(S.quotes.findIndex(x=>x.id===\''+q.id+'\'),\'drayage\',this)" style="font-size:11px">📝 BOL ▾</button>';})()}</div>
           </div>
         </div>
@@ -7064,7 +7071,7 @@ function clearSession(){
 }
 function updateUserUI(){
   const nameEl=$('user-name-display'),roleEl=$('user-role-display'),infoEl=$('user-info'),adminNav=$('admin-nav-section');
-  const ROLE_LABELS={super_admin:'Super Admin',admin:'Admin',team_member:'Team Member',user:'Team Member'};
+  const ROLE_LABELS={super_admin:'Admin',admin:'Admin',team_member:'Team Member',user:'Team Member'};
   if(_currentUser){
     if(nameEl) nameEl.textContent=_currentUser.name;
     if(roleEl) roleEl.textContent=ROLE_LABELS[_currentUser.role]||_currentUser.role;
@@ -7543,6 +7550,11 @@ async function upsertCarrier(name, mode) {
 }
 
 async function renderCarriers(){
+  // Use cached carriers if available and loaded < 5 min ago
+  if(window._carriersCache && Date.now()-window._carriersCacheTime<300000){
+    S.carriers=window._carriersCache;
+    _renderCarriersUI();return;
+  }
   $('topbar-right').innerHTML=`<button class="btn" onclick="openCarrierFraudDetector()">🚨 Fraud check</button><button class="btn" onclick="openInsuranceLapseTracker()">🔔 Insurance</button><button class="btn blue" onclick="showCarrierModal()">+ Add carrier</button>`;
   $('page').innerHTML='<div style="text-align:center;padding:40px"><div class="loading-spin" style="margin:0 auto 12px"></div><div style="color:var(--gray-400);font-size:13px">Loading carriers...</div></div>';
   try{
@@ -11852,6 +11864,17 @@ function renderProfitMonitor(){
       modeLabel:q.fqMode||'Freight',
       addedToSheet:localStorage.getItem('pm_sheet_'+q.id)==='1'
     }));
+    const aq=(window._aqHistory||[]).filter(q=>statusSet.includes(q.status)).map(q=>({
+      id:q.id,type:'air',customer:q.customer||'—',shiflRef:q.shiflRef||q.quoteNum||'—',
+      lane:`${q.originAirport||q.originCity||'—'} → ${q.destAirport||q.destCity||'—'}`,carrier:q.carrier||'—',
+      date:q.date,status:q.status,
+      carrierCost:q.carrierRates?.total||0,
+      customerRate:q.customerRates?.total||q.customerRate||0,
+      profit:(q.customerRates?.total||q.customerRate||0)-(q.carrierRates?.total||0),
+      margin:q.customerRates?.total>0?((q.customerRates.total-(q.carrierRates?.total||0))/q.customerRates.total):0,
+      isActual:false,modeLabel:'Air',
+      addedToSheet:localStorage.getItem('pm_sheet_'+q.id)==='1'
+    }));
     const tl=(window._tlHistory||[]).filter(q=>statusSet.includes(q.status)).map(q=>({
       id:q.id,type:'transload',customer:q.customer||'—',shiflRef:q.shiflRef||'—',
       lane:`${q.drayPort||'—'} → ${q.outDeliveryZip||'—'}`,carrier:q.outCarrier||'—',
@@ -11864,7 +11887,7 @@ function renderProfitMonitor(){
       modeLabel:'Transload',
       addedToSheet:localStorage.getItem('pm_sheet_'+q.id)==='1'
     }));
-    return [...dray,...fq,...tl];
+    return [...dray,...fq,...tl,...aq];
   }
 
   const statusSet = tab==='active'?ACTIVE_ST : tab==='delivered'?DONE_ST : ALL_ST;
@@ -13713,6 +13736,7 @@ function renderTMSDispatch(tabBar,kpis,loads){
   const _uploaded=_bd?`<div style="margin-bottom:6px"><a href="${_bd.data}" download="${_bd.name}" style="display:inline-flex;align-items:center;gap:4px;background:#d1fae5;color:#065f46;border-radius:6px;padding:3px 8px;font-size:10px;font-weight:700;text-decoration:none">✅ BOL uploaded — tap to view</a></div>`:'';
   return _num+_uploaded;
 })()}
+        ${`<div style="margin-top:8px"><textarea onchange="saveTMSMeta('${s.id}',{notes:this.value})" placeholder="Internal notes..." rows="2" style="width:100%;padding:6px 8px;border:1px solid var(--gray-200);border-radius:6px;font-size:11px;resize:none;font-family:inherit;color:var(--navy)">${meta.notes||''}</textarea></div>`}
         ${meta.pickupAppt?`<div style="font-size:10px;color:var(--amber);font-weight:600">PU: ${meta.pickupAppt}</div>`:''}
         <div style="display:flex;gap:4px;margin-bottom:4px">${hasCInv?'<span style="font-size:10px;background:#f0fdf4;color:#16a34a;padding:1px 6px;border-radius:99px;font-weight:700">🧾 ✓</span>':'<span style="font-size:10px;background:#f9fafb;color:#9ca3af;padding:1px 6px;border-radius:99px">🧾</span>'}${hasCarrI?'<span style="font-size:10px;background:#fffbeb;color:#d97706;padding:1px 6px;border-radius:99px;font-weight:700">🚛 ✓</span>':'<span style="font-size:10px;background:#f9fafb;color:#9ca3af;padding:1px 6px;border-radius:99px">🚛</span>'}</div>
         <div style="display:flex;gap:4px;margin-top:8px;flex-wrap:wrap">
@@ -13872,6 +13896,11 @@ function openBOLBuilder(id){
   // Support FQ, TMS, and drayage loads
   let q = (window._fqHistory||[]).find(x=>x.id===id);
   if(!q){
+    // Try air freight
+    const aq = (window._aqHistory||[]).find(x=>x.id===id);
+    if(aq) q = {id:aq.id, customer:aq.customer||'', pickupZip:aq.originAirport||aq.originCity||'', deliveryZip:aq.destAirport||aq.destCity||'', carrier:aq.carrier||'', fqMode:'Air Freight', weight:aq.weight||'', palletCount:aq.pieces||'', commodity:aq.commodity||''};
+  }
+  if(!q){
     // Try drayage quotes
     const dq = (S.quotes||[]).find(x=>x.id===id);
     if(dq) q = {id:dq.id, customer:dq.customer, pickupZip:dq.port||'', deliveryZip:dq.zip||'', carrier:dq.carrier||'', fqMode:'Drayage', weight:'', palletCount:'', commodity:dq.commodity||''};
@@ -13882,9 +13911,7 @@ function openBOLBuilder(id){
     const tl = tmsLoads.find(x=>x.id===id);
     if(tl) q = {id:tl.id, customer:tl.customer||tl.shipper||'', pickupZip:tl.pickupZip||'', deliveryZip:tl.deliveryZip||'', carrier:tl.carrier||'', fqMode:tl.mode||'Freight', weight:tl.weight||'', palletCount:tl.pallets||'', commodity:tl.commodity||''};
   }
-  if(!q){showToast('Load not found — fill in BOL details manually','warn');
-    q={id:id,customer:'',pickupZip:'',deliveryZip:'',carrier:'',fqMode:'',weight:'',palletCount:'',commodity:''};
-  }
+  if(!q){ q={id:id,customer:'',pickupZip:'',deliveryZip:'',carrier:'',fqMode:'',weight:'',palletCount:'',commodity:''}; }
   const meta=getTMSMeta(id);
   const bolNum=meta.bolNum||'BOL-'+Date.now().toString().slice(-6);
   $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
@@ -17040,6 +17067,19 @@ function replayTour(){
 
 
 
+// Session timeout after 8 hours
+(function(){
+  const loginTime=parseInt(localStorage.getItem('shifl_login_time')||'0');
+  const EIGHT_HOURS=8*60*60*1000;
+  if(loginTime && Date.now()-loginTime>EIGHT_HOURS){
+    localStorage.removeItem('shifl_session');
+    localStorage.removeItem('shifl_login_time');
+    showToast('Session expired — please log in again','warn');
+  }
+  window.addEventListener('beforeunload',function(){
+    localStorage.setItem('shifl_login_time',Date.now().toString());
+  });
+})();
 boot().catch(e=>{$('loading-screen').style.display='none';$('setup-screen').style.display='flex';});
 </script>
 <script>
@@ -19019,7 +19059,7 @@ function renderLaneBids(){
     const lane=(q.zip||'')+(q.destination?' · '+q.destination:'');
     if(!lane) return;
     if(!byLane[lane]) byLane[lane]={lane,bids:[]};
-    byLane[lane].bids.push({customer:q.customer,amount:q.customerRates?.total||0,status:q.status,date:q.date||q.created_at,won:q.status==='Booked'||q.status==='Delivered'});
+    byLane[lane].bids.push({customer:q.customer,amount:q.customerRates?.total||0,status:q.status,date:q.date||q.created_at,won:q.status==='Booked'||q.status==='Delivered',rep:q.created_by_name||q.rep||'—'});
   });
   const lanes=Object.values(byLane).filter(l=>l.bids.length>0).sort((a,b)=>b.bids.length-a.bids.length).slice(0,20);
 
@@ -19112,6 +19152,11 @@ function processRFP(){
         </div>
       </div>`).join('')}`;
   window._rfpResults=results;
+  // Save to history
+  const rfpHistory=JSON.parse(localStorage.getItem('shifl_rfp_history')||'[]');
+  rfpHistory.unshift({id:'RFP-'+Date.now(),date:new Date().toISOString().slice(0,10),lanes:lines.length,results});
+  if(rfpHistory.length>20) rfpHistory.pop();
+  localStorage.setItem('shifl_rfp_history',JSON.stringify(rfpHistory));
 }
 
 function exportRFP(){
@@ -27605,7 +27650,7 @@ function renderFqDashboard(){
   const won=all.filter(q=>['Booked','Delivered','Invoiced','Paid'].includes(q.status));
   const rev=won.reduce((s,q)=>s+getShipmentProfit(q,'freight').revenue,0);
   const prof=won.reduce((s,q)=>s+getShipmentProfit(q,'freight').profit,0);
-  const winRate=all.length>0?won.length/all.length:0;
+  const winRate=countable.length>0?won.length/countable.length:0;
 
   // Bar chart race section added below
   // Mode breakdown
@@ -30285,15 +30330,15 @@ function renderActive(){
               style="padding:7px 10px;background:${isFlagged(s.id)?'#fef2f2':'transparent'};color:${isFlagged(s.id)?'#dc2626':'#9ca3af'};border:1px solid ${isFlagged(s.id)?'#fca5a5':'#e5e7eb'};border-radius:var(--radius);cursor:pointer;font-size:13px">
               🚨
             </button>
-            <button onclick="showTrackingModal('${s.type}','${s.id}')" title="Tracking / Booking #"
+            <button onclick="showTrackingModal('${s.type}','${s.id}')" title="Set tracking link or booking number"
               style="padding:7px 10px;background:${getTrackingLink(s.id)?'var(--blue-bg)':'transparent'};color:${getTrackingLink(s.id)?'var(--steel)':'#9ca3af'};border:1px solid ${getTrackingLink(s.id)?'var(--steel)':'#e5e7eb'};border-radius:var(--radius);cursor:pointer;font-size:13px">
               ${getTrackingLink(s.id)?'📍':'🔗'}
             </button>
-            <button onclick="promptBookingNum('${s.type}','${s.id}')" title="Booking / Container #"
+            <button onclick="promptBookingNum('${s.type}','${s.id}')" title="Set booking or container number"
               style="padding:7px 10px;background:${s.bookingNum?'var(--blue-bg)':'transparent'};color:${s.bookingNum?'var(--steel)':'#9ca3af'};border:1px solid ${s.bookingNum?'var(--steel)':'#e5e7eb'};border-radius:var(--radius);cursor:pointer;font-size:13px">
               📦
             </button>
-            <button onclick="toggleFlag('${s.type}','${s.id}')" title="Flag issue" style="padding:7px 10px;background:${isFlagged(s.id)?'#fef2f2':'transparent'};color:${isFlagged(s.id)?'#dc2626':'#9ca3af'};border:1px solid ${isFlagged(s.id)?'#fca5a5':'#e5e7eb'};border-radius:var(--radius);cursor:pointer;font-size:13px">🚨</button>
+            <button onclick="toggleFlag('${s.type}','${s.id}')" title="Flag an issue with this load" style="padding:7px 10px;background:${isFlagged(s.id)?'#fef2f2':'transparent'};color:${isFlagged(s.id)?'#dc2626':'#9ca3af'};border:1px solid ${isFlagged(s.id)?'#fca5a5':'#e5e7eb'};border-radius:var(--radius);cursor:pointer;font-size:13px">🚨</button>
             <button onclick="showTrackingModal('${s.type}','${s.id}')" title="Tracking / Booking" style="padding:7px 10px;background:${getTrackingLink(s.id)?'var(--blue-bg)':'transparent'};color:${getTrackingLink(s.id)?'var(--steel)':'#9ca3af'};border:1px solid ${getTrackingLink(s.id)?'var(--steel)':'#e5e7eb'};border-radius:var(--radius);cursor:pointer;font-size:13px">${getTrackingLink(s.id)?'📍':'🔗'}</button>
             <button onclick="promptBookingNum('${s.type}','${s.id}')" title="Booking # / Container #" style="padding:7px 10px;background:${s.bookingNum?'var(--blue-bg)':'transparent'};color:${s.bookingNum?'var(--steel)':'#9ca3af'};border:1px solid ${s.bookingNum?'var(--steel)':'#e5e7eb'};border-radius:var(--radius);cursor:pointer;font-size:13px">📦</button>
             ${can('delete_quotes')?`<button onclick="deleteShipment('${s.type}','${s.id}')"
@@ -30695,7 +30740,7 @@ function buildLogRows(){
     const sp = baseSplit(q);
     const pc = sp.isActual?'var(--green)':sp.baseP>=0?'var(--amber)':'var(--red)';
     const statusSel = can('update_status')
-      ?`<select onchange="updateStatus('${q.id}',this.value)" onclick="event.stopPropagation()" style="font-size:11px;padding:2px 4px;width:100%;border-radius:4px;border:1px solid var(--gray-200)">
+      ?`<select onchange="updateStatus('${q.id}',this.value)" onclick="event.stopPropagation()" style="font-size:12px;padding:4px 6px;width:100%;border-radius:6px;border:1px solid var(--gray-200);cursor:pointer">
           <option${q.status==='Quoted'?' selected':''}>Quoted</option>
           <option${q.status==='Booked'?' selected':''}>Booked</option>
           <option${q.status==='Lost'?' selected':''}>Lost</option>
@@ -43325,6 +43370,33 @@ function filterCarrierRows(){
   });
 }
 </script>
+<script>
+function saveQuotes(){
+  try{ localStorage.setItem('drayage_quotes',JSON.stringify(S.quotes)); }catch(e){}
+  if(db) db.from('quotes').upsert(S.quotes).then(()=>{}).catch(e=>console.warn(e));
+}
+</script>
+<script>
+function duplicateFqQuote(idx){
+  const q=(window._fqHistory||[])[idx];
+  if(!q) return;
+  // Pre-fill quote builder with same lane/carrier
+  S.fq={...S.fq,
+    mode:q.fqMode||null,
+    equipment:q.fqEquip||null,
+    pickupZip:q.pickupZip||'',
+    deliveryZip:q.deliveryZip||'',
+    weight:q.weight||'',
+    palletCount:q.palletCount||'',
+    customer:q.customer||'',
+    notes:'Duplicate of '+q.quoteNum
+  };
+  closeModal();
+  setView('freight');
+  render();
+  showToast('Quote duplicated — edit and save as new');
+}
+</script>
 </body>
 </html>
 <script>
@@ -48507,10 +48579,10 @@ async function saveEditedQuote(id){
 
   showToast('✓ Quote #'+q.quoteNum+' updated'+( changes.length?' — '+changes.length+' change'+(changes.length>1?'s':''):''));
   closeModal();
-  if(typeof buildLogRows==='function'){
-    const tbody=document.getElementById('log-tbody');
-    if(tbody) tbody.innerHTML=buildLogRows();
-  }
+  // Refresh quote log
+  const tbody=document.getElementById('log-tbody');
+  if(tbody) tbody.innerHTML=buildLogRows();
+  else if(S.view==='log') render();
 }
 </script>
 /* fix 1785343934 */
