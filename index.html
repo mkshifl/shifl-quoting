@@ -183,9 +183,9 @@ tbody td{padding:9px 12px;color:var(--gray-700);vertical-align:middle}
 .alert.err{background:var(--red-bg);border-color:var(--red);color:var(--red)}
 /* Modal */
 .overlay{position:fixed;inset:0;background:rgba(0,0,0,.42);display:flex;align-items:center;justify-content:center;z-index:200}
-.modal{background:var(--white);border-radius:var(--radius-lg);padding:26px;width:680px;max-width:95vw;max-height:90vh;overflow-y:auto;box-shadow:var(--shadow-md)}
+.modal{background:var(--white);border-radius:var(--radius-lg);padding:24px;width:780px;min-width:min(780px,92vw);max-width:92vw;max-height:90vh;overflow-y:auto;box-shadow:var(--shadow-md)}
 .modal-title{font-size:16px;font-weight:700;margin-bottom:18px;padding-bottom:12px;border-bottom:1px solid var(--gray-100)}
-.modal-foot{display:flex;gap:8px;margin-top:18px;padding-top:14px;border-top:1px solid var(--gray-100);justify-content:flex-end}
+.modal-foot{display:flex;gap:8px;flex-wrap:wrap;margin-top:18px;padding-top:14px;border-top:1px solid var(--gray-100);justify-content:flex-end}
 /* Misc */
 .bold{font-weight:600}.muted{color:var(--gray-500)}.small{font-size:12px}
 .subtext{font-size:11px;color:var(--gray-400);margin-top:2px}
@@ -2892,7 +2892,7 @@ function deleteFqQuote(idx){
 function showFqBookingModal(idx){
   const q=(window._fqHistory||[])[idx];if(!q) return;
   $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
-    <div class="modal" style="width:500px">
+    <div class="modal" style="width:660px">
       <div style="background:var(--green);border-radius:10px;padding:16px 20px;margin-bottom:20px;display:flex;align-items:center;gap:12px">
         <span style="font-size:28px">✅</span>
         <div>
@@ -3059,7 +3059,7 @@ function showFqQuoteModal(idx){
   const notesHtml=q.notes
     ?'<div style="background:var(--gray-50);border-radius:var(--radius);padding:10px 14px;margin-bottom:14px;font-size:13px;color:var(--gray-600)"><strong>Notes:</strong> '+q.notes+'</div>':'';
   $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
-    <div class="modal" style="width:580px">
+    <div class="modal" style="width:720px">
       <div style="background:var(--navy);border-radius:10px;padding:16px 20px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between">
         <div style="display:flex;align-items:center;gap:12px">
           <svg width="36" height="36" viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg"><rect width="60" height="60" rx="10" fill="rgba(255,255,255,.15)"/><polygon points="10,50 25,14 44,45" fill="white"/><polygon points="25,14 44,45 53,37" fill="rgba(255,255,255,.72)"/><polygon points="10,50 44,45 53,37 53,50" fill="rgba(255,255,255,.90)"/><line x1="25" y1="14" x2="44" y2="50" stroke="rgba(59,142,208,.5)" stroke-width="1.8"/></svg>
@@ -3681,7 +3681,7 @@ function showManageSpecialZips(){
     <td><button class="btn sm ico-btn" onclick="deleteSpecialZip(${i})">🗑️</button></td>
   </tr>`).join('');
   $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
-    <div class="modal" style="width:500px">
+    <div class="modal" style="width:660px">
       <div class="modal-title">Special ZIP Codes</div>
       <p style="font-size:12px;color:var(--gray-500);margin-bottom:12px">Tag zips as Residential or Free Drop — a badge appears in the quote builder and on PDFs.</p>
       <table style="width:100%;margin-bottom:16px"><thead><tr><th style="text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;color:var(--gray-400)">ZIP</th><th>Type</th><th>Notes</th><th></th></tr></thead>
@@ -4135,7 +4135,7 @@ function showBolModal(idx, source){
   if(!q.commodityDesc && q.commodity) q = {...q, commodityDesc:q.commodity};
   const bolNum='BOL-'+localDateStr().replace(/-/g,'')+'-'+(idx+1).toString().padStart(3,'0');
   $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
-    <div class="modal" style="width:600px">
+    <div class="modal" style="width:740px">
       <div class="modal-title">📝 Generate Bill of Lading</div>
       <div style="background:var(--blue-bg);border-radius:var(--radius);padding:12px 14px;margin-bottom:16px;font-size:12px;color:var(--gray-600)">
         <strong>Booking party:</strong> SHIFL · 343 Spook Rock Road, Suffern, NY 10901<br>
@@ -6251,7 +6251,7 @@ function showBulkEdit(){
     </div>`).join('');
 
   $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
-    <div class="modal" style="width:580px">
+    <div class="modal" style="width:720px">
       <div class="modal-title">Bulk edit accessorials</div>
       <div style="background:var(--amber-bg,#fffbeb);border:1px solid #fbbf24;border-radius:var(--radius);padding:10px 14px;margin-bottom:16px;font-size:13px">
         ✏️ Editing <strong>${matches.length} rate${matches.length!==1?'s':''}</strong> matching <em>"${S.rSearch}"</em>
@@ -6621,7 +6621,7 @@ function showBookingModal(id){
   const opts=carriersOnZip.map(r=>`<option value="${r.id}"${r.carrier===q.carrier?' selected':''}>${r.carrier} — carrier total: ${fmt(totMode(r,q.ld))}</option>`).join('');
 
   $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
-    <div class="modal" style="width:560px">
+    <div class="modal" style="width:720px">
       <div style="background:var(--green);border-radius:10px;padding:16px 20px;margin-bottom:20px;display:flex;align-items:center;gap:12px">
         <span style="font-size:28px">✅</span>
         <div>
@@ -6882,7 +6882,7 @@ function showQuoteModal(id){
   const ld=q.ld;const statusColors={Quoted:'a',Booked:'g',Lost:'gr',Cancelled:'gr'};
   const chargeRows=CHARGES.map(c=>{if(!isApplicable(c,ld)) return '';const cuv=q.customerRates?.[c]||0;const cv=q.carrierRates?.[c]||0;if(!cuv&&!cv) return '';const note=c==='ovw43'?'Over 43,000 lb':c==='ovw48'?'Over 48,000 lb':c==='det_port'?'At port':c==='det_cust'?'At customer':'';return `<tr style="border-bottom:1px solid var(--gray-100)"><td style="padding:8px 12px;color:var(--gray-600)">${LABELS[c]}${note?`<div class="charge-note">${note}</div>`:''}</td><td style="padding:8px 12px;text-align:right;color:var(--gray-400);font-size:12px">${cv>0?fmtD(cv):'—'}</td><td style="padding:8px 12px;text-align:right;font-weight:600;color:var(--steel)">${cuv>0?fmtD(cuv):'—'}</td><td style="padding:8px 12px;text-align:right;font-size:12px;color:var(--green)">${cuv>0&&cv>0?'+'+fmtD(cuv-cv):''}</td></tr>`;}).join('');
   const cuTotal=q.customerRates?.total||0;const cvTotal=q.carrierRates?.total||0;const profit=q.profit||0;const margin=q.profitPct||0;
-  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal" style="width:620px">
+  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal" style="width:740px">
     <div style="background:var(--navy);border-radius:10px;padding:16px 20px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between">
       <div style="display:flex;align-items:center;gap:12px">
         <svg width="36" height="36" viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg"><rect width="60" height="60" rx="10" fill="rgba(255,255,255,.15)"/><polygon points="10,50 25,14 44,45" fill="white"/><polygon points="25,14 44,45 53,37" fill="rgba(255,255,255,.72)"/><polygon points="10,50 44,45 53,37 53,50" fill="rgba(255,255,255,.90)"/><line x1="25" y1="14" x2="44" y2="50" stroke="rgba(59,142,208,.5)" stroke-width="1.8"/></svg>
@@ -7916,7 +7916,7 @@ async function testResendKey(){
   if(!k){alert('Save a Resend API key first.');return;}
 
   // Show modal to enter test destination
-  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:420px">
+  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:500px">
     <div class="modal-title">🔬 Test Email Connection</div>
     <p style="font-size:13px;color:var(--gray-500);margin-bottom:16px">Enter the email address to send the test to. Use the email address you signed up to Resend with for best results.</p>
     <div class="field"><label>Send test to *</label>
@@ -8694,7 +8694,7 @@ async function fqConfirmInvoice(idx){
 
 function fqMarkPaid(idx){
   const q=(window._fqHistory||[])[idx];if(!q) return;
-  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:400px">
+  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:500px">
     <div class="modal-title">✅ Mark as Paid — ${q.customer||'—'}</div>
     <div style="background:var(--gray-50);border-radius:var(--radius);padding:12px 14px;margin-bottom:16px;display:flex;justify-content:space-between">
       <div><div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--gray-400)">Invoice ${q.invoiceNum||'—'}</div><div style="font-size:13px;color:var(--gray-600)">${q.customer}</div></div>
@@ -9450,7 +9450,7 @@ async function confirmDrayInvoice(type,id){
 }
 
 async function markDrayPaid(type,id){
-  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:380px">
+  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:500px">
     <div class="modal-title">✅ Mark as Paid</div>
     <div class="field"><label>Date payment received</label><input type="date" id="dpaid-date" value="${localDateStr()}"></div>
     <div class="field"><label>Payment notes</label><input type="text" id="dpaid-notes" placeholder="ACH, check #, factored…"></div>
@@ -10338,7 +10338,7 @@ function deleteTemplate(mode, id) {
 }
 
 function showSaveTemplateModal(mode) {
-  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:380px">
+  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:500px">
     <div class="modal-title">💾 Save as template</div>
     <div class="field"><label>Template name *</label>
       <input type="text" id="tpl-name" placeholder="e.g. NY/NJ → 07728 Live" autofocus>
@@ -12729,7 +12729,7 @@ function showCarrierCheckIn(quoteId){
   const q=S.quotes.find(q=>q.id===quoteId);if(!q) return;
   const carrierEmail=S.rates.find(r=>r.carrier===q.carrier)?.email||'';
   $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
-  <div class="modal" style="max-width:440px">
+  <div class="modal" style="max-width:500px">
     <div class="modal-title">📱 Carrier check-in — ${q.carrier||'—'}</div>
     <div style="background:var(--blue-bg);border-radius:var(--radius);padding:10px 14px;margin-bottom:14px;font-size:13px;color:var(--steel)">
       ${q.customer||'—'} · ${q.port||'—'} → ${q.zip||'—'} · ${q.date||'—'}
@@ -14482,7 +14482,7 @@ function openTMSLoadDetail(id){
 // ── 3. CHECK-CALL MODAL ───────────────────────────────────────────
 function openCheckcallModal(id){
   $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
-  <div class="modal" style="max-width:420px">
+  <div class="modal" style="max-width:500px">
     <div class="modal-title">📞 Log check call</div>
     <div class="field"><label>Driver location</label><input type="text" id="cc-loc" placeholder="e.g. Columbus, OH — I-70 westbound"></div>
     <div class="field"><label>New ETA</label><input type="datetime-local" id="cc-eta"></div>
@@ -14506,7 +14506,7 @@ function logCheckcall(id){
 // ── 4. POD UPLOAD ────────────────────────────────────────────────
 function openPODUpload(id){
   $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
-  <div class="modal" style="max-width:420px">
+  <div class="modal" style="max-width:500px">
     <div class="modal-title">📎 Upload Proof of Delivery</div>
     <div style="border:2px dashed var(--gray-200);border-radius:var(--radius);padding:24px;text-align:center;cursor:pointer;margin-bottom:14px" onclick="$('pod-file').click()">
       <div style="font-size:32px;margin-bottom:8px">📎</div>
@@ -14538,7 +14538,7 @@ function savePOD(id){
 // ── 5. CLAIMS MODAL ───────────────────────────────────────────────
 function openClaimModal(id){
   $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
-  <div class="modal" style="max-width:440px">
+  <div class="modal" style="max-width:500px">
     <div class="modal-title">⚠️ File a claim</div>
     <div class="g2">
       <div class="field"><label>Claim type</label><select id="clm-type" style="width:100%;padding:8px;border:1px solid var(--gray-200);border-radius:var(--radius)"><option>Damage</option><option>Shortage</option><option>Loss</option><option>Carrier no-show</option><option>Late delivery</option><option>Other</option></select></div>
@@ -14863,7 +14863,7 @@ function quoteExpiryBadge(q){
 const LOSS_REASONS=['Price too high','Carrier issue','Transit time','Customer went direct','Competitor','Load cancelled','Other'];
 function openLostReasonModal(type,id){
   $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
-  <div class="modal" style="max-width:380px">
+  <div class="modal" style="max-width:500px">
     <div class="modal-title">📉 Why was this quote lost?</div>
     <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px">
       ${LOSS_REASONS.map(r=>`<button onclick="markLostWithReason('${type}','${id}','${r}')" style="padding:10px 14px;border:1.5px solid var(--gray-200);border-radius:var(--radius);background:transparent;cursor:pointer;font-family:inherit;font-size:13px;font-weight:600;color:var(--navy);text-align:left" onmouseenter="this.style.background='var(--blue-bg)'" onmouseleave="this.style.background='transparent'">${r}</button>`).join('')}
@@ -14908,7 +14908,7 @@ function custTagBadges(name){
 function openTagModal(customerName){
   const current=getCustomerTags(customerName);
   $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
-  <div class="modal" style="max-width:380px">
+  <div class="modal" style="max-width:500px">
     <div class="modal-title">🏷️ Tags — ${escH(customerName)}</div>
     <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px">
       ${CUST_TAGS.map(t=>`<button onclick="this.classList.toggle('tag-on')" class="${current.includes(t)?'tag-on':''}" data-tag="${t}" style="padding:7px 14px;border-radius:99px;border:1.5px solid var(--gray-200);background:transparent;cursor:pointer;font-family:inherit;font-size:12px;font-weight:600" onmouseenter="this.style.background='var(--blue-bg)'" onmouseleave="this.style.background=this.classList.contains('tag-on')?'var(--blue-bg)':'transparent'">${t}</button>`).join('')}
@@ -15321,7 +15321,7 @@ function duplicateTMSLoad(id){
 function openDriverContactModal(id){
   const meta=getTMSMeta(id);
   $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
-  <div class="modal" style="max-width:400px">
+  <div class="modal" style="max-width:500px">
     <div class="modal-title">🚛 Driver details</div>
     <div class="field"><label>Driver name</label><input type="text" id="drv-name" value="${escH(meta.driverName||'')}" placeholder="Driver full name"></div>
     <div class="field"><label>Cell number</label><input type="tel" id="drv-phone" value="${escH(meta.driverPhone||'')}" placeholder="+1 (555) 000-0000"></div>
@@ -15379,7 +15379,7 @@ function blindBadge(id){return getTMSMeta(id).isBlind?'<span style="font-size:10
 function openFreightClassDispute(id){
   const meta=getTMSMeta(id);
   $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
-  <div class="modal" style="max-width:400px">
+  <div class="modal" style="max-width:500px">
     <div class="modal-title">⚠️ Freight class dispute</div>
     <div class="g2">
       <div class="field"><label>Quoted class</label><input type="text" id="fc-quoted" value="${escH(meta.freightClass||'')}" placeholder="e.g. 70"></div>
@@ -15404,7 +15404,7 @@ function w9Badge(name){const w=getCarrierW9(name);return w.onFile?`<span style="
 function openW9Modal(carrierName){
   const w=getCarrierW9(carrierName);
   $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
-  <div class="modal" style="max-width:400px">
+  <div class="modal" style="max-width:500px">
     <div class="modal-title">📋 W-9 — ${escH(carrierName)}</div>
     <div class="field"><label>EIN / Tax ID</label><input type="text" id="w9-ein" value="${escH(w.ein||'')}" placeholder="XX-XXXXXXX"></div>
     <div class="field"><label>Legal business name</label><input type="text" id="w9-name" value="${escH(w.legalName||'')}" placeholder="Legal entity name"></div>
@@ -15436,7 +15436,7 @@ function certBadges(name){
 function openCertModal(carrierName){
   const certs=getCarrierCerts(carrierName);
   $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
-  <div class="modal" style="max-width:440px">
+  <div class="modal" style="max-width:500px">
     <div class="modal-title">🏆 Certifications — ${escH(carrierName)}</div>
     <div style="margin-bottom:14px">
       ${certs.map((c,i)=>`<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--gray-100)">
@@ -15484,7 +15484,7 @@ function openLaneContractsPage(){
 }
 function openAddLaneContract(){
   $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
-  <div class="modal" style="max-width:440px">
+  <div class="modal" style="max-width:500px">
     <div class="modal-title">+ New lane contract</div>
     <div class="g2">
       <div class="field"><label>Pickup ZIP</label><input type="text" id="lc-pu" placeholder="07102"></div>
@@ -15543,7 +15543,7 @@ function renderRealTimeMargin(){
 
 function noteTemplateMenu(targetId){
   $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
-  <div class="modal" style="max-width:400px">
+  <div class="modal" style="max-width:500px">
     <div class="modal-title">📝 Note templates</div>
     <div style="display:flex;flex-direction:column;gap:6px">
       ${NOTE_TEMPLATES.map(t=>`<button onclick="insertNoteTemplate('${targetId}','${t.replace(/'/g,"\\'")}');closeModal()" style="padding:9px 14px;border:1.5px solid var(--gray-200);border-radius:var(--radius);background:transparent;cursor:pointer;font-family:inherit;font-size:12px;text-align:left" onmouseenter="this.style.background='var(--blue-bg)'" onmouseleave="this.style.background='transparent'">${t}</button>`).join('')}
@@ -15773,7 +15773,7 @@ function renderAnnualCarrierReview(tabBar,loads){
 function showPayTermsModal(carrierName){
   const current=getCarrierPayTerms(carrierName);
   $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
-  <div class="modal" style="max-width:360px">
+  <div class="modal" style="max-width:500px">
     <div class="modal-title">💳 Pay terms — ${escH(carrierName)}</div>
     <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px">
       ${['QuickPay (48h)','Net15','Net30','Net45','Net60'].map(t=>`<button onclick="setCarrierPayTerms('${carrierName}','${t}');closeModal();renderCarriers();showToast('Pay terms updated','success',2000)" style="padding:10px 14px;border:1.5px solid ${current===t?'var(--steel)':'var(--gray-200)'};border-radius:var(--radius);background:${current===t?'var(--blue-bg)':'transparent'};cursor:pointer;font-family:inherit;font-size:13px;font-weight:600;color:${current===t?'var(--steel)':'var(--navy)'};text-align:left">${t}${current===t?' ✓':''}</button>`).join('')}
@@ -15896,7 +15896,7 @@ function deleteLoadTemplate(id){const t=getLoadTemplates().filter(t=>t.id!==id);
 function openSaveTemplate(loadId){
   const q=(window._fqHistory||[]).find(q=>q.id===loadId);if(!q) return;
   $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
-  <div class="modal" style="max-width:380px">
+  <div class="modal" style="max-width:500px">
     <div class="modal-title">💾 Save as template</div>
     <div class="field"><label>Template name</label><input type="text" id="tmpl-name" value="${escH((q.fqMode||'FTL')+' '+q.pickupZip+' → '+q.deliveryZip)}" placeholder="e.g. Weekly Newark to Chicago FTL"></div>
     <div class="modal-foot"><button class="btn" onclick="closeModal()">Cancel</button>
@@ -15925,7 +15925,7 @@ function renderTMSTemplates(tabBar){
 }
 function openAddTemplate(){
   $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
-  <div class="modal" style="max-width:440px">
+  <div class="modal" style="max-width:500px">
     <div class="modal-title">+ New load template</div>
     <div class="field"><label>Template name *</label><input type="text" id="ta-name" placeholder="e.g. Weekly Chicago FTL"></div>
     <div class="g2"><div class="field"><label>Mode</label><select id="ta-mode" style="width:100%;padding:8px;border:1px solid var(--gray-200);border-radius:var(--radius)"><option>FTL</option><option>LTL</option></select></div><div class="field"><label>Carrier</label><input type="text" id="ta-carrier" placeholder="Default carrier"></div></div>
@@ -16055,7 +16055,7 @@ function logNoShow(loadId,carrier,reason){
 function getCarrierNoShows(name){return (JSON.parse(localStorage.getItem('carrier_noshows_count')||'{}')[name]||0);}
 function openNoShowModal(loadId,carrier){
   $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
-  <div class="modal" style="max-width:380px">
+  <div class="modal" style="max-width:500px">
     <div class="modal-title">🚫 Log carrier no-show</div>
     <div style="font-size:13px;color:var(--navy);font-weight:700;margin-bottom:12px">${escH(carrier)}</div>
     <div class="field"><label>Reason</label><select id="ns-reason" style="width:100%;padding:8px;border:1px solid var(--gray-200);border-radius:var(--radius)">
@@ -16074,7 +16074,7 @@ function openLoadRecovery(loadId){
   const history=(window._fqHistory||[]).filter(l=>l.carrier&&['Delivered','Invoiced','Paid'].includes(l.status)&&l.pickupZip===q.pickupZip&&l.deliveryZip===q.deliveryZip);
   const carriers=[...new Set(history.map(l=>l.carrier))].filter(c=>c!==q.carrier&&!isBlacklisted(c));
   $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
-  <div class="modal" style="max-width:440px">
+  <div class="modal" style="max-width:500px">
     <div class="modal-title">🔄 Load recovery — find replacement carrier</div>
     <div style="background:#fff5f5;border:1px solid #fca5a5;border-radius:var(--radius);padding:8px 12px;margin-bottom:12px;font-size:12px;color:var(--red);font-weight:600">Original carrier cancelled — ${escH(q.carrier||'Unknown')}</div>
     <div style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:8px">Carriers who ran this lane before:</div>
@@ -16105,7 +16105,7 @@ function checkLoadCompletion(id){
   const incomplete=checks.filter(c=>!c.done);
   if(incomplete.length>0){
     $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
-    <div class="modal" style="max-width:380px">
+    <div class="modal" style="max-width:500px">
       <div class="modal-title">📋 Delivery checklist</div>
       <div style="font-size:13px;color:var(--gray-500);margin-bottom:12px">Complete these before marking delivered:</div>
       ${checks.map(c=>`<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--gray-100)">
@@ -16132,7 +16132,7 @@ function logCarrierRejection(loadId,carrier,reason){
 }
 function openRejectionModal(loadId){
   $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
-  <div class="modal" style="max-width:380px">
+  <div class="modal" style="max-width:500px">
     <div class="modal-title">📝 Log carrier rejection</div>
     <div class="field"><label>Carrier that declined</label><input type="text" id="rej-carrier" placeholder="Carrier name"></div>
     <div class="field"><label>Reason</label><select id="rej-reason" style="width:100%;padding:8px;border:1px solid var(--gray-200);border-radius:var(--radius)">
@@ -16165,7 +16165,7 @@ function timeInStatusBadge(l){
 function openRerouteTool(id){
   const q=(window._fqHistory||[]).find(q=>q.id===id);if(!q) return;
   $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
-  <div class="modal" style="max-width:420px">
+  <div class="modal" style="max-width:500px">
     <div class="modal-title">🔀 Re-route load</div>
     <div style="background:#fffbeb;border:1px solid #fbbf24;border-radius:var(--radius);padding:8px 12px;margin-bottom:12px;font-size:12px;color:#92400e">⚠️ Original: ${escH(q.pickupZip||'?')} → ${escH(q.deliveryZip||'?')}</div>
     <div class="g2">
@@ -16327,7 +16327,7 @@ function setQuoteAssignee(id,name){localStorage.setItem('qassign_'+id,name);}
 function openAssignQuote(type,id){
   const agents=getAgentWinRates?Object.keys(getAgentWinRates()):[];
   $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
-  <div class="modal" style="max-width:360px">
+  <div class="modal" style="max-width:500px">
     <div class="modal-title">👤 Assign quote</div>
     <div class="field"><label>Assign to</label>
       <select id="assign-agent" style="width:100%;padding:8px;border:1px solid var(--gray-200);border-radius:var(--radius)">
@@ -16356,7 +16356,7 @@ function checkQuoteReminders(){
 }
 function openReminderModal(quoteId){
   $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
-  <div class="modal" style="max-width:360px">
+  <div class="modal" style="max-width:500px">
     <div class="modal-title">🔔 Set follow-up reminder</div>
     <div class="field"><label>Remind me on</label><input type="date" id="rem-date" value="${localDateStr()}"></div>
     <div class="field"><label>Note</label><input type="text" id="rem-note" placeholder="e.g. Follow up with customer on FTL quote"></div>
@@ -16376,7 +16376,7 @@ function addNegotiationEntry(id,party,amount,note){
 function openNegotiationModal(id){
   const log=getNegotiationLog(id);
   $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
-  <div class="modal" style="max-width:440px">
+  <div class="modal" style="max-width:500px">
     <div class="modal-title">🤝 Negotiation log</div>
     <div style="max-height:200px;overflow-y:auto;margin-bottom:12px">
       ${log.length?log.map(e=>`<div style="padding:8px 0;border-bottom:1px solid var(--gray-100)">
@@ -16617,7 +16617,7 @@ async function lookupDOT(dotNumber,targetName){
 function openDOTModal(carrierName){
   const p=getCarrierProfile(carrierName);
   $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
-  <div class="modal" style="max-width:420px">
+  <div class="modal" style="max-width:500px">
     <div class="modal-title">🔍 DOT / Authority info — ${escH(carrierName)}</div>
     <div class="g2">
       <div class="field"><label>DOT number</label><input type="text" id="dot-num" value="${escH(p.dotNumber||'')}" placeholder="12345678"></div>
@@ -16663,7 +16663,7 @@ function statusColor(s){return{'Available':'var(--green)','In a call':'var(--amb
 function statusDot(status){return`<span style="width:8px;height:8px;border-radius:50%;background:${statusColor(status)};display:inline-block;margin-right:4px"></span>`;}
 function openStatusPicker(){
   $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
-  <div class="modal" style="max-width:280px">
+  <div class="modal" style="max-width:500px">
     <div class="modal-title">Set your status</div>
     <div style="display:flex;flex-direction:column;gap:8px">
       ${STATUS_OPTS.map(s=>`<button onclick="setMyStatus('${s}');closeModal();render()" style="display:flex;align-items:center;gap:8px;padding:10px 14px;border:1.5px solid ${getMyStatus()===s?statusColor(s):'var(--gray-200)'};border-radius:var(--radius);background:transparent;cursor:pointer;font-family:inherit;font-size:13px;font-weight:600;color:var(--navy)">${statusDot(s)}${s}</button>`).join('')}
@@ -16746,7 +16746,7 @@ function renderTeamGoals(){
 function openGoalSetter(){
   const g=getTeamGoals();
   $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
-  <div class="modal" style="max-width:380px">
+  <div class="modal" style="max-width:500px">
     <div class="modal-title">🎯 Set team goals</div>
     <div class="g2">
       <div class="field"><label>Weekly revenue ($)</label><input type="number" id="g-wr" value="${g.weeklyRev||''}"></div>
@@ -16869,7 +16869,7 @@ function openWidgetCustomizer(){
   const current=getHomeWidgets();
   const all=[{id:'realtime',label:'💰 Real-time margin'},{id:'streak',label:'🔥 Streak & compliment'},{id:'quest',label:'⚡ Daily quest'},{id:'pipeline',label:'🚚 Pipeline'},{id:'quickactions',label:'⚡ Quick actions'},{id:'goals',label:'🎯 Team goals'},{id:'announcements',label:'📢 Announcements'},{id:'leaderboard',label:'🏆 Leaderboard preview'},{id:'performance',label:'📊 Performance summary'}];
   $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
-  <div class="modal" style="max-width:400px">
+  <div class="modal" style="max-width:500px">
     <div class="modal-title">🎨 Customize home screen</div>
     <div style="font-size:12px;color:var(--gray-500);margin-bottom:12px">Choose which widgets appear on your home screen</div>
     <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:14px">
