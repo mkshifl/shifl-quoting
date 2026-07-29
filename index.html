@@ -11812,162 +11812,216 @@ function renderProfitMonitor(){
   }
 
   const commPct = parseFloat(localStorage.getItem('shifl_comm_pct')||'0');
-  const filter = S.pmFilter||'all';
+  const modeFilter = S.pmFilter||'all';
   const dateFilter = S.pmDate||'all';
+  const tab = S.pmTab||'delivered'; // active | delivered | all
 
-  const WON=['Booked','Delivered','Invoiced','Paid'];
-  const dray=(S.quotes||[]).filter(q=>WON.includes(q.status)).map(q=>({
-    id:q.id,type:'drayage',customer:q.customer||'—',shiflRef:q.shiflRef||'—',
-    lane:`${q.port||'—'} → ${q.zip||'—'}`,carrier:q.carrier||'—',
-    date:q.date,status:q.status,
-    carrierCost:(p=>p.cost)(getShipmentProfit(q,'drayage')),
-    customerRate:(p=>p.revenue)(getShipmentProfit(q,'drayage')),
-    profit:(p=>p.profit)(getShipmentProfit(q,'drayage')),
-    margin:(p=>p.margin)(getShipmentProfit(q,'drayage')),
-    isActual:(p=>p.isActual)(getShipmentProfit(q,'drayage')),
-    modeLabel:'Drayage',
-    addedToSheet: localStorage.getItem('pm_sheet_'+q.id)==='1'
-  }));
-  const fq=(window._fqHistory||[]).filter(q=>WON.includes(q.status)).map(q=>({
-    id:q.id,type:'freight',customer:q.customer||'—',shiflRef:q.shiflRef||'—',
-    lane:`${q.pickupZip||'—'} → ${q.deliveryZip||'—'}`,carrier:q.carrier||'—',
-    date:q.date,status:q.status,
-    carrierCost:(p=>p.cost)(getShipmentProfit(q,'freight')),
-    customerRate:(p=>p.revenue)(getShipmentProfit(q,'freight')),
-    profit:(p=>p.profit)(getShipmentProfit(q,'freight')),
-    margin:(p=>p.margin)(getShipmentProfit(q,'freight')),
-    isActual:(p=>p.isActual)(getShipmentProfit(q,'freight')),
-    modeLabel:q.fqMode||'Freight',
-    addedToSheet: localStorage.getItem('pm_sheet_'+q.id)==='1'
-  }));
-  const tl=(window._tlHistory||[]).filter(q=>WON.includes(q.status)).map(q=>({
-    id:q.id,type:'transload',customer:q.customer||'—',shiflRef:q.shiflRef||'—',
-    lane:`${q.drayPort||'—'} → ${q.outDeliveryZip||'—'}`,carrier:q.outCarrier||'—',
-    date:q.date,status:q.status,
-    carrierCost:(p=>p.cost)(getShipmentProfit(q,'transload')),
-    customerRate:(p=>p.revenue)(getShipmentProfit(q,'transload')),
-    profit:(p=>p.profit)(getShipmentProfit(q,'transload')),
-    margin:(p=>p.margin)(getShipmentProfit(q,'transload')),
-    isActual:(p=>p.isActual)(getShipmentProfit(q,'transload')),
-    modeLabel:'Transload',
-    addedToSheet: localStorage.getItem('pm_sheet_'+q.id)==='1'
-  }));
+  // Status sets
+  const ACTIVE_ST  = ['Booked'];
+  const DONE_ST    = ['Delivered','Invoiced','Paid'];
+  const ALL_ST     = [...ACTIVE_ST,...DONE_ST];
 
-  let all=[...dray,...fq,...tl];
+  function buildRows(statusSet){
+    const dray=(S.quotes||[]).filter(q=>statusSet.includes(q.status)).map(q=>({
+      id:q.id,type:'drayage',customer:q.customer||'—',shiflRef:q.shiflRef||'—',
+      lane:`${q.port||'—'} → ${q.zip||'—'}`,carrier:q.carrier||'—',
+      date:q.date,status:q.status,
+      carrierCost:(p=>p.cost)(getShipmentProfit(q,'drayage')),
+      customerRate:(p=>p.revenue)(getShipmentProfit(q,'drayage')),
+      profit:(p=>p.profit)(getShipmentProfit(q,'drayage')),
+      margin:(p=>p.margin)(getShipmentProfit(q,'drayage')),
+      isActual:(p=>p.isActual)(getShipmentProfit(q,'drayage')),
+      modeLabel:'Drayage',
+      addedToSheet:localStorage.getItem('pm_sheet_'+q.id)==='1'
+    }));
+    const fq=(window._fqHistory||[]).filter(q=>statusSet.includes(q.status)).map(q=>({
+      id:q.id,type:'freight',customer:q.customer||'—',shiflRef:q.shiflRef||'—',
+      lane:`${q.pickupZip||'—'} → ${q.deliveryZip||'—'}`,carrier:q.carrier||'—',
+      date:q.date,status:q.status,
+      carrierCost:(p=>p.cost)(getShipmentProfit(q,'freight')),
+      customerRate:(p=>p.revenue)(getShipmentProfit(q,'freight')),
+      profit:(p=>p.profit)(getShipmentProfit(q,'freight')),
+      margin:(p=>p.margin)(getShipmentProfit(q,'freight')),
+      isActual:(p=>p.isActual)(getShipmentProfit(q,'freight')),
+      modeLabel:q.fqMode||'Freight',
+      addedToSheet:localStorage.getItem('pm_sheet_'+q.id)==='1'
+    }));
+    const tl=(window._tlHistory||[]).filter(q=>statusSet.includes(q.status)).map(q=>({
+      id:q.id,type:'transload',customer:q.customer||'—',shiflRef:q.shiflRef||'—',
+      lane:`${q.drayPort||'—'} → ${q.outDeliveryZip||'—'}`,carrier:q.outCarrier||'—',
+      date:q.date,status:q.status,
+      carrierCost:(p=>p.cost)(getShipmentProfit(q,'transload')),
+      customerRate:(p=>p.revenue)(getShipmentProfit(q,'transload')),
+      profit:(p=>p.profit)(getShipmentProfit(q,'transload')),
+      margin:(p=>p.margin)(getShipmentProfit(q,'transload')),
+      isActual:(p=>p.isActual)(getShipmentProfit(q,'transload')),
+      modeLabel:'Transload',
+      addedToSheet:localStorage.getItem('pm_sheet_'+q.id)==='1'
+    }));
+    return [...dray,...fq,...tl];
+  }
 
+  const statusSet = tab==='active'?ACTIVE_ST : tab==='delivered'?DONE_ST : ALL_ST;
+  let all = buildRows(statusSet);
+
+  // Date filter
   const today=localDateStr();
   const week=new Date(Date.now()-7*864e5).toISOString().slice(0,10);
   const month=new Date(Date.now()-30*864e5).toISOString().slice(0,10);
-  if(dateFilter==='week') all=all.filter(q=>q.date>=week);
+  if(dateFilter==='week')  all=all.filter(q=>q.date>=week);
   else if(dateFilter==='month') all=all.filter(q=>q.date>=month);
   else if(dateFilter==='today') all=all.filter(q=>q.date===today);
 
-  if(filter!=='all') all=all.filter(q=>q.type===filter);
+  // Mode filter
+  if(modeFilter!=='all') all=all.filter(q=>q.type===modeFilter);
+
+  // Sort newest first
+  all.sort((a,b)=>(b.date||'').localeCompare(a.date||''));
 
   const totalCarrier=all.reduce((s,q)=>s+q.carrierCost,0);
   const totalCustomer=all.reduce((s,q)=>s+q.customerRate,0);
   const totalProfit=all.reduce((s,q)=>s+q.profit,0);
   const totalMargin=totalCustomer>0?totalProfit/totalCustomer:0;
   const myCommission=totalProfit*(commPct/100);
-  const sheetCount=all.filter(q=>q.addedToSheet).length;
+
+  // Tab counts
+  const activeCnt = buildRows(ACTIVE_ST).length;
+  const delivCnt  = buildRows(DONE_ST).length;
+  const allCnt    = buildRows(ALL_ST).length;
 
   $('topbar-right').innerHTML=`
     <button onclick="pmDownloadCSV()" style="display:flex;align-items:center;gap:6px;padding:7px 14px;border-radius:8px;border:none;background:linear-gradient(135deg,#059669,#34d399);color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;box-shadow:0 2px 8px rgba(5,150,105,.3)">
       📥 Download CSV
     </button>`;
 
+  $('page').style.padding='12px 12px';
+
   $('page').innerHTML=`
-  <!-- Commission + filter bar -->
-  <div class="card" style="margin-bottom:14px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;padding:10px 14px">
-    <div style="display:flex;align-items:center;gap:10px;flex:1">
-      <span style="font-size:13px;font-weight:700;color:var(--navy);white-space:nowrap">Commission rate:</span>
-      <div style="display:flex;align-items:center;gap:6px">
-        <input type="number" id="pm-comm" value="${commPct}" min="0" max="100" step="0.5"
-          oninput="localStorage.setItem('shifl_comm_pct',this.value);renderProfitMonitor()"
-          style="width:72px;padding:6px 10px;font-size:16px;font-weight:700;border:2px solid var(--steel);border-radius:var(--radius);text-align:center">
-        <span style="font-size:18px;font-weight:700;color:var(--steel)">%</span>
-      </div>
+  <!-- Tabs -->
+  <div style="display:flex;gap:0;border-bottom:2px solid #e2e8f0;margin-bottom:14px">
+    ${[['active','⚡ Active',activeCnt,'#d97706'],['delivered','✅ Delivered',delivCnt,'#059669'],['all','📋 All',allCnt,'#2563eb']].map(([t,lbl,cnt,col])=>`
+      <button onclick="S.pmTab='${t}';renderProfitMonitor()" style="padding:10px 22px;border:none;border-bottom:${tab===t?'3px solid '+col:'3px solid transparent'};background:none;font-size:13px;font-weight:${tab===t?'700':'500'};color:${tab===t?col:'#94a3b8'};cursor:pointer;font-family:inherit;display:flex;align-items:center;gap:7px">
+        ${lbl} <span style="background:${tab===t?col:'#e2e8f0'};color:${tab===t?'#fff':'#64748b'};border-radius:99px;font-size:10px;font-weight:700;padding:1px 7px">${cnt}</span>
+      </button>`).join('')}
+    <div style="flex:1"></div>
+    <!-- Commission -->
+    <div style="display:flex;align-items:center;gap:6px;padding:0 12px">
+      <span style="font-size:11px;color:#94a3b8;white-space:nowrap">Commission:</span>
+      <input type="number" id="pm-comm" value="${commPct}" min="0" max="100" step="0.5"
+        oninput="localStorage.setItem('shifl_comm_pct',this.value);renderProfitMonitor()"
+        style="width:56px;padding:4px 8px;font-size:13px;font-weight:700;border:1.5px solid #2563eb;border-radius:6px;text-align:center">
+      <span style="font-size:13px;font-weight:700;color:#374151">%</span>
     </div>
-    <div style="display:flex;gap:6px;flex-wrap:wrap">
-      ${['all','drayage','freight','transload'].map(m=>`
-        <button onclick="S.pmFilter='${m}';renderProfitMonitor()" style="padding:5px 12px;border-radius:var(--radius);border:1px solid var(--gray-200);background:${filter===m?'var(--navy)':'#fff'};color:${filter===m?'#fff':'var(--gray-500)'};font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">${m==='all'?'All':m.charAt(0).toUpperCase()+m.slice(1)}</button>`).join('')}
+    <!-- Mode filter -->
+    <div style="display:flex;gap:4px;padding:0 8px;align-items:center">
+      ${['all','drayage','freight','transload'].map(f=>`<button onclick="S.pmFilter='${f}';renderProfitMonitor()" style="padding:4px 10px;border-radius:6px;border:1px solid #e2e8f0;background:${modeFilter===f?'#0a1628':'#fff'};color:${modeFilter===f?'#fff':'#64748b'};font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">${f==='all'?'All':f.charAt(0).toUpperCase()+f.slice(1)}</button>`).join('')}
     </div>
-    <div style="display:flex;gap:6px">
-      ${['all','today','week','month'].map(d=>`
-        <button onclick="S.pmDate='${d}';renderProfitMonitor()" style="padding:5px 12px;border-radius:var(--radius);border:1px solid var(--gray-200);background:${dateFilter===d?'var(--navy)':'#fff'};color:${dateFilter===d?'#fff':'var(--gray-500)'};font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">${d==='all'?'All time':d.charAt(0).toUpperCase()+d.slice(1)}</button>`).join('')}
-    </div>
-  </div>
-
-  <!-- KPI cards -->
-  <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:20px">
-    <div class="kpi"><div class="kpi-lbl">Shipments</div><div class="kpi-val">${all.length}</div><div style="font-size:10px;color:#94a3b8;margin-top:2px">${sheetCount} in spreadsheet</div></div>
-    <div class="kpi" style="border-color:#fca5a5;background:#fff5f5">
-      <div class="kpi-lbl" style="color:#dc2626">Total carrier pay</div>
-      <div class="kpi-val" style="color:#dc2626;font-size:18px">${fmtD(totalCarrier)}</div>
-    </div>
-    <div class="kpi" style="border-color:#86efac;background:#f0fdf4">
-      <div class="kpi-lbl" style="color:#16a34a">Total customer sell</div>
-      <div class="kpi-val" style="color:#16a34a;font-size:18px">${fmtD(totalCustomer)}</div>
-    </div>
-    <div class="kpi" style="border-color:#93c5fd;background:#eff6ff;border-width:2px">
-      <div class="kpi-lbl" style="color:#1d4ed8;font-size:11px">Net profit</div>
-      <div class="kpi-val" style="color:#1d4ed8;font-size:22px;font-weight:900">${fmtD(totalProfit)}</div>
-      <div style="font-size:11px;color:#3b82f6;margin-top:2px">${pct(totalMargin)} margin</div>
-    </div>
-    <div class="kpi" style="border-color:#c4b5fd;background:#faf5ff;border-width:2px">
-      <div class="kpi-lbl" style="color:#7c3aed;font-size:11px">My commission (${commPct}%)</div>
-      <div class="kpi-val" style="color:#7c3aed;font-size:22px;font-weight:900">${fmtD(myCommission)}</div>
-      <div style="font-size:10px;color:#a78bfa;margin-top:2px">${commPct}% × ${fmtD(totalProfit)}</div>
+    <!-- Date filter -->
+    <div style="display:flex;gap:4px;padding:0 8px;align-items:center">
+      ${['all','today','week','month'].map(d=>`<button onclick="S.pmDate='${d}';renderProfitMonitor()" style="padding:4px 10px;border-radius:6px;border:1px solid #e2e8f0;background:${dateFilter===d?'#0a1628':'#fff'};color:${dateFilter===d?'#fff':'#64748b'};font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">${d==='all'?'All time':d.charAt(0).toUpperCase()+d.slice(1)}</button>`).join('')}
     </div>
   </div>
 
-  <!-- Shipments table -->
-  ${all.length===0?`<div class="empty"><div class="empty-ico">📊</div><p>No completed shipments yet</p></div>`:`
-  <div class="tbl-wrap"><table>
-    <thead><tr>
-      <th>Customer</th><th>Type</th><th>Ref #</th><th>Lane</th><th>Carrier</th><th>Date</th><th>Status</th>
-      <th style="color:#dc2626">Carrier pay</th>
-      <th style="color:#16a34a">Sell rate</th>
-      <th style="color:#1d4ed8">Profit</th>
-      <th style="color:#1d4ed8">Margin</th>
-      <th style="color:#7c3aed">My cut</th>
-      <th style="color:#059669;text-align:center" title="Mark when you've added this load to your spreadsheet">📊 Sheet</th>
-    </tr></thead>
-    <tbody>${all.sort((a,b)=>b.date.localeCompare(a.date)).map(q=>{
-      const comm=q.profit*(commPct/100);
-      const inSheet=q.addedToSheet;
-      return`<tr style="${inSheet?'background:#f0fdf4;':''}">
-        <td class="bold">${q.customer}</td>
-        <td>${modeBadge(q.modeLabel)}</td>
-        <td style="font-family:monospace;font-size:12px;color:var(--steel);font-weight:600">${q.shiflRef||'—'}</td>
-        <td class="muted small">${q.lane}</td>
-        <td class="muted">${q.carrier}</td>
-        <td class="muted small">${q.date}</td>
-        <td><span class="badge ${q.status==='Paid'?'g':'a'}">${q.status}</span></td>
-        <td class="money" style="color:#dc2626">${fmtD(q.carrierCost)}</td>
-        <td class="money" style="color:#16a34a;font-weight:700">${fmtD(q.customerRate)}</td>
-        <td class="money" style="color:#1d4ed8;font-weight:700">${fmtD(q.profit)} ${profitBadge(q.isActual)}</td>
-        <td style="font-weight:700;color:${q.margin>=0.15?'var(--green)':q.margin>=0.08?'var(--amber)':'var(--red)'}">${pct(q.margin)}</td>
-        <td class="money" style="color:#7c3aed;font-weight:800">${fmtD(comm)}</td>
-        <td style="text-align:center;padding:0 8px">
-          <button onclick="pmToggleSheet('${q.id}',${inSheet?'false':'true'})" title="${inSheet?'Remove from spreadsheet':'Mark as added to spreadsheet'}"
-            style="width:36px;height:24px;border-radius:6px;border:1.5px solid ${inSheet?'#059669':'#d1d5db'};background:${inSheet?'#d1fae5':'#fff'};cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center;margin:0 auto;transition:all .15s">
-            ${inSheet?'✅':'○'}
-          </button>
-        </td>
-      </tr>`;}).join('')}
-      <tr style="background:var(--gray-50);font-weight:700;border-top:2px solid var(--gray-200)">
-        <td colspan="7" style="text-align:right;color:var(--gray-600);padding-right:14px">TOTAL</td>
-        <td class="money" style="color:#dc2626;font-weight:800">${fmtD(totalCarrier)}</td>
-        <td class="money" style="color:#16a34a;font-weight:800">${fmtD(totalCustomer)}</td>
-        <td class="money" style="color:#1d4ed8;font-weight:900;font-size:15px">${fmtD(totalProfit)}</td>
-        <td style="color:#1d4ed8;font-weight:800">${pct(totalMargin)}</td>
-        <td class="money" style="color:#7c3aed;font-weight:900;font-size:15px">${fmtD(myCommission)}</td>
-        <td style="text-align:center;font-size:10px;color:#059669;font-weight:600">${sheetCount}/${all.length}</td>
+  <!-- KPI strip -->
+  <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:14px">
+    <div style="background:#fff;border-radius:10px;border:1px solid #e2e8f0;padding:12px 14px">
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#94a3b8;margin-bottom:4px">Loads</div>
+      <div style="font-size:22px;font-weight:800;color:#0a1628">${all.length}</div>
+      <div style="font-size:10px;color:#94a3b8;margin-top:2px">${tab==='active'?'in transit':tab==='delivered'?'completed':'total'}</div>
+    </div>
+    <div style="background:#fff;border-radius:10px;border:1px solid #e2e8f0;padding:12px 14px">
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#94a3b8;margin-bottom:4px">Carrier pay</div>
+      <div style="font-size:22px;font-weight:800;color:#dc2626">$${Math.round(totalCarrier).toLocaleString()}</div>
+      <div style="font-size:10px;color:#94a3b8;margin-top:2px">${tab==='active'?'est.':''}</div>
+    </div>
+    <div style="background:#fff;border-radius:10px;border:1px solid #e2e8f0;padding:12px 14px">
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#94a3b8;margin-bottom:4px">Sell rate</div>
+      <div style="font-size:22px;font-weight:800;color:#2563eb">$${Math.round(totalCustomer).toLocaleString()}</div>
+      <div style="font-size:10px;color:#94a3b8;margin-top:2px">${tab==='active'?'est.':''}</div>
+    </div>
+    <div style="background:#fff;border-radius:10px;border:1px solid #e2e8f0;padding:12px 14px;border-left:3px solid #059669">
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#94a3b8;margin-bottom:4px">Gross profit</div>
+      <div style="font-size:22px;font-weight:800;color:#059669">$${Math.round(totalProfit).toLocaleString()}</div>
+      <div style="font-size:10px;color:#059669;margin-top:2px">${Math.round(totalMargin*100)}% margin${tab==='active'?' · est.':''}</div>
+    </div>
+    <div style="background:#fff;border-radius:10px;border:1px solid #e2e8f0;padding:12px 14px;border-left:3px solid #7c3aed">
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#94a3b8;margin-bottom:4px">My cut (${commPct}%)</div>
+      <div style="font-size:22px;font-weight:800;color:#7c3aed">$${Math.round(myCommission).toLocaleString()}</div>
+      <div style="font-size:10px;color:#94a3b8;margin-top:2px">${tab==='active'?'est.':''}</div>
+    </div>
+  </div>
+
+  <!-- Table — full width -->
+  ${all.length===0?`<div style="text-align:center;padding:60px;color:#94a3b8"><div style="font-size:36px;margin-bottom:12px">${tab==='active'?'🚛':tab==='delivered'?'✅':'📋'}</div><div style="font-size:15px;font-weight:600;color:#374151;margin-bottom:6px">No ${tab==='active'?'active':'delivered'} loads</div><div style="font-size:12px">${tab==='active'?'Loads marked Booked will appear here':'Loads marked Delivered, Invoiced, or Paid will appear here'}</div></div>`
+  :`<div style="overflow-x:auto;border-radius:10px;border:1px solid #e2e8f0;background:#fff">
+  <table style="width:100%;border-collapse:collapse;table-layout:fixed">
+    <colgroup>
+      <col style="width:13%">
+      <col style="width:7%">
+      <col style="width:6%">
+      <col style="width:12%">
+      <col style="width:10%">
+      <col style="width:6%">
+      <col style="width:7%">
+      <col style="width:9%">
+      <col style="width:9%">
+      <col style="width:8%">
+      <col style="width:6%">
+      <col style="width:7%">
+    </colgroup>
+    <thead>
+      <tr style="background:#f8fafc;border-bottom:2px solid #e2e8f0">
+        <th style="padding:10px 10px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#94a3b8">Customer</th>
+        <th style="padding:10px 8px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#94a3b8">Type</th>
+        <th style="padding:10px 8px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#94a3b8">Ref #</th>
+        <th style="padding:10px 8px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#94a3b8">Lane</th>
+        <th style="padding:10px 8px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#94a3b8">Carrier</th>
+        <th style="padding:10px 8px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#94a3b8">Date</th>
+        <th style="padding:10px 8px;text-align:center;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#94a3b8">Status</th>
+        <th style="padding:10px 8px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#dc2626">Carrier pay</th>
+        <th style="padding:10px 8px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#2563eb">Sell rate</th>
+        <th style="padding:10px 8px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#059669">Profit</th>
+        <th style="padding:10px 8px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#94a3b8">Margin</th>
+        <th style="padding:10px 8px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#7c3aed">My cut</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${all.map(q=>{
+        const myCut=q.profit*(commPct/100);
+        const mc=Math.round(q.margin*100);
+        const margCol=mc>=20?'#059669':mc>=12?'#d97706':'#dc2626';
+        const statusCol=q.status==='Delivered'||q.status==='Invoiced'||q.status==='Paid'?'#059669':q.status==='Booked'?'#d97706':'#94a3b8';
+        const statusBg=q.status==='Delivered'||q.status==='Invoiced'||q.status==='Paid'?'#d1fae5':q.status==='Booked'?'#fef3c7':'#f1f5f9';
+        return `<tr style="border-bottom:1px solid #f1f5f9;transition:background .1s" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background=''">
+          <td style="padding:10px 10px;font-size:12px;font-weight:600;color:#0a1628;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${q.customer}</td>
+          <td style="padding:10px 8px"><span style="background:#e2e8f0;color:#374151;border-radius:99px;font-size:10px;font-weight:700;padding:2px 8px;white-space:nowrap">${q.modeLabel}</span></td>
+          <td style="padding:10px 8px;font-size:11px;color:#2563eb;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${q.shiflRef||'—'}</td>
+          <td style="padding:10px 8px;font-size:11px;color:#374151;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${q.lane}</td>
+          <td style="padding:10px 8px;font-size:11px;color:#374151;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${q.carrier}</td>
+          <td style="padding:10px 8px;font-size:11px;color:#64748b;white-space:nowrap">${q.date||'—'}</td>
+          <td style="padding:10px 8px;text-align:center"><span style="background:${statusBg};color:${statusCol};border-radius:99px;font-size:10px;font-weight:700;padding:3px 9px;white-space:nowrap">${q.status}</span></td>
+          <td style="padding:10px 8px;text-align:right;font-size:13px;font-weight:700;color:#dc2626">$${Math.round(q.carrierCost).toLocaleString()}</td>
+          <td style="padding:10px 8px;text-align:right;font-size:13px;font-weight:700;color:#2563eb">$${Math.round(q.customerRate).toLocaleString()}</td>
+          <td style="padding:10px 8px;text-align:right">
+            <div style="font-size:13px;font-weight:800;color:#059669">$${Math.round(q.profit).toLocaleString()}</div>
+            ${q.isActual?'<div style="font-size:9px;color:#059669;font-weight:600">actual</div>':'<div style="font-size:9px;color:#94a3b8">est.</div>'}
+          </td>
+          <td style="padding:10px 8px;text-align:right;font-size:13px;font-weight:700;color:${margCol}">${mc}%</td>
+          <td style="padding:10px 8px;text-align:right;font-size:13px;font-weight:700;color:#7c3aed">$${Math.round(myCut).toLocaleString()}</td>
+        </tr>`;
+      }).join('')}
+      <tr style="background:#f8fafc;border-top:2px solid #e2e8f0;font-weight:700">
+        <td colspan="7" style="padding:10px 10px;font-size:12px;font-weight:700;color:#0a1628">Totals (${all.length} loads)</td>
+        <td style="padding:10px 8px;text-align:right;font-size:13px;font-weight:800;color:#dc2626">$${Math.round(totalCarrier).toLocaleString()}</td>
+        <td style="padding:10px 8px;text-align:right;font-size:13px;font-weight:800;color:#2563eb">$${Math.round(totalCustomer).toLocaleString()}</td>
+        <td style="padding:10px 8px;text-align:right;font-size:13px;font-weight:800;color:#059669">$${Math.round(totalProfit).toLocaleString()}</td>
+        <td style="padding:10px 8px;text-align:right;font-size:13px;font-weight:800;color:${Math.round(totalMargin*100)>=12?'#059669':'#dc2626'}">${Math.round(totalMargin*100)}%</td>
+        <td style="padding:10px 8px;text-align:right;font-size:13px;font-weight:800;color:#7c3aed">$${Math.round(myCommission).toLocaleString()}</td>
       </tr>
     </tbody>
   </table></div>`}`;
 }
+
 
 function pmToggleSheet(id, addIt){
   if(addIt==='true'||addIt===true){
