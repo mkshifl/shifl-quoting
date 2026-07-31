@@ -363,7 +363,7 @@ body.screenshot-mode .money::after,body.screenshot-mode .kpi-val::after{content:
 .tbl-wrap table thead th{background:var(--gray-50)!important;border-bottom:1px solid var(--gray-200)}
 
 /* ── Page max-width ── */
-.page{max-width:1200px;margin-left:auto;margin-right:auto;padding:20px 22px}
+.page{margin-left:auto;margin-right:auto;padding:20px 22px}
 
 /* ── Empty state refresh ── */
 .empty{padding:60px 24px;border:1.5px dashed var(--gray-200);border-radius:var(--radius-lg);margin:12px 0}
@@ -6095,7 +6095,8 @@ function renderActive(){
   }).join('');
 
   const emptyMsg=isCompleted?'No completed shipments yet':'No active shipments in this category';
-  $('page').innerHTML=statsBar+(filtered.length?cards:`<div class="empty"><div class="empty-ico">${isCompleted?'✅':'🔍'}</div><p>${emptyMsg}</p></div>`);
+  const cardsGrid=filtered.length?`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(560px,1fr));gap:14px;align-items:start">${cards}</div>`:`<div class="empty"><div class="empty-ico">${isCompleted?'✅':'🔍'}</div><p>${emptyMsg}</p></div>`;
+  $('page').innerHTML=statsBar+cardsGrid;
 }const regCol={NE:'g',WC:'b',SE:'a',Central:'p'};const ldCol={Live:'b',Drop:'gr',Both:'t'};
 function buildRateRows(){
   const s=S.rSearch.toLowerCase();
@@ -9315,7 +9316,7 @@ function renderHome(){
       <div style="font-size:14px;color:#8898aa">What are we moving today?</div>
       <div style="margin-top:14px;font-size:13px;color:#4b6584;font-style:italic;background:rgba(255,255,255,.6);border-radius:8px;padding:8px 16px;max-width:380px;margin:14px auto 0">"${getDailyCompliment()}"</div>
     </div>
-    <div style="max-width:600px;margin:0 auto 4px">${getStreakBadge()}</div>
+    <div style="width:100%;margin:0 auto 4px">${getStreakBadge()}</div>
     <div style="max-width:600px;margin:0 auto">${buildQuestWidget()}</div>
 
     <!-- Mode cards -->
@@ -19319,7 +19320,7 @@ function showUndoToast(label){
 function renderLoadTemplates(){
   const templates = JSON.parse(localStorage.getItem('shifl_load_templates')||'[]');
   $('page').innerHTML = `
-  <div style="max-width:900px">
+  <div style="width:100%">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
       <div><h2 style="font-size:20px;font-weight:700;color:#0a1628;margin-bottom:4px">🔁 Recurring load templates</h2>
       <div style="font-size:13px;color:#64748b">Save any lane as a template — one click to rebook</div></div>
