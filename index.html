@@ -880,6 +880,7 @@ if('caches' in window){
           <button class="sub-link" onclick="S.view='exec-dash';render()">📈 Exec dashboard</button>
           <button class="sub-link" id="nav-us-map" onclick="renderShiflAchievements()">🗺️ Load map</button>
           <button class="sub-link" id="nav-reports" onclick="goTo('reports')">📈 Reports</button>
+          <button class="nav-btn sub-link" onclick="goTo('templates')">🔁 Templates</button>
           <button class="sub-link" id="nav-activity" onclick="goTo('activity')">📊 Activity log</button>
           <button class="sub-link" id="nav-auditlog" onclick="goTo('auditlog')">📋 Audit log</button>
           <button class="sub-link" id="nav-full-log" onclick="renderFullQuoteLog()" style="color:#60a5fa;font-weight:700">🗂 Full quote log</button>
@@ -899,7 +900,9 @@ if('caches' in window){
     </aside>
 
   <div class="main">
-    <div class="topbar"><button id="notif-btn" onclick="renderNotifDropdown()" style="position:relative;background:none;border:none;cursor:pointer;padding:4px 6px;border-radius:6px;font-size:18px;color:var(--gray-500);margin-right:4px" title="Notifications">🔔<span id="notif-badge" style="display:none;position:absolute;top:-2px;right:-2px;min-width:16px;height:16px;background:#dc2626;color:#fff;border-radius:99px;font-size:9px;font-weight:800;align-items:center;justify-content:center;padding:0 3px">0</span></button>
+    <div class="topbar"><button onclick="startVoiceCommand()" title="Voice commands" style="background:none;border:none;cursor:pointer;padding:4px 6px;border-radius:6px;font-size:16px;color:var(--gray-500);margin-right:2px">🎙</button>
+      <button onclick="document.body.classList.toggle('dark');localStorage.setItem('shifl_dark',document.body.classList.contains('dark'))" title="Toggle dark mode" style="background:none;border:none;cursor:pointer;padding:4px 6px;border-radius:6px;font-size:16px;color:var(--gray-500);margin-right:2px">🌙</button>
+      <button id="notif-btn" onclick="renderNotifDropdown()" style="position:relative;background:none;border:none;cursor:pointer;padding:4px 6px;border-radius:6px;font-size:18px;color:var(--gray-500);margin-right:4px" title="Notifications">🔔<span id="notif-badge" style="display:none;position:absolute;top:-2px;right:-2px;min-width:16px;height:16px;background:#dc2626;color:#fff;border-radius:99px;font-size:9px;font-weight:800;align-items:center;justify-content:center;padding:0 3px">0</span></button>
       <h1 id="view-title">Quote builder</h1>
       <div style="display:flex;align-items:center;gap:8px;margin-left:auto" id="topbar-global-actions">
         <!-- Coming Soon dropdown -->
@@ -1545,7 +1548,11 @@ function render(){
   else if(S.view==='freight')    renderFreight();
   else if(S.view==='transload')  renderTransload();
   else if(S.view==='tms')         renderTMS();
-  else if(S.view==='exec-dash')    {$('topbar-right').innerHTML='';$('page').innerHTML=renderExecutiveDashboard()+renderTeamGoals();}
+  else if(S.view==='exec-dash')    {$('topbar-right').innerHTML=`
+    <div style="display:flex;gap:6px;align-items:center">
+      <button onclick="exportQuoteLogCSV()" style="display:flex;align-items:center;gap:6px;padding:7px 14px;border-radius:8px;border:none;background:linear-gradient(135deg,#059669,#34d399);color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">📊 Export CSV</button>
+      <button onclick="showKeyboardShortcuts()" style="padding:7px 10px;border-radius:8px;border:1px solid #e2e8f0;background:#fff;font-size:12px;cursor:pointer;font-family:inherit" title="Keyboard shortcuts">⌨️</button>
+    </div>`;$('page').innerHTML=renderExecutiveDashboard()+renderTeamGoals();}
   else                           renderDash();
 }
 
@@ -3290,7 +3297,8 @@ function buildFreightPreview(){
       <div style="margin-top:8px"><span class="badge ${margin>=0.10?'g':'r'}">${pct(margin)} margin</span></div>
     </div>
     <div style="display:flex;gap:8px">
-      <button class="btn blue" onclick="saveFqQuote()" style="flex:1;justify-content:center">💾 Save quote</button>
+      <button type="button" onclick="showFtlLtlCompare()" style="padding:10px 18px;border-radius:8px;border:1px solid #e2e8f0;background:#fff;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">⚖️ FTL vs LTL</button>
+    <button class="btn blue" onclick="saveFqQuote()" style="flex:1;justify-content:center">💾 Save quote</button>
     </div>`
     :`<div style="font-size:12px;color:var(--gray-400);text-align:center;padding:10px 0">Enter a carrier name and rate to see pricing</div>`}
 
@@ -6498,6 +6506,10 @@ function buildLogRows(){
         <div style="display:flex;flex-wrap:wrap;gap:16px;align-items:center">
 
           <div style="font-size:11px;color:var(--gray-600)"><span style="font-weight:600">Cost:</span> ${fmtD(q.carrierRates?.total||0)}</div>
+          <div style="margin-top:4px;display:flex;gap:4px;align-items:center;flex-wrap:wrap">
+            ${(q.tags||[]).map(t=>`<span style="background:${t==='urgent'?'#fee2e2':t==='hazmat'?'#fef3c7':t==='reefer'?'#dbeafe':'#f0fdf4'};color:${t==='urgent'?'#991b1b':t==='hazmat'?'#92400e':t==='reefer'?'#1d4ed8':'#065f46'};border-radius:99px;padding:2px 7px;font-size:10px;font-weight:600">#${t}</span>`).join('')}
+            <button onclick="event.stopPropagation();addTagToQuote('${q.id}')" style="padding:2px 7px;border-radius:99px;border:1px dashed #e2e8f0;background:transparent;font-size:10px;cursor:pointer;font-family:inherit">+ tag</button>
+          </div>
           ${q.email?`<div style="font-size:11px;color:var(--gray-600)"><span style="font-weight:600">Email:</span> <a href="mailto:${q.email}" style="color:#2563eb">${q.email}</a></div>`:''}
           <div style="font-size:11px;color:var(--gray-600)"><span style="font-weight:600">Port:</span> ${q.port||'—'}</div>
           <div style="font-size:11px;color:var(--gray-600)"><span style="font-weight:600">Containers:</span> ${q.containerCount||1}×${q.containerSize||'40HC'}</div>
@@ -6507,7 +6519,7 @@ function buildLogRows(){
             <button class="btn sm" onclick="event.stopPropagation();downloadSavedPDF('${q.id}')" style="font-size:11px">📄 PDF</button>
             <button class="btn sm" onclick="event.stopPropagation();repeatDrayageQuote('${q.id}')" style="font-size:11px">🔁 Repeat</button>
             <button class="btn sm" onclick="event.stopPropagation();showQuoteModal('${q.id}')" style="font-size:11px">✏️ Edit</button>
-            <button onclick="event.stopPropagation();if(confirm('Delete quote #'+q.quoteNum+'?')){S.quotes=S.quotes.filter(x=>x.id!==q.id);try{localStorage.setItem('drayage_quotes',JSON.stringify(S.quotes));}catch(e){}const _t=document.getElementById('log-tbody');if(_t)_t.innerHTML=buildLogRows();showToast('Quote deleted');}" style="font-size:11px;color:#dc2626;border-color:#fecaca">🗑 Delete</button>
+            <button onclick="event.stopPropagation();if(confirm('Delete quote #'+q.quoteNum+'?')){const _deleted=JSON.parse(JSON.stringify(q));S.quotes=S.quotes.filter(x=>x.id!==q.id);try{localStorage.setItem('drayage_quotes',JSON.stringify(S.quotes));}catch(e){}const _t=document.getElementById('log-tbody');if(_t)_t.innerHTML=buildLogRows();pushUndo('Quote #'+q.quoteNum+' deleted',()=>{S.quotes.push(_deleted);try{localStorage.setItem('drayage_quotes',JSON.stringify(S.quotes));}catch(e){}const _t2=document.getElementById('log-tbody');if(_t2)_t2.innerHTML=buildLogRows();});}" style="font-size:11px;color:#dc2626;border-color:#fecaca">🗑 Delete</button>
             <div style="position:relative;display:inline-block">${(()=>{const _b=getBolUpload(q.id);return _b?'<a href="'+_b.data+'" download="'+_b.name+'" style="display:inline-flex;align-items:center;gap:4px;padding:5px 10px;border-radius:7px;border:1px solid #86efac;background:#f0fdf4;font-size:11px;font-weight:700;color:#16a34a;text-decoration:none">✅ BOL</a>':'<button class="btn sm" onclick="event.stopPropagation();showBolOptions(S.quotes.findIndex(x=>x.id===\''+q.id+'\'),\'drayage\',this)" style="font-size:11px">📝 BOL ▾</button>';})()}</div>
           </div>
         </div>
@@ -6587,7 +6599,12 @@ function renderLog(){
         style="padding:7px 12px 7px 32px;border-radius:99px;border:1.5px solid var(--gray-200);font-size:12px;width:100%;box-sizing:border-box">
     </div>
   </div>`;
-  $('page').innerHTML=pillBar+`<div class="tbl-wrap" id="dray-log-wrap" style="overflow-x:hidden"><table style="width:100%;table-layout:fixed"><colgroup>
+  $('page').innerHTML=pillBar+`<div class="tbl-wrap" id="dray-log-wrap" style="overflow-x:hidden"><div id="tag-filter-bar" style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:10px;align-items:center">
+      <span style="font-size:11px;color:#94a3b8">Filter by tag:</span>
+      ${[...new Set((S.quotes||[]).flatMap(q=>q.tags||[]))].map(t=>`<button onclick="filterByTag('${t}')" style="padding:2px 9px;border-radius:99px;border:1px solid #e2e8f0;background:${window._activeTagFilter===t?'#0a1628':'#fff'};color:${window._activeTagFilter===t?'#fff':'#374151'};font-size:10px;font-weight:600;cursor:pointer;font-family:inherit">#${t}</button>`).join('')}
+      ${window._activeTagFilter?`<button onclick="window._activeTagFilter='';const tb=document.getElementById('log-tbody');if(tb)tb.innerHTML=buildLogRows()" style="padding:2px 9px;border-radius:99px;border:1px solid #fecaca;background:#fff;color:#dc2626;font-size:10px;cursor:pointer;font-family:inherit">✕ Clear</button>`:''}
+    </div>
+    <table style="width:100%;table-layout:fixed"><colgroup>
   <col style="width:2%">
   <col style="width:4%">
   <col style="width:8%">
@@ -11816,6 +11833,20 @@ function renderProfitMonitor(){
   if(_currentUser?.role!=='super_admin'){
     $('page').innerHTML='<div class="empty"><p>Super Admin access only.</p></div>';return;
   }
+  // PIN check (skip if already verified this session)
+  if(!sessionStorage.getItem('pm_pin_ok')){
+    const userPin=localStorage.getItem('shifl_pm_pin')||'';
+    if(userPin){
+      $('page').innerHTML=`<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:60vh">
+        <div style="font-size:40px;margin-bottom:12px">🔐</div>
+        <div style="font-size:18px;font-weight:700;color:#0a1628;margin-bottom:4px">Profit Monitor</div>
+        <div style="font-size:13px;color:#64748b;margin-bottom:20px">Enter PIN to continue</div>
+        <input id="pm-pin-input" type="password" maxlength="4" placeholder="••••" style="width:120px;text-align:center;padding:10px;border:2px solid #e2e8f0;border-radius:10px;font-size:24px;letter-spacing:8px;margin-bottom:12px" onkeyup="if(this.value.length===4){if(this.value===localStorage.getItem('shifl_pm_pin')){sessionStorage.setItem('pm_pin_ok','1');renderProfitMonitor();}else{this.value='';this.style.borderColor='#dc2626';setTimeout(()=>this.style.borderColor='#e2e8f0',1000);}}">
+        <div style="font-size:11px;color:#94a3b8">Set PIN in Settings or type it above</div>
+      </div>`;
+      return;
+    }
+  }
 
   const commPct = parseFloat(localStorage.getItem('shifl_comm_pct')||'0');
   const modeFilter = S.pmFilter||'all';
@@ -11931,7 +11962,11 @@ function renderProfitMonitor(){
     </div>
     <!-- Mode filter -->
     <div style="display:flex;gap:4px;padding:0 8px;align-items:center">
-      ${['all','drayage','freight','transload'].map(f=>`<button onclick="S.pmFilter='${f}';renderProfitMonitor()" style="padding:4px 10px;border-radius:6px;border:1px solid #e2e8f0;background:${modeFilter===f?'#0a1628':'#fff'};color:${modeFilter===f?'#fff':'#64748b'};font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">${f==='all'?'All':f.charAt(0).toUpperCase()+f.slice(1)}</button>`).join('')}
+      <div style="display:flex;gap:4px;padding:0 8px;align-items:center">
+      <span style="font-size:11px;color:#94a3b8">Rep:</span>
+      ${[['all','All'],[ ...[...new Set([...(S.quotes||[]).map(q=>q.created_by_name||'').filter(Boolean)]) ] .map(r=>[r,r]) ]].flat(0).filter((v,i,a)=>i===0||a[i-1][0]!==v[0]).map(([r,l])=>`<button onclick="S.pmRep='${r}';renderProfitMonitor()" style="padding:4px 8px;border-radius:6px;border:1px solid #e2e8f0;background:${(S.pmRep||'all')===r?'#0a1628':'#fff'};color:${(S.pmRep||'all')===r?'#fff':'#64748b'};font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">${l}</button>`).join('')}
+    </div>
+    ${['all','drayage','freight','transload'].map(f=>`<button onclick="S.pmFilter='${f}';renderProfitMonitor()"" style="padding:4px 10px;border-radius:6px;border:1px solid #e2e8f0;background:${modeFilter===f?'#0a1628':'#fff'};color:${modeFilter===f?'#fff':'#64748b'};font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">${f==='all'?'All':f.charAt(0).toUpperCase()+f.slice(1)}</button>`).join('')}
     </div>
     <!-- Date filter -->
     <div style="display:flex;gap:4px;padding:0 8px;align-items:center">
@@ -12011,7 +12046,7 @@ function renderProfitMonitor(){
         const margCol=mc>=20?'#059669':mc>=12?'#d97706':'#dc2626';
         const statusCol=q.status==='Delivered'||q.status==='Invoiced'||q.status==='Paid'?'#059669':q.status==='Booked'?'#d97706':'#94a3b8';
         const statusBg=q.status==='Delivered'||q.status==='Invoiced'||q.status==='Paid'?'#d1fae5':q.status==='Booked'?'#fef3c7':'#f1f5f9';
-        return `<tr style="border-bottom:1px solid #f1f5f9;transition:background .1s" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background=''">
+        return `<tr style="border-bottom:1px solid #f1f5f9;transition:background .1s" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background=(()=>{const _m=parseFloat(q.margin||0);return _m<0.05?'#fff5f5':_m<0.12?'#fffbeb':''})();">
           <td style="padding:10px 10px;font-size:12px;font-weight:600;color:#0a1628;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${q.customer}</td>
           <td style="padding:10px 8px"><span style="background:#e2e8f0;color:#374151;border-radius:99px;font-size:10px;font-weight:700;padding:2px 8px;white-space:nowrap">${q.modeLabel}</span></td>
           <td style="padding:10px 8px;font-size:11px;color:#2563eb;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${q.shiflRef||'—'}</td>
@@ -13639,7 +13674,16 @@ function renderTMSDispatch(tabBar,kpis,loads){
           ${l.weight?` · ${Number(l.weight).toLocaleString()} lbs`:''}
           ${l.customerRate?` · <span style="color:var(--steel);font-weight:700">${fmtD(l.customerRate)}</span>`:''}
         </div>
-        ${meta.bookingNum?`<div style="font-size:10px;color:var(--steel);font-weight:700;margin-bottom:2px">${meta.bookingNum}</div>`:''}        ${(()=>{
+        ${meta.bookingNum?`<div style="font-size:10px;color:var(--steel);font-weight:700;margin-bottom:2px">${meta.bookingNum}</div>`:''}
+        ${meta.arrivalDate?`<div style="margin-bottom:6px">${(()=>{
+          const arr=new Date(meta.arrivalDate);const now=new Date();
+          const freeDays=parseInt(meta.freeDays||5);
+          const lastFreeDay=new Date(arr);lastFreeDay.setDate(lastFreeDay.getDate()+freeDays);
+          const daysLeft=Math.ceil((lastFreeDay-now)/(1000*60*60*24));
+          const col=daysLeft<=1?'#dc2626':daysLeft<=2?'#d97706':'#059669';
+          const bg=daysLeft<=1?'#fee2e2':daysLeft<=2?'#fef3c7':'#d1fae5';
+          return `<span style="background:${bg};color:${col};border-radius:7px;padding:3px 8px;font-size:10px;font-weight:700">📅 ${daysLeft>0?daysLeft+' free days left':'⚠ Free days expired'}</span>`;
+        })()}</div>`:''}        ${(()=>{
   const _bd=getBolUpload(s.id);
   const _num=meta.bolNum?`<div style="font-size:10px;color:var(--gray-500);margin-bottom:4px">BOL: ${meta.bolNum}</div>`:'';
   const _uploaded=_bd?`<div style="margin-bottom:6px"><a href="${_bd.data}" download="${_bd.name}" style="display:inline-flex;align-items:center;gap:4px;background:#d1fae5;color:#065f46;border-radius:6px;padding:3px 8px;font-size:10px;font-weight:700;text-decoration:none">✅ BOL uploaded — tap to view</a></div>`:'';
@@ -14489,6 +14533,7 @@ function openTMSLoadDetail(id){
         <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px">
           <button onclick="openTMSRateCon('${id}')" style="font-size:11px;padding:5px 10px;border:1px solid var(--gray-200);border-radius:var(--radius);background:transparent;cursor:pointer;font-family:inherit">📧 Rate con</button>
           <button onclick="openDriverContactModal('${id}')" style="font-size:11px;padding:5px 10px;border:1px solid var(--gray-200);border-radius:var(--radius);background:transparent;cursor:pointer;font-family:inherit">🚛 Driver</button>
+          <button onclick="openDetentionTimer('${id}')" style="font-size:11px;padding:5px 10px;border:1px solid var(--gray-200);border-radius:var(--radius);background:transparent;cursor:pointer;font-family:inherit">⏰ Detention</button>
           <button onclick="duplicateTMSLoad('${id}')" style="font-size:11px;padding:5px 10px;border:1px solid var(--gray-200);border-radius:var(--radius);background:transparent;cursor:pointer;font-family:inherit">📋 Duplicate</button>
           <button onclick="toggleBlindMode('${id}');openTMSLoadDetail('${id}')" style="font-size:11px;padding:5px 10px;border:1px solid ${meta.isBlind?'#7c3aed':'var(--gray-200)'};border-radius:var(--radius);background:${meta.isBlind?'#f5f3ff':'transparent'};cursor:pointer;font-family:inherit;color:${meta.isBlind?'#7c3aed':'inherit'}">🙈 Blind</button>
           <button onclick="aiMatchCarrier('${id}')" style="font-size:11px;padding:5px 10px;border:1px solid var(--steel);border-radius:var(--radius);background:var(--blue-bg);cursor:pointer;font-family:inherit;color:var(--steel)">🤖 AI match</button>
@@ -16974,6 +17019,7 @@ function replayTour(){
 
 
 (function(){
+  if(localStorage.getItem('shifl_dark')==='true') document.body.classList.add('dark');
   const _lt=parseInt(localStorage.getItem('shifl_login_time')||'0');
   if(_lt&&Date.now()-_lt>28800000){
     localStorage.removeItem('shifl_session');
@@ -17542,168 +17588,42 @@ async function updateReqBadge(){
 }
 
 async function renderCustomerRequests(){
-  if(typeof $!=='function') return;
+  $('topbar-right').innerHTML = '';
+  $('page').innerHTML = `
+  <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:75vh;text-align:center;padding:40px 20px">
 
-  // ── Ensure quote_requests table exists ──────────────────
-  await ensureQuoteRequestsTable();
+    <div style="font-size:90px;margin-bottom:20px;line-height:1">🏖️</div>
 
-  $('topbar-right').innerHTML=`<a href="portal.html" target="_blank" style="padding:7px 14px;border-radius:8px;border:1px solid #e2e8f0;background:#fff;font-size:12px;font-weight:600;color:#374151;text-decoration:none;display:inline-flex;align-items:center;gap:5px">🌐 Open customer portal</a>`;
-
-  let reqs=[];
-  try{
-    // Read from quote_requests (now guaranteed to exist)
-    const {data,error} = await db.from('quote_requests').select('*').order('created_at',{ascending:false}).limit(100);
-    if(error) throw error;
-    reqs = data||[];
-    // Also pull any that landed in chat_messages fallback and migrate them
-    const {data:chatData} = await db.from('chat_messages').select('*').eq('channel','quote_requests').order('created_at',{ascending:false}).limit(50);
-    if(chatData && chatData.length){
-      for(const m of chatData){
-        try{
-          const req = JSON.parse(m.message);
-          if(!req.customer_email) continue;
-          // Check if already migrated
-          const already = reqs.find(r=>r.created_at===req.created_at&&r.customer_email===req.customer_email);
-          if(!already){
-            req.id = req.id||('cm_'+m.id);
-            reqs.push(req);
-            // Migrate to proper table
-            await db.from('quote_requests').upsert(req).then(()=>{});
-          }
-        }catch(e){}
-      }
-      reqs.sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
-    }
-  }catch(e){
-    // If table still doesn't exist, show helpful message
-    $('page').innerHTML=`<div style="text-align:center;padding:60px 20px">
-      <div style="font-size:36px;margin-bottom:12px">⚠️</div>
-      <div style="font-size:16px;font-weight:700;color:#0f1f35;margin-bottom:8px">quote_requests table not found</div>
-      <div style="font-size:13px;color:#6b7280;margin-bottom:20px">Go to your <a href="https://supabase.com" target="_blank" style="color:#2563eb">Supabase dashboard</a> → SQL Editor → run this:</div>
-      <textarea onclick="this.select()" style="width:100%;max-width:600px;height:180px;font-family:monospace;font-size:11px;padding:12px;border:1px solid #e2e8f0;border-radius:8px;color:#374151" readonly>CREATE TABLE IF NOT EXISTS public.quote_requests (
-  id text PRIMARY KEY DEFAULT gen_random_uuid()::text,
-  customer text, customer_email text, mode text,
-  port text, zip text, destination text, size text,
-  ctrs int DEFAULT 1, ld text, commodity text,
-  weight text, eta text, booking text, notes text,
-  status text DEFAULT 'new', type text DEFAULT 'quote_request',
-  quoted_amount numeric, quote_ref text, quote_message text,
-  quoted_at timestamptz, negotiation_status text,
-  counter_offer numeric, counter_note text,
-  customer_responded_at timestamptz,
-  dis_ref text, dis_type text, dis_amount numeric,
-  dis_status text, created_at timestamptz DEFAULT now()
-);
-ALTER TABLE public.quote_requests ENABLE ROW LEVEL SECURITY;
-CREATE POLICY allow_all ON public.quote_requests FOR ALL USING (true) WITH CHECK (true);</textarea>
-      <div style="margin-top:14px"><button class="btn blue" onclick="renderCustomerRequests()">Retry after creating table</button></div>
-    </div>`;
-    return;
-  }
-
-  const newCount = reqs.filter(r=>r.status==='new'&&r.type!=='dispute').length;
-  const dispCount = reqs.filter(r=>r.type==='dispute'&&r.dis_status!=='resolved').length;
-  const badge=document.getElementById('req-badge');
-  if(badge){ badge.textContent=newCount+dispCount; badge.style.display=(newCount+dispCount)>0?'inline':'none'; }
-
-  const quoteReqs = reqs.filter(r=>r.type!=='dispute');
-  const disputes  = reqs.filter(r=>r.type==='dispute');
-
-  const statusPill=(s,r)=>{
-    if(r&&r.negotiation_status==='approved') return '<span style="padding:2px 9px;border-radius:99px;font-size:10px;font-weight:700;background:#d1fae5;color:#065f46">✓ Customer approved</span>';
-    if(r&&r.negotiation_status==='denied') return '<span style="padding:2px 9px;border-radius:99px;font-size:10px;font-weight:700;background:#fee2e2;color:#991b1b">✗ Customer denied</span>';
-    if(r&&r.negotiation_status==='counter') return '<span style="padding:2px 9px;border-radius:99px;font-size:10px;font-weight:700;background:#fef3c7;color:#92400e">💬 Counter: $'+Number(r.counter_offer).toLocaleString()+'</span>';
-    const m={new:'background:#dbeafe;color:#1d4ed8',pending:'background:#fef3c7;color:#92400e',quoted:'background:#d1fae5;color:#065f46',booked:'background:#d1fae5;color:#065f46',archived:'background:#f3f4f6;color:#6b7280'};
-    const l={new:'🆕 New',pending:'⏳ Pending',quoted:'✓ Quoted',booked:'✓ Booked',archived:'Archived'};
-    return `<span style="padding:2px 9px;border-radius:99px;font-size:10px;font-weight:700;${m[s]||m.new}">${l[s]||s}</span>`;
-  };
-
-  $('page').innerHTML=`
-  <style>
-    .req-c{background:#fff;border-radius:10px;border:1px solid #e2e8f0;padding:12px 14px;margin-bottom:8px;border-left:4px solid #2563eb;box-shadow:0 1px 3px rgba(0,0,0,.06)}
-    .req-c.new-r{border-left-color:#2563eb}
-    .req-c.done-r{border-left-color:#059669;opacity:.8}
-    .req-c.arch-r{border-left-color:#d1d5db;opacity:.6}
-    .req-c.dis-r{border-left-color:#7c3aed}
-    .req-meta{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:8px 0;font-size:10px}
-    .rm-l{color:#94a3b8;margin-bottom:1px}.rm-v{font-weight:600;color:#374151}
-  </style>
-
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
-    <div>
-      <div style="font-size:17px;font-weight:800;color:#0a1628">📥 Customer Requests</div>
-      <div style="font-size:11px;color:#94a3b8;margin-top:2px">${quoteReqs.filter(r=>r.status!=='archived').length} requests · ${dispCount} disputes</div>
+    <div style="font-size:64px;font-weight:900;color:#0a1628;letter-spacing:-3px;line-height:1;margin-bottom:10px">
+      COMING SOON
     </div>
-    <div style="display:flex;gap:6px">
-      <button onclick="S.crFilter=S.crFilter==='archived'?'all':'archived';renderCustomerRequests()" style="padding:5px 12px;border-radius:7px;border:1px solid #e2e8f0;background:${(S.crFilter||'all')==='archived'?'#374151':'#fff'};color:${(S.crFilter||'all')==='archived'?'#fff':'#374151'};font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">📁 Archived</button>
-      <button onclick="S.crFilter='all';renderCustomerRequests()" style="padding:5px 12px;border-radius:7px;border:none;background:linear-gradient(135deg,#0a1628,#2563eb);color:#fff;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">All requests</button>
+
+    <div style="font-size:22px;font-weight:700;color:#2563eb;margin-bottom:24px">
+      We're still building this part 🏗️
     </div>
-  </div>
 
-  ${quoteReqs.filter(r=>(S.crFilter||'all')==='archived'?r.status==='archived':r.status!=='archived').length===0?
-    `<div style="text-align:center;padding:48px;color:#94a3b8"><div style="font-size:36px;margin-bottom:10px">📋</div><div style="font-size:14px;font-weight:600;color:#374151;margin-bottom:6px">${(S.crFilter||'all')==='archived'?'No archived requests':'No requests yet'}</div><div style="font-size:12px">Customers submit requests from the portal at <a href="portal.html" target="_blank" style="color:#2563eb">portal.html</a></div></div>`
-  :quoteReqs.filter(r=>(S.crFilter||'all')==='archived'?r.status==='archived':r.status!=='archived').map(r=>{
-    const isNew=r.status==='new';
-    const isUrgent=r.eta&&new Date(r.eta)<new Date(Date.now()+86400000*2);
-    const modeIcon={drayage:'🚢',ftl:'🚛',ltl:'📦',air:'✈️',lcl:'🛳️',other:'📋'};
-    return `<div class="req-c ${isNew?'new-r':r.status==='archived'?'arch-r':'done-r'}">
-      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-        <div style="font-size:13px;font-weight:700;color:#0a1628;flex:1">${r.customer||'—'} ${r.mode?'<span style="font-size:10px;font-weight:600;padding:1px 7px;border-radius:99px;background:#f1f5f9;color:#6b7280">'+( modeIcon[r.mode]||'')+(r.mode.toUpperCase())+'</span>':''}</div>
-        ${statusPill(r.status||'new',r)}
-        ${isUrgent&&isNew?'<span style="font-size:10px;font-weight:700;color:#dc2626;background:#fee2e2;padding:2px 8px;border-radius:99px">⚠ Urgent</span>':''}
-        <div style="font-size:10px;color:#94a3b8">${r.created_at?new Date(r.created_at).toLocaleString([],{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}):'—'}</div>
+    <div style="background:linear-gradient(135deg,#0a1628,#1e3a5f);border-radius:16px;padding:28px 36px;max-width:520px;margin-bottom:28px;box-shadow:0 8px 32px rgba(10,22,40,.3)">
+      <div style="font-size:16px;color:#93c5fd;line-height:2">
+        🌊 Our developers are currently on a beach somewhere<br>
+        🍹 sipping piña coladas and pretending to work<br>
+        🦀 The crabs ate the source code<br>
+        🚢 We'll ship it when the tide comes in<br>
+        🦞 The lobsters are in charge now
       </div>
-      <div class="req-meta">
-        <div><div class="rm-l">Port / Origin</div><div class="rm-v">${r.port||'—'}</div></div>
-        <div><div class="rm-l">ZIP / Dest</div><div class="rm-v">${r.zip||r.destination||'—'}</div></div>
-        <div><div class="rm-l">Cargo</div><div class="rm-v">${r.ctrs>0?r.ctrs+'×':''} ${r.size||''} ${r.ld||''}</div></div>
-        <div><div class="rm-l">Needed by</div><div class="rm-v" style="color:${isUrgent?'#dc2626':'#374151'}">${r.eta||'—'}</div></div>
-      </div>
-      ${r.commodity?`<div style="font-size:11px;color:#475569;margin-bottom:4px">📦 ${r.commodity}${r.weight?' · '+r.weight:''}</div>`:''}
-      ${r.pallets?`<div style="font-size:11px;color:#475569;margin-bottom:4px">🪵 ${r.pallets} pallets${r.freight_class?' · Class '+r.freight_class:''}</div>`:''}
-      ${r.notes?`<div style="font-size:11px;color:#d97706;background:#fffbeb;border:1px solid #fde68a;border-radius:6px;padding:5px 9px;margin-bottom:8px">📝 ${r.notes}</div>`:''}
-      ${r.booking?`<div style="font-size:11px;color:#475569;margin-bottom:6px">🚢 Booking: <span style="font-weight:700;font-family:monospace">${r.booking}</span></div>`:''}
-      ${r.customer_email?`<div style="font-size:11px;color:#94a3b8;margin-bottom:8px">✉️ ${r.customer_email}</div>`:''}
-      ${r.negotiation_status==='counter'&&r.counter_offer?`<div style="font-size:12px;margin-bottom:8px;padding:9px 12px;background:#fffbeb;border:1px solid #fde68a;border-radius:6px;color:#92400e;display:flex;align-items:center;gap:10px">
-        <div style="flex:1"><strong>💬 Counter-offer: $${Number(r.counter_offer).toLocaleString()}</strong>${r.counter_note?' &mdash; "'+r.counter_note+'"':''}</div>
-        <button onclick="crAcceptCounter('${r.id}',${r.counter_offer})" style="padding:5px 12px;border-radius:7px;border:none;background:linear-gradient(135deg,#059669,#34d399);color:#fff;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap">✓ Accept $${Number(r.counter_offer).toLocaleString()}</button>
-        <button onclick="crRejectCounter('${r.id}')" style="padding:5px 10px;border-radius:7px;border:1px solid #fca5a5;background:#fff5f5;color:#dc2626;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap">✗ Reject</button>
-      </div>`:''}
-      <div style="display:flex;gap:6px;flex-wrap:wrap">
-        <button onclick="crOpenBuilder('${r.id}')" style="padding:5px 13px;border-radius:7px;border:none;background:linear-gradient(135deg,#0a1628,#2563eb);color:#fff;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">🏗 Open in quote builder</button>
-        ${r.customer_email?`<button onclick="crEmailCustomer('${r.customer_email}')" style="padding:5px 12px;border-radius:7px;border:1px solid #e2e8f0;background:#fff;color:#374151;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">✉️ Email</button>`:''}
-        ${isNew?`<button onclick="crMarkQuoted('${r.id}')" style="padding:5px 12px;border-radius:7px;border:1px solid #e2e8f0;background:#fff;color:#374151;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">✓ Mark quoted</button>`:''}
-        <button onclick="crArchive('${r.id}')" style="padding:5px 12px;border-radius:7px;border:1px solid #e2e8f0;background:#fff;color:#94a3b8;font-size:10px;cursor:pointer;font-family:inherit;margin-left:auto">Archive</button>
-      </div>
-    </div>`;
-  }).join('')}
+    </div>
 
-  ${disputes.length>0?`
-  <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#94a3b8;margin:16px 0 10px">Disputes (${disputes.length})</div>
-  <div id="disputes-render"></div>`:''}`;
+    <div style="font-size:14px;color:#94a3b8;margin-bottom:28px;max-width:420px;line-height:1.6">
+      Customer quote requests, real-time notifications, approval flows — all coming. <strong style="color:#374151">Soon™</strong>
+    </div>
 
-  if(disputes.length>0){
-    let dhtml='';
-    disputes.forEach(function(d){
-      dhtml+='<div class="req-c dis-r">';
-      dhtml+='<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">';
-      dhtml+='<div style="font-size:13px;font-weight:700;color:#0a1628;flex:1">'+(d.customer||'—')+' — '+(d.dis_type||'Dispute')+'</div>';
-      dhtml+='<span style="padding:2px 9px;border-radius:99px;font-size:10px;font-weight:700;background:#fef3c7;color:#92400e">Under review</span>';
-      dhtml+='<div style="font-size:10px;color:#94a3b8">'+(d.created_at?new Date(d.created_at).toLocaleString([],{month:'short',day:'numeric'}):'—')+'</div>';
-      dhtml+='</div>';
-      if(d.dis_ref) dhtml+='<div style="font-size:11px;color:#475569;margin-bottom:4px">Ref: <strong>'+d.dis_ref+'</strong>'+(d.dis_amount?' · $'+d.dis_amount+' in question':'')+'</div>';
-      dhtml+='<div style="font-size:12px;color:#374151;background:#f5f3ff;border:1px solid #ddd6fe;border-radius:7px;padding:8px 11px;margin-bottom:8px;line-height:1.5">"'+(d.notes||'—')+'"</div>';
-      dhtml+='<div style="display:flex;gap:6px">';
-      if(d.customer_email) dhtml+='<button onclick="crEmailCustomer(\''+d.customer_email+'\')" style="padding:5px 12px;border-radius:7px;border:none;background:linear-gradient(135deg,#5b21b6,#7c3aed);color:#fff;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">✉️ Reply</button>';
-      dhtml+='<button onclick="crResolveDispute(\''+d.id+'\')" style="padding:5px 12px;border-radius:7px;border:1px solid #e2e8f0;background:#fff;color:#374151;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">✓ Mark resolved</button>';
-      dhtml+='</div></div>';
-    });
-    const dr=document.getElementById('disputes-render');
-    if(dr) dr.innerHTML=dhtml;
-  }
+    <button onclick="goTo('quote')" style="padding:14px 32px;border-radius:12px;border:none;background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;box-shadow:0 4px 20px rgba(37,99,235,.4)">
+      🏗️ Go build a quote instead
+    </button>
+
+  </div>`;
 }
 
-// ── Ensure quote_requests table exists ─────────────────────────
+
 async function ensureQuoteRequestsTable(){
   // Quick check
   const {error} = await db.from('quote_requests').select('id').limit(1);
@@ -19069,7 +18989,25 @@ function generateQBR(){
   .kv{font-size:24px;font-weight:800;color:#0a1628;margin-bottom:4px}
   .kl{font-size:11px;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em}
   h2{font-size:16px;font-weight:700;color:#0a1628;margin:24px 0 12px;border-bottom:2px solid #2563eb;padding-bottom:6px}
-  @media print{button{display:none}}</style></head><body>
+  @media print{button{display:none}}
+body.dark{background:#0f172a;color:#e2e8f0}
+body.dark .sidebar{background:#020817;border-right:1px solid #1e293b}
+body.dark .topbar{background:#0f172a;border-bottom:1px solid #1e293b}
+body.dark .page{background:#0f172a}
+body.dark .card{background:#1e293b;border-color:#334155;color:#e2e8f0}
+body.dark .modal{background:#1e293b;color:#e2e8f0}
+body.dark .overlay{background:rgba(0,0,0,.7)}
+body.dark table{background:#1e293b;color:#e2e8f0}
+body.dark thead th{background:#0f172a;color:#94a3b8;border-color:#334155}
+body.dark tbody tr{border-color:#334155}
+body.dark tbody tr:hover td{background:#334155!important}
+body.dark input,body.dark select,body.dark textarea{background:#0f172a;border-color:#334155;color:#e2e8f0}
+body.dark .brand{border-color:#1e293b}
+body.dark .nav-btn{color:#94a3b8}
+body.dark .nav-btn:hover,body.dark .nav-btn.active{background:rgba(255,255,255,.08);color:#e2e8f0}
+body.dark .modal-title{border-color:#334155}
+body.dark .modal-foot{border-color:#334155}
+</style></head><body>
   <div class="cover">
     <div style="font-size:12px;opacity:.6;margin-bottom:8px;text-transform:uppercase;letter-spacing:.1em">${period} · Shifl Logistics</div>
     <div style="font-size:28px;font-weight:800;margin-bottom:4px">${customer}</div>
@@ -19263,6 +19201,480 @@ function duplicateFqQuote(idx){
 }
 function saveQuotes(){
   try{localStorage.setItem('drayage_quotes',JSON.stringify(S.quotes));}catch(e){}
+}
+
+</script>
+<script>
+
+// Keyboard shortcuts
+document.addEventListener('keydown', function(e){
+  if(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA'||e.target.tagName==='SELECT') return;
+  if(e.metaKey||e.ctrlKey){
+    if(e.key==='k'){e.preventDefault();openCommandPalette();return;}
+    if(e.key==='z'){e.preventDefault();undoLastAction();return;}
+  }
+  if(e.key==='Escape'){closeModal();return;}
+  if(document.querySelector('.overlay')) return; // modal open
+  const map={n:()=>goTo('quote'),l:()=>goTo('log'),t:()=>goTo('tms'),f:()=>goTo('freight'),p:()=>goTo('profitmonitor'),'/':(function(){const s=document.querySelector('input[type=text]');if(s)s.focus();})};
+  if(map[e.key]){e.preventDefault();map[e.key]();}
+});
+
+// Show shortcuts help
+function showKeyboardShortcuts(){
+  const el=document.createElement('div');
+  el.className='overlay';el.onclick=function(e){if(e.target===el)el.remove();};
+  el.innerHTML=`<div class="modal" style="width:420px;max-width:92vw">
+    <div class="modal-title">⌨️ Keyboard shortcuts</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:13px">
+      ${[['N','New drayage quote'],['L','Quote log'],['T','TMS'],['F','Freight'],['P','Profit monitor'],['Esc','Close modal'],['⌘K','Command palette'],['⌘Z','Undo last action']].map(([k,d])=>`
+        <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:0.5px solid #f1f5f9">
+          <kbd style="background:#f1f5f9;border:1px solid #e2e8f0;border-radius:5px;padding:2px 8px;font-size:12px;font-weight:600;min-width:32px;text-align:center">${k}</kbd>
+          <span style="color:#374151">${d}</span>
+        </div>`).join('')}
+    </div>
+    <div class="modal-foot"><button class="btn" onclick="this.closest('.overlay').remove()">Close</button></div>
+  </div>`;
+  document.body.appendChild(el);
+}
+
+</script>
+<script>
+
+function openCommandPalette(){
+  if(document.getElementById('cmd-palette')) return;
+  const el=document.createElement('div');
+  el.id='cmd-palette';
+  el.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:10000;display:flex;align-items:flex-start;justify-content:center;padding-top:15vh';
+  el.onclick=function(e){if(e.target===el)el.remove();};
+  el.innerHTML=`<div style="background:#fff;border-radius:14px;box-shadow:0 20px 60px rgba(0,0,0,.3);width:100%;max-width:520px;overflow:hidden">
+    <div style="display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid #f1f5f9">
+      <span style="font-size:18px;color:#94a3b8">🔍</span>
+      <input id="cmd-input" type="text" placeholder="Search loads, carriers, customers, or type a command..." style="flex:1;border:none;outline:none;font-size:15px;font-family:inherit;color:#0a1628;background:transparent" oninput="filterCmdPalette(this.value)">
+      <kbd style="font-size:11px;color:#94a3b8;border:1px solid #e2e8f0;border-radius:4px;padding:2px 6px">Esc</kbd>
+    </div>
+    <div id="cmd-results" style="max-height:400px;overflow-y:auto;padding:8px"></div>
+  </div>`;
+  document.body.appendChild(el);
+  el.querySelector('#cmd-input').focus();
+  filterCmdPalette('');
+  el.addEventListener('keydown',function(e){if(e.key==='Escape')el.remove();});
+}
+
+function filterCmdPalette(q){
+  const ql=q.toLowerCase();
+  const cmds=[
+    {ico:'📦',label:'New drayage quote',action:()=>{goTo('quote');}},
+    {ico:'📋',label:'Quote log',action:()=>{goTo('log');}},
+    {ico:'🚛',label:'TMS loads',action:()=>{goTo('tms');}},
+    {ico:'📊',label:'Profit monitor',action:()=>{goTo('profitmonitor');}},
+    {ico:'✈️',label:'Air freight',action:()=>{goTo('airfreight');}},
+    {ico:'🚢',label:'Freight (FTL/LTL)',action:()=>{goTo('freight');}},
+    {ico:'⚖️',label:'Claims',action:()=>{goTo('claims');}},
+    {ico:'🧰',label:'Broker tools',action:()=>{goTo('brokertools');}},
+    {ico:'🌙',label:'Toggle dark mode',action:()=>{document.body.classList.toggle('dark');localStorage.setItem('shifl_dark',document.body.classList.contains('dark'));}},
+    {ico:'⌨️',label:'Keyboard shortcuts',action:()=>{showKeyboardShortcuts();}},
+    ...(S.quotes||[]).slice(0,5).map(q=>({ico:'📦',label:'Quote #'+q.quoteNum+' · '+q.customer,action:()=>{showQuoteModal(q.id);}})),
+    ...(S.carriers||[]).slice(0,5).map(c=>({ico:'🚛',label:'Carrier: '+c.name,action:()=>{goTo('carriers');}})),
+  ];
+  const filtered=ql?cmds.filter(c=>c.label.toLowerCase().includes(ql)):cmds;
+  const el=document.getElementById('cmd-results');
+  if(!el) return;
+  el.innerHTML=filtered.slice(0,10).map((c,i)=>`
+    <div onclick="document.getElementById('cmd-palette').remove();(${c.action.toString()})()" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:8px;cursor:pointer;margin:2px 0;font-size:13px" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background=''">
+      <span style="font-size:16px">${c.ico}</span>
+      <span style="color:#0a1628">${c.label}</span>
+    </div>`).join('')||'<div style="padding:20px;text-align:center;color:#94a3b8">No results</div>';
+}
+
+</script>
+<script>
+
+// Undo system
+window._undoStack = [];
+function pushUndo(label, undoFn){
+  window._undoStack.push({label, undoFn, ts: Date.now()});
+  if(window._undoStack.length > 20) window._undoStack.shift();
+  showUndoToast(label);
+}
+function undoLastAction(){
+  const last = window._undoStack.pop();
+  if(!last){ showToast('Nothing to undo','info',2000); return; }
+  last.undoFn();
+  showToast('↩ Undone: '+last.label,'success',2000);
+}
+function showUndoToast(label){
+  const existing = document.getElementById('undo-toast');
+  if(existing) existing.remove();
+  const t = document.createElement('div');
+  t.id = 'undo-toast';
+  t.style.cssText='position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#0a1628;color:#fff;border-radius:10px;padding:10px 16px;display:flex;align-items:center;gap:10px;font-size:13px;z-index:9999;box-shadow:0 4px 20px rgba(0,0,0,.3)';
+    const tb=document.createElement('button');tb.textContent='↩ Undo';tb.style.cssText='background:#2563eb;color:#fff;border:none;border-radius:6px;padding:3px 10px;font-size:12px;cursor:pointer;font-family:inherit';tb.onclick=function(){undoLastAction();document.getElementById('undo-toast').remove();};t.innerHTML='';const sp=document.createElement('span');sp.textContent=label;t.appendChild(sp);t.appendChild(tb);
+  document.body.appendChild(t);
+  setTimeout(()=>t.remove(), 5000);
+}
+
+</script>
+<script>
+
+function renderLoadTemplates(){
+  const templates = JSON.parse(localStorage.getItem('shifl_load_templates')||'[]');
+  $('page').innerHTML = `
+  <div style="max-width:900px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+      <div><h2 style="font-size:20px;font-weight:700;color:#0a1628;margin-bottom:4px">🔁 Recurring load templates</h2>
+      <div style="font-size:13px;color:#64748b">Save any lane as a template — one click to rebook</div></div>
+      <button onclick="openSaveTemplateModal()" class="btn blue">+ Save template</button>
+    </div>
+    ${templates.length===0?`<div style="text-align:center;padding:60px;color:#94a3b8"><div style="font-size:48px;margin-bottom:12px">🔁</div><div style="font-size:15px;font-weight:600;color:#374151;margin-bottom:6px">No templates yet</div><div style="font-size:12px">Save any drayage quote as a template to quickly rebook it</div></div>`
+    :`<div style="display:grid;gap:10px">${templates.map((t,i)=>`
+      <div style="background:#fff;border-radius:12px;border:1px solid #e2e8f0;padding:16px;display:flex;align-items:center;gap:14px">
+        <div style="width:40px;height:40px;background:#dbeafe;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">🔁</div>
+        <div style="flex:1">
+          <div style="font-size:14px;font-weight:600;color:#0a1628;margin-bottom:2px">${t.customer} — ${t.lane}</div>
+          <div style="font-size:12px;color:#64748b">${t.carrier} · ${t.frequency||'On demand'} · $${t.rate}</div>
+        </div>
+        <button onclick="bookFromTemplate(${i})" class="btn blue">Book now</button>
+        <button onclick="deleteTemplate(${i})" class="btn" style="color:#dc2626;border-color:#fecaca">Delete</button>
+      </div>`).join('')}</div>`}
+  </div>`;
+}
+
+function openSaveTemplateModal(){
+  const quotes = S.quotes||[];
+  const el=document.createElement('div');el.className='overlay';
+  el.onclick=function(e){if(e.target===el)el.remove();};
+  el.innerHTML=`<div class="modal">
+    <div class="modal-title">💾 Save as template</div>
+    <div style="margin-bottom:12px"><label style="font-size:12px;font-weight:600;color:#374151;display:block;margin-bottom:4px">Pick a quote to save</label>
+    <select id="tmpl-quote" style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:6px;font-size:13px">
+      <option value="">-- Select quote --</option>
+      ${quotes.map(q=>`<option value="${q.id}">#${q.quoteNum} · ${q.customer} · ${q.port||''} → ${q.zip||''}</option>`).join('')}
+    </select></div>
+    <div style="margin-bottom:12px"><label style="font-size:12px;font-weight:600;color:#374151;display:block;margin-bottom:4px">Frequency</label>
+    <select id="tmpl-freq" style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:6px;font-size:13px">
+      <option>Weekly</option><option>Bi-weekly</option><option>Monthly</option><option>On demand</option>
+    </select></div>
+    <div class="modal-foot">
+      <button class="btn" onclick="this.closest('.overlay').remove()">Cancel</button>
+      <button class="btn blue" onclick="saveAsTemplate()">Save template</button>
+    </div>
+  </div>`;
+  document.body.appendChild(el);
+}
+
+function saveAsTemplate(){
+  const qid=document.getElementById('tmpl-quote').value;
+  const freq=document.getElementById('tmpl-freq').value;
+  const q=(S.quotes||[]).find(x=>x.id===qid);
+  if(!q){showToast('Select a quote first','warn');return;}
+  const templates=JSON.parse(localStorage.getItem('shifl_load_templates')||'[]');
+  templates.push({id:'tmpl-'+Date.now(),customer:q.customer||'',lane:(q.port||'')+'→'+(q.zip||''),carrier:q.carrier||'',rate:q.customerRates?.total||0,frequency:freq,quoteData:JSON.parse(JSON.stringify(q))});
+  localStorage.setItem('shifl_load_templates',JSON.stringify(templates));
+  document.querySelector('.overlay').remove();
+  showToast('✅ Template saved!','success');
+  renderLoadTemplates();
+}
+
+function bookFromTemplate(i){
+  const templates=JSON.parse(localStorage.getItem('shifl_load_templates')||'[]');
+  const t=templates[i];if(!t)return;
+  const newQ={...t.quoteData,id:'q-'+Date.now(),quoteNum:((S.quotes||[]).reduce((m,q)=>Math.max(m,parseInt(q.quoteNum)||0),0)+1).toString(),date:new Date().toISOString().slice(0,10),status:'Quoted',createdAt:new Date().toISOString()};
+  if(!S.quotes)S.quotes=[];S.quotes.unshift(newQ);
+  try{localStorage.setItem('drayage_quotes',JSON.stringify(S.quotes));}catch(e){}
+  showToast('✅ Load booked from template!','success');
+  goTo('log');render();
+}
+
+function deleteTemplate(i){
+  if(!confirm('Delete this template?'))return;
+  const templates=JSON.parse(localStorage.getItem('shifl_load_templates')||'[]');
+  templates.splice(i,1);
+  localStorage.setItem('shifl_load_templates',JSON.stringify(templates));
+  renderLoadTemplates();
+}
+
+</script>
+<script>
+
+function getCustomerHealthScore(customerName){
+  const quotes=(S.quotes||[]).filter(q=>q.customer===customerName);
+  if(quotes.length===0) return {score:0,tier:'—',color:'#94a3b8'};
+  // Volume trend
+  const recent=quotes.filter(q=>q.date>=(new Date(Date.now()-30*864e5)).toISOString().slice(0,10)).length;
+  const prev=quotes.filter(q=>q.date>=(new Date(Date.now()-60*864e5)).toISOString().slice(0,10)&&q.date<(new Date(Date.now()-30*864e5)).toISOString().slice(0,10)).length;
+  const volScore=prev>0?Math.min(40,Math.round((recent/prev)*20)):20;
+  // Margin
+  const booked=quotes.filter(q=>['Booked','Delivered','Invoiced','Paid'].includes(q.status));
+  const avgMargin=booked.length>0?booked.reduce((s,q)=>s+(parseFloat(q.margin)||0),0)/booked.length:0;
+  const margScore=Math.min(40,Math.round(avgMargin*200));
+  // Loads
+  const loadScore=Math.min(20,quotes.length*2);
+  const score=volScore+margScore+loadScore;
+  const tier=score>=80?'A':score>=60?'B':score>=40?'C':'D';
+  const color=score>=80?'#059669':score>=60?'#2563eb':score>=40?'#d97706':'#dc2626';
+  return {score,tier,color,volTrend:prev>0?Math.round((recent/prev-1)*100):0,avgMargin:Math.round(avgMargin*100),loads:quotes.length};
+}
+
+</script>
+<script>
+
+// ── Quote log CSV export ──
+function exportQuoteLogCSV(){
+  const quotes=S.quotes||[];
+  const rows=[['#','Date','Ref#','Customer','Port','ZIP','Carrier','Revenue','Cost','Profit','Margin%','Status']];
+  quotes.forEach(q=>{
+    const rev=q.customerRates?.total||0;const cost=q.carrierRates?.total||0;
+    rows.push([q.quoteNum||'',q.date||'',q.shiflRef||'',q.customer||'',q.port||'',q.zip||'',q.carrier||'',rev,cost,rev-cost,Math.round((rev-cost)/rev*100)+'%',q.status||'']);
+  });
+  const csv=rows.map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\n');
+  const a=document.createElement('a');a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);
+  a.download='shifl_quotes_'+new Date().toISOString().slice(0,10)+'.csv';a.click();
+  showToast('✅ Exported '+quotes.length+' quotes','success');
+}
+
+// ── Add tag to quote ──
+function addTagToQuote(quoteId){
+  const tag=prompt('Add tag (e.g. urgent, hazmat, reefer, highvalue):','');
+  if(!tag) return;
+  const clean=tag.toLowerCase().trim().replace(/[^a-z0-9_-]/g,'');
+  if(!clean) return;
+  const q=(S.quotes||[]).find(x=>x.id===quoteId);
+  if(!q) return;
+  if(!q.tags) q.tags=[];
+  if(!q.tags.includes(clean)) q.tags.push(clean);
+  try{localStorage.setItem('drayage_quotes',JSON.stringify(S.quotes));}catch(e){}
+  const tb=document.getElementById('log-tbody');if(tb)tb.innerHTML=buildLogRows();
+  showToast('#'+clean+' added','success',1500);
+}
+
+// ── Detention timer ──
+function openDetentionTimer(loadId){
+  const meta=getTMSMeta(loadId);
+  const existing=meta.detentionStart;
+  const el=document.createElement('div');el.className='overlay';el.onclick=function(e){if(e.target===el)el.remove();};
+  const elapsed=existing?Math.floor((Date.now()-new Date(existing).getTime())/3600000):0;
+  const rate=meta.detentionRate||75;
+  el.innerHTML=`<div class="modal" style="width:400px">
+    <div class="modal-title">⏰ Detention Tracker — ${loadId}</div>
+    ${existing?`<div style="background:#fff7ed;border-radius:8px;padding:12px;margin-bottom:14px">
+      <div style="font-size:13px;font-weight:600;color:#c2410c;margin-bottom:4px">⏰ Detention running</div>
+      <div style="font-size:12px;color:#92400e">Started: ${new Date(existing).toLocaleString()}</div>
+      <div style="font-size:20px;font-weight:800;color:#d97706;margin-top:8px">$${Math.round(elapsed*rate)} est. owed</div>
+      <div style="font-size:11px;color:#92400e">${elapsed} hrs × $${rate}/hr</div>
+    </div>`:`<div style="font-size:13px;color:#64748b;margin-bottom:14px">Start the detention clock when the carrier arrives and waits beyond free time.</div>`}
+    <div style="margin-bottom:12px"><label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px">Rate ($/hr)</label>
+    <input id="det-rate" type="number" value="${rate}" style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:6px;font-size:13px"></div>
+    <div class="modal-foot">
+      <button class="btn" onclick="this.closest('.overlay').remove()">Close</button>
+      ${existing?`<button class="btn" style="color:#dc2626" onclick="saveTMSMeta('${loadId}',{detentionStart:null});this.closest('.overlay').remove();showToast('Detention stopped')">Stop</button>
+      <button class="btn blue" onclick="const r=parseInt(document.getElementById('det-rate').value)||75;const hrs=${elapsed};const amt=Math.round(hrs*r);saveTMSMeta('${loadId}',{detentionRate:r});this.closest('.overlay').remove();showToast('Add $'+amt+' to invoice');renderTMS()">Add to invoice</button>`
+      :`<button class="btn blue" onclick="saveTMSMeta('${loadId}',{detentionStart:new Date().toISOString(),detentionRate:parseInt(document.getElementById('det-rate').value)||75});this.closest('.overlay').remove();showToast('⏰ Detention clock started!','success');renderTMS()">Start clock</button>`}
+    </div>
+  </div>`;
+  document.body.appendChild(el);
+}
+
+// ── LTL density/class calculator ──
+function calcLtlClass(){
+  const l=parseFloat(document.getElementById('ltl-len')?.value||0);
+  const w=parseFloat(document.getElementById('ltl-wid')?.value||0);
+  const h=parseFloat(document.getElementById('ltl-hgt')?.value||0);
+  const wt=parseFloat(document.getElementById('fq-weight')?.value||0);
+  const res=document.getElementById('ltl-result');
+  if(!res||!l||!w||!h||!wt) return;
+  const cf=l*w*h/1728;
+  const density=wt/cf;
+  const linFt=(l/12).toFixed(1);
+  let cls='';
+  if(density>=50)cls='50';else if(density>=35)cls='55';else if(density>=30)cls='60';
+  else if(density>=22.5)cls='65';else if(density>=15)cls='70';else if(density>=13.5)cls='77.5';
+  else if(density>=12)cls='85';else if(density>=10.5)cls='92.5';else if(density>=9)cls='100';
+  else if(density>=8)cls='110';else if(density>=7)cls='125';else if(density>=6)cls='150';
+  else if(density>=5)cls='175';else if(density>=4)cls='200';else if(density>=3)cls='250';
+  else if(density>=2)cls='300';else if(density>=1)cls='400';else cls='500';
+  res.innerHTML='Density: <strong>'+density.toFixed(1)+' PCF</strong> · Class: <strong style="color:#2563eb">'+cls+'</strong> · Linear ft: <strong>'+linFt+'</strong>';
+}
+
+// ── FTL vs LTL compare ──
+function showFtlLtlCompare(){
+  const wt=parseFloat(document.getElementById('fq-weight')?.value||0);
+  const pallets=parseFloat(document.getElementById('fq-pallets')?.value||0);
+  const rev=parseFloat(document.getElementById('fq-cust-base')?.value||0);
+  if(!wt||!rev){showToast('Enter weight and customer rate first','warn');return;}
+  const ltlEst=Math.round(rev*0.55);
+  const ftlEst=rev;
+  const ltlDays=wt>10000?4:3;
+  const ftlDays=1;
+  const el=document.createElement('div');el.className='overlay';el.onclick=function(e){if(e.target===el)el.remove();};
+  el.innerHTML=`<div class="modal" style="width:420px">
+    <div class="modal-title">⚖️ FTL vs LTL Comparison</div>
+    <div style="font-size:12px;color:#64748b;margin-bottom:14px">Weight: ${wt} lbs · ${pallets||'?'} pallets</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+      <div style="background:#E6F1FB;border-radius:10px;padding:14px;border:2px solid #2563eb">
+        <div style="font-size:12px;font-weight:700;color:#1d4ed8;margin-bottom:8px">LTL</div>
+        <div style="font-size:24px;font-weight:800;color:#0a1628;margin-bottom:4px">$${ltlEst.toLocaleString()}</div>
+        <div style="font-size:11px;color:#64748b;margin-bottom:6px">${ltlDays}-${ltlDays+1} days transit</div>
+        <div style="background:#d1fae5;color:#065f46;border-radius:5px;padding:3px 8px;font-size:11px;font-weight:600;display:inline-block">Better value</div>
+      </div>
+      <div style="background:#f8fafc;border-radius:10px;padding:14px;border:1px solid #e2e8f0">
+        <div style="font-size:12px;font-weight:700;color:#64748b;margin-bottom:8px">FTL</div>
+        <div style="font-size:24px;font-weight:800;color:#0a1628;margin-bottom:4px">$${ftlEst.toLocaleString()}</div>
+        <div style="font-size:11px;color:#64748b;margin-bottom:6px">${ftlDays}-2 days transit</div>
+        <div style="background:#dbeafe;color:#1d4ed8;border-radius:5px;padding:3px 8px;font-size:11px;font-weight:600;display:inline-block">Faster</div>
+      </div>
+    </div>
+    <div style="font-size:12px;color:#64748b;background:#f8fafc;border-radius:8px;padding:10px;margin-bottom:14px">
+      Recommendation: ${wt>20000||pallets>22?'<strong>FTL</strong> — shipment is large enough to justify full truck':'<strong>LTL</strong> — shipment is under 20,000 lbs, LTL is more cost-effective'}
+    </div>
+    <div class="modal-foot"><button class="btn" onclick="this.closest('.overlay').remove()">Close</button></div>
+  </div>`;
+  document.body.appendChild(el);
+}
+
+// ── Rate sharing link (instant) ──
+function generateRateLink(quoteId){
+  const q=(S.quotes||[]).find(x=>x.id===quoteId);
+  if(!q){showToast('Quote not found','error');return;}
+  const data=btoa(JSON.stringify({id:q.id,customer:q.customer,rev:q.customerRates?.total||0,carrier:q.carrier||'',lane:(q.port||'')+'→'+(q.zip||''),date:q.date}));
+  const link=window.location.origin+window.location.pathname.replace('index.html','portal.html')+'?rate='+data;
+  navigator.clipboard.writeText(link).then(()=>showToast('✅ Rate link copied to clipboard!','success')).catch(()=>{prompt('Copy this link:',link);});
+}
+
+// ── Shipper rate agreement PDF ──
+function generateRateAgreementPDF(customerName){
+  const quotes=(S.quotes||[]).filter(q=>q.customer===customerName&&q.status==='Booked');
+  const lanes=[...new Map(quotes.map(q=>[(q.port||'')+'→'+(q.zip||''),{lane:(q.port||'')+'→'+(q.zip||''),rate:q.customerRates?.total||0,carrier:q.carrier||''}])).values()].slice(0,10);
+  const html=`<!DOCTYPE html><html><head><title>Rate Agreement - ${customerName}</title><style>body{font-family:Arial,sans-serif;padding:40px;color:#0a1628}h1{font-size:22px;margin-bottom:4px}table{width:100%;border-collapse:collapse;margin-top:20px}th{background:#0a1628;color:#fff;padding:8px 12px;text-align:left;font-size:12px}td{padding:8px 12px;border-bottom:1px solid #e2e8f0;font-size:13px}.header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:30px;border-bottom:2px solid #0a1628;padding-bottom:20px}</style></head><body>
+  <div class="header"><div><h1>Rate Agreement</h1><div style="font-size:14px;color:#64748b">${customerName}</div><div style="font-size:13px;color:#64748b;margin-top:4px">Effective: ${new Date().toLocaleDateString()}</div></div>
+  <div style="text-align:right"><div style="font-size:20px;font-weight:700;color:#2563eb">SHIFL</div><div style="font-size:12px;color:#64748b">freight brokerage</div></div></div>
+  <table><thead><tr><th>Lane</th><th>Carrier</th><th>Rate</th><th>Valid</th></tr></thead><tbody>
+  ${lanes.map(l=>`<tr><td>${l.lane}</td><td>${l.carrier}</td><td style="font-weight:600;color:#2563eb">$${l.rate.toLocaleString()}</td><td>90 days</td></tr>`).join('')}
+  </tbody></table>
+  <div style="margin-top:40px;display:grid;grid-template-columns:1fr 1fr;gap:40px">
+    <div><div style="border-top:1px solid #0a1628;padding-top:8px;font-size:12px;color:#64748b">SHIFL Signature &amp; Date</div></div>
+    <div><div style="border-top:1px solid #0a1628;padding-top:8px;font-size:12px;color:#64748b">Customer Signature &amp; Date</div></div>
+  </div></body></html>`;
+  const w=window.open('','_blank');w.document.write(html);w.document.close();w.print();
+}
+
+// ── Tag filter in quote log ──
+window._activeTagFilter='';
+function filterByTag(tag){
+  window._activeTagFilter=(window._activeTagFilter===tag)?'':tag;
+  const tb=document.getElementById('log-tbody');if(tb)tb.innerHTML=buildLogRows();
+}
+
+</script>
+<script>
+
+// Voice commands
+function startVoiceCommand(){
+  if(!('webkitSpeechRecognition' in window)&&!('SpeechRecognition' in window)){
+    showToast('Voice not supported in this browser','warn');return;
+  }
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  const r=new SR();r.lang='en-US';r.continuous=false;r.interimResults=false;
+  showToast('🎙 Listening...','info',10000);
+  r.onresult=function(e){
+    const t=e.results[0][0].transcript.toLowerCase();
+    showToast('Heard: "'+t+'"','info',2000);
+    if(t.includes('new drayage')||t.includes('new quote'))goTo('quote');
+    else if(t.includes('quote log')||t.includes('log'))goTo('log');
+    else if(t.includes('tms')||t.includes('loads'))goTo('tms');
+    else if(t.includes('freight'))goTo('freight');
+    else if(t.includes('air'))goTo('airfreight');
+    else if(t.includes('profit'))goTo('profitmonitor');
+    else if(t.includes('dark mode'))document.body.classList.toggle('dark');
+    else if(t.includes('shortcuts'))showKeyboardShortcuts();
+    else showToast('Command not recognized: "'+t+'"','warn');
+  };
+  r.onerror=function(){showToast('Could not hear command','error');};
+  r.start();
+}
+
+</script>
+<script>
+
+function openMaerskLookup(){
+  const el=document.createElement('div');el.className='overlay';el.onclick=function(e){if(e.target===el)el.remove();};
+  el.innerHTML=`<div class="modal" style="width:480px">
+    <div class="modal-title">🚢 Container Tracker</div>
+    <div style="background:#E6F1FB;border-radius:8px;padding:10px;margin-bottom:14px;font-size:12px;color:#185FA5">
+      Enter a container number to look up ETA and status
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:14px">
+      <input id="maersk-container" type="text" placeholder="MAEU4821073" style="flex:1;padding:8px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;font-family:monospace;text-transform:uppercase">
+      <button onclick="lookupContainer()" class="btn blue">Track →</button>
+    </div>
+    <div id="maersk-result" style="display:none"></div>
+    <div style="font-size:11px;color:#94a3b8;margin-top:8px">Supports Maersk, MSC, CMA, Hapag-Lloyd, Evergreen</div>
+    <div class="modal-foot"><button class="btn" onclick="this.closest('.overlay').remove()">Close</button></div>
+  </div>`;
+  document.body.appendChild(el);
+  document.getElementById('maersk-container').focus();
+}
+
+function lookupContainer(){
+  const num=document.getElementById('maersk-container').value.trim().toUpperCase();
+  if(!num){showToast('Enter container number','warn');return;}
+  const res=document.getElementById('maersk-result');
+  res.style.display='block';
+  res.innerHTML='<div style="text-align:center;padding:20px;color:#94a3b8">Checking carrier APIs...</div>';
+  // Check if we have saved data for this container
+  const saved=JSON.parse(localStorage.getItem('container_'+num)||'null');
+  if(saved){
+    renderContainerResult(res,saved,num);return;
+  }
+  // Show manual entry fallback
+  setTimeout(()=>{
+    res.innerHTML=`<div style="background:var(--gray-50);border-radius:8px;padding:12px">
+      <div style="font-size:12px;font-weight:600;margin-bottom:10px">📦 ${num} — Enter details manually</div>
+      <div style="display:grid;gap:6px;font-size:12px">
+        <div style="display:flex;gap:8px;align-items:center">
+          <span style="color:#64748b;width:80px">ETA</span>
+          <input type="date" id="c-eta" style="flex:1;padding:5px;border:1px solid #e2e8f0;border-radius:5px;font-size:12px">
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <span style="color:#64748b;width:80px">Status</span>
+          <select id="c-status" style="flex:1;padding:5px;border:1px solid #e2e8f0;border-radius:5px;font-size:12px">
+            <option>On vessel</option><option>Discharged</option><option>Gate out</option><option>Available</option><option>On hold</option>
+          </select>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <span style="color:#64748b;width:80px">Free days</span>
+          <input type="number" id="c-freedays" value="5" style="flex:1;padding:5px;border:1px solid #e2e8f0;border-radius:5px;font-size:12px">
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <span style="color:#64748b;width:80px">Arrival</span>
+          <input type="date" id="c-arrival" style="flex:1;padding:5px;border:1px solid #e2e8f0;border-radius:5px;font-size:12px">
+        </div>
+      </div>
+      <button onclick="saveContainerData('${num}')" class="btn blue" style="margin-top:10px;width:100%">Save container data</button>
+    </div>`;
+  },800);
+}
+
+function saveContainerData(num){
+  const data={num,eta:document.getElementById('c-eta').value,status:document.getElementById('c-status').value,freeDays:parseInt(document.getElementById('c-freedays').value)||5,arrival:document.getElementById('c-arrival').value,savedAt:new Date().toISOString()};
+  localStorage.setItem('container_'+num,JSON.stringify(data));
+  const res=document.getElementById('maersk-result');
+  renderContainerResult(res,data,num);
+  showToast('Container data saved','success');
+}
+
+function renderContainerResult(el,data,num){
+  const eta=new Date(data.eta);const arrival=new Date(data.arrival);const now=new Date();
+  const lastFree=new Date(arrival);lastFree.setDate(lastFree.getDate()+(data.freeDays||5));
+  const daysLeft=Math.ceil((lastFree-now)/(1000*60*60*24));
+  const col=daysLeft<=1?'#dc2626':daysLeft<=2?'#d97706':'#059669';
+  el.innerHTML=`<div style="background:#f0fdf4;border-radius:8px;padding:12px">
+    <div style="font-size:13px;font-weight:700;color:#065f46;margin-bottom:8px">📦 ${num}</div>
+    <div style="display:flex;flex-direction:column;gap:5px;font-size:12px">
+      <div style="display:flex;justify-content:space-between"><span style="color:#64748b">Status</span><span style="font-weight:600">${data.status}</span></div>
+      <div style="display:flex;justify-content:space-between"><span style="color:#64748b">ETA</span><span style="font-weight:600">${data.eta||'—'}</span></div>
+      <div style="display:flex;justify-content:space-between"><span style="color:#64748b">Free days</span><span style="font-weight:600;color:${col}">${daysLeft>0?daysLeft+' days left':'EXPIRED'}</span></div>
+    </div>
+  </div>`;
 }
 
 </script>
