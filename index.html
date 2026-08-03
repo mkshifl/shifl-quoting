@@ -5907,7 +5907,7 @@ function renderActive(){
       <div style="display:flex;align-items:center;gap:6px;border:1px solid var(--gray-200);border-radius:7px;padding:0 10px;height:32px;background:#fff;min-width:200px">
         <span style="color:var(--gray-400);font-size:14px">🔍</span>
         <input id="active-search-input" placeholder="Customer, carrier, ref #..." value="${S.activeSearch||''}"
-          oninput="S.activeSearch=this.value;renderActive()"
+          oninput="S.activeSearch=this.value;filterActiveCards()"
           style="border:none;outline:none;font-size:12px;font-family:inherit;width:100%;color:var(--navy);background:transparent">
       </div>
       <div style="display:flex;background:var(--gray-100);border-radius:6px;padding:3px;gap:2px">
@@ -6099,6 +6099,27 @@ function renderActive(){
   return; // end of v2 — original code replaced
 
   // ── drag-and-drop helpers (defined once, outside renderActive) ──
+}
+
+// Filter active cards without rebuilding the page — keeps search input focused
+function filterActiveCards(){
+  const search = (S.activeSearch||'').toLowerCase();
+  const grid = document.getElementById('active-grid');
+  if(!grid) return;
+  let any = false;
+  grid.querySelectorAll('.active-card-v2').forEach(card => {
+    const text = card.textContent.toLowerCase();
+    const show = !search || text.includes(search);
+    card.style.display = show ? '' : 'none';
+    if(show) any = true;
+  });
+  // update subhead count
+  const sub = document.getElementById('topbar-sub');
+  if(sub){
+    const total = grid.querySelectorAll('.active-card-v2').length;
+    const shown = [...grid.querySelectorAll('.active-card-v2')].filter(c=>c.style.display!=='none').length;
+    sub.textContent = search ? shown+' of '+total+' shown' : total+' in transit';
+  }
 }
 
 // Active shipments drag-drop
