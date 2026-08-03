@@ -5892,64 +5892,51 @@ async function markShipmentClosed(type,id,closeStatus){
   updateActiveBadge();renderActive();
 }
 function renderActive(){
+  /* ── v2 rebuild: 2-col draggable cards + search ── */
   if(!window._activeTracking) window._activeTracking={};
-  // Active = Booked | Completed = Delivered | Invoicing
-  if(S.activeView==='invoicing'){S.activeView='active';}
+  if(S.activeView==='invoicing') S.activeView='active';
   const isCompleted = S.activeView==='completed';
   const statuses = isCompleted ? ['Delivered'] : ['Booked'];
   const all = getAllShipmentsByStatus(statuses);
-  const activeCount = getAllActiveShipments().length; // always Booked only for badge
+  const activeCount = getAllActiveShipments().length;
+  const search = (S.activeSearch||'').toLowerCase();
 
+  // topbar
   $('topbar-right').innerHTML=`
-    <div style="display:flex;gap:6px;background:var(--gray-100);padding:3px;border-radius:var(--radius)">
-      <button onclick="S.activeView='active';S.activeFilter='all';renderActive()"
-        style="padding:5px 14px;border-radius:4px;border:none;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;
-               background:${!isCompleted?'#fff':'none'};color:${!isCompleted?'var(--navy)':'var(--gray-500)'}">
-        🟢 Active (${activeCount})
-      </button>
-      <button onclick="S.activeView='completed';S.activeFilter='all';renderActive()"
-        style="padding:5px 14px;border-radius:4px;border:none;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;
-               background:${isCompleted?'#fff':'none'};color:${isCompleted?'var(--navy)':'var(--gray-500)'}">
-        ✅ Completed (${getAllShipmentsByStatus(['Delivered']).length})
-      </button>
-    </div>
-    </div>
-    <button class="btn" onclick="updateActiveBadge();renderActive()" style="margin-left:6px">⟳</button>`;
+    <div style="display:flex;align-items:center;gap:7px">
+      <div style="display:flex;align-items:center;gap:6px;border:1px solid var(--gray-200);border-radius:7px;padding:0 10px;height:32px;background:#fff;min-width:200px">
+        <span style="color:var(--gray-400);font-size:14px">🔍</span>
+        <input id="active-search-input" placeholder="Customer, carrier, ref #..." value="${S.activeSearch||''}"
+          oninput="S.activeSearch=this.value;renderActive()"
+          style="border:none;outline:none;font-size:12px;font-family:inherit;width:100%;color:var(--navy);background:transparent">
+      </div>
+      <div style="display:flex;background:var(--gray-100);border-radius:6px;padding:3px;gap:2px">
+        <button onclick="S.activeView='active';S.activeFilter='all';S.activeSearch='';renderActive()"
+          style="padding:4px 12px;border-radius:4px;border:none;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;background:${!isCompleted?'#fff':'none'};color:${!isCompleted?'var(--navy)':'var(--gray-500)'}">
+          🟢 Active (${activeCount})
+        </button>
+        <button onclick="S.activeView='completed';S.activeFilter='all';S.activeSearch='';renderActive()"
+          style="padding:4px 12px;border-radius:4px;border:none;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;background:${isCompleted?'#fff':'none'};color:${isCompleted?'var(--navy)':'var(--gray-500)'}">
+          ✅ Delivered (${getAllShipmentsByStatus(['Delivered']).length})
+        </button>
+      </div>
+      <button onclick="updateActiveBadge();renderActive()" title="Refresh"
+        style="padding:5px 8px;background:none;border:1px solid var(--gray-200);border-radius:6px;cursor:pointer;font-size:13px">⟳</button>
+    </div>`;
 
-  // ── Stats bar ────────────────────────────────────────────────────────────
-  const counts={all:all.length,drayage:all.filter(s=>s.type==='drayage').length,
+  // mode counts
+  const counts={
+    all:all.length,
+    drayage:all.filter(s=>s.type==='drayage').length,
     ftl:all.filter(s=>s.type==='freight'&&s.fqMode==='FTL').length,
     ltl:all.filter(s=>s.type==='freight'&&(s.fqMode==='LTL'||(s.fqMode==='LCL'&&s.fqEquip==='LTL'))).length,
     lcl:all.filter(s=>s.type==='freight'&&s.fqMode==='LCL'&&s.fqEquip!=='LTL').length,
-    transload:all.filter(s=>s.type==='transload').length};
-  const urgent=all.filter(s=>window._activeTracking[s.id]?.urgent).length;
-  const filters=[
-    {id:'all',label:'All',count:counts.all,color:'var(--navy)'},
-    {id:'drayage',label:'Drayage',count:counts.drayage,color:'#3b6ea5'},
-    {id:'ftl',label:'FTL',count:counts.ftl,color:'#1d6b8c'},
-    {id:'ltl',label:'LTL',count:counts.ltl,color:'#6d28d9'},
-    {id:'lcl',label:'LCL',count:counts.lcl,color:'#0891b2'},
-    {id:'transload',label:'Transload',count:counts.transload,color:'#d97706'},
-  ];
+    transload:all.filter(s=>s.type==='transload').length,
+  };
+  const urgent = all.filter(s=>window._activeTracking[s.id]?.urgent);
 
-  const statsBar=`<div style="display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:16px">
-    ${filters.map(f=>`
-      <div onclick="S.activeFilter='${f.id}';renderActive()" style="cursor:pointer;border-radius:var(--radius-lg);padding:14px 16px;
-        background:${S.activeFilter===f.id?f.color:'var(--white)'};
-        border:2px solid ${S.activeFilter===f.id?f.color:'var(--gray-200)'};
-        box-shadow:${S.activeFilter===f.id?'0 4px 12px '+f.color+'44':'var(--shadow-sm)'};
-        transition:all .15s;text-align:center">
-        <div style="font-size:28px;font-weight:800;color:${S.activeFilter===f.id?'#fff':f.color}">${f.count}</div>
-        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:${S.activeFilter===f.id?'rgba(255,255,255,.8)':'var(--gray-400)'};margin-top:2px">${f.label}</div>
-      </div>`).join('')}
-  </div>
-  ${urgent>0?`<div style="background:#fff0f0;border:1px solid #fca5a5;border-radius:var(--radius);padding:8px 14px;margin-bottom:14px;display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:#dc2626">
-    🔥 ${urgent} shipment${urgent!==1?'s':''} marked hot
-  </div>`:''}`;
-
-  // ── Filter + empty state ──────────────────────────────────────────────────
-  const filtered=all.filter(s=>{
-    if(S.activeFilter==='all') return true;
+  // filter + search
+  let filtered = all.filter(s=>{
     if(S.activeFilter==='drayage') return s.type==='drayage';
     if(S.activeFilter==='ftl') return s.type==='freight'&&s.fqMode==='FTL';
     if(S.activeFilter==='ltl') return s.type==='freight'&&(s.fqMode==='LTL'||(s.fqMode==='LCL'&&s.fqEquip==='LTL'));
@@ -5957,156 +5944,135 @@ function renderActive(){
     if(S.activeFilter==='transload') return s.type==='transload';
     return true;
   });
-  // Sort: urgent first, then by booked date
+  if(search) filtered = filtered.filter(s=>
+    (s.customer+s.carrier+(s.shiflRef||'')+(s.to||s.zip||'')+(s.bookingNum||'')).toLowerCase().includes(search)
+  );
+
+  // restore saved order
+  const savedOrder = JSON.parse(localStorage.getItem('tms_priority_order')||'[]');
+  if(savedOrder.length) filtered.sort((a,b)=>{
+    const ai=savedOrder.indexOf(a.id), bi=savedOrder.indexOf(b.id);
+    if(ai===-1&&bi===-1) return 0;
+    if(ai===-1) return 1; if(bi===-1) return -1;
+    return ai-bi;
+  });
+  // urgent always float to top
   filtered.sort((a,b)=>{
     const au=window._activeTracking[a.id]?.urgent?1:0;
     const bu=window._activeTracking[b.id]?.urgent?1:0;
-    if(bu!==au) return bu-au;
-    return (b.bookedDate||b.date).localeCompare(a.bookedDate||a.date);
+    return bu-au;
   });
 
+  function daysAgo(d){return Math.floor((new Date()-new Date(d))/(86400000));}
+  function countdown(exp){
+    if(!exp) return null;
+    const diff=Math.floor((new Date(exp).setHours(0,0,0,0)-new Date().setHours(0,0,0,0))/86400000);
+    if(diff>1)  return{label:`Due in ${diff} days`,cls:'due-ok'};
+    if(diff===1)return{label:'Due tomorrow',cls:'due-warn'};
+    if(diff===0)return{label:'Due TODAY',cls:'due-hot'};
+    return{label:`Overdue ${Math.abs(diff)}d`,cls:'due-hot'};
+  }
+  const modeColor={
+    drayage:{bg:'#eff6ff',badge:'🚢 Drayage',bc:'#dbeafe',tc:'#1e40af'},
+    freight:{bg:'#f5f3ff',badge:'🚛 Freight',bc:'#ede9fe',tc:'#5b21b6'},
+    transload:{bg:'#fffbeb',badge:'🔄 Transload',bc:'#fef3c7',tc:'#92400e'},
+  };
+
+  const filterBar=`
+    <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;align-items:center">
+      ${[['all','All',counts.all],['drayage','🚢 Drayage',counts.drayage],['ftl','🚛 FTL',counts.ftl],['ltl','📦 LTL',counts.ltl],['lcl','🌊 LCL',counts.lcl],['transload','🔄 Transload',counts.transload]].map(([id,label,n])=>`
+      <button onclick="S.activeFilter='${id}';renderActive()"
+        style="padding:4px 12px;border-radius:99px;font-size:11px;font-weight:500;cursor:pointer;border:1px solid ${S.activeFilter===id?'#0f172a':'var(--gray-200)'};background:${S.activeFilter===id?'#0f172a':'#fff'};color:${S.activeFilter===id?'#fff':'var(--gray-500)'};font-family:inherit">
+        ${label} · ${n}
+      </button>`).join('')}
+      <span style="margin-left:auto;font-size:11px;color:var(--gray-400);display:flex;align-items:center;gap:4px">⠿ Drag to reorder</span>
+    </div>
+    ${urgent.length?`<div style="background:#fff0f0;border:1px solid #fca5a5;border-radius:7px;padding:7px 12px;margin-bottom:10px;display:flex;align-items:center;gap:7px;font-size:12px;font-weight:600;color:#dc2626">
+      🔥 ${urgent.length} urgent — ${urgent.map(s=>s.customer).join(', ')}
+    </div>`:''}`;
+
   if(!all.length){
-    $('page').innerHTML=`${statsBar}<div class="empty">
+    $('page').innerHTML=`<div style="padding:16px">${filterBar}<div class="empty">
       <div style="font-size:48px;margin-bottom:12px">🟢</div>
-      <p style="font-size:16px;font-weight:600;color:var(--navy)">No active shipments</p>
+      <p style="font-size:16px;font-weight:600;color:var(--navy)">No ${isCompleted?'completed':'active'} shipments</p>
       <small style="color:var(--gray-400)">Mark any quote as Booked and it will appear here</small>
-    </div>`;return;
+    </div></div>`;return;
+  }
+  if(!filtered.length){
+    $('page').innerHTML=`<div style="padding:16px">${filterBar}<div class="empty">
+      <div style="font-size:36px;margin-bottom:10px">🔍</div>
+      <p style="font-weight:600;color:var(--navy)">No results</p>
+      <small style="color:var(--gray-400)">Try a different search or filter</small>
+    </div></div>`;return;
   }
 
-  // ── Helpers ───────────────────────────────────────────────────────────────
-  function daysAgo(dateStr){
-    const d=new Date(dateStr);const now=new Date();
-    return Math.floor((now-d)/(1000*60*60*24));
-  }
-  function countdown(expectedStr){
-    if(!expectedStr) return null;
-    const exp=new Date(expectedStr);const now=new Date();
-    now.setHours(0,0,0,0);exp.setHours(0,0,0,0);
-    const diff=Math.floor((exp-now)/(1000*60*60*24));
-    if(diff>1)  return{label:`Due in ${diff} days`,color:'#22c55e',bg:'#f0fdf4'};
-    if(diff===1)return{label:'Due tomorrow',color:'#f59e0b',bg:'#fffbeb'};
-    if(diff===0)return{label:'Due TODAY',color:'#ef4444',bg:'#fff0f0',pulse:true};
-    return{label:`OVERDUE ${Math.abs(diff)} day${Math.abs(diff)!==1?'s':''}`,color:'#dc2626',bg:'#fff0f0',pulse:true};
-  }
+  const cards = filtered.map(s=>{
+    const mc = modeColor[s.type]||modeColor.freight;
+    const tracking = window._activeTracking[s.id]||{};
+    const isUrgent = !!tracking.urgent;
+    const cd = countdown(tracking.expectedDate);
+    const daysActive = daysAgo(s.bookedDate||s.date);
+    const trackUrl = tracking.trackingUrl||getCarrierTrackUrl(s.carrier,tracking.pro)||'';
+    const flagged = isFlagged(s.id);
+    const fqMode = s.fqMode||'';
+    const modeLabel = s.type==='drayage'?'🚢 Drayage':s.type==='transload'?'🔄 Transload':`🚛 ${fqMode||'Freight'}`;
+    const headBg = isUrgent?'#fff8f8':mc.bg;
+    const borderCol = isUrgent?'#fca5a5':'var(--gray-200)';
 
-  const typeColors={
-    drayage:{color:'#3b6ea5',bg:'#eff6ff',icon:'🚢',label:'Drayage'},
-    freight:{color:'#6d28d9',bg:'#f5f3ff',icon:'🚛',label:'Freight'},
-    transload:{color:'#d97706',bg:'#fffbeb',icon:'🔄',label:'Transload'}};
+    // per-type extra fields
+    const extraFields = s.type==='drayage'
+      ? `<div class="af"><div class="afl">Container</div><div class="afv">${s.bookingNum||getMeta(s.id).booking_num||'—'}</div></div>
+         <div class="af"><div class="afl">Mode</div><div class="afv">${s.mode||s.ld||'—'}</div></div>`
+      : s.type==='freight'
+      ? `<div class="af"><div class="afl">PRO #</div><div class="afv" style="color:${tracking.pro?'#2563eb':'var(--gray-400)'};">${tracking.pro||'—'}</div></div>
+         <div class="af"><div class="afl">Weight</div><div class="afv">${s.weight||s.totalWeight||'—'}</div></div>`
+      : `<div class="af"><div class="afl">Warehouse</div><div class="afv">${s.warehouse||'—'}</div></div>
+         <div class="af"><div class="afl">Out carrier</div><div class="afv">${s.outCarrier||'—'}</div></div>`;
 
-  const cards=filtered.map(s=>{
-    const tc=typeColors[s.type]||typeColors.freight;
-    const tracking=window._activeTracking[s.id]||{};
-    const autoUrl=getCarrierTrackUrl(s.carrier,tracking.pro);
-    const trackUrl=tracking.trackingUrl||autoUrl||'';
-    const needsTracking=s.type==='freight'&&(s.fqMode==='LTL'||s.fqMode==='FTL');
-    const closeLabel='Delivered';
-    const daysActive=daysAgo(s.bookedDate||s.date);
-    const cd=countdown(tracking.expectedDate);
-    const isUrgent=!!tracking.urgent;
-    const borderColor=isUrgent?'#ef4444':tc.color+'33';
-    return `<div class="active-card" draggable="true" data-id="${s.id}" data-type="${s.type}" style="border:2px solid ${borderColor};border-radius:12px;overflow:hidden;box-shadow:${isUrgent?'0 0 0 3px #fecaca':'0 2px 8px rgba(0,0,0,.06)'};margin-bottom:14px">
-      <div style="background:${isUrgent?'#fff0f0':tc.bg};border-bottom:1px solid ${borderColor};padding:12px 18px;display:flex;align-items:center;justify-content:space-between">
-        <div style="display:flex;align-items:center;gap:10px">
-          <span style="font-size:22px">${isUrgent?'🔥':tc.icon}</span>
-          <div>
-            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:${isUrgent?'#dc2626':tc.color}">
-              ${modeBadge(s.type==='drayage'?'Drayage':s.type==='transload'?'Transload':(s.fqMode||'Freight'))} ${s.outMode?'<small style="color:var(--gray-400)">'+s.outMode+'</small>':''}
-              ${isUrgent?'<span style="background:#ef4444;color:#fff;border-radius:4px;padding:1px 6px;font-size:9px;margin-left:6px">URGENT</span>':''}
-            </div>
-            <div style="font-size:17px;font-weight:800;color:var(--navy)">${s.customer}</div>
-          </div>
-        </div>
-        <div style="display:flex;align-items:center;gap:12px">
-          <button onclick="setActiveTracking('${s.id}','urgent',${!isUrgent})"
-            style="background:${isUrgent?'#ef4444':'transparent'};border:1px solid ${isUrgent?'#ef4444':'var(--gray-300)'};border-radius:var(--radius);padding:5px 10px;cursor:pointer;font-size:12px;font-weight:600;color:${isUrgent?'#fff':'var(--gray-400)'}">
-            🔥 ${isUrgent?'Urgent':'Flag'}
-          </button>
-          <div style="text-align:right">
-            <div style="font-size:17px;font-weight:800;color:var(--steel)">${fmtD(s.total)}</div>
-            <div style="font-size:11px;color:var(--gray-400)">Day ${daysActive} - Booked ${s.bookedDate||s.date}</div>
-          </div>
-        </div>
+    return `<div class="active-card-v2" id="acard-${s.id}" draggable="true" data-id="${s.id}"
+      style="background:#fff;border:1.5px solid ${borderCol};border-radius:12px;overflow:hidden;cursor:grab"
+      ondragstart="acDragStart(event)" ondragover="acDragOver(event)" ondrop="acDrop(event)" ondragleave="acDragLeave(event)" ondragend="acDragEnd(event)">
+      <div style="background:${headBg};padding:10px 13px;border-bottom:1px solid ${borderCol};display:flex;align-items:center;gap:7px">
+        <span style="color:var(--gray-300);font-size:16px;cursor:grab">⠿</span>
+        <span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:99px;text-transform:uppercase;letter-spacing:.04em;background:${mc.bc};color:${mc.tc};flex-shrink:0">${modeLabel}</span>
+        ${isUrgent?'<span style="background:#ef4444;color:#fff;font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;flex-shrink:0">URGENT</span>':''}
+        <span style="font-size:13px;font-weight:700;color:var(--navy);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${s.customer}</span>
+        <span style="font-size:13px;font-weight:700;color:#2563eb;flex-shrink:0">${fmtD(s.total)}</span>
       </div>
-      <div style="padding:14px 18px">
-        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin-bottom:12px">
-          <div><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--gray-400);margin-bottom:2px">Carrier</div><div style="font-weight:600;color:var(--navy)">${s.carrier||'—'}</div></div>
-          <div><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--gray-400);margin-bottom:2px">From</div><div style="font-weight:500">${s.from?s.from.split(',')[0]:'—'}</div></div>
-          <div><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--gray-400);margin-bottom:2px">${s.type==='transload'?'Warehouse':'Delivery'}</div><div style="font-weight:500">${s.type==='transload'?(s.warehouse||'—'):(s.to||'—')}</div></div>
-          <div><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--gray-400);margin-bottom:2px">Shifl Ref #</div><div style="font-weight:600;color:var(--steel);min-height:18px">${s.shiflRef||'<span style="color:var(--gray-300)">—</span>'}</div>
-            ${(s.bookingNum||getMeta(s.id).booking_num)?`<div style="font-size:10px;color:var(--gray-400);font-weight:600;margin-top:3px">📦 ${s.bookingNum||getMeta(s.id).booking_num}</div>`:''}
-            ${getTrackingLink(s.id)?`<a href="${getTrackingLink(s.id)}" target="_blank" rel="noopener" style="font-size:10px;color:var(--steel);font-weight:600;margin-top:3px;display:block">📍 Track →</a>`:''}</div>
-          ${s.mode?`<div><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--gray-400);margin-bottom:2px">Mode</div><div style="font-weight:500">${s.mode}</div></div>`:''}
-          <div><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--gray-400);margin-bottom:2px">Expected delivery</div>
-            <input type="date" value="${tracking.expectedDate||''}" onchange="setActiveTracking('${s.id}','expectedDate',this.value)"
-              style="font-size:12px;padding:3px 6px;border:1px solid var(--gray-200);border-radius:var(--radius);color:var(--navy);width:100%"></div>
+      <div style="padding:10px 13px">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px 12px;margin-bottom:9px">
+          <div class="af"><div class="afl">Carrier</div><div class="afv">${s.carrier||'—'}</div></div>
+          <div class="af"><div class="afl">Delivery</div><div class="afv">${s.to||s.zip||'—'}</div></div>
+          <div class="af"><div class="afl">Shifl ref</div><div class="afv" style="color:#2563eb;font-family:monospace;font-size:11px">${s.shiflRef||'—'}</div></div>
+          <div class="af"><div class="afl">Day</div><div class="afv">Day ${daysActive}</div></div>
+          ${extraFields}
         </div>
-        ${cd?`<div style="background:${cd.bg};border:1px solid ${cd.color}44;border-radius:var(--radius);padding:8px 14px;margin-bottom:12px;display:flex;align-items:center;gap:8px">
-          <span style="font-size:14px">${cd.color==='#22c55e'?'checkmark':cd.color==='#f59e0b'?'warning':'alert'}</span>
-          <span style="font-weight:700;color:${cd.color};font-size:13px">${cd.label}</span>
-          ${s.transitTime?`<span style="color:var(--gray-400);font-size:12px;margin-left:4px">- Est. ${s.transitTime}</span>`:''}
-        </div>`:(s.transitTime?`<div style="background:var(--gray-50);border-radius:var(--radius);padding:6px 12px;margin-bottom:12px;font-size:12px;color:var(--gray-500)">Est. transit: ${s.transitTime} - set expected date above</div>`:'')}
-        ${needsTracking?`<div style="background:var(--gray-50);border:1px solid var(--gray-200);border-radius:var(--radius);padding:12px 14px;margin-bottom:12px">
-          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-500);margin-bottom:8px">Tracking</div>
-          <div style="display:flex;align-items:flex-end;gap:8px;flex-wrap:wrap">
-            <div><div style="font-size:10px;color:var(--gray-400);margin-bottom:3px">PRO / Tracking #</div>
-              <input type="text" value="${tracking.pro||''}" placeholder="Enter PRO #" onchange="setActiveTracking('${s.id}','pro',this.value)"
-                style="width:150px;padding:6px 10px;font-size:13px;font-weight:600;border:1px solid var(--gray-300);border-radius:var(--radius)"></div>
-            <div style="flex:1;min-width:180px"><div style="font-size:10px;color:var(--gray-400);margin-bottom:3px">Tracking link${autoUrl?' (auto-detected)':''}</div>
-              <input type="text" value="${trackUrl}" placeholder="Paste URL or enter PRO# above" onchange="setActiveTracking('${s.id}','trackingUrl',this.value)"
-                style="width:100%;padding:6px 10px;font-size:12px;border:1px solid var(--gray-300);border-radius:var(--radius)"></div>
-            <button onclick="${trackUrl?`window.open('${trackUrl}','_blank')`:'alert(\'Enter PRO# or tracking URL first\')'}"
-              style="padding:6px 18px;background:${trackUrl?'var(--steel)':'var(--gray-200)'};color:${trackUrl?'#fff':'var(--gray-400)'};border:none;border-radius:var(--radius);cursor:pointer;font-size:13px;font-weight:700">
-              Track
-            </button>
-          </div>
-          ${autoUrl&&!tracking.trackingUrl?`<div style="font-size:11px;color:#22c55e;margin-top:6px;font-weight:600">${s.carrier} tracking detected - enter PRO# to activate</div>`:''}
+        ${cd?`<div style="display:inline-flex;align-items:center;gap:4px;padding:4px 9px;border-radius:5px;font-size:11px;font-weight:600;margin-bottom:9px;${cd.cls==='due-ok'?'background:#f0fdf4;color:#15803d':cd.cls==='due-warn'?'background:#fffbeb;color:#92400e':'background:#fef2f2;color:#991b1b'}">
+          ${cd.cls==='due-ok'?'✓':cd.cls==='due-warn'?'⚡':'⚠️'} ${cd.label}
         </div>`:''}
-        ${(()=>{const flag=getFlag(s.id);return flag?`<div style="background:#fef2f2;border:1px solid #fca5a5;border-radius:6px;padding:6px 10px;margin-bottom:8px;font-size:12px;color:#dc2626;display:flex;align-items:center;gap:6px"><span style="font-weight:700">🚨 Flagged</span>${flag.note?`<span>— ${flag.note}</span>`:''}<span style="color:#9ca3af;margin-left:auto">${flag.flaggedBy}</span></div>`:'';})()}
-        ${statusTimeline(s.status)}
-        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-top:12px">
-          <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;flex-wrap:wrap">
+          <div style="display:flex;gap:4px;flex-wrap:wrap">
             <button onclick="${s.type==='drayage'?`setView('log');render();setTimeout(()=>showQuoteModal('${s.id}'),100)`:s.type==='freight'?`setView('freight');setFqTab('log');setTimeout(()=>{const idx=(window._fqHistory||[]).findIndex(q=>q.id==='${s.id}');if(idx>=0)showFqQuoteModal(idx);},100)`:`setView('transload');setTlTab('log');setTimeout(()=>{const idx=(window._tlHistory||[]).findIndex(q=>q.id==='${s.id}');if(idx>=0)showTlQuoteModal(idx);},100)`}"
-              style="padding:7px 14px;background:transparent;color:var(--steel);border:1px solid var(--steel);border-radius:var(--radius);cursor:pointer;font-size:12px;font-weight:600">
-              📄 View quote
-            </button>
-            <button onclick="changeShipmentCarrier('${s.type}','${s.id}','${(s.carrier||'').replace(/'/g,'')}')"
-              style="padding:7px 14px;background:transparent;color:var(--navy);border:1px solid var(--gray-300);border-radius:var(--radius);cursor:pointer;font-size:12px;font-weight:600">
-              🚛 Change carrier
-            </button>
-            <button onclick="toggleFlag('${s.type}','${s.id}')" title="${isFlagged(s.id)?'Remove flag':'Flag an issue'}"
-              style="padding:7px 10px;background:${isFlagged(s.id)?'#fef2f2':'transparent'};color:${isFlagged(s.id)?'#dc2626':'#9ca3af'};border:1px solid ${isFlagged(s.id)?'#fca5a5':'#e5e7eb'};border-radius:var(--radius);cursor:pointer;font-size:13px">
-              🚨
-            </button>
-            <button onclick="showTrackingModal('${s.type}','${s.id}')" title="Tracking / Booking #"
-              style="padding:7px 10px;background:${getTrackingLink(s.id)?'var(--blue-bg)':'transparent'};color:${getTrackingLink(s.id)?'var(--steel)':'#9ca3af'};border:1px solid ${getTrackingLink(s.id)?'var(--steel)':'#e5e7eb'};border-radius:var(--radius);cursor:pointer;font-size:13px">
-              ${getTrackingLink(s.id)?'📍':'🔗'}
-            </button>
-            <button onclick="promptBookingNum('${s.type}','${s.id}')" title="Booking / Container #"
-              style="padding:7px 10px;background:${s.bookingNum?'var(--blue-bg)':'transparent'};color:${s.bookingNum?'var(--steel)':'#9ca3af'};border:1px solid ${s.bookingNum?'var(--steel)':'#e5e7eb'};border-radius:var(--radius);cursor:pointer;font-size:13px">
-              📦
-            </button>
-            <button onclick="toggleFlag('${s.type}','${s.id}')" title="Flag issue" style="padding:7px 10px;background:${isFlagged(s.id)?'#fef2f2':'transparent'};color:${isFlagged(s.id)?'#dc2626':'#9ca3af'};border:1px solid ${isFlagged(s.id)?'#fca5a5':'#e5e7eb'};border-radius:var(--radius);cursor:pointer;font-size:13px">🚨</button>
-            <button onclick="showTrackingModal('${s.type}','${s.id}')" title="Tracking / Booking" style="padding:7px 10px;background:${getTrackingLink(s.id)?'var(--blue-bg)':'transparent'};color:${getTrackingLink(s.id)?'var(--steel)':'#9ca3af'};border:1px solid ${getTrackingLink(s.id)?'var(--steel)':'#e5e7eb'};border-radius:var(--radius);cursor:pointer;font-size:13px">${getTrackingLink(s.id)?'📍':'🔗'}</button>
-            <button onclick="promptBookingNum('${s.type}','${s.id}')" title="Booking # / Container #" style="padding:7px 10px;background:${s.bookingNum?'var(--blue-bg)':'transparent'};color:${s.bookingNum?'var(--steel)':'#9ca3af'};border:1px solid ${s.bookingNum?'var(--steel)':'#e5e7eb'};border-radius:var(--radius);cursor:pointer;font-size:13px">📦</button>
-            ${can('delete_quotes')?`<button onclick="deleteShipment('${s.type}','${s.id}')"
-              style="padding:7px 10px;background:transparent;color:#dc2626;border:1px solid #fca5a5;border-radius:var(--radius);cursor:pointer;font-size:13px">
-              🗑️
-            </button>`:''}
+              class="acbtn">📄 Quote</button>
+            <button onclick="changeShipmentCarrier('${s.type}','${s.id}','${(s.carrier||'').replace(/'/g,'')}')" class="acbtn">🚛 Carrier</button>
+            <button onclick="toggleFlag('${s.type}','${s.id}')" class="acbtn${flagged?' acbtn-red':''}" title="${flagged?'Remove flag':'Flag issue'}">🚨</button>
+            <button onclick="showTrackingModal('${s.type}','${s.id}')" class="acbtn${trackUrl?' acbtn-blue':''}" title="Tracking">${trackUrl?'📍':'🔗'}</button>
+            <button onclick="promptBookingNum('${s.type}','${s.id}')" class="acbtn${s.bookingNum?' acbtn-blue':''}" title="Booking #">📦</button>
+            ${can('delete_quotes')?`<button onclick="deleteShipment('${s.type}','${s.id}')" class="acbtn acbtn-red" title="Delete">🗑️</button>`:''}
           </div>
           ${!isCompleted
-            ?`<button onclick="markShipmentClosed('${s.type}','${s.id}','${closeLabel}')"
-                style="padding:8px 22px;background:#22c55e;color:#fff;border:none;border-radius:var(--radius);cursor:pointer;font-size:13px;font-weight:700">
-                ✅ Mark Delivered
+            ?`<button onclick="markShipmentClosed('${s.type}','${s.id}','Delivered')"
+                style="padding:5px 14px;background:#16a34a;color:#fff;border:none;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap">
+                ✅ Delivered
               </button>`
-            :`<div style="display:flex;gap:8px;align-items:center">
+            :`<div style="display:flex;gap:6px">
                 <button onclick="revertToActive('${s.type}','${s.id}')"
-                  style="padding:7px 14px;background:#fff;color:#d97706;border:1.5px solid #fbbf24;border-radius:var(--radius);cursor:pointer;font-size:12px;font-weight:700">
-                  ↩️ Revert to Active
+                  style="padding:5px 12px;background:#fff;color:#d97706;border:1.5px solid #fbbf24;border-radius:6px;cursor:pointer;font-size:11px;font-weight:700;font-family:inherit">
+                  ↩️ Revert
                 </button>
                 <button onclick="sendInvoiceFromShipment('${s.type}','${s.id}')"
-                  style="padding:7px 14px;background:#fff;color:var(--steel);border:1.5px solid var(--steel);border-radius:var(--radius);cursor:pointer;font-size:12px;font-weight:700" onclick="showInvoiceOptions(${i},'tms',this)">
-                  🧾 Invoice ▾
+                  style="padding:5px 12px;background:#fff;color:var(--steel);border:1.5px solid var(--steel);border-radius:6px;cursor:pointer;font-size:11px;font-weight:700;font-family:inherit">
+                  🧾 Invoice
                 </button>
               </div>`}
         </div>
@@ -6114,10 +6080,54 @@ function renderActive(){
     </div>`;
   }).join('');
 
-  const emptyMsg=isCompleted?'No completed shipments yet':'No active shipments in this category';
-  const cardsGrid=filtered.length?`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(560px,1fr));gap:14px;align-items:start">${cards}</div>`:`<div class="empty"><div class="empty-ico">${isCompleted?'✅':'🔍'}</div><p>${emptyMsg}</p></div>`;
-  $('page').innerHTML=statsBar+cardsGrid;
-}const regCol={NE:'g',WC:'b',SE:'a',Central:'p'};const ldCol={Live:'b',Drop:'gr',Both:'t'};
+  $('page').innerHTML=`
+    <style>
+      .af{} .afl{font-size:9px;font-weight:600;color:var(--gray-400);text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px} .afv{font-size:12px;font-weight:500;color:var(--navy);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+      .acbtn{padding:5px 8px;background:none;border:1px solid var(--gray-200);border-radius:5px;font-size:12px;cursor:pointer;font-family:inherit;color:var(--gray-500)}
+      .acbtn:hover{background:var(--gray-50)}
+      .acbtn-red{color:#dc2626;border-color:#fecaca;background:#fff8f8}
+      .acbtn-blue{color:#2563eb;border-color:#bfdbfe;background:#eff6ff}
+      .active-card-v2.ac-drag-over{outline:2px dashed #2563eb;outline-offset:2px}
+      .active-card-v2.ac-dragging{opacity:.35}
+    </style>
+    <div style="padding:14px 18px">
+      ${filterBar}
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(420px,1fr));gap:10px" id="active-grid">
+        ${cards}
+      </div>
+    </div>`;
+  return; // end of v2 — original code replaced
+
+  // ── drag-and-drop helpers (defined once, outside renderActive) ──
+}
+
+// Active shipments drag-drop
+let _acDragged = null;
+function acDragStart(e){ _acDragged=e.currentTarget; e.currentTarget.classList.add('ac-dragging'); }
+function acDragOver(e){ e.preventDefault(); e.currentTarget.classList.add('ac-drag-over'); }
+function acDragLeave(e){ e.currentTarget.classList.remove('ac-drag-over'); }
+function acDragEnd(e){ document.querySelectorAll('.active-card-v2').forEach(c=>{c.classList.remove('ac-dragging','ac-drag-over');}); _acDragged=null; }
+function acDrop(e){
+  e.preventDefault();
+  const target=e.currentTarget; target.classList.remove('ac-drag-over');
+  if(!_acDragged||_acDragged===target) return;
+  const grid=document.getElementById('active-grid');
+  if(!grid) return;
+  const kids=[...grid.children];
+  const di=kids.indexOf(_acDragged), ti=kids.indexOf(target);
+  if(di<ti) grid.insertBefore(_acDragged,target.nextSibling);
+  else grid.insertBefore(_acDragged,target);
+  _acDragged.classList.remove('ac-dragging');
+  // save order
+  const order=[...grid.querySelectorAll('.active-card-v2')].map(c=>c.dataset.id);
+  try{localStorage.setItem('tms_priority_order',JSON.stringify(order));}catch(ex){}
+  _acDragged=null;
+}
+
+// placeholder to satisfy any leftover references
+function _renderActiveOld(){
+}
+const regCol={NE:'g',WC:'b',SE:'a',Central:'p'};const ldCol={Live:'b',Drop:'gr',Both:'t'};
 function buildRateRows(){
   const s=S.rSearch.toLowerCase();
   const isExportTab=S.rateTab==='export';
