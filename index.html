@@ -10985,7 +10985,7 @@ async function saveInvoiceData(type, id){
       q.customerRate=grandTotal;
       try{await dbSaveAqQuote(q);}catch(e){}
       try{localStorage.setItem('aq_history',JSON.stringify(window._aqHistory));}catch(e){}
-    }age.setItem('fq_history',JSON.stringify(window._fqHistory));}catch(e){}
+      try{localStorage.setItem('fq_history',JSON.stringify(window._fqHistory));}catch(e){}
     }
   }
 
