@@ -751,44 +751,20 @@ if('caches' in window){
     </div>
     <nav class="nav" id="main-nav">
 
-      <!-- ALWAYS-ON TOP ITEMS -->
+      <!-- HOME & DAILY OPS -->
       <button class="acc-btn" id="nav-active" onclick="goTo('active')" style="font-size:13px">
         <span style="display:flex;align-items:center;gap:10px">
           <span style="font-size:15px">🟢</span>Active Shipments
           <span id="active-badge" style="background:#22c55e;color:#fff;border-radius:99px;font-size:10px;font-weight:700;padding:1px 7px;display:none">0</span>
         </span>
       </button>
-      <button class="acc-btn" id="nav-requests" onclick="goTo('requests')" style="font-size:13px;position:relative">
-        <span style="display:flex;align-items:center;gap:10px">
-          <span style="font-size:15px">📥</span>Customer Requests
-          <span id="req-badge" style="display:none;background:#dc2626;color:#fff;border-radius:99px;font-size:9px;font-weight:700;padding:1px 6px;margin-left:auto">0</span>
-        </span>
-      </button>
-      <button class="acc-btn" id="nav-carriers" data-view="carriers" onclick="goTo('carriers')" style="font-size:13px">
-        <span style="display:flex;align-items:center;gap:10px">
-          <span style="font-size:15px">🤝</span>Carrier Network
-        </span>
-      </button>
+
       <button class="acc-btn" id="nav-tms" data-view="tms" onclick="goTo('tms')" style="font-size:13px;font-weight:700;color:#93c5fd;background:rgba(46,117,182,.12);border-left:3px solid #2e75b6">🚚 TMS <span id="tms-badge" style="font-size:10px;background:rgba(46,117,182,.3);color:#93c5fd;padding:1px 7px;border-radius:99px;margin-left:4px">All modes</span></button>
-      <button class="acc-btn" id="nav-broker-tools" onclick="goTo('broker-tools')" style="font-size:13px">
-        <span style="display:flex;align-items:center;gap:10px">
-          <span style="font-size:15px">🧰</span>Broker Tools
-        </span>
-      </button>
-      <button class="acc-btn" id="nav-claims" data-view="claims" onclick="goTo('claims')" style="font-size:13px">
-        <span style="display:flex;align-items:center;gap:10px">
-          <span style="font-size:15px">⚖️</span>Claims
-          <span id="claims-badge" style="display:none;background:#dc2626;color:#fff;border-radius:99px;font-size:9px;font-weight:700;padding:1px 6px;margin-left:auto">0</span>
-        </span>
-      </button>
-      <button class="acc-btn" id="nav-invoicing" onclick="S.activeView='active';goTo('invoicing')" style="font-size:13px">
-        <span style="display:flex;align-items:center;gap:10px">
-          <span style="font-size:15px">🧾</span>Invoicing
-          <span id="inv-nav-badge" style="display:none;background:#dc2626;color:#fff;border-radius:99px;font-size:10px;font-weight:700;padding:1px 7px">0</span>
-        </span>
-      </button>
+
 
       <div class="acc-sep" style="margin:8px 16px"></div>
+
+      <!-- QUOTE TYPES -->
       <div class="nav-section-label">Drayage</div>
       <button class="acc-btn" id="acc-drayage" onclick="toggleAcc('drayage')">
         <span style="display:flex;align-items:center;gap:10px">
@@ -806,6 +782,9 @@ if('caches' in window){
         <button class="sub-link" id="nav-templates-dray" onclick="renderTemplates('drayage')">📋 Templates</button>
 
       </div>
+
+      
+
 
       <div class="acc-sep"></div>
 
@@ -829,6 +808,9 @@ if('caches' in window){
         <button class="sub-link" id="fqnav-templates" onclick="renderTemplates('freight')">📋 Templates</button>
       </div>
 
+      
+
+
       <div class="acc-sep"></div>
 
       <!-- AIR FREIGHT -->
@@ -842,6 +824,9 @@ if('caches' in window){
         <button class="sub-link" id="aqnav-builder" onclick="goTo('air','builder')">🏗️ Quote builder</button>
         <button class="sub-link" id="aqnav-log" onclick="goTo('air','log')">📁 Quote log</button>
       </div>
+
+      
+
 
       <div class="acc-sep"></div>
 
@@ -860,6 +845,41 @@ if('caches' in window){
         <button class="sub-link" id="tlnav-dash" onclick="goTo('transload','dash')">📊 Dashboard</button>
       </div>
 
+
+      <div class="acc-sep" style="margin:8px 16px"></div>
+
+      <!-- OPERATIONS -->
+      <div class="nav-section-label">Operations</div>
+      <button class="acc-btn" id="nav-invoicing" onclick="S.activeView='active';goTo('invoicing')" style="font-size:13px">
+        <span style="display:flex;align-items:center;gap:10px">
+          <span style="font-size:15px">🧾</span>Invoicing
+          <span id="inv-nav-badge" style="display:none;background:#dc2626;color:#fff;border-radius:99px;font-size:10px;font-weight:700;padding:1px 7px">0</span>
+        </span>
+      </button>
+      <button class="acc-btn" id="nav-claims" data-view="claims" onclick="goTo('claims')" style="font-size:13px">
+        <span style="display:flex;align-items:center;gap:10px">
+          <span style="font-size:15px">⚖️</span>Claims
+          <span id="claims-badge" style="display:none;background:#dc2626;color:#fff;border-radius:99px;font-size:9px;font-weight:700;padding:1px 6px;margin-left:auto">0</span>
+        </span>
+      </button>
+      <button class="acc-btn" id="nav-broker-tools" onclick="goTo('broker-tools')" style="font-size:13px">
+        <span style="display:flex;align-items:center;gap:10px">
+          <span style="font-size:15px">🧰</span>Broker Tools
+        </span>
+      </button>
+      <button class="acc-btn" id="nav-requests" onclick="goTo('requests')" style="font-size:13px;position:relative">
+        <span style="display:flex;align-items:center;gap:10px">
+          <span style="font-size:15px">📥</span>Customer Requests
+          <span id="req-badge" style="display:none;background:#dc2626;color:#fff;border-radius:99px;font-size:9px;font-weight:700;padding:1px 6px;margin-left:auto">0</span>
+        </span>
+      </button>
+      <button class="acc-btn" id="nav-carriers" data-view="carriers" onclick="goTo('carriers')" style="font-size:13px">
+        <span style="display:flex;align-items:center;gap:10px">
+          <span style="font-size:15px">🤝</span>Carrier Network
+        </span>
+      </button>
+
+      <!-- ADMIN -->
       <!-- ADMIN (conditional) -->
       <div id="admin-nav-section" style="display:none">
         <div class="acc-sep"></div>
