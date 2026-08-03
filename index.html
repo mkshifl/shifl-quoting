@@ -14572,16 +14572,94 @@ function updateTMSBadge(){
   if(badge)badge.textContent=ov>0?'⚠️ '+ov+' overdue':getTMSLoads().length>0?getTMSLoads().length+' loads':'All modes';
 }
 
+// ── Drayage kanban board ────────────────────────────────────────────
+function renderTMSDrayage(tabBar){
+  const DRAY_STATUSES=['Booked','Out for Pickup','At Port','In Transit','Delivered'];
+  const DRAY_COLORS={'Booked':'#6366f1','Out for Pickup':'#f59e0b','At Port':'#0ea5e9','In Transit':'#10b981','Delivered':'#1a2e4a'};
+  const loads=(S.quotes||[]).filter(q=>['Booked','Out for Pickup','At Port','In Transit','Delivered','Invoiced','Paid'].includes(q.status));
+  const active=loads.filter(q=>['Booked','Out for Pickup','At Port','In Transit'].includes(q.status));
+  const delivered=loads.filter(q=>q.status==='Delivered');
+  const needsInv=delivered.filter(q=>!getInvoice(q.id));
+  const urgent=active.filter(q=>q.tracking?.urgent||q.urgent);
+  const kpis=`<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px">
+    <div class="kpi"><div class="kpi-lbl">Active</div><div class="kpi-val">${active.length}</div></div>
+    <div class="kpi"><div class="kpi-lbl">Urgent</div><div class="kpi-val" style="color:#dc2626">${urgent.length||'—'}</div></div>
+    <div class="kpi"><div class="kpi-lbl">Needs invoicing</div><div class="kpi-val" style="color:${needsInv.length?'#ea580c':'#16a34a'}">${needsInv.length||'—'}</div></div>
+    <div class="kpi"><div class="kpi-lbl">Delivered this month</div><div class="kpi-val">${loads.filter(q=>q.status==='Delivered'&&(q.date||'').slice(0,7)===localDateStr().slice(0,7)).length}</div></div>
+  </div>`;
+  if(!loads.length){
+    $('page').innerHTML=tabBar+kpis+`<div class="empty"><div class="empty-ico">🚢</div><p>No active drayage loads yet</p><button class="btn blue" onclick="goTo('quote')">+ New drayage quote</button></div>`;
+    return;
+  }
+  const cols=DRAY_STATUSES.map(s=>{
+    const col=loads.filter(q=>q.status===s);
+    const color=DRAY_COLORS[s]||'#64748b';
+    const cards=col.map(q=>{
+      const meta=getTMSMeta(q.id)||{};
+      const isUrgent=q.tracking?.urgent||q.urgent;
+      const hasInv=!!getInvoice(q.id);
+      let freeDayBadge='';
+      if(meta.arrivalDate){
+        const arr=new Date(meta.arrivalDate);
+        const free=parseInt(meta.freeDays||5);
+        const last=new Date(arr);last.setDate(last.getDate()+free);
+        const days=Math.ceil((last-new Date())/86400000);
+        const bg=days<=0?'#fee2e2':days<=2?'#fef3c7':'#d1fae5';
+        const col2=days<=0?'#dc2626':days<=2?'#d97706':'#059669';
+        freeDayBadge=`<div style="margin-bottom:6px"><span style="background:${bg};color:${col2};border-radius:6px;padding:2px 8px;font-size:10px;font-weight:700">${days<=0?'⚠ Free days expired':days+' free days left'}</span></div>`;
+      }
+      const nextS=DRAY_STATUSES[DRAY_STATUSES.indexOf(s)+1];
+      return `<div style="background:#fff;border:1px solid #e8f0fb;border-left:3px solid ${isUrgent?'#ef4444':color};border-radius:0 10px 10px 0;padding:12px;margin-bottom:8px;box-shadow:0 1px 4px rgba(0,0,0,.05);cursor:pointer" onclick="showQuoteModal('${q.id}')" onmouseover="this.style.boxShadow='0 4px 12px rgba(0,0,0,.1)'" onmouseout="this.style.boxShadow='0 1px 4px rgba(0,0,0,.05)'">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+          ${isUrgent?`<span style="background:#fef2f2;color:#dc2626;font-size:9px;font-weight:800;padding:2px 7px;border-radius:99px">🔥 URGENT</span>`:`<span style="font-size:10px;color:#8898aa">${q.date||''}</span>`}
+          <span style="font-size:11px;font-weight:700;color:var(--steel)">${fmtD(q.customerRates?.total||0)}</span>
+        </div>
+        <div style="font-size:13px;font-weight:700;color:#1a2e4a;margin-bottom:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${q.customer||'—'}</div>
+        <div style="font-size:11px;color:#64748b;margin-bottom:6px">${q.port||'—'} → ${q.zip||'—'}</div>
+        ${meta.booking_num||q.bookingNum?`<div style="font-size:10px;color:#2563eb;font-weight:700;margin-bottom:4px">📦 ${meta.booking_num||q.bookingNum}</div>`:''}
+        ${q.carrier?`<div style="font-size:11px;color:#475569;margin-bottom:4px">🚛 ${q.carrier}</div>`:''}
+        ${freeDayBadge}
+        ${q.shiflRef?`<div style="font-size:10px;color:#8898aa">Ref: ${q.shiflRef}</div>`:''}
+        <div style="display:flex;gap:5px;margin-top:8px;flex-wrap:wrap">
+          ${nextS&&s!=='Delivered'?`<button onclick="event.stopPropagation();markDrayageStatus('${q.id}','${nextS}')" style="padding:3px 9px;font-size:10px;font-weight:700;border:none;border-radius:5px;background:${color};color:#fff;cursor:pointer;font-family:inherit">→ ${nextS}</button>`:''}
+          ${s==='Delivered'&&!hasInv?`<button onclick="event.stopPropagation();openInvoiceBuilder('drayage','${q.id}')" style="padding:3px 9px;font-size:10px;font-weight:700;border:none;border-radius:5px;background:#ea580c;color:#fff;cursor:pointer;font-family:inherit">📤 Invoice</button>`:''}
+          ${hasInv?'<span style="font-size:10px;color:#16a34a;font-weight:700">✓ Invoiced</span>':''}
+        </div>
+      </div>`;
+    }).join('');
+    return `<div style="flex:0 0 220px;min-width:220px">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:10px;padding:6px 10px;background:${color}15;border-radius:8px">
+        <div style="width:8px;height:8px;border-radius:50%;background:${color};flex-shrink:0"></div>
+        <span style="font-size:11px;font-weight:700;color:${color};flex:1">${s}</span>
+        <span style="font-size:11px;font-weight:700;color:${color};background:${color}25;padding:1px 7px;border-radius:99px">${col.length}</span>
+      </div>
+      ${cards||'<div style="font-size:12px;color:#94a3b8;text-align:center;padding:20px 0">Empty</div>'}
+    </div>`;
+  }).join('');
+  $('page').innerHTML=tabBar+kpis+`<div style="display:flex;gap:12px;overflow-x:auto;padding-bottom:16px">${cols}</div>`;
+}
+
+async function markDrayageStatus(id,newStatus){
+  const q=S.quotes.find(x=>x.id===id);
+  if(!q) return;
+  if(!confirm('Move to "'+newStatus+'"?')) return;
+  q.status=newStatus;
+  try{await dbUpdateQuoteStatus(id,newStatus);}catch(e){}
+  try{localStorage.setItem('shifl_quotes_cache',JSON.stringify(S.quotes));}catch(e){}
+  renderTMS();
+}
+
 // ── OVERRIDE renderTMS to add new tabs + dashboard default ─────────
 const _origRenderTMS=window.renderTMS;
 function renderTMS(){
-  const sub=S.tmsTab||'dashboard';
+  const sub=S.tmsTab||'drayage';
   const loads=getTMSLoads();
   $('topbar-right').innerHTML=`<button class="btn" onclick="openRevenueLeakDetector()">💸 Revenue leaks</button><button class="btn" onclick="openLoadDocumentBundle('','')">📦 Doc bundle</button><div style="font-size:12px;font-weight:700;color:var(--steel)">🚚 TMS</div>`;
   updateTMSBadge();
 
   // Primary tabs — always visible
   const primaryTabs=[
+    {id:'drayage',icon:'ti-anchor',label:'Drayage'},
     {id:'dashboard',icon:'ti-home',label:'Dashboard'},
     {id:'dispatch',icon:'ti-layout-kanban',label:'Dispatch'},
     {id:'loads',icon:'ti-list',label:'Loads'},
@@ -14635,7 +14713,8 @@ function renderTMS(){
   // Close More dropdown on outside click
   setTimeout(()=>{document.addEventListener('click',function _tmsClose(e){const w=document.getElementById('tms-more-wrap');if(w&&!w.contains(e.target)){const d=document.getElementById('tms-more-dd');if(d)d.style.display='none';}},{once:true});},0);
 
-  if(sub==='dashboard')  renderTMSDashboard(tabBar,kpis,loads);
+  if(sub==='drayage')     renderTMSDrayage(tabBar);
+  else if(sub==='dashboard')  renderTMSDashboard(tabBar,kpis,loads);
   else if(sub==='dispatch')   renderTMSDispatch(tabBar,kpis,loads);
   else if(sub==='loads')      renderTMSLoads(tabBar,kpis,loads);
   else if(sub==='bol')        renderTMSBolDocs(tabBar,loads);
