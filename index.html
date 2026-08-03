@@ -14152,7 +14152,7 @@ function saveBOL(id){
   showToast('BOL saved','success',2000);
 }
 
-aasync function generateBOLPDF(id){
+async function generateBOLPDF(id){
   if(!await loadJsPDF()) return;
   const q=(window._fqHistory||[]).find(q=>q.id===id);
   const meta=getTMSMeta(id);
