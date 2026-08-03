@@ -1563,7 +1563,7 @@ function render(){
   if(S.view==='quote')      renderQuote();
   else if(S.view==='customers')  renderCustomers();
   else if(S.view==='rates')      renderRates();
-  else if(S.view==='log')        renderLog();
+  else if(S.view==='log')        renderFullQuoteLog();
   else if(S.view==='dash')       renderDash();
   else if(S.view==='active')     renderActive();
   else if(S.view==='requests')   renderCustomerRequests();
@@ -10595,6 +10595,43 @@ function openInvoiceBuilder(type, id){
     if(idx>=0){fqSendInvoice(idx);return;}
     alert('Freight shipment not found.');return;
   }
+  // Air — build a synthetic quote object and fall through to the builder
+  if(type==='air'){
+    const aq=(window._aqHistory||[]).find(x=>x.id===id);
+    if(!aq){alert('Air shipment not found.');return;}
+    if(aq.status!=='Delivered'){alert('Invoices can only be created after delivery.');return;}
+    const existing=getInvoice(id)||{};
+    const invNum=existing.invNum||'INV-AIR-'+Date.now().toString().slice(-5);
+    const today=localDateStr();
+    const due30=new Date(Date.now()+30*864e5).toISOString().slice(0,10);
+    const baseAmt=aq.customerRate||0;
+    const baseCharges=[{key:'base',label:'Air freight — customer rate',amount:baseAmt,locked:true}];
+    const ACC=[
+      {key:'prepull',label:'Pre-pull / handling',note:'Flat charge'},
+      {key:'toll',label:'Fuel surcharge',note:'If applicable'},
+      {key:'det_port',label:'Detention at origin',note:'Per hour'},
+      {key:'det_cust',label:'Detention at delivery',note:'Per hour'},
+      {key:'storage',label:'Storage',note:'Per day'},
+    ];
+    const HOURLY=['det_port','det_cust'];
+    const DAILY=['storage'];
+    const saved=existing.accessorials||{};
+    const rows=ACC.map(a=>{
+      const sv=saved[a.key]||{};
+      const isChecked=sv.enabled||false;
+      const isHourly=HOURLY.includes(a.key);
+      const isDaily=DAILY.includes(a.key);
+      let detail='';
+      if(isHourly){const fH=sv.freeHrs??2,tH=sv.totalHrs||0,rH=sv.rate||75;detail=`<div class="inv-acc-detail" id="acc-detail-${a.key}" style="display:${isChecked?'grid':'none'};grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px;padding:10px;background:var(--gray-50);border-radius:6px"><div><div class="inv-sm-lbl">Free hrs</div><input type="number" id="acc-free-${a.key}" value="${fH}" min="0" step="0.5" oninput="calcAccHourly('${a.key}')" style="width:100%;padding:5px 7px;font-size:12px"></div><div><div class="inv-sm-lbl">Total hrs</div><input type="number" id="acc-hrs-${a.key}" value="${tH}" min="0" step="0.5" oninput="calcAccHourly('${a.key}')" style="width:100%;padding:5px 7px;font-size:12px"></div><div><div class="inv-sm-lbl">Rate/hr</div><input type="number" id="acc-rate-${a.key}" value="${rH}" min="0" oninput="calcAccHourly('${a.key}')" style="width:100%;padding:5px 7px;font-size:12px"></div><div style="grid-column:1/-1;font-size:11px;color:var(--amber)" id="acc-calc-${a.key}"></div></div>`;}
+      else if(isDaily){const fD=sv.freeDays??0,tD=sv.totalDays||0,rD=sv.rate||50;detail=`<div class="inv-acc-detail" id="acc-detail-${a.key}" style="display:${isChecked?'grid':'none'};grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px;padding:10px;background:var(--gray-50);border-radius:6px"><div><div class="inv-sm-lbl">Free days</div><input type="number" id="acc-free-${a.key}" value="${fD}" min="0" oninput="calcAccDaily('${a.key}')" style="width:100%;padding:5px 7px;font-size:12px"></div><div><div class="inv-sm-lbl">Total days</div><input type="number" id="acc-days-${a.key}" value="${tD}" min="0" oninput="calcAccDaily('${a.key}')" style="width:100%;padding:5px 7px;font-size:12px"></div><div><div class="inv-sm-lbl">Rate/day</div><input type="number" id="acc-rate-${a.key}" value="${rD}" min="0" oninput="calcAccDaily('${a.key}')" style="width:100%;padding:5px 7px;font-size:12px"></div><div style="grid-column:1/-1;font-size:11px;color:var(--amber)" id="acc-calc-${a.key}"></div></div>`;}
+      else{const flatAmt=sv.amount||0;}
+      return `<div style="padding:10px 0;border-bottom:1px solid var(--gray-100)"><div style="display:flex;align-items:center;gap:10px"><input type="checkbox" id="acc-chk-${a.key}" ${isChecked?'checked':''} onchange="toggleAccRow('${a.key}',this.checked,${isHourly},${isDaily},false)" style="flex-shrink:0"><div style="flex:1"><label for="acc-chk-${a.key}" style="font-size:13px;font-weight:600;color:var(--navy);cursor:pointer">${a.label}</label><div style="font-size:11px;color:var(--gray-400)">${a.note}</div></div>${!isHourly&&!isDaily?`<input type="number" id="acc-flat-${a.key}" value="${isChecked?(sv.amount||''):''}" placeholder="0" min="0" oninput="calcInvTotal()" style="width:80px;padding:5px 7px;font-size:13px;text-align:right;${!isChecked?'opacity:.4':''}" ${!isChecked?'disabled':''}>`:`<span id="acc-amt-${a.key}" style="font-size:13px;font-weight:700;color:var(--navy);min-width:70px;text-align:right">—</span>`}</div>${detail}</div>`;
+    }).join('');
+    $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:600px;max-height:90vh;overflow-y:auto"><style>.inv-sm-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-400);margin-bottom:4px}</style><div class="modal-title">🧾 Air freight invoice — ${aq.customer||'—'}</div><div class="modal-body"><div style="background:var(--blue-bg);border-radius:var(--radius);padding:8px 12px;margin-bottom:14px;font-size:12px;color:var(--gray-600)">${aq.originAirport||'—'} → ${aq.deliveryZip||'—'} · ${aq.carrier||'—'}</div><div class="g3" style="margin-bottom:14px"><div class="field"><label>Invoice #</label><input type="text" id="inv-num" value="${invNum}"></div><div class="field"><label>Invoice date</label><input type="date" id="inv-date" value="${today}"></div><div class="field"><label>Due date</label><input type="date" id="inv-due" value="${due30}"></div></div><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gray-400);margin-bottom:8px">Base charges</div><div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--gray-100);opacity:.8"><span style="font-size:13px;color:var(--navy)">Air freight — customer rate <span style="font-size:10px;background:var(--gray-100);padding:1px 7px;border-radius:99px;color:var(--gray-500)">locked</span></span><span style="font-size:14px;font-weight:700;color:var(--navy)">${fmtD(baseAmt)}</span></div><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gray-400);margin:14px 0 8px">Additional charges</div>${rows}<div style="margin-top:14px;padding:12px 14px;background:var(--gray-50);border-radius:var(--radius)"><div style="display:flex;justify-content:space-between;margin-bottom:6px;font-size:13px;color:var(--gray-600)"><span>Base</span><span>${fmtD(baseAmt)}</span></div><div style="display:flex;justify-content:space-between;margin-bottom:10px;font-size:13px;color:var(--gray-600)"><span>Additional</span><span id="inv-acc-total">$0.00</span></div><div style="display:flex;justify-content:space-between;padding-top:10px;border-top:1px solid var(--gray-200)"><span style="font-size:16px;font-weight:700;color:var(--navy)">Total due</span><span style="font-size:20px;font-weight:800;color:var(--steel)" id="inv-grand-total">${fmtD(baseAmt)}</span></div></div><div class="field" style="margin-top:14px"><label>Notes</label><input type="text" id="inv-notes" value="${existing.notes||''}" placeholder="Net 30, factoring..."></div></div><div class="modal-foot"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn blue" onclick="saveInvoiceData('air','${id}')">📤 Send to SHIFL</button></div></div></div>`;
+    setTimeout(()=>{window._invBaseTotal=baseAmt;window._invType='air';window._invId=id;calcInvTotal();HOURLY.forEach(k=>{if(document.getElementById('acc-chk-'+k)?.checked)calcAccHourly(k);});DAILY.forEach(k=>{if(document.getElementById('acc-chk-'+k)?.checked)calcAccDaily(k);});},50);
+    return;
+  }
+
   // Only allow if status is Delivered
   let q=null;
   if(type==='drayage') q=S.quotes.find(x=>x.id===id);
@@ -11153,15 +11190,26 @@ function renderCustomerInvoiceTab(all,pending,invoiced,paid,subTab){
 }
 
 function renderCarrierInvoiceTab(all,delivered,paid,subTab){
-  const toPay=delivered; // need to pay carrier for all delivered
+  const toPay=delivered;
   const totalToPay=toPay.reduce((s,q)=>s+q.carrierAmount,0);
   const totalPaid=paid.reduce((s,q)=>s+q.carrierAmount,0);
   const today=localDateStr();
   const ovrdCarrier=toPay.filter(q=>q.carrInv?.invDue&&q.carrInv.invDue<today);
 
-  const kpis=`<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:20px">
-    <div class="kpi"><div class="kpi-lbl">Pending payment</div><div class="kpi-val" style="color:#d97706">${toPay.length}</div><div style="font-size:11px;color:var(--gray-400);margin-top:2px">${fmtD(totalToPay)}</div></div>
-    <div class="kpi"><div class="kpi-lbl">Overdue AP</div><div class="kpi-val" style="color:${ovrdCarrier.length?'var(--red)':'var(--green)'}">${ovrdCarrier.length}</div><div style="font-size:11px;color:var(--gray-400);margin-top:2px">${ovrdCarrier.length?'Past due date':'All current'}</div></div>
+  function daysSinceDelivered(q){
+    const d=q.date||'';
+    if(!d) return 0;
+    return Math.floor((new Date()-new Date(d))/86400000);
+  }
+  function carrierPhone(name){
+    if(!name) return '';
+    const found=(window._carriersCache||[]).find(c=>c.name&&c.name.toLowerCase()===name.toLowerCase());
+    return found?.phone||found?.contact_phone||found?.dispatcher_phone||'';
+  }
+
+  const kpis=`<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px">
+    <div class="kpi"><div class="kpi-lbl">Pending AP</div><div class="kpi-val" style="color:#d97706">${toPay.length}</div><div style="font-size:11px;color:var(--gray-400);margin-top:2px">${fmtD(totalToPay)}</div></div>
+    <div class="kpi"><div class="kpi-lbl">Overdue AP</div><div class="kpi-val" style="color:${ovrdCarrier.length?'var(--red)':'var(--green)'}">${ovrdCarrier.length}</div><div style="font-size:11px;color:var(--gray-400);margin-top:2px">${ovrdCarrier.length?'Past due':'All current'}</div></div>
     <div class="kpi"><div class="kpi-lbl">Paid to carriers</div><div class="kpi-val" style="color:var(--green)">${fmtD(totalPaid)}</div><div style="font-size:11px;color:var(--gray-400);margin-top:2px">${paid.length} loads</div></div>
   </div>`;
 
@@ -11170,28 +11218,60 @@ function renderCarrierInvoiceTab(all,delivered,paid,subTab){
 
   if(subTab==='pending'){
     if(!toPay.length){$('page').innerHTML=kpis+tabBar+`<div class="empty"><div class="empty-ico">✅</div><p>No pending carrier payments</p></div>`;return;}
-    body=`<div class="tbl-wrap"><table><thead><tr><th>Customer</th><th>Type</th><th>Ref #</th><th>Carrier</th><th>Carrier cost</th><th>Carrier inv #</th><th></th></tr></thead><tbody>
-    ${toPay.map(q=>`<tr>
-      <td><div class="bold">${q.customer}</div><div class="muted small">${q.date}</div></td>
-      <td>${modeBadge(q.modeLabel)}</td>
-      <td style="font-family:monospace;font-size:12px;color:var(--steel);font-weight:600">${q.shiflRef||'—'}</td>
-      <td class="bold" style="color:var(--navy)">${q.carrier}</td>
-      <td class="money" style="color:#d97706;font-weight:700">${fmtD(q.carrierAmount)}</td>
-      <td style="font-family:monospace;font-size:12px;color:var(--gray-500)">${q.carrierInvNum||'—'}</td>
-      <td onclick="event.stopPropagation()" style="white-space:nowrap">
-        <button class="btn sm" onclick="openCarrierInvoiceBuilder('${q.type}','${q.id}')" style="color:#d97706;border-color:#fbbf24">📤 Send to SHIFL</button>
-      </td>
-    </tr>`).join('')}</tbody></table></div>`;
+    body=`<div class="tbl-wrap"><style>
+      .carr-row{display:grid;grid-template-columns:1.6fr 1.3fr 1.2fr 0.8fr 0.9fr 110px;align-items:center;padding:10px 14px;border-bottom:0.5px solid var(--gray-100)}
+      .carr-row:hover{background:var(--gray-50)}
+      .carr-row.overdue-ap{background:#fff8f8;border-left:3px solid #dc2626}
+      .carr-row.warn-ap{background:#fffcf0;border-left:3px solid #f59e0b}
+      .carr-hd{display:grid;grid-template-columns:1.6fr 1.3fr 1.2fr 0.8fr 0.9fr 110px;padding:8px 14px;background:var(--gray-50);border-bottom:0.5px solid var(--gray-100)}
+      .carr-hd span{font-size:10px;font-weight:600;color:var(--gray-500);text-transform:uppercase;letter-spacing:.05em}
+    </style>
+    <div class="carr-hd">
+      <span>Customer</span><span>Carrier · Phone</span><span>Lane</span>
+      <span>Ref #</span><span>Amount owed</span><span></span>
+    </div>
+    ${toPay.map(q=>{
+      const days=daysSinceDelivered(q);
+      const phone=carrierPhone(q.carrier);
+      const isHot=days>=3;
+      const isWarn=days===1||days===2;
+      const hasCarrInv=!!q.carrInv;
+      return`<div class="carr-row ${isHot?'overdue-ap':isWarn?'warn-ap':''}">
+        <div>
+          <div style="font-weight:600;color:var(--navy);font-size:13px">${q.customer}</div>
+          ${isHot?`<span style="display:inline-flex;padding:2px 7px;border-radius:4px;font-size:9px;font-weight:700;background:#fef2f2;color:#dc2626;margin-top:3px">⚠️ ${days} days pending</span>`:isWarn?`<span style="display:inline-flex;padding:2px 7px;border-radius:4px;font-size:9px;font-weight:700;background:#fffbeb;color:#d97706;margin-top:3px">⚡ ${days} day${days>1?'s':''} pending</span>`:''}
+        </div>
+        <div>
+          <div style="font-size:12px;color:var(--gray-700)">${q.carrier}</div>
+          ${phone?`<div style="font-size:11px;color:var(--gray-400);margin-top:1px">📞 ${phone}</div>`:''}
+        </div>
+        <div style="font-size:12px;color:var(--gray-500)">${q.detail}</div>
+        <div style="font-family:monospace;font-size:11px;color:#2563eb;font-weight:600">${q.shiflRef||'—'}</div>
+        <div style="font-size:13px;font-weight:700;color:${isHot?'#dc2626':'#d97706'}">${fmtD(q.carrierAmount)}</div>
+        <div style="display:flex;gap:5px">
+          <button class="btn sm" style="color:#d97706;border-color:#fbbf24;white-space:nowrap" onclick="openCarrierInvoiceBuilder('${q.type}','${q.id}')">📤 AP Invoice</button>
+        </div>
+      </div>`;
+    }).join('')}</div>`;
   } else {
     if(!paid.length){$('page').innerHTML=kpis+tabBar+`<div class="empty"><div class="empty-ico">💳</div><p>No carrier payments recorded</p></div>`;return;}
-    body=`<div class="tbl-wrap"><table><thead><tr><th>Customer</th><th>Type</th><th>Carrier</th><th>Carrier cost</th><th>Paid date</th></tr></thead><tbody>
-    ${paid.map(q=>`<tr>
-      <td><div class="bold">${q.customer}</div></td>
-      <td>${modeBadge(q.modeLabel)}</td>
-      <td class="bold">${q.carrier}</td>
-      <td class="money" style="color:var(--green);font-weight:700">${fmtD(q.carrierAmount)}</td>
-      <td class="muted">${q.paidDate||'—'}</td>
-    </tr>`).join('')}</tbody></table></div>`;
+    body=`<div class="tbl-wrap"><style>
+      .carr-row{display:grid;grid-template-columns:1.6fr 1.3fr 1.2fr 0.8fr 1fr 1fr;align-items:center;padding:10px 14px;border-bottom:0.5px solid var(--gray-100)}
+      .carr-row:hover{background:var(--gray-50)}
+      .carr-hd{display:grid;grid-template-columns:1.6fr 1.3fr 1.2fr 0.8fr 1fr 1fr;padding:8px 14px;background:var(--gray-50);border-bottom:0.5px solid var(--gray-100)}
+      .carr-hd span{font-size:10px;font-weight:600;color:var(--gray-500);text-transform:uppercase;letter-spacing:.05em}
+    </style>
+    <div class="carr-hd">
+      <span>Customer</span><span>Carrier</span><span>Lane</span><span>Ref #</span><span>Amount paid</span><span>Paid date</span>
+    </div>
+    ${paid.map(q=>`<div class="carr-row">
+      <div style="font-weight:600;color:var(--navy);font-size:13px">${q.customer}</div>
+      <div style="font-size:12px;color:var(--gray-700)">${q.carrier}</div>
+      <div style="font-size:12px;color:var(--gray-500)">${q.detail}</div>
+      <div style="font-family:monospace;font-size:11px;color:#2563eb;font-weight:600">${q.shiflRef||'—'}</div>
+      <div style="font-size:13px;font-weight:700;color:var(--green)">${fmtD(q.carrierAmount)}</div>
+      <div style="font-size:12px;color:var(--gray-500)">${q.paidDate||'—'}</div>
+    </div>`).join('')}</div>`;
   }
   $('page').innerHTML=kpis+tabBar+body;
 }
@@ -17473,6 +17553,7 @@ function saveCloseout(loadId) {
 
 // ── Full Quote Log (Super Admin) ──
 function renderFullQuoteLog() {
+  $('topbar-right').innerHTML='<button class="btn" onclick="renderFullQuoteLog()">🔄 Refresh</button>';
   var all = [];
   var SC = { Quoted:'#dbeafe|#1d4ed8', Booked:'#dcfce7|#15803d', Lost:'#fee2e2|#dc2626', Delivered:'#f0fdf4|#16a34a', Cancelled:'#f3f4f6|#6b7280' };
   var dray = (typeof S !== 'undefined' && S.quotes && S.quotes.length) ? S.quotes : JSON.parse(localStorage.getItem('shifl_quotes_cache') || '[]');
