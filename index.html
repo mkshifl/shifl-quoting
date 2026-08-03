@@ -13774,16 +13774,28 @@ function saveTMSMeta(id, data){
 // Get all TMS loads — FTL/LTL quotes that are Booked or further
 function getTMSLoads(){
   const TMS_MODES=['FTL','LTL','LCL','Box Truck','Air'];
+  const ACTIVE_STATUSES=['Booked','Dispatched','In Transit','Out for Delivery','Delivered','Invoiced','Paid'];
+
+  // Drayage (S.quotes)
+  const drayLoads=(S.quotes||[]).filter(q=>ACTIVE_STATUSES.includes(q.status))
+    .map(q=>({...q,_tmsType:'drayage',fqMode:'Drayage',
+      pickupZip:q.port||'',deliveryZip:q.zip||'',
+      customerRate:q.customerRates?.total||0,
+      carrierRate:q.carrierRates?.total||0,
+      tmsMeta:getTMSMeta(q.id)}));
+
   // FQ history (FTL, LTL, LCL, Box Truck)
   const fqLoads=(window._fqHistory||[]).filter(q=>
     (TMS_MODES.includes(q.fqMode)||q.fqEquip==='Box Truck')&&
-    ['Booked','Dispatched','In Transit','Out for Delivery','Delivered','Invoiced','Paid'].includes(q.status)
+    ACTIVE_STATUSES.includes(q.status)
   ).map(q=>({...q,_tmsType:'freight',tmsMeta:getTMSMeta(q.id)}));
+
   // Air freight (aqHistory)
   const airLoads=(window._aqHistory||[]).filter(q=>
-    ['Booked','Dispatched','In Transit','Out for Delivery','Delivered','Invoiced','Paid'].includes(q.status||'')
+    ACTIVE_STATUSES.includes(q.status||'')
   ).map(q=>({...q,fqMode:'Air',_tmsType:'air',pickupZip:q.originAirport||q.pickupZip||'',deliveryZip:q.destAirport||q.deliveryZip||'',carrierRate:q.airFreightCost||q.carrierRate||0,tmsMeta:getTMSMeta(q.id)}));
-  return [...fqLoads,...airLoads];
+
+  return [...drayLoads,...fqLoads,...airLoads];
 }
 
 // TMS STATUS progression
@@ -13886,7 +13898,7 @@ function renderTMSDispatch(tabBar,kpis,loads){
           const bg=daysLeft<=1?'#fee2e2':daysLeft<=2?'#fef3c7':'#d1fae5';
           return `<span style="background:${bg};color:${col};border-radius:7px;padding:3px 8px;font-size:10px;font-weight:700">📅 ${daysLeft>0?daysLeft+' free days left':'⚠ Free days expired'}</span>`;
         })()}</div>`:''}        ${(()=>{
-  const _bd=getBolUpload(s.id);
+  const _bd=getBolUpload(l.id);
   const _num=meta.bolNum?`<div style="font-size:10px;color:var(--gray-500);margin-bottom:4px">BOL: ${meta.bolNum}</div>`:'';
   const _uploaded=_bd?`<div style="margin-bottom:6px"><a href="${_bd.data}" download="${_bd.name}" style="display:inline-flex;align-items:center;gap:4px;background:#d1fae5;color:#065f46;border-radius:6px;padding:3px 8px;font-size:10px;font-weight:700;text-decoration:none">✅ BOL uploaded — tap to view</a></div>`:'';
   return _num+_uploaded;
@@ -13907,7 +13919,7 @@ function renderTMSDispatch(tabBar,kpis,loads){
 
   $('page').innerHTML=tabBar+kpis+(loads.length?
     `<div style="display:flex;gap:12px;overflow-x:auto;padding-bottom:16px">${cols}</div>`:
-    `<div class="empty"><div class="empty-ico">🚚</div><p>No FTL/LTL loads yet — book a freight quote to start</p><button class="btn blue" onclick="goTo('freight','builder')">+ New freight quote</button></div>`);
+    `<div class="empty"><div class="empty-ico">🚚</div><p>No active loads yet — book a quote to get started</p><button class="btn blue" onclick="goTo('quote')">+ New drayage quote</button></div>`);
 }
 
 // ── ALL LOADS TABLE ────────────────────────────────────────────────
@@ -13960,7 +13972,7 @@ function renderTMSLoads(tabBar,kpis,loads){
     if(lFilt!=='all'&&l.status!==lFilt) return false;
     if(!lSrch) return true;
     const m=getTMSMeta(l.id);
-    return (l.customer||'').toLowerCase().includes(lSrch)||(m.bookingNum||'').toLowerCase().includes(lSrch)||(l.carrier||'').toLowerCase().includes(lSrch)||(l.pickupZip||'').includes(lSrch)||(l.deliveryZip||'').includes(lSrch)||(m.bolNum||'').toLowerCase().includes(lSrch);
+    return (l.customer||'').toLowerCase().includes(lSrch)||(m.bookingNum||'').toLowerCase().includes(lSrch)||(l.carrier||'').toLowerCase().includes(lSrch)||(l.pickupZip||'').includes(lSrch)||(l.deliveryZip||'').includes(lSrch)||(m.bolNum||'').toLowerCase().includes(lSrch)||(l.shiflRef||'').toLowerCase().includes(lSrch)||(l.port||'').toLowerCase().includes(lSrch);
   });
   const filterBar='<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:14px">'+
     '<div style="display:flex;gap:4px;flex-wrap:wrap;flex:1">'+
