@@ -10566,6 +10566,8 @@ function saveInvoice(id, inv){
   if(!S.invoices) S.invoices={};
   S.invoices[id]=inv;
   try{localStorage.setItem('shifl_invoices',JSON.stringify(S.invoices));}catch(e){}
+  // Push to Supabase shipment_metadata so it persists across devices
+  try{saveTMSMeta(id,{customerInvoice:inv,invNum:inv.invNum,invGrandTotal:inv.grandTotal,invSavedAt:inv.savedAt});}catch(e){}
 }
 function loadInvoices(){
   try{const d=localStorage.getItem('shifl_invoices');if(d) S.invoices=JSON.parse(d);}catch(e){S.invoices={};}
@@ -10884,22 +10886,48 @@ async function saveInvoiceData(type, id){
       accTotal+=amt;
     }
   });}
-  const inv={invNum:num,invDate:($('inv-date')||{}).value||localDateStr(),invDue:($('inv-due')||{}).value||'',notes:($('inv-notes')||{}).value?.trim()||'',baseTotal:base,accTotal,grandTotal:base+accTotal,accessorials,customCharges:savedCustomCharges,type,savedAt:localDateStr()};
+  const grandTotal=base+accTotal;
+  const inv={invNum:num,invDate:($('inv-date')||{}).value||localDateStr(),invDue:($('inv-due')||{}).value||'',notes:($('inv-notes')||{}).value?.trim()||'',baseTotal:base,accTotal,grandTotal,accessorials,customCharges:savedCustomCharges,type,savedAt:localDateStr()};
+
+  // 1. Save invoice to localStorage + Supabase metadata
   saveInvoice(id,inv);
-  // Update shipment status to Invoiced
+
+  // 2. Update quote status + actual revenue so profit monitor reflects real totals
   if(type==='drayage'){
     const q=S.quotes.find(x=>x.id===id);
-    if(q&&q.status==='Delivered'){try{await dbUpdateQuoteStatus(id,'Invoiced');q.status='Invoiced';}catch(e){}}
+    if(q){
+      q.status='Invoiced';
+      q.invoiceNum=num;
+      if(!q.customerRates) q.customerRates={};
+      q.customerRates.total=grandTotal; // actual invoiced amount
+      try{await dbUpdateQuoteStatus(id,'Invoiced');}catch(e){}
+      try{await dbSaveQuote(q);}catch(e){}
+      try{localStorage.setItem('shifl_quotes_cache',JSON.stringify(S.quotes));}catch(e){}
+    }
   } else if(type==='transload'){
     const q=(window._tlHistory||[]).find(x=>x.id===id);
-    if(q&&q.status==='Delivered'){q.status='Invoiced';try{localStorage.setItem('tl_history',JSON.stringify(window._tlHistory));}catch(e){}}
+    if(q){
+      q.status='Invoiced';
+      q.invoiceNum=num;
+      q.totalCustomer=grandTotal;
+      try{localStorage.setItem('tl_history',JSON.stringify(window._tlHistory));}catch(e){}
+    }
+  } else if(type==='freight'){
+    const q=(window._fqHistory||[]).find(x=>x.id===id);
+    if(q){
+      q.status='Invoiced';
+      q.invoiceNum=num;
+      q.customerRate=grandTotal;
+      try{localStorage.setItem('fq_history',JSON.stringify(window._fqHistory));}catch(e){}
+    }
   }
-  logAction('invoice_sent',`${type} invoice ${num} — ${fmtD(base+accTotal)}`,'invoice',id);
+
+  try{logAction('invoice_sent',`${type} invoice ${num} — ${fmtD(grandTotal)}`,'invoice',id);}catch(e){}
   closeModal();
-  showToast('Invoice saved — '+num,'success');
-  updateActiveBadge();
-  S.activeView='invoicing';S.allInvTab='invoiced';
-  renderActive();
+  showToast('✅ Invoice saved — '+num,'success');
+  try{updateActiveBadge();updateInvNavBadge();}catch(e){}
+  S.view='invoicing';S.invMainTab='customer';S.allInvTab='invoiced';
+  renderFullInvoicing();
 }
 
 function previewInvoicePDF(type,id){
