@@ -19681,31 +19681,12 @@ function renderContainerResult(el,data,num){
 </script>
 <script>
 
-function pmUpdatePrice(id, type, field, newVal){
+async function pmUpdatePrice(id, type, field, newVal){
   const val = parseFloat(newVal);
   if(isNaN(val)||val<0) return;
 
-  // Update the source data
   if(type==='drayage'){
     const q=(S.quotes||[]).find(x=>x.id===id);
-    if(q){
-      if(field==='carrier'){
-        if(!q.carrierRates) q.carrierRates={};
-        // Adjust base rate to match new total
-        const diff=val-(q.carrierRates.total||0);
-        q.carrierRates.base=(q.carrierRates.base||0)+diff;
-        q.carrierRates.total=val;
-      } else {
-        if(!q.customerRates) q.customerRates={};
-        const diff=val-(q.customerRates.total||0);
-        q.customerRates.base=(q.customerRates.base||0)+diff;
-        q.customerRates.total=val;
-      }
-      try{localStorage.setItem('drayage_quotes',JSON.stringify(S.quotes));}catch(e){}
-    }
-  } else if(type==='freight'){
-    const history=window._fqHistory||[];
-    const q=history.find(x=>x.id===id);
     if(q){
       if(field==='carrier'){
         if(!q.carrierRates) q.carrierRates={};
@@ -19714,35 +19695,39 @@ function pmUpdatePrice(id, type, field, newVal){
         if(!q.customerRates) q.customerRates={};
         q.customerRates.base=val; q.customerRates.total=val;
       }
-      try{localStorage.setItem('fq_history',JSON.stringify(history));}catch(e){}
+      // Save to BOTH localStorage keys and Supabase
+      try{localStorage.setItem('shifl_quotes_cache',JSON.stringify(S.quotes));}catch(e){}
+      try{localStorage.setItem('drayage_quotes',JSON.stringify(S.quotes));}catch(e){}
+      try{if(db && typeof dbSaveQuote==='function') await dbSaveQuote(q);}catch(e){console.warn('Supabase save failed:',e);}
+    }
+  } else if(type==='freight'){
+    const q=(window._fqHistory||[]).find(x=>x.id===id);
+    if(q){
+      if(field==='carrier'){if(!q.carrierRates)q.carrierRates={};q.carrierRates.base=val;q.carrierRates.total=val;}
+      else{if(!q.customerRates)q.customerRates={};q.customerRates.base=val;q.customerRates.total=val;}
+      try{localStorage.setItem('fq_history',JSON.stringify(window._fqHistory));}catch(e){}
+      try{if(db) await db.from('fq_quotes').upsert({id:q.id,[field==='carrier'?'carrier_rates':'customer_rates']:JSON.stringify(field==='carrier'?q.carrierRates:q.customerRates)},{onConflict:'id'});}catch(e){}
     }
   } else if(type==='air'){
-    const history=window._aqHistory||[];
-    const q=history.find(x=>x.id===id);
+    const q=(window._aqHistory||[]).find(x=>x.id===id);
     if(q){
-      if(field==='carrier'){
-        if(!q.carrierRates) q.carrierRates={}; q.carrierRates.total=val;
-      } else {
-        if(!q.customerRates) q.customerRates={}; q.customerRates.total=val;
-      }
-      try{localStorage.setItem('aq_history',JSON.stringify(history));}catch(e){}
+      if(field==='carrier'){if(!q.carrierRates)q.carrierRates={};q.carrierRates.total=val;}
+      else{if(!q.customerRates)q.customerRates={};q.customerRates.total=val;}
+      try{localStorage.setItem('aq_history',JSON.stringify(window._aqHistory));}catch(e){}
+      try{if(db) await db.from('aq_history').upsert({id:q.id,[field==='carrier'?'carrier_rates':'customer_rates']:JSON.stringify(field==='carrier'?q.carrierRates:q.customerRates)},{onConflict:'id'});}catch(e){}
     }
   } else if(type==='transload'){
-    const history=window._tlHistory||[];
-    const q=history.find(x=>x.id===id);
+    const q=(window._tlHistory||[]).find(x=>x.id===id);
     if(q){
-      if(field==='carrier'){
-        if(!q.carrierRates) q.carrierRates={}; q.carrierRates.total=val;
-      } else {
-        if(!q.customerRates) q.customerRates={}; q.customerRates.total=val;
-      }
-      try{localStorage.setItem('tl_history',JSON.stringify(history));}catch(e){}
+      if(field==='carrier'){if(!q.carrierRates)q.carrierRates={};q.carrierRates.total=val;}
+      else{if(!q.customerRates)q.customerRates={};q.customerRates.total=val;}
+      try{localStorage.setItem('tl_history',JSON.stringify(window._tlHistory));}catch(e){}
+      try{if(db) await db.from('tl_quotes').upsert({id:q.id,[field==='carrier'?'carrier_rates':'customer_rates']:JSON.stringify(field==='carrier'?q.carrierRates:q.customerRates)},{onConflict:'id'});}catch(e){}
     }
   }
 
-  // Re-render profit monitor to update totals and profit column
-  setTimeout(()=>renderProfitMonitor(), 100);
-  showToast('✅ Price updated','success',1500);
+  showToast('✅ Price saved','success',1500);
+  setTimeout(()=>renderProfitMonitor(), 150);
 }
 
 </script>
