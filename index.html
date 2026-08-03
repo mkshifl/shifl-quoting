@@ -10594,7 +10594,13 @@ function openInvoiceBuilder(type, id){
 
   // Base charges — ONLY the base rate, not the total
   const baseCharges=type==='drayage'?[
-    {key:'base',label:'Base drayage rate',amount:q.customerRates?.base||0,locked:true},
+    {key:'base',label:'Base drayage rate',amount:(()=>{
+      const cr=q.customerRates||{};
+      // Use explicit base if stored, otherwise fall back to total
+      if(cr.base && cr.base>0) return cr.base;
+      if(cr.total && cr.total>0) return cr.total;
+      return q.profitPct>0?(q.profit/q.profitPct)*(1-q.profitPct)||0:0;
+    })(),locked:true},
   ]:[
     {key:'tlBase',label:'Transload service',amount:q.totalCustomer||0,locked:true},
   ];
@@ -10815,9 +10821,8 @@ function calcInvTotal(){
   const base=window._invBaseTotal||0;
   let acc=0;
   const HOURLY=['det_port','det_cust'];
-  const DAILY=['storage'];
+  const DAILY=['storage','chassis'];
   const ALL_KEYS=['chassis','prepull','det_port','det_cust','storage','ovw43','ovw48','toll','bobtail','genset','triaxle'];
-  const DUAL_KEYS=['genset','triaxle','bobtail'];
   ALL_KEYS.forEach(k=>{
     if(!document.getElementById('acc-chk-'+k)?.checked) return;
     if(HOURLY.includes(k)||DAILY.includes(k)){
@@ -10845,7 +10850,7 @@ async function saveInvoiceData(type, id){
   if(!num){alert('Invoice number required.');return;}
   const base=window._invBaseTotal||0;
   const HOURLY=['det_port','det_cust'];
-  const DAILY=['storage'];
+  const DAILY=['storage','chassis'];
   const ALL_KEYS=['chassis','prepull','det_port','det_cust','storage','ovw43','ovw48','toll','bobtail','genset','triaxle'];
   const DUAL_KEYS=['genset','triaxle','bobtail'];
   const accessorials={};
