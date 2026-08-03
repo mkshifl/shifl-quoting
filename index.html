@@ -13904,7 +13904,7 @@ function renderTMSDrayage(tabBar){
 
       return `<div style="background:#fff;border:1px solid #e8f0fb;border-left:3px solid ${isUrgent?'#ef4444':color};border-radius:0 10px 10px 0;padding:12px;margin-bottom:8px;box-shadow:0 1px 4px rgba(0,0,0,.05);cursor:pointer;transition:box-shadow .15s" onclick="showQuoteModal('${q.id}')" onmouseover="this.style.boxShadow='0 4px 12px rgba(0,0,0,.1)'" onmouseout="this.style.boxShadow='0 1px 4px rgba(0,0,0,.05)'">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-          ${isUrgent?'<span style="background:#fef2f2;color:#dc2626;font-size:9px;font-weight:800;padding:2px 7px;border-radius:99px">🔥 URGENT</span>':'<span style="font-size:10px;color:#8898aa">${q.date||''}</span>'}
+          ${isUrgent?'<span style="background:#fef2f2;color:#dc2626;font-size:9px;font-weight:800;padding:2px 7px;border-radius:99px">🔥 URGENT</span>':`<span style="font-size:10px;color:#8898aa">${q.date||''}</span>`}
           <span style="font-size:11px;font-weight:700;color:var(--steel)">${fmtD(q.customerRates?.total||0)}</span>
         </div>
         <div style="font-size:13px;font-weight:700;color:#1a2e4a;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${q.customer||'—'}</div>
