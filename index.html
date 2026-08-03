@@ -11005,11 +11005,12 @@ function renderCustomerInvoiceTab(all,pending,invoiced,paid,subTab){
   if(subTab==='pending'){
     if(!pending.length){$('page').innerHTML=kpis+tabBar+`<div class="empty"><div class="empty-ico">✅</div><p>No loads pending invoice</p></div>`;return;}
     body=`<div class="tbl-wrap"><style>
-      .inv-row{display:grid;grid-template-columns:2fr 1.3fr 1.4fr 0.9fr 0.9fr 0.8fr 110px;align-items:center;padding:10px 16px;border-bottom:0.5px solid var(--gray-50)}
+      .inv-row{display:grid;grid-template-columns:1.6fr 1.2fr 1.3fr 0.7fr 0.8fr 0.7fr 120px;align-items:center;padding:10px 14px;border-bottom:0.5px solid var(--gray-50);min-width:0}
+      .inv-row>*{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
       .inv-row:hover{background:#fafbfc}
       .inv-row.pending-hot{background:#fff8f8;border-left:3px solid #dc2626}
       .inv-row.pending-warn{background:#fffcf0;border-left:3px solid #f59e0b}
-      .inv-hd{display:grid;grid-template-columns:2fr 1.3fr 1.4fr 0.9fr 0.9fr 0.8fr 110px;padding:8px 16px;background:var(--gray-50);border-bottom:0.5px solid var(--gray-100)}
+      .inv-hd{display:grid;grid-template-columns:1.6fr 1.2fr 1.3fr 0.7fr 0.8fr 0.7fr 120px;padding:8px 14px;background:var(--gray-50);border-bottom:0.5px solid var(--gray-100)}
       .inv-hd span{font-size:10px;font-weight:600;color:var(--gray-500);text-transform:uppercase;letter-spacing:.05em}
       .pending-tag{display:inline-flex;align-items:center;gap:3px;padding:2px 7px;border-radius:4px;font-size:9px;font-weight:700;margin-top:3px}
     </style>
@@ -11036,8 +11037,8 @@ function renderCustomerInvoiceTab(all,pending,invoiced,paid,subTab){
         <div style="font-size:13px;font-weight:700;color:${isHot?'#dc2626':'var(--steel)'}">${fmtD(q.customerAmount)}</div>
         <div style="font-size:11px;color:var(--gray-400)">${q.date||'—'}</div>
         <div style="display:flex;gap:5px">
-          <button class="btn sm blue" onclick="openInvoiceBuilder('${q.type}','${q.id}')">📤 Send to Shifl</button>
-          <button class="btn sm" onclick="revertToActive('${q.type}','${q.id}')" style="color:#d97706;border-color:#fbbf24" title="Revert to active">↩️</button>
+          <button class="btn sm blue" onclick="openInvoiceBuilder('${q.type}','${q.id}')" style="white-space:nowrap">📤 Invoice</button>
+          <button class="btn sm" onclick="revertToActive('${q.type}','${q.id}')" style="color:#d97706;border-color:#fbbf24;white-space:nowrap" title="Revert to active">↩️</button>
         </div>
       </div>`;
     }).join('')}</div>`;
