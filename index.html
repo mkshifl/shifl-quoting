@@ -5878,6 +5878,7 @@ async function markShipmentClosed(type,id,closeStatus){
         await dbUpdateQuoteStatus(id,closeStatus);
         q.status=closeStatus;
         q.bookedDate=q.bookedDate||localDateStr();
+        try{localStorage.setItem('shifl_quotes_cache',JSON.stringify(S.quotes));}catch(_){}
       }catch(e){alert('Save failed: '+e.message);return;}
     }
   } else if(type==='freight'){
@@ -9454,8 +9455,11 @@ async function revertToActive(type,id){
   if(type==='drayage'){
     const q=S.quotes.find(q=>q.id===id);
     if(q){
-      try{await dbUpdateQuoteStatus(id,'Booked');q.status='Booked';}
-      catch(e){alert('Save failed: '+e.message);return;}
+      try{
+        await dbUpdateQuoteStatus(id,'Booked');
+        q.status='Booked';
+        try{localStorage.setItem('shifl_quotes_cache',JSON.stringify(S.quotes));}catch(_){}
+      }catch(e){alert('Save failed: '+e.message);return;}
     }
   } else if(type==='freight'){
     const q=(window._fqHistory||[]).find(q=>q.id===id);
@@ -9544,7 +9548,11 @@ async function confirmDrayPaid(type,id){
   const paid={paidDate:($('dpaid-date')||{}).value||localDateStr(),paidNotes:($('dpaid-notes')||{}).value?.trim()||'',status:'Paid'};
   if(type==='drayage'){
     const q=S.quotes.find(x=>x.id===id);
-    if(q){Object.assign(q,paid);await dbSaveQuote(q).catch(()=>{});}
+    if(q){
+      Object.assign(q,paid);
+      await dbSaveQuote(q).catch(()=>{});
+      try{localStorage.setItem('shifl_quotes_cache',JSON.stringify(S.quotes));}catch(_){}
+    }
   } else if(type==='freight'){
     const idx=(window._fqHistory||[]).findIndex(x=>x.id===id);
     if(idx>=0) fqConfirmPaid(idx);return;
@@ -9554,8 +9562,8 @@ async function confirmDrayPaid(type,id){
   }
   logAction('payment_received',`${type} shipment paid`,'shipment',id);
   closeModal();
-  S.activeView='invoicing';S.allInvTab='paid';
-  renderActive();
+  S.view='invoicing';S.invMainTab='customer';S.allInvTab='paid';
+  renderFullInvoicing();
 }
 
 function renderAllInvoicing(){
@@ -12346,63 +12354,64 @@ function pmDownloadCSV(){
 // ════════════════════════════════════════════════════════════════════
 
 function getShipmentProfit(q, type) {
-  const INVOICED_STATUS = ['Invoiced','Paid'];
   const custInv = getInvoice(q.id);
   const carrInv = getCarrierInvoice(q.id);
-  
-  // If both invoices exist → actual profit
+
+  // Both invoices → full actuals
   if(custInv?.grandTotal && carrInv?.grandTotal) {
     const revenue = custInv.grandTotal;
     const cost = carrInv.grandTotal;
     const profit = revenue - cost;
     return {profit, revenue, cost, margin: revenue>0?profit/revenue:0, isActual:true};
   }
-  
-  // Estimated profit based on type
+
+  // Customer invoice only → actual revenue + estimated cost
+  if(custInv?.grandTotal) {
+    const revenue = custInv.grandTotal;
+    const cost = type==='drayage'?(q.carrierRates?.total||0):
+                 type==='freight'?(q.carrierRate||0):
+                 ((q.drayCarrierCost||0)+(q.warehouseCost||0)+(q.outCarrierCost||0));
+    const profit = revenue - cost;
+    return {profit, revenue, cost, margin: revenue>0?profit/revenue:0, isActual:'partial'};
+  }
+
+  // Estimated from quoted rates
   if(type==='drayage') {
     const cr = q.carrierRates||{};
     const cu = q.customerRates||{};
-    // Use stored totals if available (includes bobtail, genset, triaxle, all charges)
     if(cu.total && cr.total) {
-      const revenue = cu.total;
-      const cost = cr.total;
-      const profit = revenue - cost;
+      const revenue = cu.total, cost = cr.total, profit = revenue - cost;
       return {profit, revenue, cost, margin: revenue>0?profit/revenue:0, isActual:false};
     }
-    // Fallback: sum all charge keys on both sides
-    const CHARGE_KEYS = ['base','chassis','prepull','det_port','det_cust','storage','ovw43','ovw48','bobtail','toll','genset','triaxle'];
-    const revenue = CHARGE_KEYS.reduce((s,k)=>s+(Number(cu[k])||0), 0);
-    const cost    = CHARGE_KEYS.reduce((s,k)=>s+(Number(cr[k])||0), 0);
+    const KEYS = ['base','chassis','prepull','det_port','det_cust','storage','ovw43','ovw48','bobtail','toll','genset','triaxle'];
+    const revenue = KEYS.reduce((s,k)=>s+(Number(cu[k])||0), 0);
+    const cost    = KEYS.reduce((s,k)=>s+(Number(cr[k])||0), 0);
     const profit  = revenue - cost;
     return {profit, revenue, cost, margin: revenue>0?profit/revenue:0, isActual:false};
   }
-  
+
   if(type==='freight') {
-    // Base rate only
     const revenue = q.customerRate||0;
     const cost = q.carrierRate||0;
     const profit = revenue - cost;
     return {profit, revenue, cost, margin: revenue>0?profit/revenue:0, isActual:false};
   }
-  
+
   if(type==='transload') {
-    // Drayage base + 1 day chassis + warehouse fee (no other line items)
-    const drayRevBase = q.drayCustomerBase||0;
-    const drayChassis = q.drayCustomerChassis||q.drayCustomerPrice||0;
-    const whFee = q.warehouseCustomerFee||q.totalCustomer||0;
-    const drayCarrBase = q.drayCarrierBase||0;
-    const drayCarrChassis = q.drayCarrierChassis||0;
-    const whCost = q.warehouseCost||0;
-    
-    // Fallback: use totals if breakdown not available
-    const revenue = (drayRevBase+drayChassis+whFee)||q.totalCustomer||0;
-    const cost = (drayCarrBase+drayCarrChassis+whCost)||((q.drayCarrierCost||0)+(q.warehouseCost||0)+(q.outCarrierCost||0));
+    const revenue = q.totalCustomer||0;
+    const cost = (q.drayCarrierCost||0)+(q.warehouseCost||0)+(q.outCarrierCost||0);
     const profit = revenue - cost;
     return {profit, revenue, cost, margin: revenue>0?profit/revenue:0, isActual:false};
   }
-  
-  // Fallback
-  return {profit:q.profit||0, revenue:q.customerRates?.total||q.customerRate||0, cost:q.carrierRates?.total||q.carrierRate||0, margin:q.profitPct||0, isActual:false};
+
+  if(type==='air') {
+    const revenue = q.customerRate||0;
+    const cost = (q.airFreightCost||0)+(q.groundRate||0);
+    const profit = revenue - cost;
+    return {profit, revenue, cost, margin: revenue>0?profit/revenue:0, isActual:false};
+  }
+
+  return {profit:q.profit||0, revenue:q.customerRate||0, cost:0, margin:q.profitPct||0, isActual:false};
 }
 
 function profitBadge(isActual) {
