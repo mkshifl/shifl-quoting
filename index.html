@@ -5883,7 +5883,6 @@ async function markShipmentClosed(type,id,closeStatus){
     if(type==='drayage'){const q=S.quotes.find(q=>q.id===id);ref=q?.shiflRef||'';}
     else if(type==='freight'){const q=(window._fqHistory||[]).find(q=>q.id===id);ref=q?.shiflRef||'';}
     else if(type==='transload'){const q=(window._tlHistory||[]).find(q=>q.id===id);ref=q?.shiflRef||'';}
-    else if(type==='air'){const q=(window._aqHistory||[]).find(q=>q.id===id);ref=q?.shiflRef||'';}
     if(!ref.trim()){
       const entered=prompt('⚠️ A Shifl Ref # is required before marking as Delivered.\n\nEnter Shifl Ref # to continue:');
       if(!entered||!entered.trim()){alert('Shifl Ref # is required. Shipment not updated.');return;}
@@ -5891,7 +5890,6 @@ async function markShipmentClosed(type,id,closeStatus){
       if(type==='drayage'){const q=S.quotes.find(q=>q.id===id);if(q){q.shiflRef=entered.trim();try{await db.from('quotes').update({shifl_ref:entered.trim()}).eq('id',id);}catch(e){}}}
       else if(type==='freight'){const q=(window._fqHistory||[]).find(q=>q.id===id);if(q){q.shiflRef=entered.trim();try{localStorage.setItem('fq_history',JSON.stringify(window._fqHistory));}catch(e){}}}
       else if(type==='transload'){const q=(window._tlHistory||[]).find(q=>q.id===id);if(q){q.shiflRef=entered.trim();try{localStorage.setItem('tl_history',JSON.stringify(window._tlHistory));}catch(e){}}}
-      else if(type==='air'){const q=(window._aqHistory||[]).find(q=>q.id===id);if(q){q.shiflRef=entered.trim();try{localStorage.setItem('aq_history',JSON.stringify(window._aqHistory));}catch(e){}}}
     }
   }
   if(!confirm('Mark as "'+closeStatus+'"? This will move it to the Completed tab.')) return;
@@ -5912,13 +5910,6 @@ async function markShipmentClosed(type,id,closeStatus){
   } else if(type==='transload'){
     const q=(window._tlHistory||[]).find(q=>q.id===id);
     if(q){q.status=closeStatus;try{await dbUpdateTlStatus(id,closeStatus);}catch(e){}try{localStorage.setItem('tl_history',JSON.stringify(window._tlHistory));}catch(e){}}
-  } else if(type==='air'){
-    const q=(window._aqHistory||[]).find(q=>q.id===id);
-    if(q){
-      q.status=closeStatus;
-      try{await dbSaveAqQuote(q);}catch(e){}
-      try{localStorage.setItem('aq_history',JSON.stringify(window._aqHistory));}catch(e){}
-    }
   }
   logAction('status_changed',`${type} shipment marked ${closeStatus}`,'shipment',id);
   updateActiveBadge();renderActive();
@@ -11246,7 +11237,6 @@ function saveCarrierInvoice(id, inv){
   if(!S.invoices) S.invoices={};
   S.invoices[id+'_carrier']=inv;
   try{localStorage.setItem('shifl_invoices',JSON.stringify(S.invoices));}catch(e){}
-  try{saveTMSMeta(id,{carrierInvoice:inv,carrierInvNum:inv.invNum,carrierInvTotal:inv.grandTotal,carrierInvSavedAt:inv.savedAt});}catch(e){}
 }
 
 function openCarrierInvoiceBuilder(type, id){
@@ -11459,7 +11449,7 @@ function addCarrierCharge(){
   c.appendChild(d);
 }
 
-async async function saveCarrierInvoiceData(type,id){
+async function saveCarrierInvoiceData(type,id){
   const num=($('cinv-num')||{}).value?.trim();
   if(!num){alert('Invoice number required.');return;}
   const base=window._cinvBase||0;
@@ -11481,31 +11471,10 @@ async async function saveCarrierInvoiceData(type,id){
   });
   const inv={invNum:num,invDate:($('cinv-date')||{}).value||localDateStr(),invDue:($('cinv-due')||{}).value||'',notes:($('cinv-notes')||{}).value?.trim()||'',baseTotal:base,accTotal,grandTotal:base+accTotal,accessorials,customCharges,type,savedAt:localDateStr()};
   saveCarrierInvoice(id,inv);
-  // Update quote to reflect carrier invoice saved
-  if(type==='drayage'){
-    const q=S.quotes.find(x=>x.id===id);
-    if(q){
-      q.carrierInvNum=num;
-      if(!q.carrierRates) q.carrierRates={};
-      q.carrierRates.total=inv.grandTotal;
-      try{await dbSaveQuote(q);}catch(e){}
-      try{localStorage.setItem('shifl_quotes_cache',JSON.stringify(S.quotes));}catch(e){}
-    }
-  } else if(type==='freight'){
-    const q=(window._fqHistory||[]).find(x=>x.id===id);
-    if(q){q.carrierInvNum=num;try{localStorage.setItem('fq_history',JSON.stringify(window._fqHistory));}catch(e){}}
-  } else if(type==='transload'){
-    const q=(window._tlHistory||[]).find(x=>x.id===id);
-    if(q){q.carrierInvNum=num;try{localStorage.setItem('tl_history',JSON.stringify(window._tlHistory));}catch(e){}}
-  } else if(type==='air'){
-    const q=(window._aqHistory||[]).find(x=>x.id===id);
-    if(q){q.carrierInvNum=num;try{localStorage.setItem('aq_history',JSON.stringify(window._aqHistory));}catch(e){}}
-  }
-  try{logAction('invoice_sent',`Carrier invoice ${num} — ${fmtD(base+accTotal)}`,'carrier_invoice',id);}catch(e){}
+  logAction('invoice_sent',`Carrier invoice ${num} — ${fmtD(base+accTotal)}`,'carrier_invoice',id);
   closeModal();
-  showToast('✅ Carrier invoice saved — '+num,'success');
-  S.view='invoicing';S.invMainTab='carrier';S.allInvTab='pending';
-  renderFullInvoicing();
+  showToast('Carrier invoice saved — '+num,'success');
+}
 
 function openFqCarrierInvoice(idx){
   const q=(window._fqHistory||[])[idx];
