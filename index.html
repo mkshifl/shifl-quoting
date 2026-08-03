@@ -362,8 +362,8 @@ body.screenshot-mode .money::after,body.screenshot-mode .kpi-val::after{content:
 .tbl-wrap table thead{position:sticky;top:0;z-index:3}
 .tbl-wrap table thead th{background:var(--gray-50)!important;border-bottom:1px solid var(--gray-200)}
 
-/* ── Page max-width ── */
-.page{margin-left:auto;margin-right:auto;padding:20px 22px}
+/* ── Page layout ── */
+.page{padding:20px 22px}
 
 /* ── Empty state refresh ── */
 .empty{padding:60px 24px;border:1.5px dashed var(--gray-200);border-radius:var(--radius-lg);margin:12px 0}
@@ -9372,7 +9372,7 @@ function renderHome(){
       <div style="margin-top:14px;font-size:13px;color:#4b6584;font-style:italic;background:rgba(255,255,255,.6);border-radius:8px;padding:8px 16px;max-width:380px;margin:14px auto 0">"${getDailyCompliment()}"</div>
     </div>
     <div style="width:100%;margin:0 auto 4px">${getStreakBadge()}</div>
-    <div style="max-width:600px;margin:0 auto">${buildQuestWidget()}</div>
+    <div style="width:100%">${buildQuestWidget()}</div>
 
     <!-- Mode cards -->
     <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:40px">
