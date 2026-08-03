@@ -12055,8 +12055,8 @@ function renderProfitMonitor(){
           <td style="padding:10px 8px;font-size:11px;color:#374151;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${q.carrier}</td>
           <td style="padding:10px 8px;font-size:11px;color:#64748b;white-space:nowrap">${q.date||'—'}</td>
           <td style="padding:10px 8px;text-align:center"><span style="background:${statusBg};color:${statusCol};border-radius:99px;font-size:10px;font-weight:700;padding:3px 9px;white-space:nowrap">${q.status}</span></td>
-          <td style="padding:10px 8px;text-align:right;font-size:13px;font-weight:700;color:#dc2626">$${Math.round(q.carrierCost).toLocaleString()}</td>
-          <td style="padding:10px 8px;text-align:right;font-size:13px;font-weight:700;color:#2563eb">$${Math.round(q.customerRate).toLocaleString()}</td>
+          <td style="padding:10px 8px;text-align:right;font-size:13px;font-weight:700;color:#dc2626">${['Delivered','Invoiced','Paid'].includes(q.status)?`<input type="number" value="${Math.round(q.carrierCost)}" onchange="pmUpdatePrice('${q.id}','${q.type}','carrier',this.value)" style="width:78px;text-align:right;border:1.5px solid #fecaca;border-radius:6px;padding:3px 5px;font-size:12px;font-weight:700;color:#dc2626;background:#fff5f5;font-family:inherit" title="Click to edit carrier cost">`:('$'+Math.round(q.carrierCost).toLocaleString())}</td>
+          <td style="padding:10px 8px;text-align:right;font-size:13px;font-weight:700;color:#2563eb">${['Delivered','Invoiced','Paid'].includes(q.status)?`<input type="number" value="${Math.round(q.customerRate)}" onchange="pmUpdatePrice('${q.id}','${q.type}','sell',this.value)" style="width:78px;text-align:right;border:1.5px solid #bfdbfe;border-radius:6px;padding:3px 5px;font-size:12px;font-weight:700;color:#2563eb;background:#eff6ff;font-family:inherit" title="Click to edit sell rate">`:('$'+Math.round(q.customerRate).toLocaleString())}</td>
           <td style="padding:10px 8px;text-align:right">
             <div style="font-size:13px;font-weight:800;color:#059669">$${Math.round(q.profit).toLocaleString()}</div>
             ${q.isActual?'<div style="font-size:9px;color:#059669;font-weight:600">actual</div>':'<div style="font-size:9px;color:#94a3b8">est.</div>'}
@@ -19676,6 +19676,73 @@ function renderContainerResult(el,data,num){
       <div style="display:flex;justify-content:space-between"><span style="color:#64748b">Free days</span><span style="font-weight:600;color:${col}">${daysLeft>0?daysLeft+' days left':'EXPIRED'}</span></div>
     </div>
   </div>`;
+}
+
+</script>
+<script>
+
+function pmUpdatePrice(id, type, field, newVal){
+  const val = parseFloat(newVal);
+  if(isNaN(val)||val<0) return;
+
+  // Update the source data
+  if(type==='drayage'){
+    const q=(S.quotes||[]).find(x=>x.id===id);
+    if(q){
+      if(field==='carrier'){
+        if(!q.carrierRates) q.carrierRates={};
+        // Adjust base rate to match new total
+        const diff=val-(q.carrierRates.total||0);
+        q.carrierRates.base=(q.carrierRates.base||0)+diff;
+        q.carrierRates.total=val;
+      } else {
+        if(!q.customerRates) q.customerRates={};
+        const diff=val-(q.customerRates.total||0);
+        q.customerRates.base=(q.customerRates.base||0)+diff;
+        q.customerRates.total=val;
+      }
+      try{localStorage.setItem('drayage_quotes',JSON.stringify(S.quotes));}catch(e){}
+    }
+  } else if(type==='freight'){
+    const history=window._fqHistory||[];
+    const q=history.find(x=>x.id===id);
+    if(q){
+      if(field==='carrier'){
+        if(!q.carrierRates) q.carrierRates={};
+        q.carrierRates.base=val; q.carrierRates.total=val;
+      } else {
+        if(!q.customerRates) q.customerRates={};
+        q.customerRates.base=val; q.customerRates.total=val;
+      }
+      try{localStorage.setItem('fq_history',JSON.stringify(history));}catch(e){}
+    }
+  } else if(type==='air'){
+    const history=window._aqHistory||[];
+    const q=history.find(x=>x.id===id);
+    if(q){
+      if(field==='carrier'){
+        if(!q.carrierRates) q.carrierRates={}; q.carrierRates.total=val;
+      } else {
+        if(!q.customerRates) q.customerRates={}; q.customerRates.total=val;
+      }
+      try{localStorage.setItem('aq_history',JSON.stringify(history));}catch(e){}
+    }
+  } else if(type==='transload'){
+    const history=window._tlHistory||[];
+    const q=history.find(x=>x.id===id);
+    if(q){
+      if(field==='carrier'){
+        if(!q.carrierRates) q.carrierRates={}; q.carrierRates.total=val;
+      } else {
+        if(!q.customerRates) q.customerRates={}; q.customerRates.total=val;
+      }
+      try{localStorage.setItem('tl_history',JSON.stringify(history));}catch(e){}
+    }
+  }
+
+  // Re-render profit monitor to update totals and profit column
+  setTimeout(()=>renderProfitMonitor(), 100);
+  showToast('✅ Price updated','success',1500);
 }
 
 </script>
