@@ -10977,6 +10977,16 @@ async function saveInvoiceData(type, id){
       q.customerRate=grandTotal;
       try{localStorage.setItem('fq_history',JSON.stringify(window._fqHistory));}catch(e){}
     }
+  } else if(type==='air'){
+    const q=(window._aqHistory||[]).find(x=>x.id===id);
+    if(q){
+      q.status='Invoiced';
+      q.invoiceNum=num;
+      q.customerRate=grandTotal;
+      try{await dbSaveAqQuote(q);}catch(e){}
+      try{localStorage.setItem('aq_history',JSON.stringify(window._aqHistory));}catch(e){}
+    }age.setItem('fq_history',JSON.stringify(window._fqHistory));}catch(e){}
+    }
   }
 
   try{logAction('invoice_sent',`${type} invoice ${num} — ${fmtD(grandTotal)}`,'invoice',id);}catch(e){}
