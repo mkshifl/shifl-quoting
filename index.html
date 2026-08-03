@@ -14003,64 +14003,133 @@ function renderTMSBol(tabBar,loads){
 
 // BOL Builder Modal
 function openBOLBuilder(id){
-  // Support FQ, TMS, and drayage loads
+  // Support FQ, TMS, drayage, and air loads
   let q = (window._fqHistory||[]).find(x=>x.id===id);
   if(!q){ const _aq=(window._aqHistory||[]).find(x=>x.id===id); if(_aq) q={id:_aq.id,customer:_aq.customer||'',pickupZip:_aq.originAirport||'',deliveryZip:_aq.destAirport||'',carrier:_aq.carrier||'',fqMode:'Air Freight',weight:_aq.weight||'',palletCount:_aq.pieces||'',commodity:_aq.commodity||''}; }
-  if(!q){
-    // Try drayage quotes
-    const dq = (S.quotes||[]).find(x=>x.id===id);
-    if(dq) q = {id:dq.id, customer:dq.customer, pickupZip:dq.port||'', deliveryZip:dq.zip||'', carrier:dq.carrier||'', fqMode:'Drayage', weight:'', palletCount:'', commodity:dq.commodity||''};
-  }
-  if(!q){
-    // Try TMS loads
-    const tmsLoads = JSON.parse(localStorage.getItem('tms_loads')||'[]');
-    const tl = tmsLoads.find(x=>x.id===id);
-    if(tl) q = {id:tl.id, customer:tl.customer||tl.shipper||'', pickupZip:tl.pickupZip||'', deliveryZip:tl.deliveryZip||'', carrier:tl.carrier||'', fqMode:tl.mode||'Freight', weight:tl.weight||'', palletCount:tl.pallets||'', commodity:tl.commodity||''};
-  }
-  if(!q){showToast('Load not found — fill in BOL details manually','warn');
-    q={id:id,customer:'',pickupZip:'',deliveryZip:'',carrier:'',fqMode:'',weight:'',palletCount:'',commodity:''};
-  }
+  if(!q){ const dq=(S.quotes||[]).find(x=>x.id===id); if(dq) q={id:dq.id,customer:dq.customer,pickupZip:dq.port||'',deliveryZip:dq.zip||'',carrier:dq.carrier||'',fqMode:'Drayage',weight:'',palletCount:'',commodity:dq.commodity||'',shiflRef:dq.shiflRef||''}; }
+  if(!q){ const tmsLoads=JSON.parse(localStorage.getItem('tms_loads')||'[]'); const tl=tmsLoads.find(x=>x.id===id); if(tl) q={id:tl.id,customer:tl.customer||tl.shipper||'',pickupZip:tl.pickupZip||'',deliveryZip:tl.deliveryZip||'',carrier:tl.carrier||'',fqMode:tl.mode||'Freight',weight:tl.weight||'',palletCount:tl.pallets||'',commodity:tl.commodity||''}; }
+  if(!q){ showToast('Load not found — entering manual mode','warn'); q={id,customer:'',pickupZip:'',deliveryZip:'',carrier:'',fqMode:'',weight:'',palletCount:'',commodity:'',shiflRef:''}; }
+
   const meta=getTMSMeta(id);
-  const bolNum=meta.bolNum||'BOL-'+Date.now().toString().slice(-6);
+  const bolNum=meta.bolNum||('BOL-'+Date.now().toString().slice(-6));
+  const uploaded=getBolUpload(id); // existing uploaded BOL if any
+
   $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
-  <div class="modal" style="max-width:620px;max-height:90vh;overflow-y:auto">
-    <div class="modal-title">📄 Bill of Lading — ${q.customer||'—'}</div>
-    <div class="g2">
-      <div class="field"><label>BOL Number</label><input type="text" id="bol-num" value="${bolNum}"></div>
-      <div class="field"><label>Ship date</label><input type="date" id="bol-date" value="${localDateStr()}"></div>
+  <div class="modal" style="max-width:640px;max-height:92vh;overflow-y:auto">
+    <div class="modal-title" style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--gray-100)">
+      <span>📄 Bill of Lading — ${q.customer||'—'}</span>
+      <button onclick="closeModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--gray-400);line-height:1">×</button>
     </div>
-    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gray-400);margin:10px 0 8px">Shipper</div>
-    <div class="g2">
-      <div class="field"><label>Company name</label><input type="text" id="bol-ship-name" value="" placeholder="Shipper name"></div>
-      <div class="field"><label>Address</label><input type="text" id="bol-ship-addr" value="" placeholder="123 Main St, City, State ZIP"></div>
+
+    <!-- Upload section — always visible at top -->
+    <div style="padding:14px 18px;background:${uploaded?'#f0fdf4':'#f8fafc'};border-bottom:1px solid var(--gray-100)">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gray-400);margin-bottom:8px">Upload your own BOL</div>
+      ${uploaded
+        ? `<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:#fff;border:1px solid #86efac;border-radius:8px">
+            <span style="font-size:20px">📎</span>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:13px;font-weight:600;color:#15803d;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${uploaded.name}</div>
+              <div style="font-size:11px;color:var(--gray-400)">Uploaded ${new Date(uploaded.uploaded).toLocaleDateString()}</div>
+            </div>
+            <button onclick="viewUploadedBOL('${id}')" style="padding:6px 12px;background:#16a34a;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;font-family:inherit">👁 View</button>
+            <button onclick="uploadBOLFromModal('${id}')" style="padding:6px 12px;background:#fff;color:var(--gray-600);border:1px solid var(--gray-200);border-radius:6px;cursor:pointer;font-size:12px;font-family:inherit">Replace</button>
+            <button onclick="deleteUploadedBOL('${id}')" style="padding:6px 10px;background:#fff;color:#dc2626;border:1px solid #fecaca;border-radius:6px;cursor:pointer;font-size:12px;font-family:inherit">🗑️</button>
+          </div>`
+        : `<div style="display:flex;align-items:center;gap:10px">
+            <button onclick="uploadBOLFromModal('${id}')" style="padding:8px 16px;background:#fff;border:1.5px dashed var(--gray-300);border-radius:8px;cursor:pointer;font-size:13px;font-family:inherit;color:var(--gray-600);display:flex;align-items:center;gap:7px">
+              📎 Upload BOL (PDF, JPG, PNG, DOC)
+            </button>
+            <span style="font-size:12px;color:var(--gray-400)">or create one below</span>
+          </div>`}
     </div>
-    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gray-400);margin:10px 0 8px">Consignee</div>
-    <div class="g2">
-      <div class="field"><label>Company name</label><input type="text" id="bol-cons-name" value="${q.customer||''}" placeholder="Consignee name"></div>
-      <div class="field"><label>Address</label><input type="text" id="bol-cons-addr" value="" placeholder="456 Oak Ave, City, State ZIP"></div>
+
+    <!-- BOL form -->
+    <div style="padding:16px 18px">
+      <div style="font-size:12px;font-weight:600;color:var(--gray-500);margin-bottom:14px">Or fill in details to generate a BOL</div>
+      <div class="g2" style="margin-bottom:12px">
+        <div class="field"><label>BOL Number</label><input type="text" id="bol-num" value="${bolNum}"></div>
+        <div class="field"><label>Ship date</label><input type="date" id="bol-date" value="${localDateStr()}"></div>
+      </div>
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gray-400);margin:10px 0 6px">Shipper</div>
+      <div class="g2" style="margin-bottom:12px">
+        <div class="field"><label>Company name</label><input type="text" id="bol-ship-name" value="${meta.shipperName||''}" placeholder="Shipper name"></div>
+        <div class="field"><label>Address</label><input type="text" id="bol-ship-addr" value="${meta.shipperAddr||''}" placeholder="123 Main St, City, State ZIP"></div>
+      </div>
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gray-400);margin:10px 0 6px">Consignee</div>
+      <div class="g2" style="margin-bottom:12px">
+        <div class="field"><label>Company name</label><input type="text" id="bol-cons-name" value="${meta.consigneeName||q.customer||''}" placeholder="Consignee name"></div>
+        <div class="field"><label>Address</label><input type="text" id="bol-cons-addr" value="${meta.consigneeAddr||''}" placeholder="456 Oak Ave, City, State ZIP"></div>
+      </div>
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gray-400);margin:10px 0 6px">Carrier</div>
+      <div class="g2" style="margin-bottom:12px">
+        <div class="field"><label>Carrier name</label><input type="text" id="bol-carrier" value="${meta.carrier||q.carrier||''}"></div>
+        <div class="field"><label>Pro / Tracking #</label><input type="text" id="bol-pro" value="${meta.proNum||''}" placeholder="PRO number"></div>
+      </div>
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gray-400);margin:10px 0 6px">Freight details</div>
+      <div class="g3" style="margin-bottom:12px">
+        <div class="field"><label>Pieces</label><input type="number" id="bol-pieces" value="${meta.pieces||q.palletCount||''}"></div>
+        <div class="field"><label>Weight (lbs)</label><input type="number" id="bol-weight" value="${meta.weight||q.weight||''}"></div>
+        <div class="field"><label>Freight class</label><input type="text" id="bol-class" value="${meta.freightClass||''}" placeholder="e.g. 70"></div>
+      </div>
+      <div class="g2" style="margin-bottom:12px">
+        <div class="field"><label>Commodity</label><input type="text" id="bol-commodity" value="${meta.commodity||q.commodity||''}" placeholder="General freight, no hazmat"></div>
+        <div class="field"><label>NMFC #</label><input type="text" id="bol-nmfc" value="${meta.nmfc||''}" placeholder="Optional"></div>
+      </div>
+      <div class="field" style="margin-bottom:8px"><label>Special instructions</label><textarea id="bol-notes" rows="2" style="width:100%;box-sizing:border-box;resize:vertical;border:1px solid var(--gray-200);border-radius:var(--radius);padding:7px 10px;font-family:inherit;font-size:13px" placeholder="Liftgate required, appointment needed...">${meta.bolNotes||''}</textarea></div>
     </div>
-    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gray-400);margin:10px 0 8px">Carrier</div>
-    <div class="g2">
-      <div class="field"><label>Carrier name</label><input type="text" id="bol-carrier" value="${q.carrier||''}"></div>
-      <div class="field"><label>Pro / Tracking #</label><input type="text" id="bol-pro" value="${meta.proNum||''}" placeholder="PRO number"></div>
-    </div>
-    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gray-400);margin:10px 0 8px">Freight details</div>
-    <div class="g3">
-      <div class="field"><label>Pieces</label><input type="number" id="bol-pieces" value="${q.palletCount||''}"></div>
-      <div class="field"><label>Weight (lbs)</label><input type="number" id="bol-weight" value="${q.weight||''}"></div>
-      <div class="field"><label>Freight class</label><input type="text" id="bol-class" value="${meta.freightClass||''}" placeholder="e.g. 70"></div>
-    </div>
-    <div class="g2">
-      <div class="field"><label>Commodity description</label><input type="text" id="bol-commodity" value="${q.commodity||''}" placeholder="General freight, no hazmat"></div>
-      <div class="field"><label>NMFC #</label><input type="text" id="bol-nmfc" value="${meta.nmfc||''}" placeholder="Optional"></div>
-    </div>
-    <div class="field"><label>Special instructions</label><textarea id="bol-notes" rows="2" style="width:100%;box-sizing:border-box;resize:vertical" placeholder="Liftgate required, appointment needed, etc.">${meta.bolNotes||''}</textarea></div>
-    <div class="modal-foot">
+
+    <div class="modal-foot" style="padding:12px 18px;border-top:1px solid var(--gray-100);display:flex;gap:8px;justify-content:flex-end">
       <button class="btn" onclick="closeModal()">Cancel</button>
-      <button class="btn" onclick="saveBOL('${id}');closeModal()">💾 Save BOL</button>
-      <button class="btn blue" onclick="saveBOL('${id}');generateBOLPDF('${id}')">📄 Save & Download PDF</button>
+      <button class="btn" onclick="saveBOL('${id}');showToast('BOL details saved','success',2000)">💾 Save details</button>
+      <button class="btn blue" onclick="saveBOL('${id}');generateBOLPDF('${id}')">📄 Generate & download PDF</button>
     </div>
   </div></div>`;
+}
+
+// Upload BOL from within the modal
+function uploadBOLFromModal(id){
+  var input=document.createElement('input');
+  input.type='file';
+  input.accept='.pdf,.jpg,.jpeg,.png,.doc,.docx';
+  input.onchange=function(){
+    var file=input.files[0];
+    if(!file) return;
+    var reader=new FileReader();
+    reader.onload=function(e){
+      var key='bol_upload_'+id;
+      var data={name:file.name,data:e.target.result,type:file.type,uploaded:new Date().toISOString()};
+      localStorage.setItem(key,JSON.stringify(data));
+      try{saveTMSMeta(id,{hasBolUpload:true,bolUploadName:file.name,bolUploadDate:new Date().toISOString()});}catch(ex){}
+      showToast('✅ BOL uploaded: '+file.name,'success');
+      openBOLBuilder(id); // refresh modal to show uploaded state
+    };
+    reader.readAsDataURL(file);
+  };
+  input.click();
+}
+
+// View uploaded BOL in new tab
+function viewUploadedBOL(id){
+  var d=getBolUpload(id);
+  if(!d){showToast('No uploaded BOL found','warn');return;}
+  var win=window.open();
+  if(!win){showToast('Pop-up blocked — allow pop-ups to view BOL','warn');return;}
+  if(d.type&&d.type.includes('pdf')){
+    win.document.write('<html><body style="margin:0"><embed src="'+d.data+'" width="100%" height="100%" type="application/pdf"></body></html>');
+  } else {
+    win.document.write('<html><body style="margin:0;background:#111;display:flex;align-items:center;justify-content:center;min-height:100vh"><img src="'+d.data+'" style="max-width:100%;max-height:100vh;object-fit:contain"></body></html>');
+  }
+  win.document.title=d.name||'BOL';
+}
+
+// Delete uploaded BOL
+function deleteUploadedBOL(id){
+  if(!confirm('Remove uploaded BOL?')) return;
+  localStorage.removeItem('bol_upload_'+id);
+  localStorage.removeItem('bol_upload_tms_'+id);
+  try{saveTMSMeta(id,{hasBolUpload:false,bolUploadName:'',bolUploadDate:''});}catch(e){}
+  showToast('BOL removed','success',2000);
+  openBOLBuilder(id);
 }
 
 function saveBOL(id){
@@ -14083,7 +14152,7 @@ function saveBOL(id){
   showToast('BOL saved','success',2000);
 }
 
-async function generateBOLPDF(id){
+aasync function generateBOLPDF(id){
   if(!await loadJsPDF()) return;
   const q=(window._fqHistory||[]).find(q=>q.id===id);
   const meta=getTMSMeta(id);
