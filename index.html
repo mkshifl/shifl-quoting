@@ -6052,9 +6052,16 @@ function renderActive(){
     const borderCol = isUrgent?'#fca5a5':'var(--gray-200)';
 
     // per-type extra fields
+    const drayMeta = s.type==='drayage' ? getMeta(s.id) : {};
+    const eta = drayMeta.containerETA || '';
+    const etaDays = eta ? Math.ceil((new Date(eta)-new Date())/86400000) : null;
+    const etaBadge = eta ? `<span onclick="event.stopPropagation();setContainerETA('${s.id}')" style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:99px;font-size:10px;font-weight:700;cursor:pointer;${etaDays<=0?'background:#fee2e2;color:#dc2626':etaDays<=2?'background:#fef3c7;color:#d97706':'background:#d1fae5;color:#059669'}" title="Click to edit ETA">
+        🚢 ${etaDays<=0?'Arrived':etaDays===1?'ETA tomorrow':'ETA '+etaDays+'d'}
+      </span>` : `<span onclick="event.stopPropagation();setContainerETA('${s.id}')" style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:99px;font-size:10px;font-weight:600;cursor:pointer;background:var(--gray-100);color:var(--gray-500)" title="Set container ETA">+ ETA</span>`;
     const extraFields = s.type==='drayage'
       ? `<div class="af"><div class="afl">Container</div><div class="afv">${s.bookingNum||getMeta(s.id).booking_num||'—'}</div></div>
-         <div class="af"><div class="afl">Mode</div><div class="afv">${s.mode||s.ld||'—'}</div></div>`
+         <div class="af"><div class="afl">Mode</div><div class="afv">${s.mode||s.ld||'—'}</div></div>
+         <div class="af"><div class="afl">ETA</div><div class="afv">${eta?eta:'—'}</div></div>`
       : s.type==='freight'
       ? `<div class="af"><div class="afl">PRO #</div><div class="afv" style="color:${tracking.pro?'#2563eb':'var(--gray-400)'};">${tracking.pro||'—'}</div></div>
          <div class="af"><div class="afl">Weight</div><div class="afv">${s.weight||s.totalWeight||'—'}</div></div>`
@@ -6083,7 +6090,8 @@ function renderActive(){
           <div class="af"><div class="afl">Day</div><div class="afv">Day ${daysActive}</div></div>
           ${extraFields}
         </div>
-        ${cd?`<div style="display:inline-flex;align-items:center;gap:4px;padding:4px 9px;border-radius:5px;font-size:11px;font-weight:600;margin-bottom:9px;${cd.cls==='due-ok'?'background:#f0fdf4;color:#15803d':cd.cls==='due-warn'?'background:#fffbeb;color:#92400e':'background:#fef2f2;color:#991b1b'}">
+        ${s.type==='drayage'?`<div style="margin-bottom:7px">${etaBadge}</div>`:''}
+        ${cd?`<div;align-items:center;gap:4px;padding:4px 9px;border-radius:5px;font-size:11px;font-weight:600;margin-bottom:9px;${cd.cls==='due-ok'?'background:#f0fdf4;color:#15803d':cd.cls==='due-warn'?'background:#fffbeb;color:#92400e':'background:#fef2f2;color:#991b1b'}">
           ${cd.cls==='due-ok'?'✓':cd.cls==='due-warn'?'⚡':'⚠️'} ${cd.label}
         </div>`:''}
         <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;flex-wrap:wrap">
@@ -6135,6 +6143,17 @@ function renderActive(){
   return; // end of v2 — original code replaced
 
   // ── drag-and-drop helpers (defined once, outside renderActive) ──
+}
+
+// Set container ETA from active card
+function setContainerETA(id){
+  const meta=getMeta(id);
+  const current=meta.containerETA||'';
+  const val=prompt('Container ETA (vessel arrival date):', current);
+  if(val===null) return; // cancelled
+  saveTMSMeta(id,{containerETA:val.trim()});
+  showToast('✅ ETA saved','success',1500);
+  renderActive();
 }
 
 // Filter active cards without rebuilding the page — keeps search input focused
