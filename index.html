@@ -1149,7 +1149,7 @@ const NOTE_TEMPLATES=[
   'Subject to fuel surcharge adjustment',
   'Hazmat: additional charges may apply',
 ];
-const REGIONS=['NE','SE','Central','WC'];
+const REGIONS=['NE','SE','Central','WC','Canada'];
 const SEED=[
   {id:'r1',region:'WC',carrier:'Fitted',port:'Los Angeles, CA',destination:'Fontana, CA',zip:'92337',ld:'Live',active:true,base:500,chassis:40,prepull:150,det_port:80,det_cust:80,storage:40,ovw43:0,ovw48:0,bobtail:0,toll:0,notes:'American Stitch LLC'},
   {id:'r2',region:'WC',carrier:'Fitted',port:'Long Beach, CA',destination:'Huntington Beach, CA',zip:'92648',ld:'Drop',active:true,base:365,chassis:40,prepull:150,det_port:0,det_cust:0,storage:40,ovw43:0,ovw48:0,bobtail:300,toll:0,notes:'Migo Trading LLC'},
@@ -1667,6 +1667,22 @@ function buildCarrierComparison(matches){
       onmouseleave="if('${r.id}'!==S.selId)this.style.background=''">
       <div style="width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0;background:${isSel?'#2563eb':'#f3f4f6'};color:${isSel?'#fff':'#9ca3af'}">${i+1}</div>
       <div style="flex:1;min-width:0">
+        ${(()=>{
+          if(!isSel) return '';
+          const past=(S.quotes||[]).filter(q=>
+            q.carrier===r.carrier && q.zip===(qi.drayType==='export'?qi.pickupZip:qi.zip) &&
+            ['Booked','Delivered','Invoiced','Paid'].includes(q.status) &&
+            (q.customerRates?.total||0)>0
+          ).sort((a,b)=>new Date(b.date||0)-new Date(a.date||0));
+          if(!past.length) return '';
+          const p=past[0];
+          return `<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:#eff6ff;border-radius:7px;margin-bottom:8px;flex-wrap:wrap;gap:6px">
+            <span>📋</span>
+            <span style="font-size:11px;font-weight:600;color:#1d4ed8">Past rates found — ${p.customer||''} · ${p.date||''}</span>
+            <span style="font-size:11px;color:#64748b">${fmtD(p.customerRates?.total||0)} customer · ${fmtD(p.carrierRates?.total||0)} carrier</span>
+            <button onclick="event.stopPropagation();applyPastQuoteRates('${p.id}')" style="padding:3px 10px;background:#2563eb;color:#fff;border:none;border-radius:5px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">📋 Use these rates</button>
+          </div>`;
+        })()}
         <div style="font-size:13px;font-weight:700;color:#1e3a5f;display:flex;align-items:center;gap:5px">
           ${r.carrier}
           ${i===0?'<span style="font-size:9px;font-weight:700;padding:1px 6px;border-radius:99px;background:#1e3a5f;color:#fff">Best</span>':''}
@@ -6143,6 +6159,29 @@ function renderActive(){
   return; // end of v2 — original code replaced
 
   // ── drag-and-drop helpers (defined once, outside renderActive) ──
+}
+
+// Apply rates from a past quote to the current quote builder
+function applyPastQuoteRates(pastId){
+  const past=S.quotes.find(q=>q.id===pastId);
+  if(!past) return;
+  // Apply carrier rates as markup baseline
+  const cr=past.carrierRates||{};
+  const cu=past.customerRates||{};
+  const RATE_KEYS=['base','chassis','prepull','det_port','det_cust','storage','ovw43','ovw48','bobtail','toll','genset','triaxle'];
+  // Set flat rates to match past quote customer rates
+  if(!S.qi.flatRates) S.qi.flatRates={};
+  RATE_KEYS.forEach(k=>{
+    if(cu[k]!=null) S.qi.flatRates[k]=cu[k];
+  });
+  // Show customer + carrier total as markup
+  if(cu.total && cr.total){
+    const diff=cu.total-cr.total;
+    S.qi.markup=diff;
+    S.qi.markupType='flat';
+  }
+  showToast('✅ Rates applied from past quote','success',2000);
+  renderQuote();
 }
 
 // Set container ETA from active card
