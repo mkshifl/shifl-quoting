@@ -6555,6 +6555,7 @@ function buildLogRows(){
     const exp = window._expandedRows.has(q.id);
     const sp = baseSplit(q);
     const pc = sp.isActual?'var(--green)':sp.baseP>=0?'var(--amber)':'var(--red)';
+    const profitLabel = sp.isActual?'Actual':'Guaranteed';
     const statusSel = can('update_status')
       ?`<select onchange="updateStatus('${q.id}',this.value)" onclick="event.stopPropagation()" style="font-size:11px;padding:2px 4px;width:100%;border-radius:4px;border:1px solid var(--gray-200)">
           <option${q.status==='Quoted'?' selected':''}>Quoted</option>
@@ -6582,7 +6583,7 @@ function buildLogRows(){
       <td style="padding:8px 6px;overflow:hidden"><div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px">${q.zip} · ${q.ld}</div><div style="font-size:10px;color:var(--gray-400);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${q.destination||''}</div></td>
       <td style="padding:8px 6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px">${q.carrier}</td>
       <td style="font-weight:600;color:var(--steel);padding:8px 6px;font-size:13px">${fmtD(q.customerRates?.total||0)}</td>
-      <td style="padding:8px 6px"><div style="color:${pc};font-weight:600;font-size:13px">${sp.isActual?'':'+'}${fmtD(sp.baseP)}</div><div style="font-size:10px;color:${pc}">${pct(sp.baseM)}</div></td>
+      <td style="padding:8px 6px"><div style="color:${pc};font-weight:600;font-size:13px">${sp.isActual?'':'+'}${fmtD(sp.baseP)}</div><div style="font-size:10px;color:${pc}">${pct(sp.baseM)} · ${profitLabel}</div></td>
       <td onclick="event.stopPropagation()" style="padding:8px 6px">${statusSel}</td>
     </tr>`;
 
@@ -8371,11 +8372,37 @@ function checkMargin(customerRate, carrierRate, quoteName){
 
 
 function baseSplit(q){
-  const cb=q.carrierRates?.base||0,cu=q.customerRates?.base||0;
-  const ctTot=q.carrierRates?.total||0,cuTot=q.customerRates?.total||0;
-  const baseP=cu-cb,baseM=cu>0?baseP/cu:0;
+  const cb=q.carrierRates?.base||0;
+  const cu=q.customerRates?.base||0;
+  const ctTot=q.carrierRates?.total||0;
+  const cuTot=q.customerRates?.total||0;
+
+  // If invoiced/paid — use actual invoice totals
+  const custInv=getInvoice(q.id);
+  const carrInv=getCarrierInvoice(q.id);
+  if(custInv?.grandTotal){
+    const revenue=custInv.grandTotal;
+    const cost=carrInv?.grandTotal||ctTot||0;
+    const baseP=revenue-cost;
+    const baseM=revenue>0?baseP/revenue:0;
+    return{baseP,baseM,accC:0,accCu:0,accP:0,isActual:true};
+  }
+
+  // If booked/active — only count guaranteed: base markup + 1 day chassis
+  if(['Booked','Delivered'].includes(q.status)){
+    const chassisDay=q.customerRates?.chassis||q.carrierRates?.chassis||40;
+    const guaranteedRev=(cu>0?cu:cuTot)+(chassisDay);
+    const guaranteedCost=(cb>0?cb:ctTot)+(chassisDay*0.85); // rough carrier chassis cost
+    const baseP=guaranteedRev-guaranteedCost;
+    const baseM=guaranteedRev>0?baseP/guaranteedRev:0;
+    return{baseP,baseM,accC:0,accCu:0,accP:0,isActual:false,isGuaranteed:true};
+  }
+
+  // Quoted — base markup only
+  const baseP=cu-cb;
+  const baseM=cu>0?baseP/cu:0;
   const accC=ctTot-cb,accCu=cuTot-cu,accP=accCu-accC;
-  return{baseP,baseM,accC,accCu,accP};
+  return{baseP,baseM,accC,accCu,accP,isActual:false,isGuaranteed:false};
 }
 // ═══════════════════════════════════════════════════════
 // REPORTS MODULE — 8 report types
