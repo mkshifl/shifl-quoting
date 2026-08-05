@@ -2873,7 +2873,7 @@ function renderFqLog(){
       <td onclick="event.stopPropagation()" style="white-space:nowrap">
         ${q.status==='Booked'?`<button class="btn sm ico-btn" onclick="downloadFqCarrierPDF(${i})" style="color:var(--green)">📋</button>`:''}
         ${q.status==='Delivered'?`<button class="btn sm ico-btn" onclick="fqSendInvoice(${i})" style="color:var(--amber)">🧾</button>`:''}
-        <button class="btn sm ico-btn" onclick="repeatFreightQuote(${i})" title="Repeat">🔁</button>
+        <button class="btn sm ico-btn" onclick="repeatFreightQuote('${q.id}')" title="Duplicate">🔁</button>
         <button class="btn sm ico-btn" onclick="deleteFqQuote(${i})">🗑️</button>
       </td>
     </tr>`).join('');
@@ -12160,8 +12160,10 @@ function confirmRepeatDrayage(originalId){
 }
 
 // Freight repeat
-function repeatFreightQuote(idx){
-  const q = (window._fqHistory||[])[idx];
+function repeatFreightQuote(idOrIdx){
+  const q = typeof idOrIdx==='string'
+    ? (window._fqHistory||[]).find(x=>x.id===idOrIdx)
+    : (window._fqHistory||[])[idOrIdx];
   if(!q){ alert('Quote not found.'); return; }
   const isLCL=q.fqMode==='LCL';
 
@@ -12217,13 +12219,13 @@ function repeatFreightQuote(idx){
 
     <div class="modal-foot">
       <button class="btn" onclick="closeModal()">Cancel</button>
-      <button class="btn blue" onclick="confirmRepeatFreight(${idx})">✅ Create duplicate</button>
+      <button class="btn blue" onclick="confirmRepeatFreight('${q.id}')">✅ Create duplicate</button>
     </div>
   </div></div>`;
 }
 
-function confirmRepeatFreight(origIdx){
-  const orig = (window._fqHistory||[])[origIdx];
+function confirmRepeatFreight(origId){
+  const orig = (window._fqHistory||[]).find(x=>x.id===origId);
   if(!orig) return;
   const customer=($('frpt-customer')||{}).value?.trim()||orig.customer;
   if(!customer){alert('Customer required.');return;}
