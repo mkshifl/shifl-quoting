@@ -927,7 +927,7 @@ if('caches' in window){
       </div>
 
     </nav>
-    <div class="sidebar-foot" style="padding:0"><div id="sb-user-block" onclick="toggleProfileMenu()" title="Profile & settings"><div id="sb-av-sm" style="width:26px;height:26px;border-radius:50%;background:linear-gradient(135deg,#2563eb,#60a5fa);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;color:#fff;flex-shrink:0">MK</div><div style="flex:1;min-width:0"><div id="sb-uname" style="font-size:11px;font-weight:600;color:rgba(255,255,255,.75);overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></div><div id="sb-urole" style="font-size:9px;color:rgba(255,255,255,.3)">Super Admin</div></div><div style="color:rgba(255,255,255,.22);font-size:12px">⚙</div></div>
+    <div class="sidebar-foot" style="padding:0"><div id="sb-user-block" onclick="toggleProfileMenu()" title="Profile & settings"><div id="sb-av-sm" style="width:26px;height:26px;border-radius:50%;background:linear-gradient(135deg,#2563eb,#60a5fa);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;color:#fff;flex-shrink:0"></div><div style="flex:1;min-width:0"><div id="sb-uname" style="font-size:11px;font-weight:600;color:rgba(255,255,255,.75);overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></div><div id="sb-urole" style="font-size:9px;color:rgba(255,255,255,.3)">Super Admin</div></div><div style="color:rgba(255,255,255,.22);font-size:12px">⚙</div></div>
       <button onclick="var p=document.getElementById('sf-panel'),i=document.getElementById('sf-icon'),o=p.style.display!=='none';p.style.display=o?'none':'flex';i.textContent=o?'&#9658;':'&#9660;';localStorage.setItem('sf_open',String(!o))" style="width:100%;background:rgba(255,255,255,.05);border:none;border-top:1px solid rgba(255,255,255,.07);color:rgba(255,255,255,.4);font-size:11px;font-weight:600;padding:9px 18px;cursor:pointer;font-family:inherit;text-align:left;display:flex;align-items:center;justify-content:space-between;text-transform:uppercase;letter-spacing:.06em"><span>&#9881; Settings</span><span id="sf-icon">&#9658;</span></button>
       <div id="sf-panel" style="display:none;flex-direction:column;gap:6px;padding:8px 12px 10px">
         <button id="dark-toggle" onclick="toggleDarkMode()" style="background:rgba(255,255,255,.07);border:none;border-radius:6px;color:rgba(255,255,255,.6);font-size:12px;font-weight:600;padding:7px 12px;cursor:pointer;font-family:inherit;text-align:left;width:100%">&#127769; Dark mode</button>
@@ -18004,16 +18004,16 @@ if(typeof _ppOrigInitApp==='function'&&!window._ppWired){
     if(typeof _origUPP === 'function') _origUPP.apply(this, arguments);
     try{
       var u = window._currentUser || {};
-      var name = u.name || u.email || localStorage.getItem('shifl_user') || '';
-      var role = u.role || localStorage.getItem('shifl_role') || '';
-      var parts = name.split(/\s+/);
+      var name = u.name || u.email || '';
+      var role = u.role || '';
+      var parts = name.trim().split(/\s+/);
       var initials = parts.length > 1 ? (parts[0][0] + parts[parts.length-1][0]).toUpperCase() : name.slice(0,2).toUpperCase();
       var roleLabel = role === 'super_admin' ? 'Super Admin' : role === 'admin' ? 'Admin' : role === 'team_member' ? 'Team Member' : role || '';
       var savedColor = localStorage.getItem('avatar_color');
       var sbAv = document.getElementById('sb-av-sm');
       var sbName = document.getElementById('sb-uname');
       var sbRole = document.getElementById('sb-urole');
-      if(sbAv){ sbAv.textContent = initials || 'MK'; if(savedColor) sbAv.style.background = savedColor; }
+      if(sbAv){ sbAv.textContent = initials || '?'; if(savedColor) sbAv.style.background = savedColor; }
       if(sbName) sbName.textContent = name || '—';
       if(sbRole) sbRole.textContent = roleLabel;
     }catch(e){}
