@@ -4712,7 +4712,7 @@ function calcTlTotals(tl){
       if(def.unit==='perPallet') qty=pCount;
       if(def.unit==='perPalletPerDay') qty=pCount*(parseInt(item.days)||0);
       tlCarrier+=(parseFloat(item.carrierCost)||0)*qty;
-      tlCustomer+=(parseFloat(item.customerPrice)||0)*qty;
+      tlCustomer+=(parseFloat(item.customerPrice)||0)*(isFloorLoaded&&isPerPal?1:qty);
     });
   }
   const ftlRate=window._fqRates?.find(r=>r.id===tl.selFtlId);
@@ -5017,9 +5017,9 @@ function buildTlStep2Preview(tl){
     Object.entries(tl.tlItems).forEach(([k,item])=>{
       if(!item.included) return;
       const def=TL_ITEMS_DEF[k];
-      let qty=def.unit==='perPallet'?pCount:def.unit==='perPalletPerDay'?pCount*(parseInt(item.days)||0):1;
+      const isFloorLoaded=tl?.cargoType==='floorLoaded'||q?.cargoType==='floorLoaded';const isPerPal=def.unit==='perPallet'||def.unit==='perPalletPerDay';let qty=isFloorLoaded&&isPerPal?1:def.unit==='perPallet'?pCount:def.unit==='perPalletPerDay'?pCount*(parseInt(item.days)||0):1;
       tlCarrier+=(parseFloat(item.carrierCost)||0)*qty;
-      tlCustomer+=(parseFloat(item.customerPrice)||0)*qty;
+      tlCustomer+=(parseFloat(item.customerPrice)||0)*(isFloorLoaded&&isPerPal?1:qty);
     });
   }
   const wh=tl.warehouseId?(window._tlWarehouses||[]).find(w=>w.id===tl.warehouseId):null;
@@ -5230,9 +5230,9 @@ function buildTlStep4(tl){
     Object.entries(tl.tlItems).forEach(([k,item])=>{
       if(!item.included) return;
       const def=TL_ITEMS_DEF[k];
-      let qty=def.unit==='perPallet'?pCount:def.unit==='perPalletPerDay'?pCount*(parseInt(item.days)||0):1;
-      tlRows+=row(`${def.icon} ${def.label}${qty>1?' × '+qty:''}`,
-        (parseFloat(item.carrierCost)||0)*qty,(parseFloat(item.customerPrice)||0)*qty);
+      const isFloorLoaded=tl?.cargoType==='floorLoaded'||q?.cargoType==='floorLoaded';const isPerPal=def.unit==='perPallet'||def.unit==='perPalletPerDay';let qty=isFloorLoaded&&isPerPal?1:def.unit==='perPallet'?pCount:def.unit==='perPalletPerDay'?pCount*(parseInt(item.days)||0):1;
+      tlRows+=row(`${def.icon} ${def.label}${isFloorLoaded&&isPerPal?' — per pallet':qty>1?' × '+qty:''}`,
+        (parseFloat(item.carrierCost)||0)*qty,(parseFloat(item.customerPrice)||0)*(isFloorLoaded&&isPerPal?1:qty));
     });
   }
 
@@ -5414,8 +5414,8 @@ function showTlQuoteModal(idx){
     const pCount=parseInt(q.palletCount)||1;
     Object.entries(q.tlItems).forEach(([k,item])=>{
       if(!item.included) return;const def=TL_ITEMS_DEF[k];if(!def) return;
-      let qty=def.unit==='perPallet'?pCount:def.unit==='perPalletPerDay'?pCount*(parseInt(item.days)||0):1;
-      tlRows+=secRow(def.label+(qty>1?' x '+qty:''),(parseFloat(item.carrierCost)||0)*qty,(parseFloat(item.customerPrice)||0)*qty);
+      const isFloorLoaded=tl?.cargoType==='floorLoaded'||q?.cargoType==='floorLoaded';const isPerPal=def.unit==='perPallet'||def.unit==='perPalletPerDay';let qty=isFloorLoaded&&isPerPal?1:def.unit==='perPallet'?pCount:def.unit==='perPalletPerDay'?pCount*(parseInt(item.days)||0):1;
+      tlRows+=secRow(def.label+(isFloorLoaded&&isPerPal?' — per pallet':qty>1?' x '+qty:''),(parseFloat(item.carrierCost)||0)*qty,(parseFloat(item.customerPrice)||0)*(isFloorLoaded&&isPerPal?1:qty));
     });
   } else {tlRows=secRow('Full transload service',parseFloat(q.tlFlatCarrier)||0,parseFloat(q.tlFlatCustomer)||0);}
   $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
@@ -5878,8 +5878,8 @@ async function downloadTlInternalPDF(idx){
   if(q.chargeMode==='byItem'&&q.tlItems){
     Object.entries(q.tlItems).forEach(([k,item])=>{
       if(!item.included) return;const def=TL_ITEMS_DEF[k];if(!def) return;
-      let qty=def.unit==='perPallet'?pCount:def.unit==='perPalletPerDay'?pCount*(parseInt(item.days)||0):1;
-      dataRow(def.label+(qty>1?' × '+qty:''),(parseFloat(item.carrierCost)||0)*qty,(parseFloat(item.customerPrice)||0)*qty);
+      const isFloorLoaded=tl?.cargoType==='floorLoaded'||q?.cargoType==='floorLoaded';const isPerPal=def.unit==='perPallet'||def.unit==='perPalletPerDay';let qty=isFloorLoaded&&isPerPal?1:def.unit==='perPallet'?pCount:def.unit==='perPalletPerDay'?pCount*(parseInt(item.days)||0):1;
+      dataRow(def.label+(isFloorLoaded&&isPerPal?' — per pallet':qty>1?' × '+qty:''),(parseFloat(item.carrierCost)||0)*qty,(parseFloat(item.customerPrice)||0)*(isFloorLoaded&&isPerPal?1:qty));
     });
   } else {dataRow('Full transload service',parseFloat(q.tlFlatCarrier)||0,parseFloat(q.tlFlatCustomer)||0);}
   secTotal(q.tlCarrierCost||0,q.tlCustomerPrice||0);
