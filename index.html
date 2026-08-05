@@ -961,10 +961,10 @@ if('caches' in window){
         <!-- Profile pill -->
         <div id="profile-pill-wrap" style="position:relative;margin-left:6px">
           <button id="profile-pill" onclick="toggleProfileMenu()" style="display:flex;align-items:center;gap:7px;padding:4px 10px 4px 4px;border-radius:99px;border:1px solid var(--gray-200);background:#fff;cursor:pointer;font-family:inherit;transition:all .15s" onmouseenter="this.style.borderColor='#2563eb';this.style.background='#eff6ff'" onmouseleave="this.style.borderColor='var(--gray-200)';this.style.background='#fff'">
-            <div id="topbar-avatar" style="width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,#1e3a5f,#2563eb);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;flex-shrink:0">MK</div>
+            <div id="topbar-avatar" style="width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,#1e3a5f,#2563eb);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;flex-shrink:0"></div>
             <div style="text-align:left">
-              <div id="topbar-uname" style="font-size:12px;font-weight:600;color:#1e3a5f;line-height:1.1">Mendy K.</div>
-              <div id="topbar-urole" style="font-size:10px;color:#9ca3af;line-height:1.1">Super Admin</div>
+              <div id="topbar-uname" style="font-size:12px;font-weight:600;color:#1e3a5f;line-height:1.1"></div>
+              <div id="topbar-urole" style="font-size:10px;color:#9ca3af;line-height:1.1"></div>
             </div>
             <span style="font-size:10px;color:#9ca3af;margin-left:2px">▾</span>
           </button>
@@ -17946,8 +17946,8 @@ function updateProfilePill(){
     var av=document.getElementById('topbar-avatar');
     var un=document.getElementById('topbar-uname');
     var ur=document.getElementById('topbar-urole');
-    if(av) av.textContent=initials||'MK';
-    if(un) un.textContent=shortName||'Mendy K.';
+    if(av) av.textContent=initials||'?';
+    if(un) un.textContent=shortName||'—';
     if(ur) ur.textContent=roleLabel;
     // Update menu
     var pn=document.getElementById('pm-name');
