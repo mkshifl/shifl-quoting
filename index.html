@@ -5300,8 +5300,11 @@ function buildTlStep4(tl){
 // Step navigation
 function tlNext(from){
   if(from===1){
-    if(!S.tl.drayPort){alert('Please enter the origin port.');return;}
-    if(!S.tl.drayZip){alert('Please enter the delivery zip code.');return;}
+    if(!S.tl._skipped) S.tl._skipped={};
+    // Only warn, don't block — user may be filling partially
+    if(!S.tl.drayPort&&!S.tl._skipped[1]){
+      if(!confirm('Origin port is empty. Continue anyway?')) return;
+    }
     S.tl.step=2;
   } else if(from===2){
     if(!S.tl.warehouseId&&!S.tl.useManual&&!window._tlWarehouses?.length){S.tl.useManual=true;}
