@@ -4067,7 +4067,8 @@ async function downloadPDF(){
   _generatePDF({quoteNum:'—',date:localDateStr(),customer:qi.customer,port:qi.port,zip:qi.zip,destination:sel.destination,ld:qi.ld,carrier:sel.carrier,status:'Quote',notes:qi.notes||'',carrierRates:{...CHARGES.reduce((o,c)=>{o[c]=sel[c]||0;return o;},{}),total:ct},customerRates:{...CHARGES.reduce((o,c)=>{o[c]=cuRate(Number(sel[c])||0,c);return o;},{}),total:cu},profit:cu-ct,profitPct:cu>0?(cu-ct)/cu:0,
     bobtailEnabled:qi.bobtailEnabled,bobtailCustomerRate:qi.bobtailCustomerRate,
     gensetEnabled:qi.gensetEnabled,gensetCustomerRate:qi.gensetCustomerRate,
-    triaxleEnabled:qi.triaxleEnabled,triaxleCustomerRate:qi.triaxleCustomerRate});
+    triaxleEnabled:qi.triaxleEnabled,triaxleCustomerRate:qi.triaxleCustomerRate,
+    customAcc:qi.customAcc||[]});
 }
 
 const CHARGE_DESC={
@@ -4169,15 +4170,18 @@ function _generatePDF(q, existingDoc){
   }
 
   // ── Custom accessorials (user-defined) ────────────────
-  const customAcc=(q.customAcc||S.qi?.customAcc||[]).filter(ca=>ca.label&&(ca.customer||0)>0);
+  const customAcc=(q.customAcc||[]).filter(ca=>ca.label&&(ca.customer||0)>0);
   if(customAcc.length>0){
-    if(!accessorials||!accessorials.length){
+    const stdAccCount=(isBoth
+      ? (CHARGES.filter(c=>c!=='base'&&(q.customerRates?.[c]||0)>0).length)
+      : (CHARGES.filter(c=>c!=='base'&&isApplicable(c,q.ld)&&(q.customerRates?.[c]||0)>0).length));
+    if(stdAccCount===0){
       doc.setDrawColor(200,215,235);doc.setLineWidth(.3);doc.line(12,y,W-12,y);y+=8;
       doc.setFont('helvetica','italic');doc.setFontSize(9);doc.setTextColor(100,110,125);
       doc.text('The following charges will apply when applicable:',12,y);y+=10;
     }
     customAcc.forEach((ca,i)=>{
-      if((i+(accessorials?.length||0))%2===0){doc.setFillColor(248,250,252);doc.rect(12,y-4,W-24,9,'F');}
+      if((i+stdAccCount)%2===0){doc.setFillColor(248,250,252);doc.rect(12,y-4,W-24,9,'F');}
       doc.setFont('helvetica','normal');doc.setFontSize(10);doc.setTextColor(55,65,81);
       doc.text(ca.label,16,y);
       doc.setFont('helvetica','bold');doc.setFontSize(10);doc.setTextColor(...navy);
