@@ -4895,7 +4895,9 @@ function buildTlStep2(tl){
 
   const itemRows=Object.entries(TL_ITEMS_DEF).map(([k,def])=>{
     const item=tl.tlItems[k];
-    const pricedQty=def.unit==='perPallet'?pCount:def.unit==='perPalletPerDay'?pCount*(parseInt(item.days)||0):1;
+    const isFloor=tl.cargoType==='floorLoaded';
+    const pricedQty=isFloor?(def.unit==='perPallet'||def.unit==='perPalletPerDay'?null:1):def.unit==='perPallet'?pCount:def.unit==='perPalletPerDay'?pCount*(parseInt(item.days)||0):1;
+    const qtyLabel=isFloor&&(def.unit==='perPallet'||def.unit==='perPalletPerDay')?'per pallet':def.unit!=='flat'&&pCount>0?'× '+pricedQty:'flat';
     return `<div style="padding:10px 0;border-bottom:1px solid var(--gray-100)">
       <label style="display:flex;align-items:center;gap:10px;cursor:pointer;margin-bottom:${item.included?'10':'0'}px">
         <input type="checkbox" ${item.included?'checked':''} onchange="S.tl.tlItems['${k}'].included=this.checked;renderTlBuilder()" style="width:auto">
@@ -4911,7 +4913,7 @@ function buildTlStep2(tl){
           <div style="display:flex;align-items:center;gap:4px">
             <span style="color:var(--gray-400);font-size:13px">$</span>
             <input type="number" value="${item.carrierCost}" min="0" oninput="S.tl.tlItems['${k}'].carrierCost=this.value" style="width:100px;padding:5px 8px;font-size:13px">
-            <span style="font-size:11px;color:var(--gray-400)">${def.unit!=='flat'&&pCount>0?'× '+pricedQty:'flat'}</span>
+            <span style="font-size:11px;color:var(--gray-400)">${qtyLabel}</span>
           </div>
         </div>
         <div>
@@ -4919,7 +4921,7 @@ function buildTlStep2(tl){
           <div style="display:flex;align-items:center;gap:4px">
             <span style="color:var(--gray-400);font-size:13px">$</span>
             <input type="number" value="${item.customerPrice}" min="0" oninput="S.tl.tlItems['${k}'].customerPrice=this.value" style="width:100px;padding:5px 8px;font-size:13px;border-color:var(--steel)">
-            <span style="font-size:11px;color:var(--gray-400)">${def.unit!=='flat'&&pCount>0?'× '+pricedQty:'flat'}</span>
+            <span style="font-size:11px;color:var(--gray-400)">${qtyLabel}</span>
           </div>
         </div>
       </div>`:''}
@@ -4963,8 +4965,8 @@ function buildTlStep2(tl){
             </div>
             ${tl.cargoType==='floorLoaded'?'<div style="font-size:11px;color:var(--amber,#d97706);margin-top:4px">⚠️ Palletizing auto-added for floor loaded cargo</div>':''}
           </div>
-          <div class="field"><label>Pallet count <span style="font-weight:400;color:var(--gray-400)">(for pricing)</span></label>
-            <input type="number" value="${tl.palletCount}" min="0" oninput="S.tl.palletCount=this.value" onblur="renderTlBuilder()" placeholder="e.g. 20"></div>
+          <div class="field"><label>${tl.cargoType==='floorLoaded'?'Carton count':'Pallet count'} <span style="font-weight:400;color:var(--gray-400)">(for pricing)</span></label>
+            <input type="number" value="${tl.palletCount}" min="0" oninput="S.tl.palletCount=this.value" onblur="renderTlBuilder()" placeholder="${tl.cargoType==='floorLoaded'?'e.g. 200 cartons':'e.g. 20'}"></div>
         </div>
       </div>
 
@@ -5651,11 +5653,14 @@ async function downloadTlCustomerPDF(idx, rawTl, existingDoc){
     y+=9;
     // Rows
     rows.forEach(([label,amount],ri)=>{
-      if(amount<=0) return;
+      if(amount!==null&&amount<=0) return;
       if(ri%2===0){doc.setFillColor(250,252,255);doc.rect(M,y,CW,10,'F');}
       doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(45,58,78);
       doc.text(doc.splitTextToSize(label,CW-55)[0],M+4,y+7);
-      doc.setFont('helvetica','bold');doc.setTextColor(...navy);
+      if(amount===null){
+        doc.setFont('helvetica','italic');doc.setFontSize(8);doc.setTextColor(120,140,160);
+        doc.text('Rate per pallet',M+CW-4,y+7,{align:'right'});
+      } else { doc.setFont('helvetica','bold');doc.setTextColor(...navy);
       doc.text(fmtD(amount),W-M-2,y+7,{align:'right'});
       doc.setDrawColor(230,234,242);doc.setLineWidth(0.2);doc.line(M,y+10,W-M,y+10);
       y+=10;
@@ -5697,9 +5702,12 @@ async function downloadTlCustomerPDF(idx, rawTl, existingDoc){
     const items=q?.tlItems||tl?.tlItems;
     if(items) Object.entries(items).forEach(([k,item])=>{
       if(!item.included) return;const def=TL_ITEMS_DEF[k];if(!def) return;
-      let qty=def.unit==='perPallet'?pCount:def.unit==='perPalletPerDay'?pCount*(parseInt(item.days)||0):1;
-      const cuv=(parseFloat(item.customerPrice)||0)*qty;
-      if(cuv>0){tlRows.push([def.label+(qty>1?' × '+qty:''),cuv]);tlTotal+=cuv;}
+      const isFloor=tl?.cargoType==='floorLoaded'||q?.cargoType==='floorLoaded';
+      const isPerPallet=def.unit==='perPallet'||def.unit==='perPalletPerDay';
+      let qty=isFloor&&isPerPallet?null:def.unit==='perPallet'?pCount:def.unit==='perPalletPerDay'?pCount*(parseInt(item.days)||0):1;
+      const cuv=(parseFloat(item.customerPrice)||0)*(qty||1);
+      const label=isFloor&&isPerPallet?def.label+' — $'+(parseFloat(item.customerPrice)||0).toFixed(2)+' per pallet':def.label+(qty&&qty>1?' × '+qty:'');
+      if(cuv>0||isFloor&&isPerPallet){tlRows.push([label,isFloor&&isPerPallet?null:cuv]);tlTotal+=cuv;}
     });
   }
   if(tlTotal>0){
