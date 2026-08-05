@@ -6888,7 +6888,7 @@ function renderLog(){
     <div style="position:relative;min-width:200px">
       <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:13px;pointer-events:none">🔍</span>
       <input type="text" id="log-search" placeholder="Customer, ref #, ZIP, carrier…" value="${S.logSearch||''}"
-        oninput="S.logSearch=this.value;const t=$('log-tbody');if(t) t.innerHTML=buildLogRows()"
+        oninput="S.logSearch=this.value;const t=$('log-tbody');if(t){const pos=this.selectionStart;t.innerHTML=buildLogRows();this.focus();this.setSelectionRange(pos,pos);}"
         style="padding:7px 12px 7px 32px;border-radius:99px;border:1.5px solid var(--gray-200);font-size:12px;width:100%;box-sizing:border-box">
     </div>
   </div>`;
@@ -9475,9 +9475,9 @@ const SUBLINK_VIEWS={
 
 function goTo(view,subtab){
   if(subtab){
-    if(view==='freight'){setView('freight');setFqTab(subtab);}
-    else if(view==='transload'){setView('transload');setTlTab(subtab);}
-    else if(view==='air'){setView('air');setAqTab(subtab);}
+    if(view==='freight'){S.fqTab=subtab;setView('freight');}
+    else if(view==='transload'){S.tlTab=subtab;setView('transload');}
+    else if(view==='air'){S.aqTab=subtab;setView('air');}
   } else {
     setView(view);
   }
