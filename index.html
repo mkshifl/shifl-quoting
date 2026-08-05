@@ -919,17 +919,10 @@ if('caches' in window){
         <div class="acc-sub" id="acc-sub-admin">
           <button class="sub-link" id="nav-admin" onclick="goTo('admin')">⚙️ Admin panel</button>
           <button class="sub-link" id="nav-profit-monitor" onclick="renderProfitMonitor()" style="${_currentUser?.role==='super_admin'?'':'display:none'}">💰 Profit monitor</button>
-          <button class="sub-link" id="nav-achievements" onclick="renderAchievementsPage()">🏆 Achievements</button>
-          <button class="sub-link" id="nav-leaderboard" onclick="renderLeaderboard()">🥇 Leaderboard</button>
-          <button class="sub-link" onclick="generateWeeklyReport()">📊 Weekly report</button>
-          <button class="sub-link" onclick="openDailyDispatchReport()">📋 Daily dispatch</button>
-          <button class="sub-link" onclick="S.view='exec-dash';render()">📈 Exec dashboard</button>
-          <button class="sub-link" id="nav-us-map" onclick="renderShiflAchievements()">🗺️ Load map</button>
           <button class="sub-link" id="nav-reports" onclick="goTo('reports')">📈 Reports</button>
           <button class="nav-btn sub-link" data-view="templates" onclick="goTo('templates')">🔁 Templates</button>
           <button class="sub-link" id="nav-activity" onclick="goTo('activity')">📊 Activity log</button>
           <button class="sub-link" id="nav-auditlog" onclick="goTo('auditlog')">📋 Audit log</button>
-          <button class="sub-link" id="nav-full-log" onclick="renderFullQuoteLog()" style="color:#60a5fa;font-weight:700">🗂 Full quote log</button>
         </div>
       </div>
 
