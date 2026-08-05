@@ -2784,7 +2784,7 @@ function renderFqLog(){
   updateFqInvBadge();
   const history=window._fqHistory||[];
   if(!history.length){
-    $('page').innerHTML=`<div class="empty"><div class="empty-ico">📁</div><p>No freight quotes saved yet</p><small>Build a quote on the Quote builder tab and save it</small></div>`;
+    $('page').innerHTML=`<div class="empty"><div class="empty-ico">📁</div><p>No freight quotes saved yet</p><small>Build a quote on the Quote builder tab and save it</small><div style="margin-top:12px;font-size:11px;color:var(--gray-400)">Debug: _fqHistory=${JSON.stringify(window._fqHistory?.length??'undefined')} · user=${window._currentUser?.email||'none'}</div></div>`;
     return;
   }
   if(!window._fqSelected) window._fqSelected=new Set();
