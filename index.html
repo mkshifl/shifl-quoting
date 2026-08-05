@@ -1275,7 +1275,7 @@ async function dbUpdateQuoteStatus(id,status){
   const {error}=await db.from('quotes').update({status}).eq('id',id);
   if(error) throw error;
 }
-async async function dbDeleteQuote(id){
+async function dbDeleteQuote(id){
   const {error}=await db.from('quotes').delete().eq('id',id);
   if(error) throw error;
 }
