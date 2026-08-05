@@ -6214,9 +6214,12 @@ function addCustomAcc(){
 function collectCustomAcc(){
   const rows=document.getElementById('custom-acc-rows');
   if(!rows) return [];
-  return [...rows.querySelectorAll('.g2')].map(row=>{
+  return [...rows.querySelectorAll('div[style*="grid"]')].map(row=>{
     const inputs=row.querySelectorAll('input');
-    return {label:inputs[0]?.value?.trim()||'',carrier:parseFloat(inputs[1]?.value)||0,customer:parseFloat(inputs[2]?.value)||0};
+    const label=(inputs[0]?.value||'').trim();
+    const carrier=parseFloat(inputs[1]?.value)||0;
+    const customer=parseFloat(inputs[2]?.value)||0;
+    return {label,carrier,customer};
   }).filter(a=>a.label);
 }
 
@@ -6572,6 +6575,9 @@ function rateFields(r){
   <div class="g2">${fld('toll','Toll',null,'leave $0 if no toll on this lane')}${fld('genset','Genset',null,'reefer/temp-controlled only')}</div>
   <div class="field" style="margin-top:8px"><label>Notes (optional)</label><input type="text" id="f-notes" value="${r?r.notes:''}" placeholder="e.g. customer name"></div>
   <div class="field" style="margin-top:8px">
+    <div style="font-size:11px;font-weight:700;color:var(--gray-500);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Custom accessorials <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--gray-400)">— add any not listed above</span></div>
+    <div id="custom-acc-rows">${(r&&r.customAcc||[]).map((ca,ci)=>`<div style="display:grid;grid-template-columns:1fr 80px 80px 24px;gap:6px;margin-bottom:6px;align-items:end"><input type="text" value="${ca.label||''}" placeholder="Name e.g. Scale ticket" id="cust-acc-lbl-${ci}" style="padding:6px 8px;border:1px solid var(--gray-200);border-radius:6px;font-size:12px;font-family:inherit"><input type="number" value="${ca.carrier||''}" placeholder="Carrier" id="cust-acc-car-${ci}" style="padding:6px 8px;border:1px solid var(--gray-200);border-radius:6px;font-size:12px;font-family:inherit"><input type="number" value="${ca.customer||''}" placeholder="Customer" id="cust-acc-cus-${ci}" style="padding:6px 8px;border:1px solid var(--gray-200);border-radius:6px;font-size:12px;font-family:inherit"><button type="button" onclick="this.closest('div').remove()" style="padding:0;border:none;background:none;cursor:pointer;color:var(--gray-400);font-size:16px">×</button></div>`).join('')}</div>
+    <button type="button" onclick="addCustomAcc()" style="padding:5px 12px;border:1.5px dashed var(--gray-300);border-radius:7px;background:none;font-size:12px;color:var(--gray-500);cursor:pointer;font-family:inherit;margin-bottom:10px">+ Add accessorial</button>
     <label>BCO / Special customer tags <span class="cond-note">Select all that apply</span></label>
     <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px" id="bco-tags-wrap">
       ${['Menards','Amazon','Walmart','Target','Home Depot','Costco','IKEA','Dollar General','Wayfair','Other BCO'].map(tag=>{
@@ -6581,18 +6587,6 @@ function rateFields(r){
       }).join('')}
     </div>
   </div>
-  <div class="charge-group-label">Custom accessorials <span class="cond-note">Add any charges not listed above</span></div>
-  <div id="custom-acc-rows">
-    ${(r&&r.customAcc||[]).map((ca,ci)=>`
-    <div class="g2" style="margin-bottom:6px">
-      <div class="field"><input type="text" value="${ca.label||''}" placeholder="Accessorial name" oninput="if(!window._pendingCustomAcc)window._pendingCustomAcc=[];window._pendingCustomAcc[${ci}]={...window._pendingCustomAcc[${ci}],label:this.value}"></div>
-      <div class="g2">
-        <div class="field"><input type="number" value="${ca.carrier||''}" placeholder="Carrier $" oninput="if(!window._pendingCustomAcc)window._pendingCustomAcc=[];window._pendingCustomAcc[${ci}]={...window._pendingCustomAcc[${ci}],carrier:this.value}"></div>
-        <div class="field"><input type="number" value="${ca.customer||''}" placeholder="Customer $" oninput="if(!window._pendingCustomAcc)window._pendingCustomAcc=[];window._pendingCustomAcc[${ci}]={...window._pendingCustomAcc[${ci}],customer:this.value}"></div>
-      </div>
-    </div>`).join('')}
-  </div>
-  <button type="button" onclick="addCustomAcc()" style="margin-top:4px;padding:6px 14px;border:1.5px dashed var(--gray-300);border-radius:8px;background:none;font-size:12px;color:var(--gray-500);cursor:pointer;font-family:inherit">+ Add accessorial</button>
 `;
 }
 const _modalXBtn='<button onclick="closeRateModal()" style="position:absolute;top:12px;right:14px;background:none;border:none;font-size:22px;cursor:pointer;color:var(--gray-400);line-height:1" title="Close">×</button>';
