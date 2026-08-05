@@ -1888,6 +1888,29 @@ function buildPricingSection(){
       </div>
     </div>
 
+    <!-- Custom accessorials -->
+    <div style="margin-top:10px;border-top:1px solid var(--gray-100);padding-top:10px">
+      <div style="font-size:11px;font-weight:700;color:var(--gray-500);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Additional charges</div>
+      <div id="quote-custom-acc">
+        ${(S.qi.customAcc||[]).map((ca,ci)=>`
+        <div style="display:grid;grid-template-columns:1fr 75px 75px 24px;gap:5px;margin-bottom:5px;align-items:center">
+          <input type="text" value="${ca.label||''}" placeholder="e.g. Scale ticket"
+            oninput="if(!S.qi.customAcc)S.qi.customAcc=[];S.qi.customAcc[${ci}]={...S.qi.customAcc[${ci}],label:this.value};refreshPreviewOnly()"
+            style="padding:5px 8px;border:1px solid var(--gray-200);border-radius:6px;font-size:12px;font-family:inherit">
+          <input type="number" value="${ca.customer||''}" placeholder="Cust $"
+            oninput="if(!S.qi.customAcc)S.qi.customAcc=[];S.qi.customAcc[${ci}]={...S.qi.customAcc[${ci}],customer:+this.value};refreshPreviewOnly()"
+            style="padding:5px 8px;border:1px solid var(--gray-200);border-radius:6px;font-size:12px;font-family:inherit">
+          <input type="number" value="${ca.carrier||''}" placeholder="Carr $"
+            oninput="if(!S.qi.customAcc)S.qi.customAcc=[];S.qi.customAcc[${ci}]={...S.qi.customAcc[${ci}],carrier:+this.value};refreshPreviewOnly()"
+            style="padding:5px 8px;border:1px solid var(--gray-200);border-radius:6px;font-size:12px;font-family:inherit">
+          <button onclick="S.qi.customAcc.splice(${ci},1);document.getElementById('pricing-section').innerHTML=buildPricingSection()"
+            style="background:none;border:none;cursor:pointer;color:var(--gray-400);font-size:18px;line-height:1;padding:0">×</button>
+        </div>`).join('')}
+      </div>
+      <button onclick="if(!S.qi.customAcc)S.qi.customAcc=[];S.qi.customAcc.push({label:'',customer:0,carrier:0});document.getElementById('pricing-section').innerHTML=buildPricingSection()"
+        style="padding:5px 14px;border:1.5px dashed var(--gray-300);border-radius:7px;background:none;font-size:12px;color:var(--gray-500);cursor:pointer;font-family:inherit">+ Add charge</button>
+    </div>
+
   </div>`;
 }
 
