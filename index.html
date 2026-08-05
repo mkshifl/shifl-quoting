@@ -4649,12 +4649,15 @@ function calcTlTotals(tl){
 // ── Step stepper UI ───────────────────────────────────────────────────────
 function buildTlStepper(step){
   const steps=[{n:1,label:'Inbound\nDrayage'},{n:2,label:'Transload\nServices'},{n:3,label:'Outbound\nFTL'},{n:4,label:'Review\n& Save'}];
+  const skipped=S.tl._skipped||{};
   return `<div class="tl-stepper">${steps.map((s,i)=>{
-    const cls=step>s.n?'done':step===s.n?'active':'';
-    const clickable=step>s.n?`onclick="S.tl.step=${s.n};renderTlBuilder()"`:'' ;
-    return `<div class="tl-step ${cls}" ${clickable}>
+    const isDone=step>s.n&&!skipped[s.n];
+    const isSkipped=skipped[s.n];
+    const cls=isDone?'done':isSkipped?'skipped':step===s.n?'active':'';
+    const clickable=`onclick="S.tl.step=${s.n};renderTlBuilder()"`;
+    return `<div class="tl-step ${cls}" ${clickable} style="cursor:pointer">
       ${i<steps.length-1?'<div class="tl-step-line"></div>':''}
-      <div class="tl-step-num">${step>s.n?'✓':s.n}</div>
+      <div class="tl-step-num">${isDone?'✓':isSkipped?'—':s.n}</div>
       <div class="tl-step-label">${s.label.replace('\n','<br>')}</div>
     </div>`;
   }).join('')}</div>`;
@@ -4738,7 +4741,8 @@ function buildTlStep1(tl){
     </div>
   </div>
   <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:16px">
-    <button class="btn blue" onclick="tlNext(1)" ${!tl.drayPort?'disabled':''}>Next: Transload Services →</button>
+    <button class="btn" onclick="if(!S.tl._skipped)S.tl._skipped={};S.tl._skipped[1]=true;S.tl.step=2;renderTlBuilder()" style="color:var(--gray-500)">Skip inbound dray</button>
+    <button class="btn blue" onclick="tlNext(1)">Next: Transload Services →</button>
   </div>`;
 }
 function refreshTlStep1(){
@@ -4905,7 +4909,10 @@ function buildTlStep2(tl){
   </div>
   <div style="display:flex;justify-content:space-between;margin-top:16px">
     <button class="btn" onclick="S.tl.step=1;renderTlBuilder()">← Back</button>
-    <button class="btn blue" onclick="tlNext(2)">Next: Outbound FTL →</button>
+    <div style="display:flex;gap:8px">
+      <button class="btn" onclick="if(!S.tl._skipped)S.tl._skipped={};S.tl._skipped[2]=true;S.tl.step=3;renderTlBuilder()" style="color:var(--gray-500)">Skip transload services</button>
+      <button class="btn blue" onclick="tlNext(2)">Next: Outbound FTL →</button>
+    </div>
   </div>`;
 }
 function buildTlStep2Preview(tl){
@@ -5057,7 +5064,10 @@ function buildTlStep3(tl){
   </div>
   <div style="display:flex;justify-content:space-between;margin-top:16px">
     <button class="btn" onclick="S.tl.step=2;renderTlBuilder()">← Back</button>
-    <button class="btn blue" onclick="tlNext(3)">Next: Review & Save →</button>
+    <div style="display:flex;gap:8px">
+      <button class="btn" onclick="if(!S.tl._skipped)S.tl._skipped={};S.tl._skipped[3]=true;S.tl.step=4;renderTlBuilder()" style="color:var(--gray-500)">Skip outbound FTL</button>
+      <button class="btn blue" onclick="tlNext(3)">Next: Review & Save →</button>
+    </div>
   </div>`;
 }
 function buildTlStep3Preview(tl){
@@ -5455,8 +5465,8 @@ function renderTlDashboard(){
 
 async function saveTlQuote(){
   const tl=S.tl;const t=calcTlTotals(tl);
-  if(!tl.drayPort){alert('Please complete Step 1 first.');return;}
-  if(t.totalCustomer===0){alert('Please enter carrier rates in all sections.');return;}
+  // Step validation removed — each step is optional
+  if(t.totalCustomer===0&&t.totalCost===0){alert('Please enter at least one rate.');return;}
   const wh=tl.warehouseId?(window._tlWarehouses||[]).find(w=>w.id===tl.warehouseId):null;
   const selDray=S.rates.find(r=>r.id===tl.selDrayId);
   const selFtl=window._fqRates?.find(r=>r.id===tl.selFtlId);
@@ -6184,6 +6194,46 @@ function applyPastQuoteRates(pastId){
   renderQuote();
 }
 
+// Add custom accessorial row to carrier rate form
+function addCustomAcc(){
+  const rows=document.getElementById('custom-acc-rows');
+  if(!rows) return;
+  const ci=(rows.querySelectorAll('.g2').length);
+  const div=document.createElement('div');
+  div.className='g2';
+  div.style.marginBottom='6px';
+  div.innerHTML=`<div class="field"><input type="text" placeholder="Accessorial name e.g. Scale ticket" style="width:100%"></div>
+    <div class="g2">
+      <div class="field"><input type="number" placeholder="Carrier $" style="width:100%"></div>
+      <div class="field"><input type="number" placeholder="Customer $" style="width:100%"></div>
+    </div>`;
+  rows.appendChild(div);
+}
+
+// Collect custom accessorials from rate form
+function collectCustomAcc(){
+  const rows=document.getElementById('custom-acc-rows');
+  if(!rows) return [];
+  return [...rows.querySelectorAll('.g2')].map(row=>{
+    const inputs=row.querySelectorAll('input');
+    return {label:inputs[0]?.value?.trim()||'',carrier:parseFloat(inputs[1]?.value)||0,customer:parseFloat(inputs[2]?.value)||0};
+  }).filter(a=>a.label);
+}
+
+// Edit customer name on a drayage quote
+async function editQuoteCustomer(id){
+  const q=S.quotes.find(x=>x.id===id);
+  if(!q){showToast('Quote not found','warn');return;}
+  const newName=prompt('Edit customer name:',q.customer||'');
+  if(newName===null) return;
+  q.customer=newName.trim();
+  try{await dbSaveQuote(q);}catch(e){}
+  try{localStorage.setItem('shifl_quotes_cache',JSON.stringify(S.quotes));}catch(e){}
+  const tbody=document.getElementById('log-tbody');
+  if(tbody) tbody.innerHTML=buildLogRows();
+  showToast('✅ Customer name updated','success',2000);
+}
+
 // Set container ETA from active card
 function setContainerETA(id){
   const meta=getMeta(id);
@@ -6530,7 +6580,20 @@ function rateFields(r){
           style="padding:4px 12px;border-radius:99px;border:1.5px solid ${sel?'#1a2e4a':'var(--gray-300)'};background:${sel?'#1a2e4a':'#fff'};color:${sel?'#fff':'var(--gray-500)'};font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .12s">${tag}</button>`;
       }).join('')}
     </div>
-  </div>`;
+  </div>
+  <div class="charge-group-label">Custom accessorials <span class="cond-note">Add any charges not listed above</span></div>
+  <div id="custom-acc-rows">
+    ${(r&&r.customAcc||[]).map((ca,ci)=>`
+    <div class="g2" style="margin-bottom:6px">
+      <div class="field"><input type="text" value="${ca.label||''}" placeholder="Accessorial name" oninput="if(!window._pendingCustomAcc)window._pendingCustomAcc=[];window._pendingCustomAcc[${ci}]={...window._pendingCustomAcc[${ci}],label:this.value}"></div>
+      <div class="g2">
+        <div class="field"><input type="number" value="${ca.carrier||''}" placeholder="Carrier $" oninput="if(!window._pendingCustomAcc)window._pendingCustomAcc=[];window._pendingCustomAcc[${ci}]={...window._pendingCustomAcc[${ci}],carrier:this.value}"></div>
+        <div class="field"><input type="number" value="${ca.customer||''}" placeholder="Customer $" oninput="if(!window._pendingCustomAcc)window._pendingCustomAcc=[];window._pendingCustomAcc[${ci}]={...window._pendingCustomAcc[${ci}],customer:this.value}"></div>
+      </div>
+    </div>`).join('')}
+  </div>
+  <button type="button" onclick="addCustomAcc()" style="margin-top:4px;padding:6px 14px;border:1.5px dashed var(--gray-300);border-radius:8px;background:none;font-size:12px;color:var(--gray-500);cursor:pointer;font-family:inherit">+ Add accessorial</button>
+`;
 }
 const _modalXBtn='<button onclick="closeRateModal()" style="position:absolute;top:12px;right:14px;background:none;border:none;font-size:22px;cursor:pointer;color:var(--gray-400);line-height:1" title="Close">×</button>';
 function showAddRate(){
@@ -6541,7 +6604,7 @@ async function submitAdd(){
   const carrier=$v('carrier');if(!carrier){alert('Carrier name required.');return;}
   const _rt=($('rf-rate-type')||{}).value||'import';
   const _bcoTagsAdd=[...document.querySelectorAll('#bco-tags-wrap button[data-tag]')].filter(b=>b.style.background.includes('1a2e4a')||b.style.background==='#1a2e4a').map(b=>b.dataset.tag);
-  const nr={id:uid(),region:$v('region'),carrier,port:$v('port'),destination:$v('destination'),zip:$v('zip'),ld:$v('ld'),active:true,notes:$v('notes'),bcoTags:_bcoTagsAdd,base:_rt==='export'?0:parseFloat($v('base'))||0,exportBase:_rt==='import'?0:parseFloat($v('exportBase'))||0};
+  const nr={id:uid(),region:$v('region'),carrier,port:$v('port'),destination:$v('destination'),zip:$v('zip'),ld:$v('ld'),active:true,notes:$v('notes'),bcoTags:_bcoTagsAdd,base:_rt==='export'?0:parseFloat($v('base'))||0,exportBase:_rt==='import'?0:parseFloat($v('exportBase'))||0,customAcc:collectCustomAcc()};
   CHARGES.filter(c=>c!=='base').forEach(c=>{nr[c]=parseFloat($v(c))||0;});
   setSaving(true);try{await dbSaveRate(nr);S.rates.push(nr);logAction('rate_added',`${nr.carrier||'—'} | ${nr.port||'—'} → ${nr.zip||'—'}`,'rate',nr.id);closeModal();renderRates();}catch(e){alert('Error: '+e.message);}finally{setSaving(false);}
 }
@@ -6554,7 +6617,7 @@ async function submitEdit(id){
   const r=S.rates.find(r=>r.id===id);if(!r) return;const carrier=$v('carrier');if(!carrier){alert('Carrier name required.');return;}
   const _bcoTags=[...document.querySelectorAll('#bco-tags-wrap button[data-tag]')].filter(b=>b.style.background.includes('1a2e4a')||b.style.background==='#1a2e4a').map(b=>b.dataset.tag);
   const _rtE=($('rf-rate-type')||{}).value||'import';
-  Object.assign(r,{region:$v('region'),carrier,port:$v('port'),destination:$v('destination'),zip:$v('zip'),ld:$v('ld'),notes:$v('notes'),bcoTags:_bcoTags||[],base:_rtE==='export'?0:parseFloat($v('base'))||0,exportBase:_rtE==='import'?0:parseFloat($v('exportBase'))||0});
+  Object.assign(r,{region:$v('region'),carrier,port:$v('port'),destination:$v('destination'),zip:$v('zip'),ld:$v('ld'),notes:$v('notes'),bcoTags:_bcoTags||[],customAcc:collectCustomAcc(),base:_rtE==='export'?0:parseFloat($v('base'))||0,exportBase:_rtE==='import'?0:parseFloat($v('exportBase'))||0});
   CHARGES.filter(c=>c!=='base').forEach(c=>{r[c]=parseFloat($v(c))||0;});
   setSaving(true);try{await dbSaveRate(r);logAction('rate_edited',`${r.carrier||'—'} | ${r.port||'—'} → ${r.zip||'—'}`,'rate',r.id);closeModal();renderRates();}catch(e){alert('Error: '+e.message);}finally{setSaving(false);}
 }
@@ -6636,7 +6699,7 @@ function buildLogRows(){
           style="border:none;background:${q.shiflRef?'var(--blue-bg)':'transparent'};color:${q.shiflRef?'var(--steel)':'var(--gray-300)'};font-weight:${q.shiflRef?'600':'400'};font-size:11px;padding:2px 4px;border-radius:4px;width:100%;cursor:text;outline:none"
           onfocus="this.style.background='var(--blue-bg)';this.style.border='1px solid var(--steel)'" onblur="this.style.border='none';this.style.background=this.value?'var(--blue-bg)':'transparent'">
       </td>
-      <td style="font-weight:600;padding:8px 8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${q.customer}</td>
+      <td style="font-weight:600;padding:8px 8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${q.customer||'<span style="color:var(--gray-400);font-style:italic">Add name</span>'} <button onclick="event.stopPropagation();editQuoteCustomer('${q.id}')" title="Edit customer name" style="background:none;border:none;cursor:pointer;font-size:11px;color:var(--gray-400);padding:0 2px" onmouseover="this.style.color='var(--steel)'" onmouseout="this.style.color='var(--gray-400)'">✏️</button></td>
       <td style="padding:8px 6px;overflow:hidden"><div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px">${q.zip} · ${q.ld}</div><div style="font-size:10px;color:var(--gray-400);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${q.destination||''}</div></td>
       <td style="padding:8px 6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px">${q.carrier}</td>
       <td style="font-weight:600;color:var(--steel);padding:8px 6px;font-size:13px">${fmtD(q.customerRates?.total||0)}</td>
@@ -11157,7 +11220,16 @@ function renderCustomerInvoiceTab(all,pending,invoiced,paid,subTab){
 
   if(subTab==='pending'){
     if(!pending.length){$('page').innerHTML=kpis+tabBar+`<div class="empty"><div class="empty-ico">✅</div><p>No loads pending invoice</p></div>`;return;}
-    body=`<div class="tbl-wrap"><style>
+    const pendSearch=(S.invSearch||'').toLowerCase();
+    const pendFiltered=pendSearch?pending.filter(q=>(q.customer||'').toLowerCase().includes(pendSearch)||(q.carrier||'').toLowerCase().includes(pendSearch)||(q.shiflRef||'').toLowerCase().includes(pendSearch)||(q.detail||'').toLowerCase().includes(pendSearch)):pending;
+    body=`<div style="margin-bottom:12px;position:relative">
+      <input type="text" placeholder="Search customer, carrier, ref #..." value="${S.invSearch||''}"
+        oninput="S.invSearch=this.value;renderFullInvoicing()"
+        style="width:100%;padding:8px 12px 8px 36px;border:0.5px solid var(--gray-200);border-radius:8px;font-size:13px;font-family:inherit;outline:none"
+        onfocus="this.style.borderColor='var(--steel)'" onblur="this.style.borderColor='var(--gray-200)'">
+      <span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--gray-400);font-size:14px">🔍</span>
+    </div>
+    <div class="tbl-wrap"><style>
       .inv-row{display:grid;grid-template-columns:1.6fr 1.2fr 1.3fr 0.7fr 0.8fr 0.7fr 120px;align-items:center;padding:10px 14px;border-bottom:0.5px solid var(--gray-50);min-width:0}
       .inv-row>*{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
       .inv-row:hover{background:#fafbfc}
@@ -11171,7 +11243,7 @@ function renderCustomerInvoiceTab(all,pending,invoiced,paid,subTab){
       <span>Customer</span><span>Carrier · Phone</span><span>Lane</span>
       <span>Ref #</span><span>Amount</span><span>Delivered</span><span></span>
     </div>
-    ${pending.map(q=>{
+    ${pendFiltered.map(q=>{
       const days=daysPending(q);
       const phone=carrierPhone(q.carrier);
       const isHot=days>=2;
