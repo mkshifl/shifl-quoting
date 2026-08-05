@@ -3910,6 +3910,7 @@ async function saveQuote(){
     const qn=await dbGetNextQuoteNum();
     const q={id:uid(),quoteNum:qn,date:localDateStr(),
       customer:qi.customer||'—',port:qi.port,zip:qi.zip,ld:qi.ld,carrier:sel.carrier,destination:sel.destination,
+      customAcc:qi.customAcc||[],
       carrierRates:{...CHARGES.reduce((o,c)=>{o[c]=sel[c]||0;return o;},{}),genset:qi.gensetEnabled&&qi.gensetScope!=='customer_only'?(Number(qi.gensetCarrierRate)||0):0,bobtail:qi.bobtailEnabled&&qi.bobtailScope!=='customer_only'?(Number(qi.bobtailCarrierRate)||0):0,triaxle:qi.triaxleEnabled&&qi.triaxleScope!=='customer_only'?(Number(qi.triaxleCarrierRate)||0):0,total:ct},
       customerRates:{...cuRates,total:cu},baseMarkup:{...qi.baseMarkup},flatRates:{...qi.flatRates},
       profit,profitPct:cu>0?profit/cu:0,status:'Quoted',notes:qi.notes||'',shiflRef:qi.shiflRef||'',
@@ -4165,6 +4166,25 @@ function _generatePDF(q, existingDoc){
       doc.text('The following charges will apply when applicable:',12,y);y+=10;
       drawChargeRows(accessorials);
     }
+  }
+
+  // ── Custom accessorials (user-defined) ────────────────
+  const customAcc=(q.customAcc||S.qi?.customAcc||[]).filter(ca=>ca.label&&(ca.customer||0)>0);
+  if(customAcc.length>0){
+    if(!accessorials||!accessorials.length){
+      doc.setDrawColor(200,215,235);doc.setLineWidth(.3);doc.line(12,y,W-12,y);y+=8;
+      doc.setFont('helvetica','italic');doc.setFontSize(9);doc.setTextColor(100,110,125);
+      doc.text('The following charges will apply when applicable:',12,y);y+=10;
+    }
+    customAcc.forEach((ca,i)=>{
+      if((i+(accessorials?.length||0))%2===0){doc.setFillColor(248,250,252);doc.rect(12,y-4,W-24,9,'F');}
+      doc.setFont('helvetica','normal');doc.setFontSize(10);doc.setTextColor(55,65,81);
+      doc.text(ca.label,16,y);
+      doc.setFont('helvetica','bold');doc.setFontSize(10);doc.setTextColor(...navy);
+      doc.text(fmtD(ca.customer||0),140,y,{align:'right'});
+      doc.setDrawColor(235,238,242);doc.setLineWidth(.2);doc.line(12,y+5,W-12,y+5);
+      y+=9;
+    });
   }
 
   // ── Customer notes ────────────────────────────────────
