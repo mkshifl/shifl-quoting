@@ -3621,6 +3621,13 @@ function buildCustomerRows(){
       <div style="flex:1;min-width:0">
         <div style="font-size:13px;font-weight:700;color:#1e3a5f;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${c.company||'—'}</div>
         <div style="font-size:11px;color:#6b7280;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${c.name||''}${c.email?' · '+c.email:''}</div>
+        ${(c.customerType||c.laneType)?`<div style="display:flex;gap:4px;margin-top:4px;flex-wrap:wrap">
+          ${c.customerType==='new'?'<span style="background:#f0fdf4;color:#16a34a;font-size:10px;font-weight:600;padding:1px 7px;border-radius:99px">🟢 New</span>':''}
+          ${c.customerType==='shifl'?'<span style="background:#eff6ff;color:#2563eb;font-size:10px;font-weight:600;padding:1px 7px;border-radius:99px">⭐ Shifl</span>':''}
+          ${c.laneType==='onetime'?'<span style="background:#f9fafb;color:#6b7280;font-size:10px;font-weight:600;padding:1px 7px;border-radius:99px">📦 One time</span>':''}
+          ${c.laneType==='volume'?'<span style="background:#fdf4ff;color:#9333ea;font-size:10px;font-weight:600;padding:1px 7px;border-radius:99px">📊 Volume</span>':''}
+          ${c.laneType==='recurring'?'<span style="background:#fffbeb;color:#d97706;font-size:10px;font-weight:600;padding:1px 7px;border-radius:99px">🔁 Recurring</span>':''}
+        </div>`:''}
       </div>
       ${ytdRev>0?`<div style="text-align:right;flex-shrink:0"><div style="font-size:13px;font-weight:700;color:#2563eb">${fmtD(ytdRev)}</div><div style="font-size:9px;color:#9ca3af">YTD revenue</div></div>`:''}
       <div onclick="event.stopPropagation()" style="display:flex;gap:4px;flex-shrink:0">
@@ -3656,6 +3663,23 @@ function customerFields(c){
       <div class="field"><label>Email address</label><input type="text" id="f-cemail" value="${c?c.email:''}" placeholder="john@acme.com"></div>
       <div class="field"><label>Phone</label><input type="text" id="f-cphone" value="${c?c.phone:''}" placeholder="+1 (555) 000-0000"></div>
     </div>
+    <div class="g2">
+      <div class="field"><label>Customer type</label>
+        <select id="f-ctype" style="width:100%;padding:7px 10px;border:1px solid var(--gray-200);border-radius:var(--radius);font-size:13px;font-family:inherit">
+          <option value="" ${!c?.customerType?'selected':''}>— Select type —</option>
+          <option value="new" ${c?.customerType==='new'?'selected':''}>🟢 New customer</option>
+          <option value="shifl" ${c?.customerType==='shifl'?'selected':''}>⭐ Shifl customer</option>
+        </select>
+      </div>
+      <div class="field"><label>Lane type</label>
+        <select id="f-clane" style="width:100%;padding:7px 10px;border:1px solid var(--gray-200);border-radius:var(--radius);font-size:13px;font-family:inherit">
+          <option value="" ${!c?.laneType?'selected':''}>— Select lane —</option>
+          <option value="onetime" ${c?.laneType==='onetime'?'selected':''}>📦 One time request</option>
+          <option value="volume" ${c?.laneType==='volume'?'selected':''}>📊 Volume request</option>
+          <option value="recurring" ${c?.laneType==='recurring'?'selected':''}>🔁 Recurring lane</option>
+        </select>
+      </div>
+    </div>
     <div class="field"><label>Notes (optional)</label><input type="text" id="f-cnotes" value="${c?c.notes:''}" placeholder="e.g. prefers email, Net 30"></div>`;
 }
 
@@ -3672,7 +3696,9 @@ async function submitAddCustomer(){
   if(!company){alert('Company name is required.');return;}
   const c={id:uid(),company,name:($('f-cname')||{}).value?.trim()||'',
     email:($('f-cemail')||{}).value?.trim()||'',phone:($('f-cphone')||{}).value?.trim()||'',
-    notes:($('f-cnotes')||{}).value?.trim()||''};
+    notes:($('f-cnotes')||{}).value?.trim()||'',
+    customerType:($('f-ctype')||{}).value||'new',
+    laneType:($('f-clane')||{}).value||''};
   setSaving(true);
   try{await dbSaveCustomer(c);S.customers.push(c);S.customers.sort((a,b)=>(a.company||'').localeCompare(b.company||''));
     closeModal();const t=$('cust-tbody');if(t) t.innerHTML=buildCustomerRows();
@@ -3693,7 +3719,9 @@ async function submitEditCustomer(id){
   const company=($('f-company')||{}).value?.trim();if(!company){alert('Company name is required.');return;}
   Object.assign(c,{company,name:($('f-cname')||{}).value?.trim()||'',
     email:($('f-cemail')||{}).value?.trim()||'',phone:($('f-cphone')||{}).value?.trim()||'',
-    notes:($('f-cnotes')||{}).value?.trim()||''});
+    notes:($('f-cnotes')||{}).value?.trim()||'',
+    customerType:($('f-ctype')||{}).value||c.customerType||'',
+    laneType:($('f-clane')||{}).value||c.laneType||''});
   setSaving(true);
   try{await dbSaveCustomer(c);closeModal();const t=$('cust-tbody');if(t) t.innerHTML=buildCustomerRows();
   }catch(e){alert('Error: '+e.message);}finally{setSaving(false);}
@@ -3913,6 +3941,14 @@ async function saveQuote(){
       profit,profitPct:cu>0?profit/cu:0,status:'Quoted',notes:qi.notes||'',shiflRef:qi.shiflRef||'',
       created_by:_currentUser?.id||null,created_by_name:_currentUser?.name||null};
     await dbSaveQuote(q);
+    // Auto-tag customer as New if not already in customer database
+    if(qi.customer&&qi.customer!=='—'){
+      const existingCust=(S.customers||[]).find(c=>c.company?.toLowerCase()===qi.customer.toLowerCase());
+      if(!existingCust){
+        const newCust={id:uid(),company:qi.customer,name:'',email:'',phone:'',notes:'',customerType:'new',laneType:''};
+        try{await dbSaveCustomer(newCust);S.customers.push(newCust);}catch(e){}
+      }
+    }
     upsertCarrier(sel.carrier,'Drayage');
     S.quotes.unshift(q);
     // Show success modal with option to post to portal
