@@ -5660,8 +5660,9 @@ async function downloadTlCustomerPDF(idx, rawTl, existingDoc){
       if(amount===null){
         doc.setFont('helvetica','italic');doc.setFontSize(8);doc.setTextColor(120,140,160);
         doc.text('Rate per pallet',M+CW-4,y+7,{align:'right'});
-      } else { doc.setFont('helvetica','bold');doc.setTextColor(...navy);
-      doc.text(fmtD(amount),W-M-2,y+7,{align:'right'});
+            } else { doc.setFont('helvetica','bold');doc.setTextColor(...navy);
+        doc.text(fmtD(amount),W-M-2,y+7,{align:'right'});
+      }
       doc.setDrawColor(230,234,242);doc.setLineWidth(0.2);doc.line(M,y+10,W-M,y+10);
       y+=10;
     });
