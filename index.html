@@ -1945,6 +1945,16 @@ function renderQuote(){
                 :`<span style="font-size:11px;color:var(--gray-400)">Add to <span style="color:var(--steel);cursor:pointer;text-decoration:underline" onclick="setView('customers')">contact book</span> to enable email</span>`}
             </div>
           </div>
+          <div class="field" style="width:160px;flex-shrink:0;margin-bottom:0">
+            <label>Lane type</label>
+            <select id="qi-lane-type" oninput="S.qi.laneType=this.value"
+              style="width:100%;padding:6px 8px;border:1px solid var(--gray-200);border-radius:var(--radius);font-size:12px;font-family:inherit;color:var(--gray-700)">
+              <option value="" ${!S.qi.laneType?'selected':''}>— Select —</option>
+              <option value="onetime" ${S.qi.laneType==='onetime'?'selected':''}>📦 One time</option>
+              <option value="volume" ${S.qi.laneType==='volume'?'selected':''}>📊 Volume</option>
+              <option value="recurring" ${S.qi.laneType==='recurring'?'selected':''}>🔁 Recurring</option>
+            </select>
+          </div>
           <div class="field" style="width:240px;flex-shrink:0;margin-bottom:0">
             <label>${qi.drayType==='export'?'Pickup ZIP (shipper warehouse)':'Port / Rail origin'}</label>
             ${qi.drayType==='export'
