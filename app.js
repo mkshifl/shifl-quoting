@@ -5155,7 +5155,9 @@ function renderActive(){
         <span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:99px;text-transform:uppercase;letter-spacing:.04em;background:${mc.bc};color:${mc.tc};flex-shrink:0">${modeLabel}</span>
         ${isUrgent?'<span style="background:#ef4444;color:#fff;font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;flex-shrink:0">URGENT</span>':''}
         <span style="font-size:13px;font-weight:700;color:var(--navy);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${s.customer}</span>
-        ${s.type==='drayage'&&eta?etaBadge:''}
+        ${s.type==='drayage'?`<span onclick="event.stopPropagation();setContainerETA('${s.id}')" style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:99px;font-size:10px;font-weight:700;cursor:pointer;${eta?(etaDays<=0?'background:#fee2e2;color:#dc2626':etaDays<=2?'background:#fef3c7;color:#d97706':'background:#d1fae5;color:#059669'):'background:var(--gray-100);color:var(--gray-400)'}">
+          ${eta?(etaDays<=0?'🚢 Arrived':etaDays===1?'🚢 ETA tomorrow':'🚢 ETA '+etaDays+'d'):'+ ETA'}
+        </span>`:''}
         <button onclick="setActiveTracking('${s.id}','urgent',${!isUrgent});renderActive()"
           style="flex-shrink:0;padding:3px 9px;border-radius:99px;border:1px solid ${isUrgent?'#ef4444':'var(--gray-200)'};background:${isUrgent?'#ef4444':'transparent'};color:${isUrgent?'#fff':'var(--gray-400)'};font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">
           🔥 ${isUrgent?'Hot':'Flag'}
