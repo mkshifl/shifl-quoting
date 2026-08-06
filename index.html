@@ -920,6 +920,7 @@ if('caches' in window){
           <button class="sub-link" id="nav-admin" onclick="goTo('admin')">⚙️ Admin panel</button>
           <button class="sub-link" id="nav-profit-monitor" onclick="renderProfitMonitor()" style="${_currentUser?.role==='super_admin'?'':'display:none'}">💰 Profit monitor</button>
           <button class="sub-link" id="nav-reports" onclick="goTo('reports')">📈 Reports</button>
+          <button class="sub-link" onclick="goTo('coverage-map')">🗺️ Coverage map</button>
           <button class="nav-btn sub-link" data-view="templates" onclick="goTo('templates')">🔁 Templates</button>
           <button class="sub-link" id="nav-activity" onclick="goTo('activity')">📊 Activity log</button>
           <button class="sub-link" id="nav-auditlog" onclick="goTo('auditlog')">📋 Audit log</button>
@@ -1574,6 +1575,7 @@ function render(){
   else if(S.view==='achievements')  renderAchievementsPage();
   else if(S.view==='usmap')         renderShiflAchievements();
   else if(S.view==='tms')           renderTMS();
+  else if(S.view==='coverage-map')  renderCoverageMap();
   else if(S.view==='claims')        renderClaims();
   else if(S.view==='broker-tools')  renderBrokerTools();
   else if(S.view==='carrier-score') renderCarrierScore();
@@ -6216,7 +6218,92 @@ function renderActive(){
 }
 
 // Apply rates from a past quote to the current quote builder
-function applyPastQuoteRates(pastId){
+function renderCoverageMap(){
+  var allQ=(S.quotes||[]).concat(window._fqHistory||[]).concat(window._aqHistory||[]);
+  var sc={};
+  allQ.forEach(function(q){
+    var z=q.zip||q.deliveryZip||q.destZip||'';
+    var st=zipToState(z);
+    if(st&&st.length===2) sc[st]=(sc[st]||0)+1;
+  });
+  var covered=Object.keys(sc);
+  var SN={AL:'Alabama',AK:'Alaska',AZ:'Arizona',AR:'Arkansas',CA:'California',CO:'Colorado',CT:'Connecticut',DE:'Delaware',DC:'DC',FL:'Florida',GA:'Georgia',HI:'Hawaii',ID:'Idaho',IL:'Illinois',IN:'Indiana',IA:'Iowa',KS:'Kansas',KY:'Kentucky',LA:'Louisiana',ME:'Maine',MD:'Maryland',MA:'Massachusetts',MI:'Michigan',MN:'Minnesota',MS:'Mississippi',MO:'Missouri',MT:'Montana',NE:'Nebraska',NV:'Nevada',NH:'New Hampshire',NJ:'New Jersey',NM:'New Mexico',NY:'New York',NC:'North Carolina',ND:'North Dakota',OH:'Ohio',OK:'Oklahoma',OR:'Oregon',PA:'Pennsylvania',RI:'Rhode Island',SC:'South Carolina',SD:'South Dakota',TN:'Tennessee',TX:'Texas',UT:'Utah',VT:'Vermont',VA:'Virginia',WA:'Washington',WV:'West Virginia',WI:'Wisconsin',WY:'Wyoming'};
+  function col(n){if(!n)return'#f1f5f9';if(n<=3)return'#bfdbfe';if(n<=10)return'#3b82f6';return'#1d4ed8';}
+
+  $('topbar-right').innerHTML='<button class="btn" onclick="renderCoverageMap()">Refresh</button>';
+
+  var gridHTML='';
+  if(covered.length){
+    Object.entries(sc).sort(function(a,b){return b[1]-a[1];}).forEach(function(e){
+      var st=e[0],n=e[1];
+      gridHTML+='<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 10px;background:#f8fafc;border-radius:8px;border:0.5px solid #e8eaed">'
+        +'<div><div style="font-size:12px;font-weight:600;color:#0d1117">'+(SN[st]||st)+'</div><div style="font-size:10px;color:#9ca3af">'+st+'</div></div>'
+        +'<div style="font-size:15px;font-weight:600;color:#2563eb">'+n+'</div></div>';
+    });
+  } else {
+    gridHTML='<div style="color:var(--gray-400);font-size:13px;padding:8px">No delivery ZIP codes on quotes yet.</div>';
+  }
+
+  $('page').innerHTML=
+    '<div style="margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">'
+    +'<div><h2 style="font-size:20px;font-weight:700;color:var(--navy);margin:0 0 4px">Coverage map</h2>'
+    +'<p style="font-size:13px;color:var(--gray-500);margin:0">'+covered.length+' states covered</p></div>'
+    +'<div style="display:flex;align-items:center;gap:12px;font-size:12px;color:var(--gray-500)">'
+    +'<span style="display:flex;align-items:center;gap:5px"><span style="width:12px;height:12px;border-radius:2px;background:#bfdbfe;display:inline-block;border:1px solid #93c5fd"></span>1-3</span>'
+    +'<span style="display:flex;align-items:center;gap:5px"><span style="width:12px;height:12px;border-radius:2px;background:#3b82f6;display:inline-block"></span>4-10</span>'
+    +'<span style="display:flex;align-items:center;gap:5px"><span style="width:12px;height:12px;border-radius:2px;background:#1d4ed8;display:inline-block"></span>10+</span>'
+    +'<span style="display:flex;align-items:center;gap:5px"><span style="width:12px;height:12px;border-radius:2px;background:#f1f5f9;border:1px solid #e2e8f0;display:inline-block"></span>None</span>'
+    +'</div></div>'
+    +'<div style="background:#fff;border:0.5px solid #e8eaed;border-radius:12px;overflow:hidden;margin-bottom:14px">'
+    +'<svg id="cov-map" style="width:100%;height:480px;display:block"></svg>'
+    +'<div id="cov-tip" style="display:none;position:fixed;background:#fff;border:0.5px solid #e8eaed;border-radius:8px;padding:8px 12px;font-size:13px;color:#0d1117;pointer-events:none;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,.1)"></div>'
+    +'</div>'
+    +'<div style="background:#fff;border:0.5px solid #e8eaed;border-radius:12px;padding:14px">'
+    +'<div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-400);margin-bottom:10px">State breakdown</div>'
+    +'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(145px,1fr));gap:6px">'+gridHTML+'</div>'
+    +'</div>';
+
+  var stMap={'01':'AL','02':'AK','04':'AZ','05':'AR','06':'CA','08':'CO','09':'CT','10':'DE','11':'DC','12':'FL','13':'GA','15':'HI','16':'ID','17':'IL','18':'IN','19':'IA','20':'KS','21':'KY','22':'LA','23':'ME','24':'MD','25':'MA','26':'MI','27':'MN','28':'MS','29':'MO','30':'MT','31':'NE','32':'NV','33':'NH','34':'NJ','35':'NM','36':'NY','37':'NC','38':'ND','39':'OH','40':'OK','41':'OR','42':'PA','44':'RI','45':'SC','46':'SD','47':'TN','48':'TX','49':'UT','50':'VT','51':'VA','53':'WA','54':'WV','55':'WI','56':'WY'};
+
+  function drawMap(){
+    if(!window.d3||!window.topojson){setTimeout(drawMap,200);return;}
+    var d3=window.d3,topo=window.topojson;
+    var svg=d3.select('#cov-map');
+    if(!svg.node())return;
+    var W=svg.node().getBoundingClientRect().width||800,H=480;
+    svg.attr('viewBox','0 0 '+W+' '+H);
+    var proj=d3.geoAlbersUsa().scale(W*1.25).translate([W/2,H/2]);
+    var path=d3.geoPath().projection(proj);
+    var tip=document.getElementById('cov-tip');
+    d3.json('https://cdn.jsdelivr.net/npm/us-atlas@3/states-10m.json').then(function(us){
+      var states=topo.feature(us,us.objects.states);
+      var mesh=topo.mesh(us,us.objects.states,function(a,b){return a!==b;});
+      svg.selectAll('.st').data(states.features).enter().append('path').attr('class','st')
+        .attr('d',path)
+        .attr('fill',function(d){var ab=stMap[String(d.id).padStart(2,'0')];return col(sc[ab]||0);})
+        .attr('stroke','#fff').attr('stroke-width',0.8)
+        .on('mousemove',function(ev,d){
+          var ab=stMap[String(d.id).padStart(2,'0')];
+          var n=sc[ab]||0;
+          if(!tip)return;
+          tip.style.display='block';tip.style.left=(ev.clientX+14)+'px';tip.style.top=(ev.clientY-10)+'px';
+          tip.innerHTML='<strong>'+(SN[ab]||ab)+'</strong><br><span style="color:#2563eb">'+n+' quote'+(n!==1?'s':'')+'</span>';
+          d3.select(this).attr('opacity',0.75);
+        })
+        .on('mouseleave',function(){if(tip)tip.style.display='none';d3.select(this).attr('opacity',1);});
+      svg.append('path').datum(mesh).attr('fill','none').attr('stroke','#e2e8f0').attr('stroke-width',0.5).attr('d',path);
+    }).catch(function(){
+      if(svg.node()) svg.append('text').attr('x',W/2).attr('y',H/2).attr('text-anchor','middle').attr('fill','#9ca3af').attr('font-size',14).text('Map unavailable — check internet connection');
+    });
+  }
+
+  function loadScript(src,cb){var s=document.createElement('script');s.src=src;s.onload=cb;document.head.appendChild(s);}
+  if(window.d3&&window.topojson){drawMap();}
+  else if(window.d3){loadScript('https://cdn.jsdelivr.net/npm/topojson-client@3/dist/topojson-client.min.js',drawMap);}
+  else{loadScript('https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js',function(){loadScript('https://cdn.jsdelivr.net/npm/topojson-client@3/dist/topojson-client.min.js',drawMap);});}
+}
+
+
   const past=S.quotes.find(q=>q.id===pastId);
   if(!past) return;
   // Apply carrier rates as markup baseline
