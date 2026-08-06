@@ -14995,7 +14995,8 @@ function renderTMSDrayage(tabBar){
           <span style="font-size:11px;font-weight:700;color:var(--steel)">${fmtD(q.customerRates?.total||0)}</span>
         </div>
         <div style="font-size:13px;font-weight:700;color:#1a2e4a;margin-bottom:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${q.customer||'—'}</div>
-        <div style="font-size:11px;color:#64748b;margin-bottom:6px">${q.port||'—'} → ${q.zip||'—'}</div>
+        <div style="font-size:11px;color:#64748b;margin-bottom:4px">${q.port||'—'} → ${q.zip||'—'}</div>
+        ${(()=>{const meta=getMeta(q.id);const eta=meta.containerETA||'';if(!eta)return`<span onclick="event.stopPropagation();setContainerETA('${q.id}')" style="display:inline-flex;align-items:center;gap:3px;padding:2px 7px;border-radius:99px;font-size:10px;font-weight:600;cursor:pointer;background:#f1f5f9;color:#64748b;margin-bottom:4px">+ ETA</span>`;const days=Math.ceil((new Date(eta)-new Date())/86400000);const bg=days<=0?'#fee2e2':days<=2?'#fef3c7':'#d1fae5';const col=days<=0?'#dc2626':days<=2?'#d97706':'#059669';return`<span onclick="event.stopPropagation();setContainerETA('${q.id}')" style="display:inline-flex;align-items:center;gap:3px;padding:2px 7px;border-radius:99px;font-size:10px;font-weight:700;cursor:pointer;background:${bg};color:${col};margin-bottom:4px">🚢 ${days<=0?'Arrived':days===1?'ETA tomorrow':'ETA '+days+'d'}</span>`;})()}
         ${meta.booking_num||q.bookingNum?`<div style="font-size:10px;color:#2563eb;font-weight:700;margin-bottom:4px">📦 ${meta.booking_num||q.bookingNum}</div>`:''}
         ${q.carrier?`<div style="font-size:11px;color:#475569;margin-bottom:4px">🚛 ${q.carrier}</div>`:''}
         ${freeDayBadge}
