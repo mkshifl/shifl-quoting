@@ -6272,7 +6272,7 @@ function renderCoverageMap(){
     if(!svg.node())return;
     var W=svg.node().getBoundingClientRect().width||800,H=480;
     svg.attr('viewBox','0 0 '+W+' '+H);
-    var proj=d3.geoAlbersUsa().scale(W*1.25).translate([W/2,H/2]);
+    var proj=d3.geoAlbersUsa().scale(W*0.85).translate([W/2,H/2]);
     var path=d3.geoPath().projection(proj);
     var tip=document.getElementById('cov-tip');
     d3.json('https://cdn.jsdelivr.net/npm/us-atlas@3/states-10m.json').then(function(us){
