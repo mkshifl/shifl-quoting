@@ -1806,14 +1806,9 @@ function setBrokerData(key,val){localStorage.setItem('shifl_'+key,JSON.stringify
 function renderBrokerTools(){
   $('topbar-right').innerHTML='';
   const tools=[
-    {ico:'🗺️',title:'Cargo theft map',desc:'Active load routes vs theft hotspots',fn:"goTo('broker-tools');renderCargoTheftMap()"},
-    {ico:'🔒',title:'Rate agreement lock',desc:'Lock contracted rates per customer/lane',fn:"renderRateAgreements()"},
     {ico:'⛔',title:'Margin floor',desc:'Block quotes below your minimum margin',fn:"renderMarginFloor()"},
     {ico:'📈',title:'Carrier cost trends',desc:'90-day carrier rate history by lane',fn:"renderCarrierCostTrend()"},
     {ico:'🎯',title:'Backup carrier suggest',desc:'Auto-suggest carriers when load falls through',fn:"renderBackupCarrier()"},
-    {ico:'🚫',title:'Carrier payment hold',desc:'Hold payment and block dispatch per carrier',fn:"renderCarrierHolds()"},
-    {ico:'🚑',title:'Load recovery',desc:'Structured workflow when carrier goes dark',fn:"renderLoadRecovery()"},
-    {ico:'🔔',title:'Re-engage lost customers',desc:'Customers quiet 60+ days with at-risk revenue',fn:"goTo('re-engage');render()"},
     {ico:'⭐',title:'Carrier relationship score',desc:'Rank your carrier network 0–100',fn:"goTo('carrier-score');render()"},
     {ico:'📊',title:'Shipper annual review',desc:'Auto-generate QBR deck for any customer',fn:"goTo('qbr');render()"},
     {ico:'🏆',title:'Lane bid history',desc:'Win/loss history and sweet spot per lane',fn:"goTo('lane-bids');render()"},
@@ -1835,72 +1830,12 @@ function renderBrokerTools(){
 // ─────────────────────────────────────────────────────────────
 // 1. CARGO THEFT MAP
 // ─────────────────────────────────────────────────────────────
-function renderCargoTheftMap(){
-  const HOTSPOTS=[
-    {name:'I-78 New Jersey',risk:'high',lat:40.7,lng:-74.2},
-    {name:'I-95 Maryland',risk:'high',lat:39.1,lng:-76.6},
-    {name:'I-40 California',risk:'high',lat:35.4,lng:-119.0},
-    {name:'I-10 Texas',risk:'medium',lat:29.8,lng:-95.4},
-    {name:'I-75 Georgia',risk:'medium',lat:33.7,lng:-84.4},
-  ];
-  openModal(`
-    <div style="min-width:580px">
-      <div class="modal-title">🗺️ Cargo theft hotspot map</div>
-      <div class="modal-body">
-        <div style="background:linear-gradient(135deg,#1a3a2a,#2d5a3d);border-radius:12px;height:200px;position:relative;overflow:hidden;margin-bottom:14px;display:flex;align-items:center;justify-content:center">
-          <div style="color:rgba(255,255,255,.3);font-size:13px">Interactive map — integrates with cargo theft API</div>
-          <div style="position:absolute;top:12px;left:12px;background:rgba(0,0,0,.4);border-radius:8px;padding:6px 10px;font-size:10px;color:#fff">
-            🔴 High risk &nbsp; 🟡 Medium &nbsp; 🔵 Active loads
-          </div>
-        </div>
-        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#94a3b8;margin-bottom:8px">Known hotspots</div>
-        ${HOTSPOTS.map(h=>`
-          <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #f1f5f9">
-            <div style="width:10px;height:10px;border-radius:50%;background:${h.risk==='high'?'#dc2626':'#f59e0b'};flex-shrink:0"></div>
-            <div style="flex:1;font-size:13px;font-weight:500;color:#0a1628">${h.name}</div>
-            <span style="padding:2px 8px;border-radius:99px;font-size:10px;font-weight:700;background:${h.risk==='high'?'#fee2e2':'#fef3c7'};color:${h.risk==='high'?'#991b1b':'#92400e'}">${h.risk==='high'?'High risk':'Medium'}</span>
-          </div>`).join('')}
-        <div style="background:#fff3cd;border-radius:8px;padding:10px 12px;margin-top:12px;font-size:12px;color:#856404">
-          💡 Connect to CargoNet or FreightWatch API in Settings → Integrations for live theft incident data on your active load routes.
-        </div>
-      </div>
-      <div class="modal-foot"><button class="btn blue" onclick="closeModal()">Got it</button></div>
-    </div>`);
-}
+
 
 // ─────────────────────────────────────────────────────────────
 // 2. RATE AGREEMENT LOCK
 // ─────────────────────────────────────────────────────────────
-function renderRateAgreements(){
-  const agreements = getBrokerData('rate_agreements',[]);
-  openModal(`
-    <div style="min-width:560px">
-      <div class="modal-title">🔒 Customer rate agreements</div>
-      <div class="modal-body">
-        <p style="font-size:12px;color:#6b7280;margin-bottom:14px">Lock rates per customer and lane. Quote builder will auto-apply and alert if you go below.</p>
-        <div style="display:flex;gap:8px;margin-bottom:12px">
-          <select id="ra-customer" style="flex:1;padding:7px 10px;border:1px solid #e2e8f0;border-radius:7px;font-size:12px">
-            <option value="">Select customer...</option>
-            ${(S.customers||[]).map(c=>`<option value="${c.company||c.id}">${c.company||c.id}</option>`).join('')}
-          </select>
-          <input type="text" id="ra-lane" placeholder="Lane (e.g. Newark → 51570)" style="flex:1;padding:7px 10px;border:1px solid #e2e8f0;border-radius:7px;font-size:12px">
-          <input type="number" id="ra-rate" placeholder="Rate $" style="width:90px;padding:7px 10px;border:1px solid #e2e8f0;border-radius:7px;font-size:12px">
-          <button onclick="addRateAgreement()" class="btn blue">Lock</button>
-        </div>
-        <div id="ra-list">
-          ${agreements.length===0?'<div style="text-align:center;padding:20px;color:#94a3b8">No locked rates yet</div>'
-          :agreements.map((a,i)=>`
-            <div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid #f1f5f9">
-              <span style="font-size:14px">🔒</span>
-              <div style="flex:1"><div style="font-size:13px;font-weight:600;color:#0a1628">${a.customer}</div><div style="font-size:11px;color:#64748b">${a.lane}</div></div>
-              <div style="font-size:14px;font-weight:700;color:#2563eb">$${Number(a.rate).toLocaleString()}</div>
-              <button onclick="removeRateAgreement(${i})" style="background:none;border:none;color:#94a3b8;cursor:pointer;font-size:16px">×</button>
-            </div>`).join('')}
-        </div>
-      </div>
-      <div class="modal-foot"><button class="btn" onclick="closeModal()">Close</button></div>
-    </div>`);
-}
+
 
 function addRateAgreement(){
   const customer=($('ra-customer')||{}).value||'';
@@ -2070,35 +2005,7 @@ function renderBackupCarrier(loadId){
 // ─────────────────────────────────────────────────────────────
 // 6. CARRIER PAYMENT HOLD
 // ─────────────────────────────────────────────────────────────
-function renderCarrierHolds(){
-  const holds=getBrokerData('carrier_holds',[]);
-  openModal(`
-    <div style="min-width:560px">
-      <div class="modal-title">🚫 Carrier payment holds</div>
-      <div class="modal-body">
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:8px;margin-bottom:12px;align-items:end">
-          <div><label style="font-size:10px;font-weight:700;text-transform:uppercase;color:#94a3b8;display:block;margin-bottom:3px">Carrier name</label>
-            <input type="text" id="hold-carrier" placeholder="Carrier name" style="width:100%;padding:7px 10px;border:1px solid #e2e8f0;border-radius:7px;font-size:12px"></div>
-          <div><label style="font-size:10px;font-weight:700;text-transform:uppercase;color:#94a3b8;display:block;margin-bottom:3px">Amount held ($)</label>
-            <input type="number" id="hold-amount" placeholder="0.00" style="width:100%;padding:7px 10px;border:1px solid #e2e8f0;border-radius:7px;font-size:12px"></div>
-          <div><label style="font-size:10px;font-weight:700;text-transform:uppercase;color:#94a3b8;display:block;margin-bottom:3px">Reason</label>
-            <input type="text" id="hold-reason" placeholder="e.g. Cargo claim open" style="width:100%;padding:7px 10px;border:1px solid #e2e8f0;border-radius:7px;font-size:12px"></div>
-          <button onclick="addCarrierHold()" class="btn red" style="height:34px">Place hold</button>
-        </div>
-        ${holds.length===0?'<div style="text-align:center;padding:20px;color:#94a3b8">No carriers on hold</div>'
-        :holds.map((h,i)=>`
-          <div style="background:#fff5f5;border:1px solid #fecaca;border-radius:8px;padding:10px 12px;margin-bottom:8px">
-            <div style="display:flex;align-items:center;gap:8px">
-              <div style="flex:1"><div style="font-size:13px;font-weight:700;color:#0a1628">${h.carrier}</div>
-                <div style="font-size:11px;color:#dc2626;margin-top:2px">$${Number(h.amount||0).toLocaleString()} held · ${h.reason}</div>
-                <div style="font-size:10px;color:#94a3b8;margin-top:1px">Placed ${new Date(h.date).toLocaleDateString()} by ${h.by||'Admin'}</div></div>
-              <button onclick="releaseCarrierHold(${i})" class="btn green" style="font-size:11px;padding:5px 10px">Release</button>
-            </div>
-          </div>`).join('')}
-      </div>
-      <div class="modal-foot"><button class="btn" onclick="closeModal()">Close</button></div>
-    </div>`);
-}
+
 
 function addCarrierHold(){
   const carrier=($('hold-carrier')||{}).value?.trim()||'';
@@ -2129,38 +2036,7 @@ function isCarrierOnHold(carrierName){
 // ─────────────────────────────────────────────────────────────
 // 7. LOAD RECOVERY WORKFLOW
 // ─────────────────────────────────────────────────────────────
-function renderLoadRecovery(loadId){
-  const recoveries=getBrokerData('load_recoveries',[]);
-  const rec=recoveries.find(r=>r.loadId===loadId)||null;
-  const steps=['Carrier marked unresponsive','Shipper notified of delay','Find replacement carrier','Update tracking & rebook','File claim if needed'];
 
-  openModal(`
-    <div style="min-width:520px">
-      <div class="modal-title">🚑 Load recovery workflow${loadId?' — '+loadId:''}</div>
-      <div class="modal-body">
-        ${!loadId?`<div class="field" style="margin-bottom:14px"><label style="font-size:10px;font-weight:700;text-transform:uppercase;color:#94a3b8;display:block;margin-bottom:4px">Load / Shipment ref</label>
-          <input type="text" id="rec-loadid" placeholder="e.g. SR-2641" style="width:100%;padding:8px 10px;border:1px solid #e2e8f0;border-radius:7px;font-size:13px">
-          <button onclick="startRecovery()" class="btn red" style="margin-top:8px">🚨 Start recovery</button>
-        </div>`:''}
-        ${rec?`
-          <div style="background:#fff3cd;border-radius:8px;padding:8px 12px;font-size:12px;color:#856404;margin-bottom:12px">
-            🚨 Recovery in progress — ${rec.loadId} · Started ${new Date(rec.started).toLocaleString([],{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})}
-          </div>
-          ${steps.map((step,i)=>{
-            const done=i<rec.step;const active=i===rec.step;
-            return `<div style="display:flex;gap:10px;padding:8px 0;border-bottom:1px solid #f1f5f9">
-              <div style="width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;background:${done?'#059669':active?'#2563eb':'#f1f5f9'};color:${done||active?'#fff':'#9ca3af'}">${done?'✓':i+1}</div>
-              <div style="flex:1;padding-top:3px"><div style="font-size:13px;font-weight:${active?'700':'400'};color:${active?'#2563eb':done?'#374151':'#9ca3af'}">${step}</div></div>
-              ${active?`<button onclick="advanceRecovery('${rec.loadId}')" class="btn blue" style="font-size:11px;padding:4px 10px">Done →</button>`:''}
-            </div>`;
-          }).join('')}
-          ${rec.step>=steps.length?`<div style="background:#d1fae5;border-radius:8px;padding:10px 12px;margin-top:8px;font-size:12px;color:#065f46;text-align:center">✓ Recovery complete</div>`:''}
-        `:'<div style="text-align:center;padding:20px;color:#94a3b8">No active recovery. Enter a load ID above to start.</div>'}
-        ${recoveries.filter(r=>r.step>=steps.length).length>0?`<div style="font-size:11px;color:#94a3b8;margin-top:12px">${recoveries.filter(r=>r.step>=steps.length).length} completed recoveries on file</div>`:''}
-      </div>
-      <div class="modal-foot"><button class="btn" onclick="closeModal()">Close</button></div>
-    </div>`);
-}
 
 function startRecovery(){
   const loadId=($('rec-loadid')||{}).value?.trim()||'';
@@ -2183,41 +2059,7 @@ function advanceRecovery(loadId){
 // ─────────────────────────────────────────────────────────────
 // 8. RE-ENGAGE LOST CUSTOMERS
 // ─────────────────────────────────────────────────────────────
-function renderReEngage(){
-  $('topbar-right').innerHTML='<button class="btn blue" onclick="goTo(\'broker-tools\');renderBrokerTools()">← Broker Tools</button>';
-  const quotes=S.quotes||[];
-  const byCustomer={};
-  quotes.forEach(q=>{
-    if(!q.customer) return;
-    const d=new Date(q.date||q.created_at||0);
-    if(!byCustomer[q.customer]||d>byCustomer[q.customer].last){
-      byCustomer[q.customer]={customer:q.customer,last:d,revenue:0};
-    }
-    byCustomer[q.customer].revenue+=(q.customerRates?.total||0);
-  });
-  const now=Date.now();
-  const quiet=Object.values(byCustomer)
-    .map(c=>({...c,days:Math.round((now-c.last.getTime())/86400000)}))
-    .filter(c=>c.days>=60)
-    .sort((a,b)=>b.days-a.days);
 
-  $('page').innerHTML=`
-    <div style="font-size:18px;font-weight:800;color:#0a1628;margin-bottom:4px">🔔 Re-engage lost customers</div>
-    <div style="font-size:12px;color:#94a3b8;margin-bottom:16px">Customers quiet for 60+ days — ${quiet.length} found</div>
-    ${quiet.length===0?`<div style="text-align:center;padding:60px;color:#94a3b8"><div style="font-size:36px;margin-bottom:12px">🎉</div><div style="font-size:14px;font-weight:600;color:#374151">All customers are active</div><div style="font-size:12px;margin-top:4px">No one has been quiet for 60+ days</div></div>`
-    :quiet.map(c=>`
-      <div style="background:#fff;border-radius:10px;border:1px solid #e2e8f0;padding:14px 16px;margin-bottom:8px;display:flex;align-items:center;gap:12px">
-        <div style="flex:1">
-          <div style="font-size:14px;font-weight:700;color:#0a1628">${c.customer}</div>
-          <div style="font-size:12px;color:#64748b;margin-top:2px">Last load: ${c.last.toLocaleDateString([],{month:'short',day:'numeric',year:'numeric'})} · $${Math.round(c.revenue).toLocaleString()} lifetime revenue</div>
-        </div>
-        <div style="text-align:center;padding:6px 12px;border-radius:8px;background:${c.days>90?'#fee2e2':'#fef3c7'}">
-          <div style="font-size:16px;font-weight:800;color:${c.days>90?'#dc2626':'#d97706'}">${c.days}</div>
-          <div style="font-size:10px;color:${c.days>90?'#dc2626':'#d97706'}">days</div>
-        </div>
-        <button onclick="window.open('mailto:?subject=Checking in — freight quote for you&body=Hi, just wanted to touch base and see if you have any upcoming freight needs. We have great capacity right now. Let me know!')" class="btn blue" style="font-size:11px;padding:6px 12px">✉️ Reach out</button>
-      </div>`).join('')}`;
-}
 
 // ─────────────────────────────────────────────────────────────
 // 9. CARRIER RELATIONSHIP SCORE
