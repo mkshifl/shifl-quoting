@@ -6304,6 +6304,7 @@ function renderCoverageMap(){
 }
 
 
+function applyPastQuoteRates(pastId){
   const past=S.quotes.find(q=>q.id===pastId);
   if(!past) return;
   // Apply carrier rates as markup baseline
