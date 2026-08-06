@@ -5299,16 +5299,12 @@ function buildTlStep4(tl){
 
 // Step navigation
 function tlNext(from){
+  if(!S.tl._skipped) S.tl._skipped={};
   if(from===1){
-    if(!S.tl._skipped) S.tl._skipped={};
-    // Only warn, don't block — user may be filling partially
-    if(!S.tl.drayPort&&!S.tl._skipped[1]){
-      if(!confirm('Origin port is empty. Continue anyway?')) return;
-    }
     S.tl.step=2;
   } else if(from===2){
     if(!S.tl.warehouseId&&!S.tl.useManual&&!window._tlWarehouses?.length){S.tl.useManual=true;}
-    if(S.tl.useManual&&!S.tl.warehouseManual.name){alert('Please enter the warehouse name.');return;}
+    if(S.tl.useManual&&!S.tl.warehouseManual?.name){alert('Please enter the warehouse name.');return;}
     S.tl.step=3;
   } else if(from===3){
     const hasMainZip=S.tl.outDeliveryZip;
