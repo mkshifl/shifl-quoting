@@ -1071,7 +1071,7 @@ const US_PORTS=[
   // ── CN / CPKC Railyards ──────────────────────────────────────
   'CN Chicago Intermodal, IL','CN Memphis, TN','CN Detroit, MI',
   'CPKC Franklin Park, Chicago, IL','CPKC Kansas City, MO','CPKC Dallas, TX',
-];
+,"Port of Felixstowe, UK","Port of Southampton, UK","Port of London (Tilbury), UK","Port of Liverpool, UK","Port of Bristol (Avonmouth), UK","Port of Hull, UK","Port of Immingham, UK","Port of Grimsby, UK"];
 function isApplicable(c,ld){
   if((c==='det_port'||c==='det_cust')&&ld==='Drop') return false;
   if(c==='bobtail') return false; // bobtail handled per-quote like genset
@@ -1147,7 +1147,7 @@ const NOTE_TEMPLATES=[
   'Subject to fuel surcharge adjustment',
   'Hazmat: additional charges may apply',
 ];
-const REGIONS=['NE','SE','Central','WC','Canada'];
+const REGIONS=['NE','SE','Central','WC','Canada','UK'];
 const SEED=[
   {id:'r1',region:'WC',carrier:'Fitted',port:'Los Angeles, CA',destination:'Fontana, CA',zip:'92337',ld:'Live',active:true,base:500,chassis:40,prepull:150,det_port:80,det_cust:80,storage:40,ovw43:0,ovw48:0,bobtail:0,toll:0,notes:'American Stitch LLC'},
   {id:'r2',region:'WC',carrier:'Fitted',port:'Long Beach, CA',destination:'Huntington Beach, CA',zip:'92648',ld:'Drop',active:true,base:365,chassis:40,prepull:150,det_port:0,det_cust:0,storage:40,ovw43:0,ovw48:0,bobtail:300,toll:0,notes:'Migo Trading LLC'},
