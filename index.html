@@ -14003,7 +14003,7 @@ async function loadShipmentMeta(){
   }
 }
 
-function getMeta(id){ return window._shipmentMeta?.[id]||{}; }
+function getMeta(id){ return window._shipmentMeta?.[id]||getTMSMeta(id)||{}; }
 
 async function saveMeta(id, updates){
   if(!window._shipmentMeta) window._shipmentMeta={};
@@ -14111,11 +14111,16 @@ function subscribeToMeta(){
 
 // TMS-specific metadata stored per load
 function getTMSMeta(id){ return JSON.parse(localStorage.getItem('tms_meta_'+id)||'{}'); }
-function saveTMSMeta(id, data){
+async function saveTMSMeta(id, data){
   const existing=getTMSMeta(id);
   const merged={...existing,...data,updatedAt:new Date().toISOString()};
+  // Update in-memory cache immediately
+  if(!window._shipmentMeta) window._shipmentMeta={};
+  window._shipmentMeta[id]=merged;
+  // Persist to localStorage
   localStorage.setItem('tms_meta_'+id,JSON.stringify(merged));
-  try{db.from('shipment_metadata').upsert([{id:'tms_'+id,...merged}]);}catch(e){}
+  // Persist to Supabase
+  try{await db.from('shipment_metadata').upsert([{id:'tms_'+id,...merged}]);}catch(e){console.warn('saveTMSMeta Supabase error:',e);}
   return merged;
 }
 
