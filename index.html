@@ -6371,13 +6371,40 @@ async function editQuoteCustomer(id){
 
 // Set container ETA from active card
 async function setContainerETA(id){
-  const meta=getMeta(id);
-  const current=meta.containerETA||'';
-  const val=prompt('Container ETA (vessel arrival date):', current);
-  if(val===null) return;
-  await saveTMSMeta(id,{containerETA:val.trim()});
-  showToast('✅ ETA saved','success',1500);
-  renderActive();
+  // Show inline date picker instead of prompt
+  const existing=getMeta(id).containerETA||'';
+  const modal=document.createElement('div');
+  modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:9999;display:flex;align-items:center;justify-content:center';
+  modal.innerHTML=`<div style="background:#fff;border-radius:12px;padding:24px 28px;min-width:300px;box-shadow:0 20px 60px rgba(0,0,0,.2)">
+    <div style="font-size:15px;font-weight:600;color:#0d1117;margin-bottom:16px">🚢 Set container ETA</div>
+    <div style="margin-bottom:16px">
+      <label style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:6px">Vessel arrival date</label>
+      <input type="date" id="eta-input" value="${existing}" style="width:100%;padding:9px 12px;border:1px solid #e8eaed;border-radius:8px;font-size:14px;font-family:inherit;outline:none">
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button id="eta-cancel" style="padding:7px 16px;border:1px solid #e8eaed;border-radius:8px;background:#fff;font-size:13px;cursor:pointer;font-family:inherit">Cancel</button>
+      ${existing?`<button id="eta-clear" style="padding:7px 16px;border:1px solid #fecaca;border-radius:8px;background:#fff;color:#dc2626;font-size:13px;cursor:pointer;font-family:inherit">Clear</button>`:''}
+      <button id="eta-save" style="padding:7px 16px;border:none;border-radius:8px;background:#2563eb;color:#fff;font-size:13px;cursor:pointer;font-family:inherit;font-weight:600">Save ETA</button>
+    </div>
+  </div>`;
+  document.body.appendChild(modal);
+  document.getElementById('eta-input').focus();
+
+  await new Promise(resolve=>{
+    document.getElementById('eta-cancel').onclick=()=>{modal.remove();resolve();};
+    const clearBtn=document.getElementById('eta-clear');
+    if(clearBtn) clearBtn.onclick=async()=>{await saveTMSMeta(id,{containerETA:''});modal.remove();showToast('ETA cleared','success',1500);renderActive();resolve();};
+    document.getElementById('eta-save').onclick=async()=>{
+      const val=document.getElementById('eta-input').value;
+      if(!val){modal.remove();resolve();return;}
+      await saveTMSMeta(id,{containerETA:val});
+      modal.remove();
+      showToast('✅ ETA saved','success',1500);
+      renderActive();
+      resolve();
+    };
+    modal.onclick=e=>{if(e.target===modal){modal.remove();resolve();}};
+  });
 }
 
 // Filter active cards without rebuilding the page — keeps search input focused
