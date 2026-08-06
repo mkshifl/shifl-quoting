@@ -5180,6 +5180,7 @@ function renderActive(){
             <button onclick="${s.type==='drayage'?`setView('log');render();setTimeout(()=>showQuoteModal('${s.id}'),100)`:s.type==='freight'?`setView('freight');setFqTab('log');setTimeout(()=>{const idx=(window._fqHistory||[]).findIndex(q=>q.id==='${s.id}');if(idx>=0)showFqQuoteModal(idx);},100)`:`setView('transload');setTlTab('log');setTimeout(()=>{const idx=(window._tlHistory||[]).findIndex(q=>q.id==='${s.id}');if(idx>=0)showTlQuoteModal(idx);},100)`}"
               class="acbtn">📄 Quote</button>
             <button onclick="changeShipmentCarrier('${s.type}','${s.id}','${(s.carrier||'').replace(/'/g,'')}')" class="acbtn">🚛 Carrier</button>
+            ${s.type==='drayage'?`<button onclick="setContainerETA('${s.id}')" class="acbtn" style="${eta?'color:#059669':''}" title="Set/change ETA">🚢 ${eta?(etaDays<=0?'Arrived':etaDays+'d'):'ETA'}</button>`:''}  
             <button onclick="toggleFlag('${s.type}','${s.id}')" class="acbtn${flagged?' acbtn-red':''}" title="${flagged?'Remove flag':'Flag issue'}">🚨</button>
             <button onclick="showTrackingModal('${s.type}','${s.id}')" class="acbtn${trackUrl?' acbtn-blue':''}" title="Tracking">${trackUrl?'📍':'🔗'}</button>
             <button onclick="promptBookingNum('${s.type}','${s.id}')" class="acbtn${s.bookingNum?' acbtn-blue':''}" title="Booking #">📦</button>
