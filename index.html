@@ -6370,12 +6370,12 @@ async function editQuoteCustomer(id){
 }
 
 // Set container ETA from active card
-function setContainerETA(id){
+async function setContainerETA(id){
   const meta=getMeta(id);
   const current=meta.containerETA||'';
   const val=prompt('Container ETA (vessel arrival date):', current);
-  if(val===null) return; // cancelled
-  saveTMSMeta(id,{containerETA:val.trim()});
+  if(val===null) return;
+  await saveTMSMeta(id,{containerETA:val.trim()});
   showToast('✅ ETA saved','success',1500);
   renderActive();
 }
