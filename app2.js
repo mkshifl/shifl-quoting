@@ -1,4 +1,97 @@
+" oninput="S.aq.pieces=this.value" placeholder="e.g. 10" min="0"></div>
+        <div class="field"><label>Weight (lbs)</label>
+          <input type="number" value="${aq.weightLbs}" oninput="S.aq.weightLbs=this.value" placeholder="e.g. 500" min="0"></div>
+        <div class="field"><label>CBM</label>
+          <input type="number" value="${aq.cbm}" oninput="S.aq.cbm=this.value" placeholder="e.g. 2.5" min="0" step="0.01"></div>
+      </div>
+    </div>
 
+    <!-- Ground Leg -->
+    <div class="card">
+      <div class="sec-head">🚛 Ground leg — airport → delivery</div>
+      <div class="g2" style="margin-bottom:12px">
+        <div class="field"><label>Delivery ZIP *</label>
+          <input type="text" value="${aq.deliveryZip}" oninput="S.aq.deliveryZip=this.value;S.aq.groundSelId=null;renderAqBuilder()"
+            placeholder="e.g. 07728" maxlength="10"></div>
+        <div class="field"><label>Ground transit method</label>
+          <div class="toggle-group" style="margin-top:4px">
+            <button class="tgl${aq.groundMode==='LTL'?' on':''}" onclick="S.aq.groundMode='LTL';S.aq.groundSelId=null;renderAqBuilder()">LTL</button>
+            <button class="tgl${aq.groundMode==='Box Truck'?' on':''}" onclick="S.aq.groundMode='Box Truck';S.aq.groundSelId=null;renderAqBuilder()">Box Truck</button>
+          </div>
+        </div>
+      </div>
+      ${carrierOptions}
+      <div class="g2">
+        <div class="field"><label>Ground carrier</label>
+          <input type="text" value="${aq.groundCarrierName}" oninput="S.aq.groundCarrierName=this.value"
+            placeholder="${groundMatches.length?'Or type manually':'e.g. XPO, UPS Freight'}"></div>
+        <div class="field"><label>Ground rate ($)</label>
+          <input type="number" value="${aq.groundRate}" oninput="S.aq.groundRate=this.value;refreshAqPreview()"
+            placeholder="0.00" step="0.01" min="0"></div>
+      </div>
+    </div>
+
+    <!-- Notes -->
+    <div class="card">
+      <div class="sec-head">Notes</div>
+      <textarea rows="2" oninput="S.aq.notes=this.value" placeholder="Special instructions, commodity, incoterms…"
+        style="width:100%;padding:8px;font-size:13px;border:1px solid var(--gray-200);border-radius:var(--radius);resize:vertical;font-family:inherit">${aq.notes}</textarea>
+    </div>
+
+  </div>
+
+  <!-- Right panel — pricing -->
+  <div style="position:sticky;top:16px">
+    <div class="card">
+      <div class="sec-head">💰 Pricing</div>
+
+      ${airport?`
+      <div style="background:var(--blue-bg);border-radius:var(--radius);padding:12px 14px;margin-bottom:14px;font-size:12px;color:var(--steel)">
+        <div class="bold" style="margin-bottom:4px">✈️ ${airport.code} — ${airport.city}, ${airport.state}</div>
+        <div>${airport.name}</div>
+        <div style="margin-top:4px;color:var(--gray-400)">Ground pickup ZIP: ${airport.zip}</div>
+      </div>`:''}
+
+      <!-- Cost breakdown -->
+      <div style="border:1px solid var(--gray-200);border-radius:var(--radius);overflow:hidden;margin-bottom:14px">
+        <div style="padding:10px 14px;display:flex;justify-content:space-between;border-bottom:1px solid var(--gray-100)">
+          <span style="font-size:13px;color:var(--gray-600)">✈️ Air freight cost</span>
+          <span class="money am">${fmtD(airCost)}</span>
+        </div>
+        <div style="padding:10px 14px;display:flex;justify-content:space-between;border-bottom:1px solid var(--gray-100)">
+          <span style="font-size:13px;color:var(--gray-600)">🚛 Ground delivery (${aq.groundMode||'LTL'})</span>
+          <span class="money am">${fmtD(groundRate)}</span>
+        </div>
+        <div style="padding:10px 14px;display:flex;justify-content:space-between;background:var(--gray-50)">
+          <span style="font-size:13px;font-weight:700">Total cost</span>
+          <span class="money rd">${fmtD(totalCost)}</span>
+        </div>
+      </div>
+
+      <div class="field"><label>Customer rate ($) *</label>
+        <input type="number" value="${aq.customerRate}" oninput="S.aq.customerRate=this.value;refreshAqPreview()"
+          placeholder="0.00" step="0.01" min="0" style="font-size:18px;font-weight:700;border-color:var(--steel)"></div>
+
+      ${custRate>0&&totalCost>0?`
+      <div style="background:${profit>=0?'#f0fdf4':'#fff5f5'};border-radius:var(--radius);padding:14px;text-align:center;margin-top:4px">
+        <div style="display:flex;justify-content:space-around">
+          <div><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--gray-400)">Profit</div>
+            <div style="font-size:22px;font-weight:800;color:${profit>=0?'var(--green)':'var(--red)'}">+${fmtD(profit)}</div></div>
+          <div><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--gray-400)">Margin</div>
+            <div style="font-size:22px;font-weight:800;color:${margin>=0.10?'var(--green)':margin>=0?'var(--amber)':'var(--red)'}">${pct(margin)}</div></div>
+        </div>
+      </div>`:''}
+
+      <div class="field" style="margin-top:14px"><label>Shifl Ref #</label>
+        <input type="text" value="${aq.shiflRef||''}" oninput="S.aq.shiflRef=this.value" placeholder="Assigned after booking"></div>
+
+      <button class="btn blue" onclick="saveAqQuote()" style="width:100%;justify-content:center;padding:11px;margin-top:4px;font-size:14px">
+        💾 Save Air Freight Quote
+      </button>
+    </div>
+  </div>
+</div>`;
+}
 
 async function saveAqQuote(){
   const aq=S.aq;
@@ -3009,254 +3102,7 @@ function showRepeatPicker(){
 // ════════════════════════════════════════════════════════════════════
 // PROFIT MONITOR — Super Admin Only
 // ════════════════════════════════════════════════════════════════════
-function renderProfitMonitor(){
-  if(_currentUser?.role!=='super_admin'){
-    $('page').innerHTML='<div class="empty"><p>Super Admin access only.</p></div>';return;
-  }
-  // PIN check (skip if already verified this session)
-  if(!sessionStorage.getItem('pm_pin_ok')){
-    const userPin=localStorage.getItem('shifl_pm_pin')||'';
-    if(userPin){
-      $('page').innerHTML=`<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:60vh">
-        <div style="font-size:40px;margin-bottom:12px">🔐</div>
-        <div style="font-size:18px;font-weight:700;color:#0a1628;margin-bottom:4px">Profit Monitor</div>
-        <div style="font-size:13px;color:#64748b;margin-bottom:20px">Enter PIN to continue</div>
-        <input id="pm-pin-input" type="password" maxlength="4" placeholder="••••" style="width:120px;text-align:center;padding:10px;border:2px solid #e2e8f0;border-radius:10px;font-size:24px;letter-spacing:8px;margin-bottom:12px" onkeyup="if(this.value.length===4){if(this.value===localStorage.getItem('shifl_pm_pin')){sessionStorage.setItem('pm_pin_ok','1');renderProfitMonitor();}else{this.value='';this.style.borderColor='#dc2626';setTimeout(()=>this.style.borderColor='#e2e8f0',1000);}}">
-        <div style="font-size:11px;color:#94a3b8">Set PIN in Settings or type it above</div>
-      </div>`;
-      return;
-    }
-  }
 
-  const commPct = parseFloat(localStorage.getItem('shifl_comm_pct')||'0');
-  const modeFilter = S.pmFilter||'all';
-  const dateFilter = S.pmDate||'all';
-  const tab = S.pmTab||'delivered'; // active | delivered | all
-
-  // Status sets
-  const ACTIVE_ST  = ['Booked'];
-  const DONE_ST    = ['Delivered','Invoiced','Paid'];
-  const ALL_ST     = [...ACTIVE_ST,...DONE_ST];
-
-  function buildRows(statusSet){
-    const dray=(S.quotes||[]).filter(q=>statusSet.includes(q.status)).map(q=>({
-      id:q.id,type:'drayage',customer:q.customer||'—',shiflRef:q.shiflRef||'—',
-      lane:`${q.port||'—'} → ${q.zip||'—'}`,carrier:q.carrier||'—',
-      date:q.date,status:q.status,
-      carrierCost:(p=>p.cost)(getShipmentProfit(q,'drayage')),
-      customerRate:(p=>p.revenue)(getShipmentProfit(q,'drayage')),
-      profit:(p=>p.profit)(getShipmentProfit(q,'drayage')),
-      margin:(p=>p.margin)(getShipmentProfit(q,'drayage')),
-      isActual:(p=>p.isActual)(getShipmentProfit(q,'drayage')),
-      modeLabel:'Drayage',
-      addedToSheet:localStorage.getItem('pm_sheet_'+q.id)==='1'
-    }));
-    const fq=(window._fqHistory||[]).filter(q=>statusSet.includes(q.status)).map(q=>({
-      id:q.id,type:'freight',customer:q.customer||'—',shiflRef:q.shiflRef||'—',
-      lane:`${q.pickupZip||'—'} → ${q.deliveryZip||'—'}`,carrier:q.carrier||'—',
-      date:q.date,status:q.status,
-      carrierCost:(p=>p.cost)(getShipmentProfit(q,'freight')),
-      customerRate:(p=>p.revenue)(getShipmentProfit(q,'freight')),
-      profit:(p=>p.profit)(getShipmentProfit(q,'freight')),
-      margin:(p=>p.margin)(getShipmentProfit(q,'freight')),
-      isActual:(p=>p.isActual)(getShipmentProfit(q,'freight')),
-      modeLabel:q.fqMode||'Freight',
-      addedToSheet:localStorage.getItem('pm_sheet_'+q.id)==='1'
-    }));
-    const aq=(window._aqHistory||[]).filter(q=>statusSet.includes(q.status)).map(q=>({
-      id:q.id,type:'air',customer:q.customer||'—',shiflRef:q.shiflRef||q.quoteNum||'—',
-      lane:`${q.originAirport||'—'} → ${q.destAirport||'—'}`,carrier:q.carrier||'—',
-      date:q.date,status:q.status,
-      carrierCost:q.carrierRates?.total||0,
-      customerRate:q.customerRates?.total||q.customerRate||0,
-      profit:(q.customerRates?.total||q.customerRate||0)-(q.carrierRates?.total||0),
-      margin:q.customerRates?.total>0?((q.customerRates.total-(q.carrierRates?.total||0))/q.customerRates.total):0,
-      isActual:false,modeLabel:'Air',
-      addedToSheet:localStorage.getItem('pm_sheet_'+q.id)==='1'
-    }));
-    const tl=(window._tlHistory||[]).filter(q=>statusSet.includes(q.status)).map(q=>({
-      id:q.id,type:'transload',customer:q.customer||'—',shiflRef:q.shiflRef||'—',
-      lane:`${q.drayPort||'—'} → ${q.outDeliveryZip||'—'}`,carrier:q.outCarrier||'—',
-      date:q.date,status:q.status,
-      carrierCost:(p=>p.cost)(getShipmentProfit(q,'transload')),
-      customerRate:(p=>p.revenue)(getShipmentProfit(q,'transload')),
-      profit:(p=>p.profit)(getShipmentProfit(q,'transload')),
-      margin:(p=>p.margin)(getShipmentProfit(q,'transload')),
-      isActual:(p=>p.isActual)(getShipmentProfit(q,'transload')),
-      modeLabel:'Transload',
-      addedToSheet:localStorage.getItem('pm_sheet_'+q.id)==='1'
-    }));
-    return [...dray,...fq,...tl,...aq];
-  }
-
-  const statusSet = tab==='active'?ACTIVE_ST : tab==='delivered'?DONE_ST : ALL_ST;
-  let all = buildRows(statusSet);
-
-  // Date filter
-  const today=localDateStr();
-  const week=new Date(Date.now()-7*864e5).toISOString().slice(0,10);
-  const month=new Date(Date.now()-30*864e5).toISOString().slice(0,10);
-  if(dateFilter==='week')  all=all.filter(q=>q.date>=week);
-  else if(dateFilter==='month') all=all.filter(q=>q.date>=month);
-  else if(dateFilter==='today') all=all.filter(q=>q.date===today);
-
-  // Mode filter
-  if(modeFilter!=='all') all=all.filter(q=>q.type===modeFilter);
-
-  // Sort newest first
-  all.sort((a,b)=>(b.date||'').localeCompare(a.date||''));
-
-  const totalCarrier=all.reduce((s,q)=>s+q.carrierCost,0);
-  const totalCustomer=all.reduce((s,q)=>s+q.customerRate,0);
-  const totalProfit=all.reduce((s,q)=>s+q.profit,0);
-  const totalMargin=totalCustomer>0?totalProfit/totalCustomer:0;
-  const myCommission=totalProfit*(commPct/100);
-
-  // Tab counts
-  const activeCnt = buildRows(ACTIVE_ST).length;
-  const delivCnt  = buildRows(DONE_ST).length;
-  const allCnt    = buildRows(ALL_ST).length;
-
-  $('topbar-right').innerHTML=`
-    <button onclick="pmDownloadCSV()" style="display:flex;align-items:center;gap:6px;padding:7px 14px;border-radius:8px;border:none;background:linear-gradient(135deg,#059669,#34d399);color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;box-shadow:0 2px 8px rgba(5,150,105,.3)">
-      📥 Download CSV
-    </button>`;
-
-  $('page').style.padding='12px 12px';
-
-  $('page').innerHTML=`
-  <!-- Tabs -->
-  <div style="display:flex;gap:0;border-bottom:2px solid #e2e8f0;margin-bottom:14px">
-    ${[['active','⚡ Active',activeCnt,'#d97706'],['delivered','✅ Delivered',delivCnt,'#059669'],['all','📋 All',allCnt,'#2563eb']].map(([t,lbl,cnt,col])=>`
-      <button onclick="S.pmTab='${t}';renderProfitMonitor()" style="padding:10px 22px;border:none;border-bottom:${tab===t?'3px solid '+col:'3px solid transparent'};background:none;font-size:13px;font-weight:${tab===t?'700':'500'};color:${tab===t?col:'#94a3b8'};cursor:pointer;font-family:inherit;display:flex;align-items:center;gap:7px">
-        ${lbl} <span style="background:${tab===t?col:'#e2e8f0'};color:${tab===t?'#fff':'#64748b'};border-radius:99px;font-size:10px;font-weight:700;padding:1px 7px">${cnt}</span>
-      </button>`).join('')}
-    <div style="flex:1"></div>
-    <!-- Commission -->
-    <div style="display:flex;align-items:center;gap:6px;padding:0 12px">
-      <span style="font-size:11px;color:#94a3b8;white-space:nowrap">Commission:</span>
-      <input type="number" id="pm-comm" value="${commPct}" min="0" max="100" step="0.5"
-        oninput="localStorage.setItem('shifl_comm_pct',this.value);renderProfitMonitor()"
-        style="width:56px;padding:4px 8px;font-size:13px;font-weight:700;border:1.5px solid #2563eb;border-radius:6px;text-align:center">
-      <span style="font-size:13px;font-weight:700;color:#374151">%</span>
-    </div>
-    <!-- Mode filter -->
-    <div style="display:flex;gap:4px;padding:0 8px;align-items:center">
-      <div style="display:flex;gap:4px;padding:0 8px;align-items:center">
-      <span style="font-size:11px;color:#94a3b8">Rep:</span>
-      ${[['all','All'],[ ...[...new Set([...(S.quotes||[]).map(q=>q.created_by_name||'').filter(Boolean)]) ] .map(r=>[r,r]) ]].flat(0).filter((v,i,a)=>i===0||a[i-1][0]!==v[0]).map(([r,l])=>`<button onclick="S.pmRep='${r}';renderProfitMonitor()" style="padding:4px 8px;border-radius:6px;border:1px solid #e2e8f0;background:${(S.pmRep||'all')===r?'#0a1628':'#fff'};color:${(S.pmRep||'all')===r?'#fff':'#64748b'};font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">${l}</button>`).join('')}
-    </div>
-    ${['all','drayage','freight','transload'].map(f=>`<button onclick="S.pmFilter='${f}';renderProfitMonitor()"" style="padding:4px 10px;border-radius:6px;border:1px solid #e2e8f0;background:${modeFilter===f?'#0a1628':'#fff'};color:${modeFilter===f?'#fff':'#64748b'};font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">${f==='all'?'All':f.charAt(0).toUpperCase()+f.slice(1)}</button>`).join('')}
-    </div>
-    <!-- Date filter -->
-    <div style="display:flex;gap:4px;padding:0 8px;align-items:center">
-      ${['all','today','week','month'].map(d=>`<button onclick="S.pmDate='${d}';renderProfitMonitor()" style="padding:4px 10px;border-radius:6px;border:1px solid #e2e8f0;background:${dateFilter===d?'#0a1628':'#fff'};color:${dateFilter===d?'#fff':'#64748b'};font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">${d==='all'?'All time':d.charAt(0).toUpperCase()+d.slice(1)}</button>`).join('')}
-    </div>
-  </div>
-
-  <!-- KPI strip -->
-  <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:14px">
-    <div style="background:#fff;border-radius:10px;border:1px solid #e2e8f0;padding:12px 14px">
-      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#94a3b8;margin-bottom:4px">Loads</div>
-      <div style="font-size:22px;font-weight:800;color:#0a1628">${all.length}</div>
-      <div style="font-size:10px;color:#94a3b8;margin-top:2px">${tab==='active'?'in transit':tab==='delivered'?'completed':'total'}</div>
-    </div>
-    <div style="background:#fff;border-radius:10px;border:1px solid #e2e8f0;padding:12px 14px">
-      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#94a3b8;margin-bottom:4px">Carrier pay</div>
-      <div style="font-size:22px;font-weight:800;color:#dc2626">$${Math.round(totalCarrier).toLocaleString()}</div>
-      <div style="font-size:10px;color:#94a3b8;margin-top:2px">${tab==='active'?'est.':''}</div>
-    </div>
-    <div style="background:#fff;border-radius:10px;border:1px solid #e2e8f0;padding:12px 14px">
-      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#94a3b8;margin-bottom:4px">Sell rate</div>
-      <div style="font-size:22px;font-weight:800;color:#2563eb">$${Math.round(totalCustomer).toLocaleString()}</div>
-      <div style="font-size:10px;color:#94a3b8;margin-top:2px">${tab==='active'?'est.':''}</div>
-    </div>
-    <div style="background:#fff;border-radius:10px;border:1px solid #e2e8f0;padding:12px 14px;border-left:3px solid #059669">
-      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#94a3b8;margin-bottom:4px">Gross profit</div>
-      <div style="font-size:22px;font-weight:800;color:#059669">$${Math.round(totalProfit).toLocaleString()}</div>
-      <div style="font-size:10px;color:#059669;margin-top:2px">${Math.round(totalMargin*100)}% margin${tab==='active'?' · est.':''}</div>
-    </div>
-    <div style="background:#fff;border-radius:10px;border:1px solid #e2e8f0;padding:12px 14px;border-left:3px solid #7c3aed">
-      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#94a3b8;margin-bottom:4px">My cut (${commPct}%)</div>
-      <div style="font-size:22px;font-weight:800;color:#7c3aed">$${Math.round(myCommission).toLocaleString()}</div>
-      <div style="font-size:10px;color:#94a3b8;margin-top:2px">${tab==='active'?'est.':''}</div>
-    </div>
-  </div>
-
-  <!-- Table — full width -->
-  ${all.length===0?`<div style="text-align:center;padding:60px;color:#94a3b8"><div style="font-size:36px;margin-bottom:12px">${tab==='active'?'🚛':tab==='delivered'?'✅':'📋'}</div><div style="font-size:15px;font-weight:600;color:#374151;margin-bottom:6px">No ${tab==='active'?'active':'delivered'} loads</div><div style="font-size:12px">${tab==='active'?'Loads marked Booked will appear here':'Loads marked Delivered, Invoiced, or Paid will appear here'}</div></div>`
-  :`<div style="overflow-x:auto;border-radius:10px;border:1px solid #e2e8f0;background:#fff">
-  <table style="width:100%;border-collapse:collapse;table-layout:fixed">
-    <colgroup>
-      <col style="width:12%">
-      <col style="width:6%">
-      <col style="width:6%">
-      <col style="width:11%">
-      <col style="width:9%">
-      <col style="width:6%">
-      <col style="width:6%">
-      <col style="width:8%">
-      <col style="width:8%">
-      <col style="width:7%">
-      <col style="width:5%">
-      <col style="width:6%">
-      <col style="width:10%">
-    </colgroup>
-    <thead>
-      <tr style="background:#f8fafc;border-bottom:2px solid #e2e8f0">
-        <th style="padding:10px 10px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#94a3b8">Customer</th>
-        <th style="padding:10px 8px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#94a3b8">Type</th>
-        <th style="padding:10px 8px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#94a3b8">Ref #</th>
-        <th style="padding:10px 8px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#94a3b8">Lane</th>
-        <th style="padding:10px 8px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#94a3b8">Carrier</th>
-        <th style="padding:10px 8px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#94a3b8">Date</th>
-        <th style="padding:10px 8px;text-align:center;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#94a3b8">Status</th>
-        <th style="padding:10px 8px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#dc2626">Carrier pay</th>
-        <th style="padding:10px 8px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#2563eb">Sell rate</th>
-        <th style="padding:10px 8px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#059669">Profit</th>
-        <th style="padding:10px 8px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#94a3b8">Margin</th>
-        <th style="padding:10px 8px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#7c3aed">My cut</th>
-        <th style="padding:10px 8px;text-align:center;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#94a3b8">📊 Sheet</th>
-      </tr>
-    </thead>
-    <tbody>
-      ${all.map(q=>{
-        const myCut=q.profit*(commPct/100);
-        const mc=Math.round(q.margin*100);
-        const margCol=mc>=20?'#059669':mc>=12?'#d97706':'#dc2626';
-        const statusCol=q.status==='Delivered'||q.status==='Invoiced'||q.status==='Paid'?'#059669':q.status==='Booked'?'#d97706':'#94a3b8';
-        const statusBg=q.status==='Delivered'||q.status==='Invoiced'||q.status==='Paid'?'#d1fae5':q.status==='Booked'?'#fef3c7':'#f1f5f9';
-        return `<tr style="border-bottom:1px solid #f1f5f9;transition:background .1s" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background=(()=>{const _m=parseFloat(q.margin||0);return _m<0.05?'#fff5f5':_m<0.12?'#fffbeb':''})();">
-          <td style="padding:10px 10px;font-size:12px;font-weight:600;color:#0a1628;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${q.customer}</td>
-          <td style="padding:10px 8px"><span style="background:#e2e8f0;color:#374151;border-radius:99px;font-size:10px;font-weight:700;padding:2px 8px;white-space:nowrap">${q.modeLabel}</span></td>
-          <td style="padding:10px 8px;font-size:11px;color:#2563eb;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${q.shiflRef||'—'}</td>
-          <td style="padding:10px 8px;font-size:11px;color:#374151;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${q.lane}</td>
-          <td style="padding:10px 8px;font-size:11px;color:#374151;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${q.carrier}</td>
-          <td style="padding:10px 8px;font-size:11px;color:#64748b;white-space:nowrap">${q.date||'—'}</td>
-          <td style="padding:10px 8px;text-align:center"><span style="background:${statusBg};color:${statusCol};border-radius:99px;font-size:10px;font-weight:700;padding:3px 9px;white-space:nowrap">${q.status}</span></td>
-          <td style="padding:10px 8px;text-align:right;font-size:13px;font-weight:700;color:#dc2626">${['Delivered','Invoiced','Paid'].includes(q.status)?`<input type="number" value="${Math.round(q.carrierCost)}" onchange="pmUpdatePrice('${q.id}','${q.type}','carrier',this.value)" style="width:78px;text-align:right;border:1.5px solid #fecaca;border-radius:6px;padding:3px 5px;font-size:12px;font-weight:700;color:#dc2626;background:#fff5f5;font-family:inherit" title="Click to edit carrier cost">`:('$'+Math.round(q.carrierCost).toLocaleString())}</td>
-          <td style="padding:10px 8px;text-align:right;font-size:13px;font-weight:700;color:#2563eb">${['Delivered','Invoiced','Paid'].includes(q.status)?`<input type="number" value="${Math.round(q.customerRate)}" onchange="pmUpdatePrice('${q.id}','${q.type}','sell',this.value)" style="width:78px;text-align:right;border:1.5px solid #bfdbfe;border-radius:6px;padding:3px 5px;font-size:12px;font-weight:700;color:#2563eb;background:#eff6ff;font-family:inherit" title="Click to edit sell rate">`:('$'+Math.round(q.customerRate).toLocaleString())}</td>
-          <td style="padding:10px 8px;text-align:right" id="pm-profit-${q.id}">
-            <div style="font-size:13px;font-weight:800;color:#059669">$${Math.round(q.profit).toLocaleString()}</div>
-            ${q.isActual?'<div style="font-size:9px;color:#059669;font-weight:600">actual</div>':'<div style="font-size:9px;color:#94a3b8">est.</div>'}
-          </td>
-          <td style="padding:10px 8px;text-align:right;font-size:13px;font-weight:700;color:${margCol}">${mc}%</td>
-          <td style="padding:10px 8px;text-align:right;font-size:13px;font-weight:700;color:#7c3aed">$${Math.round(myCut).toLocaleString()}</td>
-          <td style="padding:10px 8px;text-align:center"><button onclick="pmToggleSheet('${q.id}',${!q.addedToSheet})" style="width:26px;height:26px;border-radius:6px;border:2px solid ${q.addedToSheet?'#059669':'#e2e8f0'};background:${q.addedToSheet?'#059669':'#fff'};cursor:pointer;display:inline-flex;align-items:center;justify-content:center;font-size:13px" title="${q.addedToSheet?'Remove from sheet':'Mark as added to sheet'}">${q.addedToSheet?'✓':''}</button></td>
-        </tr>`;
-      }).join('')}
-      <tr style="background:#f8fafc;border-top:2px solid #e2e8f0;font-weight:700">
-        <td colspan="7" style="padding:10px 10px;font-size:12px;font-weight:700;color:#0a1628">Totals (${all.length} loads)</td>
-        <td style="padding:10px 8px;text-align:right;font-size:13px;font-weight:800;color:#dc2626">$${Math.round(totalCarrier).toLocaleString()}</td>
-        <td style="padding:10px 8px;text-align:right;font-size:13px;font-weight:800;color:#2563eb">$${Math.round(totalCustomer).toLocaleString()}</td>
-        <td style="padding:10px 8px;text-align:right;font-size:13px;font-weight:800;color:#059669">$${Math.round(totalProfit).toLocaleString()}</td>
-        <td style="padding:10px 8px;text-align:right;font-size:13px;font-weight:800;color:${Math.round(totalMargin*100)>=12?'#059669':'#dc2626'}">${Math.round(totalMargin*100)}%</td>
-        <td style="padding:10px 8px;text-align:right;font-size:13px;font-weight:800;color:#7c3aed">$${Math.round(myCommission).toLocaleString()}</td>
-        <td style="padding:10px 8px;text-align:center;font-size:10px;color:#94a3b8">${all.filter(q=>q.addedToSheet).length} ✓</td>
-      </tr>
-    </tbody>
-  </table></div>`}`;
-}
 
 
 function pmToggleSheet(id, addIt){
