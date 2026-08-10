@@ -276,7 +276,7 @@ if('caches' in window){
         </button>
         <div class="acc-sub" id="acc-sub-admin">
           <button class="sub-link" id="nav-admin" onclick="goTo('admin')">⚙️ Admin panel</button>
-          <button class="sub-link" id="nav-profit-monitor" onclick="renderProfitMonitor()" style="${_currentUser?.role==='super_admin'?'':'display:none'}">💰 Profit monitor</button>
+          
           <button class="sub-link" id="nav-reports" onclick="goTo('reports')">📈 Reports</button>
           <button class="sub-link" onclick="goTo('coverage-map')">🗺️ Coverage map</button>
           <button class="nav-btn sub-link" data-view="templates" onclick="goTo('templates')">🔁 Templates</button>
@@ -1808,9 +1808,6 @@ function renderBrokerTools(){
   const tools=[
     {ico:'🗺️',title:'Cargo theft map',desc:'Active load routes vs theft hotspots',fn:"goTo('broker-tools');renderCargoTheftMap()"},
     {ico:'🔒',title:'Rate agreement lock',desc:'Lock contracted rates per customer/lane',fn:"renderRateAgreements()"},
-    {ico:'⛔',title:'Margin floor',desc:'Block quotes below your minimum margin',fn:"renderMarginFloor()"},
-    {ico:'📈',title:'Carrier cost trends',desc:'90-day carrier rate history by lane',fn:"renderCarrierCostTrend()"},
-    {ico:'🎯',title:'Backup carrier suggest',desc:'Auto-suggest carriers when load falls through',fn:"renderBackupCarrier()"},
     {ico:'🚫',title:'Carrier payment hold',desc:'Hold payment and block dispatch per carrier',fn:"renderCarrierHolds()"},
     {ico:'🚑',title:'Load recovery',desc:'Structured workflow when carrier goes dark',fn:"renderLoadRecovery()"},
     {ico:'🔔',title:'Re-engage lost customers',desc:'Customers quiet 60+ days with at-risk revenue',fn:"goTo('re-engage');render()"},
@@ -2474,11 +2471,7 @@ function exportRFP(){
 // WIRE UP to existing nav items in Carriers page
 // ─────────────────────────────────────────────────────────────
 // Add quick-access buttons to carrier detail modal
-function brokerCarrierActions(carrierName){
-  return `<div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap">
-    <button onclick="renderBackupCarrier(null)" class="btn" style="font-size:11px">🎯 Use as backup</button>
-    <button onclick="renderCarrierCostTrend()" class="btn" style="font-size:11px">📈 Cost trend</button>
-    <button onclick="renderCarrierHolds()" class="btn" style="font-size:11px;color:${isCarrierOnHold(carrierName)?'#dc2626':''}">🚫 ${isCarrierOnHold(carrierName)?'On hold':'Place hold'}</button>
+function brokerCarrierActions(carrierName)">🚫 ${isCarrierOnHold(carrierName)?'On hold':'Place hold'}</button>
   </div>`;
 }
 </script>
