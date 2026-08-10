@@ -1,19 +1,4 @@
-">+${fmtD(profit)}</div></div>
-          <div><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--gray-400)">Margin</div>
-            <div style="font-size:22px;font-weight:800;color:${margin>=0.10?'var(--green)':margin>=0?'var(--amber)':'var(--red)'}">${pct(margin)}</div></div>
-        </div>
-      </div>`:''}
 
-      <div class="field" style="margin-top:14px"><label>Shifl Ref #</label>
-        <input type="text" value="${aq.shiflRef||''}" oninput="S.aq.shiflRef=this.value" placeholder="Assigned after booking"></div>
-
-      <button class="btn blue" onclick="saveAqQuote()" style="width:100%;justify-content:center;padding:11px;margin-top:4px;font-size:14px">
-        💾 Save Air Freight Quote
-      </button>
-    </div>
-  </div>
-</div>`;
-}
 
 async function saveAqQuote(){
   const aq=S.aq;
