@@ -12632,7 +12632,7 @@ async function pmSyncToSheet(){
         r.margin?+(r.margin*100).toFixed(1):0,
         mycut,
         'FALSE', // Shifl Payout checkbox — unchecked by default
-        r.isActual?'Actual':'Quoted'
+        r.isActual?'Actual':'Estimated'
       ];
     });
 
@@ -12652,27 +12652,27 @@ async function pmSyncToSheet(){
 }
 
 function pmGetAllRows(){
-  const DONE_ST=['Delivered','Invoiced','Paid','Booked'];
-  const dray=(S.quotes||[]).filter(q=>DONE_ST.includes(q.status)).map(q=>({
-    customer:q.customer||'',shiflRef:q.shiflRef||'',
-    lane:(q.port||'')+'→'+(q.zip||''),carrier:q.carrier||'',
-    date:q.date,status:q.status,modeLabel:'Drayage',
-    carrierCost:getShipmentProfit(q,'drayage').cost,
-    customerRate:getShipmentProfit(q,'drayage').revenue,
-    profit:getShipmentProfit(q,'drayage').profit,
-    margin:getShipmentProfit(q,'drayage').margin,
-    isActual:getShipmentProfit(q,'drayage').isActual
-  }));
-  const fq=(window._fqHistory||[]).filter(q=>DONE_ST.includes(q.status)).map(q=>({
-    customer:q.customer||'',shiflRef:q.shiflRef||'',
-    lane:(q.pickupZip||'')+'→'+(q.deliveryZip||''),carrier:q.carrier||'',
-    date:q.date,status:q.status,modeLabel:'Freight',
-    carrierCost:getShipmentProfit(q,'freight').cost,
-    customerRate:getShipmentProfit(q,'freight').revenue,
-    profit:getShipmentProfit(q,'freight').profit,
-    margin:getShipmentProfit(q,'freight').margin,
-    isActual:getShipmentProfit(q,'freight').isActual
-  }));
+  const SYNC_ST=['Delivered','Invoiced','Paid'];
+  const dray=(S.quotes||[]).filter(q=>SYNC_ST.includes(q.status)).map(q=>{
+    const p=getShipmentProfit(q,'drayage');
+    return {
+      customer:q.customer||'',shiflRef:q.shiflRef||'',
+      lane:(q.port||'')+'→'+(q.zip||''),carrier:q.carrier||'',
+      date:q.date,status:q.status,modeLabel:'Drayage',
+      carrierCost:p.cost,customerRate:p.revenue,
+      profit:p.profit,margin:p.margin,isActual:p.isActual
+    };
+  });
+  const fq=(window._fqHistory||[]).filter(q=>SYNC_ST.includes(q.status)).map(q=>{
+    const p=getShipmentProfit(q,'freight');
+    return {
+      customer:q.customer||'',shiflRef:q.shiflRef||'',
+      lane:(q.pickupZip||'')+'→'+(q.deliveryZip||''),carrier:q.carrier||'',
+      date:q.date,status:q.status,modeLabel:'Freight',
+      carrierCost:p.cost,customerRate:p.revenue,
+      profit:p.profit,margin:p.margin,isActual:p.isActual
+    };
+  });
   return [...dray,...fq].sort((a,b)=>(b.date||'').localeCompare(a.date||''));
 }
 
