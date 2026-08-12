@@ -9657,13 +9657,13 @@ function renderProfitMonitor(){
         <td style="padding:10px 8px;text-align:center;font-size:10px;color:#94a3b8">${all.filter(q=>q.addedToSheet).length} ✓</td>
       </tr>
     </tbody>
-  </table></div>
+  </table></div>`}
   ${(S._pmTotal||0)>30?`<div style="display:flex;align-items:center;justify-content:center;gap:10px;padding:16px;border-top:0.5px solid #e8eaed">
     <button onclick="if(S.pmPage>0){S.pmPage--;renderProfitMonitor()}" ${(S.pmPage||0)===0?'disabled':''} style="padding:6px 14px;border-radius:8px;border:1px solid #e8eaed;background:#fff;font-size:13px;font-weight:500;font-family:inherit;cursor:pointer">← Prev</button>
     <span style="font-size:13px;color:#6b7280">Page ${(S.pmPage||0)+1} of ${S._pmTotalPages||1} &nbsp;·&nbsp; ${S._pmTotal} total loads</span>
     <button onclick="if((S.pmPage||0)<(S._pmTotalPages||1)-1){S.pmPage++;renderProfitMonitor()}" ${(S.pmPage||0)>=(S._pmTotalPages||1)-1?'disabled':''} style="padding:6px 14px;border-radius:8px;border:1px solid #e8eaed;background:#fff;font-size:13px;font-weight:500;font-family:inherit;cursor:pointer">Next →</button>
   </div>`:''}
-  \`}\`;
+  `};
 }
 async function pmUpdatePrice(id, type, field, newVal){
   const val = parseFloat(newVal);
