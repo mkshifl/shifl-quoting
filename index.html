@@ -12619,32 +12619,59 @@ async function pmSyncToSheet(){
   const btn=document.getElementById('pm-sync-btn');
   if(btn){btn.textContent='⏳ Syncing...';btn.disabled=true;}
   try{
-    const rows=pmGetAllRows();
-    const headers=['Date','Ref #','Customer','Lane','Carrier','Mode','Status','Carrier Cost','Customer Rate','Profit','Margin %','My 15% ($)','Shifl Payout','Type'];
-    const data=rows.map(r=>{
-      const profit=+(r.profit||0).toFixed(2);
+    // Get already-synced ref numbers from localStorage
+    const synced=JSON.parse(localStorage.getItem('pm_synced_refs')||'[]');
+
+    // Only pull DONE statuses — same as profit monitor delivered tab
+    const DONE_ST=['Delivered','Invoiced','Paid'];
+    const dray=(S.quotes||[]).filter(q=>DONE_ST.includes(q.status));
+    const fq=(window._fqHistory||[]).filter(q=>DONE_ST.includes(q.status));
+
+    // Filter to only NEW ones not yet synced
+    const newDray=dray.filter(q=>q.shiflRef&&!synced.includes(q.shiflRef));
+    const newFq=fq.filter(q=>q.shiflRef&&!synced.includes(q.shiflRef));
+
+    if(!newDray.length&&!newFq.length){
+      showToast('Nothing new to sync — all loads already in sheet','info',2500);
+      if(btn){btn.textContent='📊 Sync to Sheet';btn.disabled=false;}
+      return;
+    }
+
+    const headers=['Date','Ref #','Customer','Lane','Carrier','Mode','Status','Carrier Cost','Customer Rate','Profit','Margin %','My 15% ($)','Shifl Payout'];
+    const newRows=[];
+    const newRefs=[];
+
+    [...newDray.map(q=>({q,type:'drayage',mode:'Drayage'})),
+     ...newFq.map(q=>({q,type:'freight',mode:'Freight'}))]
+    .forEach(({q,type,mode})=>{
+      const p=getShipmentProfit(q,type);
+      const profit=+(p.profit||0).toFixed(2);
       const mycut=+(profit*0.15).toFixed(2);
-      return [
-        r.date||'',r.shiflRef||'',r.customer||'',r.lane||'',r.carrier||'',
-        r.modeLabel||'',r.status||'',
-        +(r.carrierCost||0).toFixed(2),+(r.customerRate||0).toFixed(2),
+      newRows.push([
+        q.date||'',q.shiflRef||'',q.customer||'',
+        type==='drayage'?(q.port||'')+'→'+(q.zip||''):(q.pickupZip||'')+'→'+(q.deliveryZip||''),
+        q.carrier||'',mode,q.status||'',
+        +(p.cost||0).toFixed(2),+(p.revenue||0).toFixed(2),
         profit,
-        r.margin?+(r.margin*100).toFixed(1):0,
+        p.margin?+(p.margin*100).toFixed(1):0,
         mycut,
-        'FALSE', // Shifl Payout checkbox — unchecked by default
-        r.isActual?'Actual':'Estimated'
-      ];
+        'FALSE'
+      ]);
+      newRefs.push(q.shiflRef);
     });
 
-    // Send headers first (only writes if sheet is empty)
+    // Send headers first (script only writes if tab is empty)
     await fetch(SHEET_URL,{method:'POST',mode:'no-cors',body:JSON.stringify({headers})});
-    await new Promise(r=>setTimeout(r,600));
-    // Send rows — script skips any ref# already in sheet
-    await fetch(SHEET_URL,{method:'POST',mode:'no-cors',body:JSON.stringify({rows:data})});
+    await new Promise(r=>setTimeout(r,800));
+    // Send new rows only
+    await fetch(SHEET_URL,{method:'POST',mode:'no-cors',body:JSON.stringify({rows:newRows})});
 
-    if(btn){btn.textContent='✅ Synced!';btn.style.background='linear-gradient(135deg,#059669,#34d399)';}
+    // Save synced refs to localStorage
+    localStorage.setItem('pm_synced_refs',JSON.stringify([...synced,...newRefs]));
+
+    if(btn){btn.textContent='✅ '+newRows.length+' added!';btn.style.background='linear-gradient(135deg,#059669,#34d399)';}
     setTimeout(()=>{if(btn){btn.textContent='📊 Sync to Sheet';btn.style.background='linear-gradient(135deg,#2563eb,#60a5fa)';btn.disabled=false;}},3000);
-    showToast('✅ Synced to TMS Numbers tab','success',3000);
+    showToast('✅ Added '+newRows.length+' new loads to TMS Numbers tab','success',3000);
   }catch(e){
     if(btn){btn.textContent='❌ Failed';btn.disabled=false;}
     showToast('Sync failed: '+e.message,'error',3000);
