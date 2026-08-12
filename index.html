@@ -1305,7 +1305,7 @@ async function dbSaveFqQuote(q){
   const{error}=await db.from('fq_quotes').upsert({id:q.id,date:q.date,customer:q.customer||'',data:q});
   if(error) throw error;
 }
-async function dbUpdateFqStatus(id,status){
+async async function dbUpdateFqStatus(id,status){
   const q=(window._fqHistory||[]).find(q=>q.id===id);if(!q) return;
   q.status=status;
   const{error}=await db.from('fq_quotes').update({data:q}).eq('id',id);
