@@ -918,9 +918,12 @@ if('caches' in window){
         </button>
         <div class="acc-sub" id="acc-sub-admin">
           <button class="sub-link" id="nav-admin" onclick="goTo('admin')">⚙️ Admin panel</button>
-          <button class="sub-link" id="nav-profit-monitor" onclick="renderProfitMonitor()">💰 Profit monitor</button>
+          <button class="sub-link" id="nav-profit-monitor" onclick="renderProfitMonitor()" style="${_currentUser?.role==='super_admin'?'':'display:none'}">💰 Profit monitor</button>
+          <button class="sub-link" id="nav-reports" onclick="goTo('reports')">📈 Reports</button>
           <button class="sub-link" onclick="goTo('coverage-map')">🗺️ Coverage map</button>
+          <button class="nav-btn sub-link" data-view="templates" onclick="goTo('templates')">🔁 Templates</button>
           <button class="sub-link" id="nav-activity" onclick="goTo('activity')">📊 Activity log</button>
+          <button class="sub-link" id="nav-auditlog" onclick="goTo('auditlog')">📋 Audit log</button>
         </div>
       </div>
 
@@ -1068,7 +1071,7 @@ const US_PORTS=[
   // ── CN / CPKC Railyards ──────────────────────────────────────
   'CN Chicago Intermodal, IL','CN Memphis, TN','CN Detroit, MI',
   'CPKC Franklin Park, Chicago, IL','CPKC Kansas City, MO','CPKC Dallas, TX',
-,"Port of Felixstowe, UK","Port of Southampton, UK","Port of London (Tilbury), UK","Port of Liverpool, UK","Port of Bristol (Avonmouth), UK","Port of Hull, UK","Port of Immingham, UK","Port of Grimsby, UK"];
+,"Port of Felixstowe, UK","Port of Southampton, UK","Port of London (Tilbury), UK","Port of Liverpool, UK","Port of Bristol (Avonmouth), UK","Port of Hull, UK","Port of Immingham, UK","Port of Grimsby, UK","Port of Felixstowe, UK","Port of Southampton, UK","Port of London (Tilbury), UK","Port of Liverpool, UK","Port of Bristol (Avonmouth), UK","Port of Hull, UK","Port of Immingham, UK","Port of Grimsby, UK"];
 function isApplicable(c,ld){
   if((c==='det_port'||c==='det_cust')&&ld==='Drop') return false;
   if(c==='bobtail') return false; // bobtail handled per-quote like genset
@@ -1468,7 +1471,7 @@ async function initApp(){
     },1000);
     try{
       realtimeChannel=db.channel('app-changes')
-        .on('postgres_changes',{event:'*',schema:'public',table:'quotes'},async()=>{try{S.quotes=await dbLoadQuotes();setTimeout(setupRealtimeSync,2000);if(S.view==='log')renderLog();if(S.view==='dash')renderDash();updateActiveBadge();}catch(e){}})
+        .on('postgres_changes',{event:'*',schema:'public',table:'quotes'},async()=>{try{S.quotes=await dbLoadQuotes();if(S.view==='log')renderLog();if(S.view==='dash')renderDash();updateActiveBadge();}catch(e){}})
         .on('postgres_changes',{event:'*',schema:'public',table:'fq_quotes'},async()=>{try{window._fqHistory=await withTimeout(dbLoadFqQuotes(),5000,window._fqHistory);if(S.view==='freight'&&S.fqTab==='log')renderFqLog();updateActiveBadge();}catch(e){}})
         .subscribe(status=>{try{setSyncStatus(status==='SUBSCRIBED'?'on':status==='CLOSED'?'off':'loading');}catch(e){}});
     }catch(e){}
@@ -8404,7 +8407,182 @@ async function logAction(action, details='', entityType='', entityId=''){
   }catch(e){ console.log('Audit log:',e.message); } // silent fail
 }
 
+async function renderAuditLog(){
+  if(!can('view_admin')){$('page').innerHTML='<div style="padding:40px;text-align:center;color:var(--gray-400)">Admin access required</div>';return;}
+  $('page').innerHTML='<div class="loading-page"><div class="spin" style="margin:0 auto 12px"></div><div style="color:var(--gray-400);font-size:13px">Loading audit log...</div></div>';
+  try{
+    // Fetch audit log AND all users simultaneously
+    const [{data:logs},{data:allUsers}]=await Promise.all([
+      db.from('audit_log').select('*').order('created_at',{ascending:false}).limit(1000),
+      db.from('app_users').select('id,name,email,role,active,last_login').order('name')
+    ]);
+    const all=logs||[];
+    const users=allUsers||[];
 
+    // Stats
+    const today=localDateStr();
+    const todayCount=all.filter(l=>l.created_at?.startsWith(today)).length;
+    const week=new Date(Date.now()-7*864e5).toISOString();
+    const weekCount=all.filter(l=>l.created_at>=week).length;
+    const activeUserIds=[...new Set(all.map(l=>l.user_id).filter(Boolean))];
+
+    // Filters
+    const filterUser=S._auditUser||'all';
+    const filterAction=S._auditAction||'all';
+    const filterDate=S._auditDate||'all';
+
+    let shown=all.filter(l=>{
+      if(filterUser!=='all'&&l.user_id!==filterUser&&l.user_name!==filterUser) return false;
+      if(filterAction!=='all'&&l.action!==filterAction) return false;
+      if(filterDate==='today'&&!l.created_at?.startsWith(today)) return false;
+      if(filterDate==='week'&&l.created_at<week) return false;
+      if(filterDate==='month'&&l.created_at<new Date(Date.now()-30*864e5).toISOString()) return false;
+      return true;
+    });
+
+    // ── KPI row ───────────────────────────────────────────────────────────
+    let h=`<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:18px">
+      <div class="kpi"><div class="kpi-lbl">Total entries</div><div class="kpi-val">${all.length.toLocaleString()}</div></div>
+      <div class="kpi"><div class="kpi-lbl">Today</div><div class="kpi-val" style="color:var(--steel)">${todayCount}</div></div>
+      <div class="kpi"><div class="kpi-lbl">Last 7 days</div><div class="kpi-val">${weekCount}</div></div>
+      <div class="kpi"><div class="kpi-lbl">Active users</div><div class="kpi-val" style="color:var(--green)">${activeUserIds.length} / ${users.length}</div></div>
+    </div>`;
+
+    // ── User activity cards ────────────────────────────────────────────────
+    h+=`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px;margin-bottom:18px">`;
+    users.forEach(u=>{
+      const uLogs=all.filter(l=>l.user_id===u.id||l.user_name===u.name);
+      const lastLog=uLogs[0];
+      const lastLogin=all.filter(l=>(l.user_id===u.id||l.user_name===u.name)&&l.action==='login')[0];
+      const ROLE_LABELS={super_admin:'Super Admin',admin:'Admin',team_member:'Team Member',user:'Team Member'};
+      const hasActivity=uLogs.length>0;
+      const isFiltered=filterUser!=='all'&&(filterUser===u.id||filterUser===u.name);
+      h+=`<div onclick="S._auditUser=S._auditUser===u.id?'all':'${u.id}';renderAuditLog()"
+        style="background:${isFiltered?'var(--blue-bg)':'#fff'};border:1.5px solid ${isFiltered?'var(--steel)':'var(--gray-200)'};border-radius:10px;padding:12px;cursor:pointer;transition:border-color .15s"
+        onmouseover="this.style.borderColor='var(--steel)'" onmouseout="this.style.borderColor='${isFiltered?'var(--steel)':'var(--gray-200)'}'"
+      >
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <div style="width:28px;height:28px;border-radius:50%;background:${u.active?'var(--steel)':'var(--gray-300)'};color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0">${u.name.slice(0,2).toUpperCase()}</div>
+          <div style="min-width:0">
+            <div style="font-size:12px;font-weight:700;color:var(--navy);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${u.name}</div>
+            <div style="font-size:10px;color:var(--gray-400)">${ROLE_LABELS[u.role]||u.role}${u.active?'':' · Inactive'}</div>
+          </div>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:10px">
+          <span style="color:${hasActivity?'var(--steel)':'var(--gray-300)'};font-weight:600">${uLogs.length} actions</span>
+          <span style="color:var(--gray-400)">${lastLogin?new Date(lastLogin.created_at).toLocaleDateString('en-US',{month:'short',day:'numeric'}):'Never logged in'}</span>
+        </div>
+      </div>`;
+    });
+    h+=`</div>`;
+
+    // ── Filter bar ─────────────────────────────────────────────────────────
+    const userOpts=users.map(u=>`<option value="${u.id}"${filterUser===u.id?' selected':''}>${u.name}${all.filter(l=>l.user_id===u.id||l.user_name===u.name).length===0?' (no activity)':''}</option>`).join('');
+    const actionGroups={
+      'Logins':['login','logout'],
+      'Quotes':['quote_created','quote_deleted','quote_booked','status_changed'],
+      'Rates':['rate_added','rate_edited','rate_deleted'],
+      'Carriers':['carrier_added','carrier_edited','carrier_deleted'],
+      'Users':['user_added','user_edited','user_deleted'],
+      'Finance':['invoice_sent','payment_received','margin_override'],
+      'Email':['email_sent'],
+    };
+    const allActions=[...new Set(all.map(l=>l.action))];
+    let actionOpts='';
+    Object.entries(actionGroups).forEach(([grp,acts])=>{
+      const matching=acts.filter(a=>allActions.includes(a));
+      if(matching.length){
+        actionOpts+=`<optgroup label="${grp}">`;
+        matching.forEach(a=>actionOpts+=`<option value="${a}"${filterAction===a?' selected':''}>${ACTION_LABELS[a]||a}</option>`);
+        actionOpts+=`</optgroup>`;
+      }
+    });
+
+    h+=`<div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center">
+      <select onchange="S._auditUser=this.value;renderAuditLog()" style="padding:7px 10px;border:1px solid var(--gray-200);border-radius:var(--radius);font-size:13px;font-family:inherit;min-width:160px">
+        <option value="all">All users</option>${userOpts}
+      </select>
+      <select onchange="S._auditAction=this.value;renderAuditLog()" style="padding:7px 10px;border:1px solid var(--gray-200);border-radius:var(--radius);font-size:13px;font-family:inherit">
+        <option value="all">All actions</option>${actionOpts}
+      </select>
+      <select onchange="S._auditDate=this.value;renderAuditLog()" style="padding:7px 10px;border:1px solid var(--gray-200);border-radius:var(--radius);font-size:13px;font-family:inherit">
+        <option value="all"${filterDate==='all'?' selected':''}>All time</option>
+        <option value="today"${filterDate==='today'?' selected':''}>Today</option>
+        <option value="week"${filterDate==='week'?' selected':''}>Last 7 days</option>
+        <option value="month"${filterDate==='month'?' selected':''}>Last 30 days</option>
+      </select>
+      ${filterUser!=='all'||filterAction!=='all'||filterDate!=='all'?`<button class="btn sm" onclick="S._auditUser='all';S._auditAction='all';S._auditDate='all';renderAuditLog()">✕ Clear filters</button>`:''}
+      <span style="font-size:12px;color:var(--gray-400)">${shown.length.toLocaleString()} entries</span>
+      <button class="btn sm" onclick="exportAuditLog()" style="margin-left:auto">📥 Export CSV</button>
+    </div>`;
+
+    // ── Table ──────────────────────────────────────────────────────────────
+    const ACTION_COLORS={
+      login:'#dbeafe',logout:'#f3f4f6',
+      quote_created:'#dcfce7',quote_deleted:'#fee2e2',quote_booked:'#d1fae5',status_changed:'#fef3c7',
+      rate_added:'#e0f2fe',rate_edited:'#e0e7ff',rate_deleted:'#fee2e2',
+      carrier_added:'#f0fdf4',carrier_edited:'#e0e7ff',carrier_deleted:'#fee2e2',
+      user_added:'#fef9c3',user_edited:'#e0e7ff',user_deleted:'#fee2e2',
+      invoice_sent:'#fef3c7',payment_received:'#dcfce7',margin_override:'#fef3c7',
+      email_sent:'#e0e7ff',
+    };
+    const ACTION_TEXT={
+      login:'#1e40af',logout:'#6b7280',
+      quote_created:'#166534',quote_deleted:'#b91c1c',quote_booked:'#065f46',status_changed:'#92400e',
+      rate_added:'#0c4a6e',rate_edited:'#3730a3',rate_deleted:'#b91c1c',
+      carrier_added:'#14532d',carrier_edited:'#3730a3',carrier_deleted:'#b91c1c',
+      user_added:'#713f12',user_edited:'#3730a3',user_deleted:'#b91c1c',
+      invoice_sent:'#92400e',payment_received:'#166534',margin_override:'#92400e',
+      email_sent:'#3730a3',
+    };
+
+    if(!shown.length){
+      h+='<div class="empty"><div class="empty-ico">🔍</div><div style="font-size:15px;font-weight:700;color:var(--gray-500)">No entries match filters</div></div>';
+    } else {
+      h+=`<div class="tbl-wrap"><table><thead><tr>
+        <th style="width:130px">Date &amp; Time</th>
+        <th style="width:130px">User</th>
+        <th style="width:160px">Action</th>
+        <th>Details</th>
+        <th style="width:90px">Type</th>
+      </tr></thead><tbody>`;
+
+      h+=shown.slice(0,300).map(l=>{
+        const dt=new Date(l.created_at);
+        const dateStr=dt.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+        const timeStr=dt.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',second:'2-digit'});
+        const bg=ACTION_COLORS[l.action]||'#f1f5f9';
+        const col=ACTION_TEXT[l.action]||'var(--gray-600)';
+        const user=users.find(u=>u.id===l.user_id);
+        const ROLE_LABELS={super_admin:'SA',admin:'Admin',team_member:'TM',user:'TM'};
+        const roleLabel=user?ROLE_LABELS[user.role]||'':'' ;
+        return `<tr>
+          <td style="white-space:nowrap">
+            <div style="font-size:11px;font-weight:600;color:var(--gray-600)">${dateStr}</div>
+            <div style="font-size:10px;color:var(--gray-400)">${timeStr}</div>
+          </td>
+          <td>
+            <div style="font-size:12px;font-weight:700;color:var(--navy)">${l.user_name||'System'}</div>
+            ${roleLabel?`<div style="font-size:10px;color:var(--gray-400)">${roleLabel}</div>`:''}
+          </td>
+          <td>
+            <span style="display:inline-block;font-size:11px;background:${bg};color:${col};padding:3px 9px;border-radius:5px;font-weight:700;white-space:nowrap">
+              ${ACTION_LABELS[l.action]||l.action}
+            </span>
+          </td>
+          <td style="font-size:12px;color:var(--gray-600);max-width:320px">${l.details||'—'}</td>
+          <td style="font-size:10px;color:var(--gray-400);white-space:nowrap">${l.entity_type?`<span style="background:var(--gray-100);padding:2px 6px;border-radius:4px">${l.entity_type}</span>`:''}</td>
+        </tr>`;
+      }).join('');
+      h+='</tbody></table></div>';
+      if(shown.length>300) h+=`<div style="text-align:center;padding:12px;font-size:12px;color:var(--gray-400)">Showing 300 of ${shown.length} entries — export CSV for full data</div>`;
+    }
+    $('page').innerHTML=h;
+  }catch(e){
+    $('page').innerHTML=`<div style="padding:20px;color:var(--red)">Error loading audit log: ${e.message}</div>
+    <div style="padding:0 20px;font-size:13px;color:var(--gray-500);margin-top:8px">Make sure you've run the audit_log setup SQL in Supabase.</div>`;
+  }
+}
 
 function exportAuditLog(){
   db.from('audit_log').select('*').order('created_at',{ascending:false}).then(({data})=>{
@@ -9402,358 +9580,6 @@ function updateSubActive(view,subtab){
   else if(view==='invoicing') target='nav-invoicing';
   else if(view==='tms') target='nav-tms';
   if(target&&$(target)) $(target).classList.add('active');
-}
-
-function renderProfitMonitor(){
-  if(_currentUser?.role!=='super_admin'){
-    $('page').innerHTML='<div class="empty"><p>Super Admin access only.</p></div>';return;
-  }
-  // PIN check (skip if already verified this session)
-  if(!sessionStorage.getItem('pm_pin_ok')){
-    const userPin=localStorage.getItem('shifl_pm_pin')||'';
-    if(userPin){
-      $('page').innerHTML=`<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:60vh">
-        <div style="font-size:40px;margin-bottom:12px">🔐</div>
-        <div style="font-size:18px;font-weight:700;color:#0a1628;margin-bottom:4px">Profit Monitor</div>
-        <div style="font-size:13px;color:#64748b;margin-bottom:20px">Enter PIN to continue</div>
-        <input id="pm-pin-input" type="password" maxlength="4" placeholder="••••" style="width:120px;text-align:center;padding:10px;border:2px solid #e2e8f0;border-radius:10px;font-size:24px;letter-spacing:8px;margin-bottom:12px" onkeyup="if(this.value.length===4){if(this.value===localStorage.getItem('shifl_pm_pin')){sessionStorage.setItem('pm_pin_ok','1');renderProfitMonitor();}else{this.value='';this.style.borderColor='#dc2626';setTimeout(()=>this.style.borderColor='#e2e8f0',1000);}}">
-        <div style="font-size:11px;color:#94a3b8">Set PIN in Settings or type it above</div>
-      </div>`;
-      return;
-    }
-  }
-
-  const commPct = parseFloat(localStorage.getItem('shifl_comm_pct')||'0');
-  const modeFilter = S.pmFilter||'all';
-  const dateFilter = S.pmDate||'all';
-  const tab = S.pmTab||'delivered'; // active | delivered | all
-
-  // Status sets
-  const ACTIVE_ST  = ['Booked'];
-  const DONE_ST    = ['Delivered','Invoiced','Paid'];
-  const ALL_ST     = [...ACTIVE_ST,...DONE_ST];
-
-  function buildRows(statusSet){
-    const dray=(S.quotes||[]).filter(q=>statusSet.includes(q.status)).map(q=>({
-      id:q.id,type:'drayage',customer:q.customer||'—',shiflRef:q.shiflRef||'—',
-      lane:`${q.port||'—'} → ${q.zip||'—'}`,carrier:q.carrier||'—',
-      date:q.date,status:q.status,
-      carrierCost:(p=>p.cost)(getShipmentProfit(q,'drayage')),
-      customerRate:(p=>p.revenue)(getShipmentProfit(q,'drayage')),
-      profit:(p=>p.profit)(getShipmentProfit(q,'drayage')),
-      margin:(p=>p.margin)(getShipmentProfit(q,'drayage')),
-      isActual:(p=>p.isActual)(getShipmentProfit(q,'drayage')),
-      modeLabel:'Drayage',
-      addedToSheet:localStorage.getItem('pm_sheet_'+q.id)==='1'
-    }));
-    const fq=(window._fqHistory||[]).filter(q=>statusSet.includes(q.status)).map(q=>({
-      id:q.id,type:'freight',customer:q.customer||'—',shiflRef:q.shiflRef||'—',
-      lane:`${q.pickupZip||'—'} → ${q.deliveryZip||'—'}`,carrier:q.carrier||'—',
-      date:q.date,status:q.status,
-      carrierCost:(p=>p.cost)(getShipmentProfit(q,'freight')),
-      customerRate:(p=>p.revenue)(getShipmentProfit(q,'freight')),
-      profit:(p=>p.profit)(getShipmentProfit(q,'freight')),
-      margin:(p=>p.margin)(getShipmentProfit(q,'freight')),
-      isActual:(p=>p.isActual)(getShipmentProfit(q,'freight')),
-      modeLabel:q.fqMode||'Freight',
-      addedToSheet:localStorage.getItem('pm_sheet_'+q.id)==='1'
-    }));
-    const aq=(window._aqHistory||[]).filter(q=>statusSet.includes(q.status)).map(q=>({
-      id:q.id,type:'air',customer:q.customer||'—',shiflRef:q.shiflRef||q.quoteNum||'—',
-      lane:`${q.originAirport||'—'} → ${q.destAirport||'—'}`,carrier:q.carrier||'—',
-      date:q.date,status:q.status,
-      carrierCost:q.carrierRates?.total||0,
-      customerRate:q.customerRates?.total||q.customerRate||0,
-      profit:(q.customerRates?.total||q.customerRate||0)-(q.carrierRates?.total||0),
-      margin:q.customerRates?.total>0?((q.customerRates.total-(q.carrierRates?.total||0))/q.customerRates.total):0,
-      isActual:false,modeLabel:'Air',
-      addedToSheet:localStorage.getItem('pm_sheet_'+q.id)==='1'
-    }));
-    const tl=(window._tlHistory||[]).filter(q=>statusSet.includes(q.status)).map(q=>({
-      id:q.id,type:'transload',customer:q.customer||'—',shiflRef:q.shiflRef||'—',
-      lane:`${q.drayPort||'—'} → ${q.outDeliveryZip||'—'}`,carrier:q.outCarrier||'—',
-      date:q.date,status:q.status,
-      carrierCost:(p=>p.cost)(getShipmentProfit(q,'transload')),
-      customerRate:(p=>p.revenue)(getShipmentProfit(q,'transload')),
-      profit:(p=>p.profit)(getShipmentProfit(q,'transload')),
-      margin:(p=>p.margin)(getShipmentProfit(q,'transload')),
-      isActual:(p=>p.isActual)(getShipmentProfit(q,'transload')),
-      modeLabel:'Transload',
-      addedToSheet:localStorage.getItem('pm_sheet_'+q.id)==='1'
-    }));
-    return [...dray,...fq,...tl,...aq];
-  }
-
-  const statusSet = tab==='active'?ACTIVE_ST : tab==='delivered'?DONE_ST : ALL_ST;
-  let all = buildRows(statusSet);
-
-  // Date filter
-  const today=localDateStr();
-  const week=new Date(Date.now()-7*864e5).toISOString().slice(0,10);
-  const month=new Date(Date.now()-30*864e5).toISOString().slice(0,10);
-  if(dateFilter==='week')  all=all.filter(q=>q.date>=week);
-  else if(dateFilter==='month') all=all.filter(q=>q.date>=month);
-  else if(dateFilter==='today') all=all.filter(q=>q.date===today);
-
-  // Mode filter
-  if(modeFilter!=='all') all=all.filter(q=>q.type===modeFilter);
-
-  // Sort newest first
-  all.sort((a,b)=>(b.date||'').localeCompare(a.date||''));
-  S._pmTotal=all.length;
-  S._pmTotalPages=Math.ceil(all.length/30)||1;
-  if((S.pmPage||0)>=S._pmTotalPages) S.pmPage=0;
-
-  const totalCarrier=all.reduce((s,q)=>s+q.carrierCost,0);
-  const totalCustomer=all.reduce((s,q)=>s+q.customerRate,0);
-  const totalProfit=all.reduce((s,q)=>s+q.profit,0);
-  const totalMargin=totalCustomer>0?totalProfit/totalCustomer:0;
-  const myCommission=totalProfit*(commPct/100);
-
-  // Tab counts
-  const activeCnt = buildRows(ACTIVE_ST).length;
-  const delivCnt  = buildRows(DONE_ST).length;
-  const allCnt    = buildRows(ALL_ST).length;
-
-  $('topbar-right').innerHTML=`
-    <div style="display:flex;gap:8px;align-items:center">
-      <button onclick="pmDownloadCSV()" style="display:flex;align-items:center;gap:6px;padding:7px 14px;border-radius:8px;border:none;background:linear-gradient(135deg,#059669,#34d399);color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;box-shadow:0 2px 8px rgba(5,150,105,.3)">
-        📥 Download CSV
-      </button>
-      <button onclick="pmSyncToSheet()" id="pm-sync-btn" style="display:flex;align-items:center;gap:6px;padding:7px 14px;border-radius:8px;border:none;background:linear-gradient(135deg,#2563eb,#60a5fa);color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;box-shadow:0 2px 8px rgba(37,99,235,.3)">
-        📊 Sync to Sheet
-      </button>
-    </div>`;
-
-  $('page').style.padding='12px 12px';
-
-  $('page').innerHTML=`
-  <!-- Tabs -->
-  <div style="display:flex;gap:0;border-bottom:2px solid #e2e8f0;margin-bottom:14px">
-    ${[['active','⚡ Active',activeCnt,'#d97706'],['delivered','✅ Delivered',delivCnt,'#059669'],['all','📋 All',allCnt,'#2563eb']].map(([t,lbl,cnt,col])=>`
-      <button onclick="S.pmTab='${t}';renderProfitMonitor()" style="padding:10px 22px;border:none;border-bottom:${tab===t?'3px solid '+col:'3px solid transparent'};background:none;font-size:13px;font-weight:${tab===t?'700':'500'};color:${tab===t?col:'#94a3b8'};cursor:pointer;font-family:inherit;display:flex;align-items:center;gap:7px">
-        ${lbl} <span style="background:${tab===t?col:'#e2e8f0'};color:${tab===t?'#fff':'#64748b'};border-radius:99px;font-size:10px;font-weight:700;padding:1px 7px">${cnt}</span>
-      </button>`).join('')}
-    <div style="flex:1"></div>
-    <!-- Commission -->
-    <div style="display:flex;align-items:center;gap:6px;padding:0 12px">
-      <span style="font-size:11px;color:#94a3b8;white-space:nowrap">Commission:</span>
-      <input type="number" id="pm-comm" value="${commPct}" min="0" max="100" step="0.5"
-        oninput="localStorage.setItem('shifl_comm_pct',this.value);renderProfitMonitor()"
-        style="width:56px;padding:4px 8px;font-size:13px;font-weight:700;border:1.5px solid #2563eb;border-radius:6px;text-align:center">
-      <span style="font-size:13px;font-weight:700;color:#374151">%</span>
-    </div>
-    <!-- Mode filter -->
-    <div style="display:flex;gap:4px;padding:0 8px;align-items:center">
-      <div style="display:flex;gap:4px;padding:0 8px;align-items:center">
-      <span style="font-size:11px;color:#94a3b8">Rep:</span>
-      ${[['all','All'],[ ...[...new Set([...(S.quotes||[]).map(q=>q.created_by_name||'').filter(Boolean)]) ] .map(r=>[r,r]) ]].flat(0).filter((v,i,a)=>i===0||a[i-1][0]!==v[0]).map(([r,l])=>`<button onclick="S.pmRep='${r}';renderProfitMonitor()" style="padding:4px 8px;border-radius:6px;border:1px solid #e2e8f0;background:${(S.pmRep||'all')===r?'#0a1628':'#fff'};color:${(S.pmRep||'all')===r?'#fff':'#64748b'};font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">${l}</button>`).join('')}
-    </div>
-    ${['all','drayage','freight','transload'].map(f=>`<button onclick="S.pmFilter='${f}';renderProfitMonitor()"" style="padding:4px 10px;border-radius:6px;border:1px solid #e2e8f0;background:${modeFilter===f?'#0a1628':'#fff'};color:${modeFilter===f?'#fff':'#64748b'};font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">${f==='all'?'All':f.charAt(0).toUpperCase()+f.slice(1)}</button>`).join('')}
-    </div>
-    <!-- Date filter -->
-    <div style="display:flex;gap:4px;padding:0 8px;align-items:center">
-      ${['all','today','week','month'].map(d=>`<button onclick="S.pmDate='${d}';renderProfitMonitor()" style="padding:4px 10px;border-radius:6px;border:1px solid #e2e8f0;background:${dateFilter===d?'#0a1628':'#fff'};color:${dateFilter===d?'#fff':'#64748b'};font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">${d==='all'?'All time':d.charAt(0).toUpperCase()+d.slice(1)}</button>`).join('')}
-    </div>
-  </div>
-
-  <!-- KPI strip -->
-  <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:14px">
-    <div style="background:#fff;border-radius:10px;border:1px solid #e2e8f0;padding:12px 14px">
-      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#94a3b8;margin-bottom:4px">Loads</div>
-      <div style="font-size:22px;font-weight:800;color:#0a1628">${all.length}</div>
-      <div style="font-size:10px;color:#94a3b8;margin-top:2px">${tab==='active'?'in transit':tab==='delivered'?'completed':'total'}</div>
-    </div>
-    <div style="background:#fff;border-radius:10px;border:1px solid #e2e8f0;padding:12px 14px">
-      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#94a3b8;margin-bottom:4px">Carrier pay</div>
-      <div style="font-size:22px;font-weight:800;color:#dc2626">$${Math.round(totalCarrier).toLocaleString()}</div>
-      <div style="font-size:10px;color:#94a3b8;margin-top:2px">${tab==='active'?'est.':''}</div>
-    </div>
-    <div style="background:#fff;border-radius:10px;border:1px solid #e2e8f0;padding:12px 14px">
-      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#94a3b8;margin-bottom:4px">Sell rate</div>
-      <div style="font-size:22px;font-weight:800;color:#2563eb">$${Math.round(totalCustomer).toLocaleString()}</div>
-      <div style="font-size:10px;color:#94a3b8;margin-top:2px">${tab==='active'?'est.':''}</div>
-    </div>
-    <div style="background:#fff;border-radius:10px;border:1px solid #e2e8f0;padding:12px 14px;border-left:3px solid #059669">
-      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#94a3b8;margin-bottom:4px">Gross profit</div>
-      <div style="font-size:22px;font-weight:800;color:#059669">$${Math.round(totalProfit).toLocaleString()}</div>
-      <div style="font-size:10px;color:#059669;margin-top:2px">${Math.round(totalMargin*100)}% margin${tab==='active'?' · est.':''}</div>
-    </div>
-    <div style="background:#fff;border-radius:10px;border:1px solid #e2e8f0;padding:12px 14px;border-left:3px solid #7c3aed">
-      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#94a3b8;margin-bottom:4px">My cut (${commPct}%)</div>
-      <div style="font-size:22px;font-weight:800;color:#7c3aed">$${Math.round(myCommission).toLocaleString()}</div>
-      <div style="font-size:10px;color:#94a3b8;margin-top:2px">${tab==='active'?'est.':''}</div>
-    </div>
-  </div>
-
-  <!-- Table — full width -->
-  ${all.length===0?'<div style="text-align:center;padding:60px;color:#94a3b8"><div style="font-size:36px;margin-bottom:12px">'+(tab==='active'?'🚛':tab==='delivered'?'✅':'📋')+'</div><div style="font-size:15px;font-weight:600;color:#374151;margin-bottom:6px">No '+(tab==='active'?'active':'delivered')+' loads</div><div style="font-size:12px">'+(tab==='active'?'Loads marked Booked will appear here':'Loads marked Delivered, Invoiced, or Paid will appear here')+'</div></div>':`<div style="overflow-x:auto;border-radius:10px;border:1px solid #e2e8f0;background:#fff">
-  <table style="width:100%;border-collapse:collapse;table-layout:fixed">
-    <colgroup>
-      <col style="width:12%">
-      <col style="width:6%">
-      <col style="width:6%">
-      <col style="width:11%">
-      <col style="width:9%">
-      <col style="width:6%">
-      <col style="width:6%">
-      <col style="width:8%">
-      <col style="width:8%">
-      <col style="width:7%">
-      <col style="width:5%">
-      <col style="width:6%">
-      <col style="width:10%">
-    </colgroup>
-    <thead>
-      <tr style="background:#f8fafc;border-bottom:2px solid #e2e8f0">
-        <th style="padding:10px 10px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#94a3b8">Customer</th>
-        <th style="padding:10px 8px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#94a3b8">Type</th>
-        <th style="padding:10px 8px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#94a3b8">Ref #</th>
-        <th style="padding:10px 8px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#94a3b8">Lane</th>
-        <th style="padding:10px 8px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#94a3b8">Carrier</th>
-        <th style="padding:10px 8px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#94a3b8">Date</th>
-        <th style="padding:10px 8px;text-align:center;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#94a3b8">Status</th>
-        <th style="padding:10px 8px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#dc2626">Carrier pay</th>
-        <th style="padding:10px 8px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#2563eb">Sell rate</th>
-        <th style="padding:10px 8px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#059669">Profit</th>
-        <th style="padding:10px 8px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#94a3b8">Margin</th>
-        <th style="padding:10px 8px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#7c3aed">My cut</th>
-        <th style="padding:10px 8px;text-align:center;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#94a3b8">📊 Sheet</th>
-      </tr>
-    </thead>
-    <tbody>
-      ${all.slice((S.pmPage||0)*30,((S.pmPage||0)+1)*30).map(q=>{
-        const myCut=q.profit*(commPct/100);
-        const mc=Math.round(q.margin*100);
-        const margCol=mc>=20?'#059669':mc>=12?'#d97706':'#dc2626';
-        const statusCol=q.status==='Delivered'||q.status==='Invoiced'||q.status==='Paid'?'#059669':q.status==='Booked'?'#d97706':'#94a3b8';
-        const statusBg=q.status==='Delivered'||q.status==='Invoiced'||q.status==='Paid'?'#d1fae5':q.status==='Booked'?'#fef3c7':'#f1f5f9';
-        return `<tr style="border-bottom:1px solid #f1f5f9;transition:background .1s" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background=(()=>{const _m=parseFloat(q.margin||0);return _m<0.05?'#fff5f5':_m<0.12?'#fffbeb':''})();">
-          <td style="padding:10px 10px;font-size:12px;font-weight:600;color:#0a1628;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${q.customer}</td>
-          <td style="padding:10px 8px"><span style="background:#e2e8f0;color:#374151;border-radius:99px;font-size:10px;font-weight:700;padding:2px 8px;white-space:nowrap">${q.modeLabel}</span></td>
-          <td style="padding:10px 8px;font-size:11px;color:#2563eb;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${q.shiflRef||'—'}</td>
-          <td style="padding:10px 8px;font-size:11px;color:#374151;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${q.lane}</td>
-          <td style="padding:10px 8px;font-size:11px;color:#374151;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${q.carrier}</td>
-          <td style="padding:10px 8px;font-size:11px;color:#64748b;white-space:nowrap">${q.date||'—'}</td>
-          <td style="padding:10px 8px;text-align:center"><span style="background:${statusBg};color:${statusCol};border-radius:99px;font-size:10px;font-weight:700;padding:3px 9px;white-space:nowrap">${q.status}</span></td>
-          <td style="padding:10px 8px;text-align:right;font-size:13px;font-weight:700;color:#dc2626">${['Delivered','Invoiced','Paid'].includes(q.status)?`<input type="number" value="${Math.round(q.carrierCost)}" onchange="pmUpdatePrice('${q.id}','${q.type}','carrier',this.value)" style="width:78px;text-align:right;border:1.5px solid #fecaca;border-radius:6px;padding:3px 5px;font-size:12px;font-weight:700;color:#dc2626;background:#fff5f5;font-family:inherit" title="Click to edit carrier cost">`:('$'+Math.round(q.carrierCost).toLocaleString())}</td>
-          <td style="padding:10px 8px;text-align:right;font-size:13px;font-weight:700;color:#2563eb">${['Delivered','Invoiced','Paid'].includes(q.status)?`<input type="number" value="${Math.round(q.customerRate)}" onchange="pmUpdatePrice('${q.id}','${q.type}','sell',this.value)" style="width:78px;text-align:right;border:1.5px solid #bfdbfe;border-radius:6px;padding:3px 5px;font-size:12px;font-weight:700;color:#2563eb;background:#eff6ff;font-family:inherit" title="Click to edit sell rate">`:('$'+Math.round(q.customerRate).toLocaleString())}</td>
-          <td style="padding:10px 8px;text-align:right" id="pm-profit-${q.id}">
-            <div style="font-size:13px;font-weight:800;color:#059669">$${Math.round(q.profit).toLocaleString()}</div>
-            ${q.isActual?'<div style="font-size:9px;color:#059669;font-weight:600">actual</div>':'<div style="font-size:9px;color:#94a3b8">est.</div>'}
-          </td>
-          <td style="padding:10px 8px;text-align:right;font-size:13px;font-weight:700;color:${margCol}">${mc}%</td>
-          <td style="padding:10px 8px;text-align:right;font-size:13px;font-weight:700;color:#7c3aed">$${Math.round(myCut).toLocaleString()}</td>
-          <td style="padding:10px 8px;text-align:center"><button onclick="pmToggleSheet('${q.id}',${!q.addedToSheet})" style="width:26px;height:26px;border-radius:6px;border:2px solid ${q.addedToSheet?'#059669':'#e2e8f0'};background:${q.addedToSheet?'#059669':'#fff'};cursor:pointer;display:inline-flex;align-items:center;justify-content:center;font-size:13px" title="${q.addedToSheet?'Remove from sheet':'Mark as added to sheet'}">${q.addedToSheet?'✓':''}</button></td>
-        </tr>`;
-      }).join('')}
-      <tr style="background:#f8fafc;border-top:2px solid #e2e8f0;font-weight:700">
-        <td colspan="7" style="padding:10px 10px;font-size:12px;font-weight:700;color:#0a1628">Totals (${all.length} loads)</td>
-        <td style="padding:10px 8px;text-align:right;font-size:13px;font-weight:800;color:#dc2626">$${Math.round(totalCarrier).toLocaleString()}</td>
-        <td style="padding:10px 8px;text-align:right;font-size:13px;font-weight:800;color:#2563eb">$${Math.round(totalCustomer).toLocaleString()}</td>
-        <td style="padding:10px 8px;text-align:right;font-size:13px;font-weight:800;color:#059669">$${Math.round(totalProfit).toLocaleString()}</td>
-        <td style="padding:10px 8px;text-align:right;font-size:13px;font-weight:800;color:${Math.round(totalMargin*100)>=12?'#059669':'#dc2626'}">${Math.round(totalMargin*100)}%</td>
-        <td style="padding:10px 8px;text-align:right;font-size:13px;font-weight:800;color:#7c3aed">$${Math.round(myCommission).toLocaleString()}</td>
-        <td style="padding:10px 8px;text-align:center;font-size:10px;color:#94a3b8">${all.filter(q=>q.addedToSheet).length} ✓</td>
-      </tr>
-    </tbody>
-  </table></div>`}
-  ${(S._pmTotal||0)>30?`<div style="display:flex;align-items:center;justify-content:center;gap:10px;padding:16px;border-top:0.5px solid #e8eaed">
-    <button onclick="if(S.pmPage>0){S.pmPage--;renderProfitMonitor()}" ${(S.pmPage||0)===0?'disabled':''} style="padding:6px 14px;border-radius:8px;border:1px solid #e8eaed;background:#fff;font-size:13px;font-weight:500;font-family:inherit;cursor:pointer">← Prev</button>
-    <span style="font-size:13px;color:#6b7280">Page ${(S.pmPage||0)+1} of ${S._pmTotalPages||1} &nbsp;·&nbsp; ${S._pmTotal} total loads</span>
-    <button onclick="if((S.pmPage||0)<(S._pmTotalPages||1)-1){S.pmPage++;renderProfitMonitor()}" ${(S.pmPage||0)>=(S._pmTotalPages||1)-1?'disabled':''} style="padding:6px 14px;border-radius:8px;border:1px solid #e8eaed;background:#fff;font-size:13px;font-weight:500;font-family:inherit;cursor:pointer">Next →</button>
-  </div>`:''}
-  `};
-}
-async function pmUpdatePrice(id, type, field, newVal){
-  const val = parseFloat(newVal);
-  if(isNaN(val)||val<0) return;
-
-  if(type==='drayage'){
-    const q=(S.quotes||[]).find(x=>x.id===id);
-    if(q){
-      if(field==='carrier'){
-        if(!q.carrierRates) q.carrierRates={};
-        q.carrierRates.base=val; q.carrierRates.total=val;
-      } else {
-        if(!q.customerRates) q.customerRates={};
-        q.customerRates.base=val; q.customerRates.total=val;
-      }
-      try{localStorage.setItem('shifl_quotes_cache',JSON.stringify(S.quotes));}catch(e){}
-      try{localStorage.setItem('drayage_quotes',JSON.stringify(S.quotes));}catch(e){}
-      try{await dbSaveQuote(q);}catch(e){console.warn('Supabase save failed:',e);}
-    }
-  } else if(type==='freight'){
-    const q=(window._fqHistory||[]).find(x=>x.id===id);
-    if(q){
-      if(field==='carrier'){if(!q.carrierRates)q.carrierRates={};q.carrierRates.base=val;q.carrierRates.total=val;}
-      else{if(!q.customerRates)q.customerRates={};q.customerRates.base=val;q.customerRates.total=val;}
-      try{localStorage.setItem('fq_history',JSON.stringify(window._fqHistory));}catch(e){}
-      try{await db.from('fq_quotes').upsert({id:q.id,[field==='carrier'?'carrier_rates':'customer_rates']:JSON.stringify(field==='carrier'?q.carrierRates:q.customerRates)},{onConflict:'id'});}catch(e){}
-    }
-  } else if(type==='air'){
-    const q=(window._aqHistory||[]).find(x=>x.id===id);
-    if(q){
-      if(field==='carrier'){if(!q.carrierRates)q.carrierRates={};q.carrierRates.total=val;}
-      else{if(!q.customerRates)q.customerRates={};q.customerRates.total=val;}
-      try{localStorage.setItem('aq_history',JSON.stringify(window._aqHistory));}catch(e){}
-      try{await db.from('aq_history').upsert({id:q.id,[field==='carrier'?'carrier_rates':'customer_rates']:JSON.stringify(field==='carrier'?q.carrierRates:q.customerRates)},{onConflict:'id'});}catch(e){}
-    }
-  } else if(type==='transload'){
-    const q=(window._tlHistory||[]).find(x=>x.id===id);
-    if(q){
-      if(field==='carrier'){if(!q.carrierRates)q.carrierRates={};q.carrierRates.total=val;}
-      else{if(!q.customerRates)q.customerRates={};q.customerRates.total=val;}
-      try{localStorage.setItem('tl_history',JSON.stringify(window._tlHistory));}catch(e){}
-      try{await db.from('tl_quotes').upsert({id:q.id,[field==='carrier'?'carrier_rates':'customer_rates']:JSON.stringify(field==='carrier'?q.carrierRates:q.customerRates)},{onConflict:'id'});}catch(e){}
-    }
-  }
-
-  showToast('✅ Saved','success',1500);
-  // Update only this row's profit display — don't rebuild the whole table
-  // which would destroy other inputs mid-edit
-  const profitEl=document.getElementById('pm-profit-'+id);
-  if(profitEl){
-    const allQ=[
-      ...(S.quotes||[]).map(q=>({...q,_type:'drayage'})),
-      ...(window._fqHistory||[]).map(q=>({...q,_type:'freight'})),
-      ...(window._aqHistory||[]).map(q=>({...q,_type:'air'})),
-      ...(window._tlHistory||[]).map(q=>({...q,_type:'transload'}))
-    ];
-    const q=allQ.find(x=>x.id===id);
-    if(q){
-      const p=getShipmentProfit(q,q._type||type);
-      const profit=Math.round(p.profit||0);
-      const margin=Math.round((p.margin||0)*100);
-      const col=profit>=0?'#16a34a':'#dc2626';
-      profitEl.innerHTML=`<div style="font-weight:700;color:${col}">${profit>=0?'+':''}$${Math.abs(profit).toLocaleString()}</div><div style="font-size:10px;color:${col}">${margin}%</div>`;
-    }
-  }
-}
-
-// ── Real-time sync: refresh data when any user makes changes ──
-function setupRealtimeSync(){
-  if(!db||window._realtimeSetup) return;
-  window._realtimeSetup=true;
-  try{
-    db.channel('shifl-live')
-      .on('postgres_changes',{event:'*',schema:'public',table:'quotes'},()=>{
-        dbLoadQuotes().then(q=>{S.quotes=q;if(['log','dash','active','invoicing'].includes(S.view))render();updateActiveBadge();});
-      })
-      .on('postgres_changes',{event:'*',schema:'public',table:'fq_quotes'},()=>{
-        dbLoadFqQuotes().then(q=>{window._fqHistory=q;if(S.view==='freight')render();});
-      })
-      .on('postgres_changes',{event:'*',schema:'public',table:'customers'},()=>{
-        dbLoadCustomers().then(q=>{S.customers=q;});
-      })
-      .on('postgres_changes',{event:'*',schema:'public',table:'shipment_metadata'},async()=>{
-        const rows=await db.from('shipment_metadata').select('*');
-        if(rows.data){window._shipmentMeta={};rows.data.forEach(r=>{const id=r.id.replace('tms_','');window._shipmentMeta[id]=r;});}
-        if(S.view==='active'||S.view==='tms')render();
-      })
-      .subscribe();
-    console.log('Realtime sync active');
-  }catch(e){console.warn('Realtime setup failed:',e);}
 }
 
 function renderHome(){
@@ -10894,7 +10720,37 @@ function loadTemplate(mode, id) {
   showToast('Template "'+tpl.name+'" loaded');
 }
 
-
+function renderTemplates(mode) {
+  const tpls = getTemplates(mode);
+  const modeLabels = {drayage:'🚢 Drayage',freight:'🚛 Freight',air:'✈️ Air',transload:'🔄 Transload'};
+  $('topbar-right').innerHTML=`<button class="btn blue" onclick="showSaveTemplateModal('${mode}')">+ Save current as template</button>`;
+  $('page').innerHTML=`
+    <div style="margin-bottom:16px;display:flex;align-items:center;justify-content:space-between">
+      <div>
+        <div style="font-size:18px;font-weight:800;color:var(--navy)">${modeLabels[mode]||mode} Templates</div>
+        <div style="font-size:13px;color:var(--gray-500);margin-top:2px">Saved quote configurations — one click to load into the quote builder</div>
+      </div>
+    </div>
+    ${tpls.length===0
+      ?`<div class="empty"><div class="empty-ico">📋</div>
+          <p style="font-size:15px;font-weight:700;color:var(--gray-500)">No templates yet</p>
+          <p style="font-size:13px;color:var(--gray-400)">Build a quote and click "+ Save current as template" to save it here</p>
+        </div>`
+      :`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px">
+          ${tpls.map(t=>`
+            <div style="background:#fff;border:1.5px solid var(--gray-200);border-radius:12px;padding:18px 20px">
+              <div style="font-size:14px;font-weight:800;color:var(--navy);margin-bottom:4px">${t.name}</div>
+              <div style="font-size:11px;color:var(--gray-400);margin-bottom:14px">Saved ${t.created}</div>
+              ${t.data.port?`<div style="font-size:12px;color:var(--gray-600);margin-bottom:2px">Port: ${t.data.port}</div>`:''}
+              ${t.data.zip?`<div style="font-size:12px;color:var(--gray-600);margin-bottom:2px">ZIP: ${t.data.zip} · ${t.data.ld||''}</div>`:''}
+              ${t.data.pickupZip?`<div style="font-size:12px;color:var(--gray-600);margin-bottom:2px">${t.data.pickupZip} → ${t.data.deliveryZip||'—'}</div>`:''}
+              <div style="display:flex;gap:8px;margin-top:14px">
+                <button class="btn sm blue" onclick="loadTemplate('${mode}','${t.id}');${mode==='drayage'?"setView('quote');openAccFor('quote')":`setView('${mode}');openAccFor('${mode}')`}" style="flex:1">Load →</button>
+                <button class="btn sm" onclick="if(confirm('Delete this template?')){deleteTemplate('${mode}','${t.id}');renderTemplates('${mode}')}" style="color:var(--red);border-color:#fca5a5">🗑️</button>
+              </div>
+            </div>`).join('')}
+        </div>`}`;
+}
 
 // ══════════════════════════════════════════════════════════════
 // FEATURE 11: TOAST NOTIFICATIONS
@@ -12522,7 +12378,254 @@ function showRepeatPicker(){
 // ════════════════════════════════════════════════════════════════════
 // PROFIT MONITOR — Super Admin Only
 // ════════════════════════════════════════════════════════════════════
+function renderProfitMonitor(){
+  if(_currentUser?.role!=='super_admin'){
+    $('page').innerHTML='<div class="empty"><p>Super Admin access only.</p></div>';return;
+  }
+  // PIN check (skip if already verified this session)
+  if(!sessionStorage.getItem('pm_pin_ok')){
+    const userPin=localStorage.getItem('shifl_pm_pin')||'';
+    if(userPin){
+      $('page').innerHTML=`<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:60vh">
+        <div style="font-size:40px;margin-bottom:12px">🔐</div>
+        <div style="font-size:18px;font-weight:700;color:#0a1628;margin-bottom:4px">Profit Monitor</div>
+        <div style="font-size:13px;color:#64748b;margin-bottom:20px">Enter PIN to continue</div>
+        <input id="pm-pin-input" type="password" maxlength="4" placeholder="••••" style="width:120px;text-align:center;padding:10px;border:2px solid #e2e8f0;border-radius:10px;font-size:24px;letter-spacing:8px;margin-bottom:12px" onkeyup="if(this.value.length===4){if(this.value===localStorage.getItem('shifl_pm_pin')){sessionStorage.setItem('pm_pin_ok','1');renderProfitMonitor();}else{this.value='';this.style.borderColor='#dc2626';setTimeout(()=>this.style.borderColor='#e2e8f0',1000);}}">
+        <div style="font-size:11px;color:#94a3b8">Set PIN in Settings or type it above</div>
+      </div>`;
+      return;
+    }
+  }
 
+  const commPct = parseFloat(localStorage.getItem('shifl_comm_pct')||'0');
+  const modeFilter = S.pmFilter||'all';
+  const dateFilter = S.pmDate||'all';
+  const tab = S.pmTab||'delivered'; // active | delivered | all
+
+  // Status sets
+  const ACTIVE_ST  = ['Booked'];
+  const DONE_ST    = ['Delivered','Invoiced','Paid'];
+  const ALL_ST     = [...ACTIVE_ST,...DONE_ST];
+
+  function buildRows(statusSet){
+    const dray=(S.quotes||[]).filter(q=>statusSet.includes(q.status)).map(q=>({
+      id:q.id,type:'drayage',customer:q.customer||'—',shiflRef:q.shiflRef||'—',
+      lane:`${q.port||'—'} → ${q.zip||'—'}`,carrier:q.carrier||'—',
+      date:q.date,status:q.status,
+      carrierCost:(p=>p.cost)(getShipmentProfit(q,'drayage')),
+      customerRate:(p=>p.revenue)(getShipmentProfit(q,'drayage')),
+      profit:(p=>p.profit)(getShipmentProfit(q,'drayage')),
+      margin:(p=>p.margin)(getShipmentProfit(q,'drayage')),
+      isActual:(p=>p.isActual)(getShipmentProfit(q,'drayage')),
+      modeLabel:'Drayage',
+      addedToSheet:localStorage.getItem('pm_sheet_'+q.id)==='1'
+    }));
+    const fq=(window._fqHistory||[]).filter(q=>statusSet.includes(q.status)).map(q=>({
+      id:q.id,type:'freight',customer:q.customer||'—',shiflRef:q.shiflRef||'—',
+      lane:`${q.pickupZip||'—'} → ${q.deliveryZip||'—'}`,carrier:q.carrier||'—',
+      date:q.date,status:q.status,
+      carrierCost:(p=>p.cost)(getShipmentProfit(q,'freight')),
+      customerRate:(p=>p.revenue)(getShipmentProfit(q,'freight')),
+      profit:(p=>p.profit)(getShipmentProfit(q,'freight')),
+      margin:(p=>p.margin)(getShipmentProfit(q,'freight')),
+      isActual:(p=>p.isActual)(getShipmentProfit(q,'freight')),
+      modeLabel:q.fqMode||'Freight',
+      addedToSheet:localStorage.getItem('pm_sheet_'+q.id)==='1'
+    }));
+    const aq=(window._aqHistory||[]).filter(q=>statusSet.includes(q.status)).map(q=>({
+      id:q.id,type:'air',customer:q.customer||'—',shiflRef:q.shiflRef||q.quoteNum||'—',
+      lane:`${q.originAirport||'—'} → ${q.destAirport||'—'}`,carrier:q.carrier||'—',
+      date:q.date,status:q.status,
+      carrierCost:q.carrierRates?.total||0,
+      customerRate:q.customerRates?.total||q.customerRate||0,
+      profit:(q.customerRates?.total||q.customerRate||0)-(q.carrierRates?.total||0),
+      margin:q.customerRates?.total>0?((q.customerRates.total-(q.carrierRates?.total||0))/q.customerRates.total):0,
+      isActual:false,modeLabel:'Air',
+      addedToSheet:localStorage.getItem('pm_sheet_'+q.id)==='1'
+    }));
+    const tl=(window._tlHistory||[]).filter(q=>statusSet.includes(q.status)).map(q=>({
+      id:q.id,type:'transload',customer:q.customer||'—',shiflRef:q.shiflRef||'—',
+      lane:`${q.drayPort||'—'} → ${q.outDeliveryZip||'—'}`,carrier:q.outCarrier||'—',
+      date:q.date,status:q.status,
+      carrierCost:(p=>p.cost)(getShipmentProfit(q,'transload')),
+      customerRate:(p=>p.revenue)(getShipmentProfit(q,'transload')),
+      profit:(p=>p.profit)(getShipmentProfit(q,'transload')),
+      margin:(p=>p.margin)(getShipmentProfit(q,'transload')),
+      isActual:(p=>p.isActual)(getShipmentProfit(q,'transload')),
+      modeLabel:'Transload',
+      addedToSheet:localStorage.getItem('pm_sheet_'+q.id)==='1'
+    }));
+    return [...dray,...fq,...tl,...aq];
+  }
+
+  const statusSet = tab==='active'?ACTIVE_ST : tab==='delivered'?DONE_ST : ALL_ST;
+  let all = buildRows(statusSet);
+
+  // Date filter
+  const today=localDateStr();
+  const week=new Date(Date.now()-7*864e5).toISOString().slice(0,10);
+  const month=new Date(Date.now()-30*864e5).toISOString().slice(0,10);
+  if(dateFilter==='week')  all=all.filter(q=>q.date>=week);
+  else if(dateFilter==='month') all=all.filter(q=>q.date>=month);
+  else if(dateFilter==='today') all=all.filter(q=>q.date===today);
+
+  // Mode filter
+  if(modeFilter!=='all') all=all.filter(q=>q.type===modeFilter);
+
+  // Sort newest first
+  all.sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+
+  const totalCarrier=all.reduce((s,q)=>s+q.carrierCost,0);
+  const totalCustomer=all.reduce((s,q)=>s+q.customerRate,0);
+  const totalProfit=all.reduce((s,q)=>s+q.profit,0);
+  const totalMargin=totalCustomer>0?totalProfit/totalCustomer:0;
+  const myCommission=totalProfit*(commPct/100);
+
+  // Tab counts
+  const activeCnt = buildRows(ACTIVE_ST).length;
+  const delivCnt  = buildRows(DONE_ST).length;
+  const allCnt    = buildRows(ALL_ST).length;
+
+  $('topbar-right').innerHTML=`
+    <button onclick="pmDownloadCSV()" style="display:flex;align-items:center;gap:6px;padding:7px 14px;border-radius:8px;border:none;background:linear-gradient(135deg,#059669,#34d399);color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;box-shadow:0 2px 8px rgba(5,150,105,.3)">
+      📥 Download CSV
+    </button>`;
+
+  $('page').style.padding='12px 12px';
+
+  $('page').innerHTML=`
+  <!-- Tabs -->
+  <div style="display:flex;gap:0;border-bottom:2px solid #e2e8f0;margin-bottom:14px">
+    ${[['active','⚡ Active',activeCnt,'#d97706'],['delivered','✅ Delivered',delivCnt,'#059669'],['all','📋 All',allCnt,'#2563eb']].map(([t,lbl,cnt,col])=>`
+      <button onclick="S.pmTab='${t}';renderProfitMonitor()" style="padding:10px 22px;border:none;border-bottom:${tab===t?'3px solid '+col:'3px solid transparent'};background:none;font-size:13px;font-weight:${tab===t?'700':'500'};color:${tab===t?col:'#94a3b8'};cursor:pointer;font-family:inherit;display:flex;align-items:center;gap:7px">
+        ${lbl} <span style="background:${tab===t?col:'#e2e8f0'};color:${tab===t?'#fff':'#64748b'};border-radius:99px;font-size:10px;font-weight:700;padding:1px 7px">${cnt}</span>
+      </button>`).join('')}
+    <div style="flex:1"></div>
+    <!-- Commission -->
+    <div style="display:flex;align-items:center;gap:6px;padding:0 12px">
+      <span style="font-size:11px;color:#94a3b8;white-space:nowrap">Commission:</span>
+      <input type="number" id="pm-comm" value="${commPct}" min="0" max="100" step="0.5"
+        oninput="localStorage.setItem('shifl_comm_pct',this.value);renderProfitMonitor()"
+        style="width:56px;padding:4px 8px;font-size:13px;font-weight:700;border:1.5px solid #2563eb;border-radius:6px;text-align:center">
+      <span style="font-size:13px;font-weight:700;color:#374151">%</span>
+    </div>
+    <!-- Mode filter -->
+    <div style="display:flex;gap:4px;padding:0 8px;align-items:center">
+      <div style="display:flex;gap:4px;padding:0 8px;align-items:center">
+      <span style="font-size:11px;color:#94a3b8">Rep:</span>
+      ${[['all','All'],[ ...[...new Set([...(S.quotes||[]).map(q=>q.created_by_name||'').filter(Boolean)]) ] .map(r=>[r,r]) ]].flat(0).filter((v,i,a)=>i===0||a[i-1][0]!==v[0]).map(([r,l])=>`<button onclick="S.pmRep='${r}';renderProfitMonitor()" style="padding:4px 8px;border-radius:6px;border:1px solid #e2e8f0;background:${(S.pmRep||'all')===r?'#0a1628':'#fff'};color:${(S.pmRep||'all')===r?'#fff':'#64748b'};font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">${l}</button>`).join('')}
+    </div>
+    ${['all','drayage','freight','transload'].map(f=>`<button onclick="S.pmFilter='${f}';renderProfitMonitor()"" style="padding:4px 10px;border-radius:6px;border:1px solid #e2e8f0;background:${modeFilter===f?'#0a1628':'#fff'};color:${modeFilter===f?'#fff':'#64748b'};font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">${f==='all'?'All':f.charAt(0).toUpperCase()+f.slice(1)}</button>`).join('')}
+    </div>
+    <!-- Date filter -->
+    <div style="display:flex;gap:4px;padding:0 8px;align-items:center">
+      ${['all','today','week','month'].map(d=>`<button onclick="S.pmDate='${d}';renderProfitMonitor()" style="padding:4px 10px;border-radius:6px;border:1px solid #e2e8f0;background:${dateFilter===d?'#0a1628':'#fff'};color:${dateFilter===d?'#fff':'#64748b'};font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">${d==='all'?'All time':d.charAt(0).toUpperCase()+d.slice(1)}</button>`).join('')}
+    </div>
+  </div>
+
+  <!-- KPI strip -->
+  <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:14px">
+    <div style="background:#fff;border-radius:10px;border:1px solid #e2e8f0;padding:12px 14px">
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#94a3b8;margin-bottom:4px">Loads</div>
+      <div style="font-size:22px;font-weight:800;color:#0a1628">${all.length}</div>
+      <div style="font-size:10px;color:#94a3b8;margin-top:2px">${tab==='active'?'in transit':tab==='delivered'?'completed':'total'}</div>
+    </div>
+    <div style="background:#fff;border-radius:10px;border:1px solid #e2e8f0;padding:12px 14px">
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#94a3b8;margin-bottom:4px">Carrier pay</div>
+      <div style="font-size:22px;font-weight:800;color:#dc2626">$${Math.round(totalCarrier).toLocaleString()}</div>
+      <div style="font-size:10px;color:#94a3b8;margin-top:2px">${tab==='active'?'est.':''}</div>
+    </div>
+    <div style="background:#fff;border-radius:10px;border:1px solid #e2e8f0;padding:12px 14px">
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#94a3b8;margin-bottom:4px">Sell rate</div>
+      <div style="font-size:22px;font-weight:800;color:#2563eb">$${Math.round(totalCustomer).toLocaleString()}</div>
+      <div style="font-size:10px;color:#94a3b8;margin-top:2px">${tab==='active'?'est.':''}</div>
+    </div>
+    <div style="background:#fff;border-radius:10px;border:1px solid #e2e8f0;padding:12px 14px;border-left:3px solid #059669">
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#94a3b8;margin-bottom:4px">Gross profit</div>
+      <div style="font-size:22px;font-weight:800;color:#059669">$${Math.round(totalProfit).toLocaleString()}</div>
+      <div style="font-size:10px;color:#059669;margin-top:2px">${Math.round(totalMargin*100)}% margin${tab==='active'?' · est.':''}</div>
+    </div>
+    <div style="background:#fff;border-radius:10px;border:1px solid #e2e8f0;padding:12px 14px;border-left:3px solid #7c3aed">
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#94a3b8;margin-bottom:4px">My cut (${commPct}%)</div>
+      <div style="font-size:22px;font-weight:800;color:#7c3aed">$${Math.round(myCommission).toLocaleString()}</div>
+      <div style="font-size:10px;color:#94a3b8;margin-top:2px">${tab==='active'?'est.':''}</div>
+    </div>
+  </div>
+
+  <!-- Table — full width -->
+  ${all.length===0?`<div style="text-align:center;padding:60px;color:#94a3b8"><div style="font-size:36px;margin-bottom:12px">${tab==='active'?'🚛':tab==='delivered'?'✅':'📋'}</div><div style="font-size:15px;font-weight:600;color:#374151;margin-bottom:6px">No ${tab==='active'?'active':'delivered'} loads</div><div style="font-size:12px">${tab==='active'?'Loads marked Booked will appear here':'Loads marked Delivered, Invoiced, or Paid will appear here'}</div></div>`
+  :`<div style="overflow-x:auto;border-radius:10px;border:1px solid #e2e8f0;background:#fff">
+  <table style="width:100%;border-collapse:collapse;table-layout:fixed">
+    <colgroup>
+      <col style="width:12%">
+      <col style="width:6%">
+      <col style="width:6%">
+      <col style="width:11%">
+      <col style="width:9%">
+      <col style="width:6%">
+      <col style="width:6%">
+      <col style="width:8%">
+      <col style="width:8%">
+      <col style="width:7%">
+      <col style="width:5%">
+      <col style="width:6%">
+      <col style="width:10%">
+    </colgroup>
+    <thead>
+      <tr style="background:#f8fafc;border-bottom:2px solid #e2e8f0">
+        <th style="padding:10px 10px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#94a3b8">Customer</th>
+        <th style="padding:10px 8px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#94a3b8">Type</th>
+        <th style="padding:10px 8px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#94a3b8">Ref #</th>
+        <th style="padding:10px 8px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#94a3b8">Lane</th>
+        <th style="padding:10px 8px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#94a3b8">Carrier</th>
+        <th style="padding:10px 8px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#94a3b8">Date</th>
+        <th style="padding:10px 8px;text-align:center;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#94a3b8">Status</th>
+        <th style="padding:10px 8px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#dc2626">Carrier pay</th>
+        <th style="padding:10px 8px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#2563eb">Sell rate</th>
+        <th style="padding:10px 8px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#059669">Profit</th>
+        <th style="padding:10px 8px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#94a3b8">Margin</th>
+        <th style="padding:10px 8px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#7c3aed">My cut</th>
+        <th style="padding:10px 8px;text-align:center;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#94a3b8">📊 Sheet</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${all.map(q=>{
+        const myCut=q.profit*(commPct/100);
+        const mc=Math.round(q.margin*100);
+        const margCol=mc>=20?'#059669':mc>=12?'#d97706':'#dc2626';
+        const statusCol=q.status==='Delivered'||q.status==='Invoiced'||q.status==='Paid'?'#059669':q.status==='Booked'?'#d97706':'#94a3b8';
+        const statusBg=q.status==='Delivered'||q.status==='Invoiced'||q.status==='Paid'?'#d1fae5':q.status==='Booked'?'#fef3c7':'#f1f5f9';
+        return `<tr style="border-bottom:1px solid #f1f5f9;transition:background .1s" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background=(()=>{const _m=parseFloat(q.margin||0);return _m<0.05?'#fff5f5':_m<0.12?'#fffbeb':''})();">
+          <td style="padding:10px 10px;font-size:12px;font-weight:600;color:#0a1628;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${q.customer}</td>
+          <td style="padding:10px 8px"><span style="background:#e2e8f0;color:#374151;border-radius:99px;font-size:10px;font-weight:700;padding:2px 8px;white-space:nowrap">${q.modeLabel}</span></td>
+          <td style="padding:10px 8px;font-size:11px;color:#2563eb;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${q.shiflRef||'—'}</td>
+          <td style="padding:10px 8px;font-size:11px;color:#374151;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${q.lane}</td>
+          <td style="padding:10px 8px;font-size:11px;color:#374151;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${q.carrier}</td>
+          <td style="padding:10px 8px;font-size:11px;color:#64748b;white-space:nowrap">${q.date||'—'}</td>
+          <td style="padding:10px 8px;text-align:center"><span style="background:${statusBg};color:${statusCol};border-radius:99px;font-size:10px;font-weight:700;padding:3px 9px;white-space:nowrap">${q.status}</span></td>
+          <td style="padding:10px 8px;text-align:right;font-size:13px;font-weight:700;color:#dc2626">${['Delivered','Invoiced','Paid'].includes(q.status)?`<input type="number" value="${Math.round(q.carrierCost)}" onchange="pmUpdatePrice('${q.id}','${q.type}','carrier',this.value)" style="width:78px;text-align:right;border:1.5px solid #fecaca;border-radius:6px;padding:3px 5px;font-size:12px;font-weight:700;color:#dc2626;background:#fff5f5;font-family:inherit" title="Click to edit carrier cost">`:('$'+Math.round(q.carrierCost).toLocaleString())}</td>
+          <td style="padding:10px 8px;text-align:right;font-size:13px;font-weight:700;color:#2563eb">${['Delivered','Invoiced','Paid'].includes(q.status)?`<input type="number" value="${Math.round(q.customerRate)}" onchange="pmUpdatePrice('${q.id}','${q.type}','sell',this.value)" style="width:78px;text-align:right;border:1.5px solid #bfdbfe;border-radius:6px;padding:3px 5px;font-size:12px;font-weight:700;color:#2563eb;background:#eff6ff;font-family:inherit" title="Click to edit sell rate">`:('$'+Math.round(q.customerRate).toLocaleString())}</td>
+          <td style="padding:10px 8px;text-align:right" id="pm-profit-${q.id}">
+            <div style="font-size:13px;font-weight:800;color:#059669">$${Math.round(q.profit).toLocaleString()}</div>
+            ${q.isActual?'<div style="font-size:9px;color:#059669;font-weight:600">actual</div>':'<div style="font-size:9px;color:#94a3b8">est.</div>'}
+          </td>
+          <td style="padding:10px 8px;text-align:right;font-size:13px;font-weight:700;color:${margCol}">${mc}%</td>
+          <td style="padding:10px 8px;text-align:right;font-size:13px;font-weight:700;color:#7c3aed">$${Math.round(myCut).toLocaleString()}</td>
+          <td style="padding:10px 8px;text-align:center"><button onclick="pmToggleSheet('${q.id}',${!q.addedToSheet})" style="width:26px;height:26px;border-radius:6px;border:2px solid ${q.addedToSheet?'#059669':'#e2e8f0'};background:${q.addedToSheet?'#059669':'#fff'};cursor:pointer;display:inline-flex;align-items:center;justify-content:center;font-size:13px" title="${q.addedToSheet?'Remove from sheet':'Mark as added to sheet'}">${q.addedToSheet?'✓':''}</button></td>
+        </tr>`;
+      }).join('')}
+      <tr style="background:#f8fafc;border-top:2px solid #e2e8f0;font-weight:700">
+        <td colspan="7" style="padding:10px 10px;font-size:12px;font-weight:700;color:#0a1628">Totals (${all.length} loads)</td>
+        <td style="padding:10px 8px;text-align:right;font-size:13px;font-weight:800;color:#dc2626">$${Math.round(totalCarrier).toLocaleString()}</td>
+        <td style="padding:10px 8px;text-align:right;font-size:13px;font-weight:800;color:#2563eb">$${Math.round(totalCustomer).toLocaleString()}</td>
+        <td style="padding:10px 8px;text-align:right;font-size:13px;font-weight:800;color:#059669">$${Math.round(totalProfit).toLocaleString()}</td>
+        <td style="padding:10px 8px;text-align:right;font-size:13px;font-weight:800;color:${Math.round(totalMargin*100)>=12?'#059669':'#dc2626'}">${Math.round(totalMargin*100)}%</td>
+        <td style="padding:10px 8px;text-align:right;font-size:13px;font-weight:800;color:#7c3aed">$${Math.round(myCommission).toLocaleString()}</td>
+        <td style="padding:10px 8px;text-align:center;font-size:10px;color:#94a3b8">${all.filter(q=>q.addedToSheet).length} ✓</td>
+      </tr>
+    </tbody>
+  </table></div>`}`;
+}
 
 
 function pmToggleSheet(id, addIt){
@@ -12622,96 +12725,6 @@ function pmDownloadCSV(){
 }
 
 
-async function pmSyncToSheet(){
-  const SHEET_URL='https://script.google.com/macros/s/AKfycbx745DyAxscIyC3Rn_IFG7jHjohBbgWIaz8vZsB-JMGmPcx_KIpe67aionjy2-f35UeDw/exec';
-  const btn=document.getElementById('pm-sync-btn');
-  if(btn){btn.textContent='⏳ Syncing...';btn.disabled=true;}
-  try{
-    // Get already-synced ref numbers from localStorage
-    const synced=JSON.parse(localStorage.getItem('pm_synced_refs')||'[]');
-
-    // Only pull DONE statuses — same as profit monitor delivered tab
-    const DONE_ST=['Delivered','Invoiced','Paid'];
-    const dray=(S.quotes||[]).filter(q=>DONE_ST.includes(q.status));
-    const fq=(window._fqHistory||[]).filter(q=>DONE_ST.includes(q.status));
-
-    // Filter to only NEW ones not yet synced
-    const newDray=dray.filter(q=>q.shiflRef&&!synced.includes(q.shiflRef));
-    const newFq=fq.filter(q=>q.shiflRef&&!synced.includes(q.shiflRef));
-
-    if(!newDray.length&&!newFq.length){
-      showToast('Nothing new to sync — all loads already in sheet','info',2500);
-      if(btn){btn.textContent='📊 Sync to Sheet';btn.disabled=false;}
-      return;
-    }
-
-    const headers=['Date','Ref #','Customer','Lane','Carrier','Mode','Status','Carrier Cost','Customer Rate','Profit','Margin %','My 15% ($)','Shifl Payout'];
-    const newRows=[];
-    const newRefs=[];
-
-    [...newDray.map(q=>({q,type:'drayage',mode:'Drayage'})),
-     ...newFq.map(q=>({q,type:'freight',mode:'Freight'}))]
-    .forEach(({q,type,mode})=>{
-      const p=getShipmentProfit(q,type);
-      const profit=+(p.profit||0).toFixed(2);
-      const mycut=+(profit*0.15).toFixed(2);
-      newRows.push([
-        q.date||'',q.shiflRef||'',q.customer||'',
-        type==='drayage'?(q.port||'')+'→'+(q.zip||''):(q.pickupZip||'')+'→'+(q.deliveryZip||''),
-        q.carrier||'',mode,q.status||'',
-        +(p.cost||0).toFixed(2),+(p.revenue||0).toFixed(2),
-        profit,
-        p.margin?+(p.margin*100).toFixed(1):0,
-        mycut,
-        'FALSE'
-      ]);
-      newRefs.push(q.shiflRef);
-    });
-
-    // Send headers first (script only writes if tab is empty)
-    await fetch(SHEET_URL,{method:'POST',mode:'no-cors',body:JSON.stringify({headers})});
-    await new Promise(r=>setTimeout(r,800));
-    // Send new rows only
-    await fetch(SHEET_URL,{method:'POST',mode:'no-cors',body:JSON.stringify({rows:newRows})});
-
-    // Save synced refs to localStorage
-    localStorage.setItem('pm_synced_refs',JSON.stringify([...synced,...newRefs]));
-
-    if(btn){btn.textContent='✅ '+newRows.length+' added!';btn.style.background='linear-gradient(135deg,#059669,#34d399)';}
-    setTimeout(()=>{if(btn){btn.textContent='📊 Sync to Sheet';btn.style.background='linear-gradient(135deg,#2563eb,#60a5fa)';btn.disabled=false;}},3000);
-    showToast('✅ Added '+newRows.length+' new loads to TMS Numbers tab','success',3000);
-  }catch(e){
-    if(btn){btn.textContent='❌ Failed';btn.disabled=false;}
-    showToast('Sync failed: '+e.message,'error',3000);
-  }
-}
-
-function pmGetAllRows(){
-  const SYNC_ST=['Delivered','Invoiced','Paid'];
-  const dray=(S.quotes||[]).filter(q=>SYNC_ST.includes(q.status)).map(q=>{
-    const p=getShipmentProfit(q,'drayage');
-    return {
-      customer:q.customer||'',shiflRef:q.shiflRef||'',
-      lane:(q.port||'')+'→'+(q.zip||''),carrier:q.carrier||'',
-      date:q.date,status:q.status,modeLabel:'Drayage',
-      carrierCost:p.cost,customerRate:p.revenue,
-      profit:p.profit,margin:p.margin,isActual:p.isActual
-    };
-  });
-  const fq=(window._fqHistory||[]).filter(q=>SYNC_ST.includes(q.status)).map(q=>{
-    const p=getShipmentProfit(q,'freight');
-    return {
-      customer:q.customer||'',shiflRef:q.shiflRef||'',
-      lane:(q.pickupZip||'')+'→'+(q.deliveryZip||''),carrier:q.carrier||'',
-      date:q.date,status:q.status,modeLabel:'Freight',
-      carrierCost:p.cost,customerRate:p.revenue,
-      profit:p.profit,margin:p.margin,isActual:p.isActual
-    };
-  });
-  return [...dray,...fq].sort((a,b)=>(b.date||'').localeCompare(a.date||''));
-}
-
-
 // ════════════════════════════════════════════════════════════════════
 // SMART PROFIT CALCULATION
 // Before invoiced = estimated (base + 1d chassis / base only / TL base+chassis+WH)
@@ -12798,7 +12811,7 @@ function buildPillBar(filterKey, searchKey, counts, searchPlaceholder){
     {s:'Lost',label:'Lost',color:'#dc2626',bg:'#dc2626'},
     {s:'Cancelled',label:'Cancelled',color:'#6b7280',bg:'#6b7280'},
     {s:'Expired',label:'Expired',color:'#d97706',bg:'#d97706'},
-  ].filter(p=>p.s==='all'||p.s==='Booked'||(counts[p.s]||0)>0||(f===p.s));
+  ].filter(p=>p.s==='all'||(counts[p.s]||0)>0||(f===p.s));
   return `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:14px">
     <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;flex:1">
       ${pills.map(p=>`<button onclick="S.${filterKey}='${p.s}';S.${searchKey}=S.${searchKey}||'';render()"
@@ -19174,6 +19187,9 @@ function renderBrokerTools(){
   const tools=[
     {ico:'🗺️',title:'Cargo theft map',desc:'Active load routes vs theft hotspots',fn:"goTo('broker-tools');renderCargoTheftMap()"},
     {ico:'🔒',title:'Rate agreement lock',desc:'Lock contracted rates per customer/lane',fn:"renderRateAgreements()"},
+    {ico:'⛔',title:'Margin floor',desc:'Block quotes below your minimum margin',fn:"renderMarginFloor()"},
+    {ico:'📈',title:'Carrier cost trends',desc:'90-day carrier rate history by lane',fn:"renderCarrierCostTrend()"},
+    {ico:'🎯',title:'Backup carrier suggest',desc:'Auto-suggest carriers when load falls through',fn:"renderBackupCarrier()"},
     {ico:'🚫',title:'Carrier payment hold',desc:'Hold payment and block dispatch per carrier',fn:"renderCarrierHolds()"},
     {ico:'🚑',title:'Load recovery',desc:'Structured workflow when carrier goes dark',fn:"renderLoadRecovery()"},
     {ico:'🔔',title:'Re-engage lost customers',desc:'Customers quiet 60+ days with at-risk revenue',fn:"goTo('re-engage');render()"},
@@ -19837,7 +19853,11 @@ function exportRFP(){
 // WIRE UP to existing nav items in Carriers page
 // ─────────────────────────────────────────────────────────────
 // Add quick-access buttons to carrier detail modal
-function brokerCarrierActions(carrierName)">🚫 ${isCarrierOnHold(carrierName)?'On hold':'Place hold'}</button>
+function brokerCarrierActions(carrierName){
+  return `<div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap">
+    <button onclick="renderBackupCarrier(null)" class="btn" style="font-size:11px">🎯 Use as backup</button>
+    <button onclick="renderCarrierCostTrend()" class="btn" style="font-size:11px">📈 Cost trend</button>
+    <button onclick="renderCarrierHolds()" class="btn" style="font-size:11px;color:${isCarrierOnHold(carrierName)?'#dc2626':''}">🚫 ${isCarrierOnHold(carrierName)?'On hold':'Place hold'}</button>
   </div>`;
 }
 </script>
