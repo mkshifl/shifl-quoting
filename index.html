@@ -1071,7 +1071,7 @@ const US_PORTS=[
   // ── CN / CPKC Railyards ──────────────────────────────────────
   'CN Chicago Intermodal, IL','CN Memphis, TN','CN Detroit, MI',
   'CPKC Franklin Park, Chicago, IL','CPKC Kansas City, MO','CPKC Dallas, TX',
-,"Port of Felixstowe, UK","Port of Southampton, UK","Port of London (Tilbury), UK","Port of Liverpool, UK","Port of Bristol (Avonmouth), UK","Port of Hull, UK","Port of Immingham, UK","Port of Grimsby, UK","Port of Felixstowe, UK","Port of Southampton, UK","Port of London (Tilbury), UK","Port of Liverpool, UK","Port of Bristol (Avonmouth), UK","Port of Hull, UK","Port of Immingham, UK","Port of Grimsby, UK"];
+,"Port of Felixstowe, UK","Port of Southampton, UK","Port of London (Tilbury), UK","Port of Liverpool, UK","Port of Bristol (Avonmouth), UK","Port of Hull, UK","Port of Immingham, UK","Port of Grimsby, UK"];
 function isApplicable(c,ld){
   if((c==='det_port'||c==='det_cust')&&ld==='Drop') return false;
   if(c==='bobtail') return false; // bobtail handled per-quote like genset
@@ -12487,14 +12487,9 @@ function renderProfitMonitor(){
   const allCnt    = buildRows(ALL_ST).length;
 
   $('topbar-right').innerHTML=`
-    <div style="display:flex;gap:8px">
-      <button onclick="pmDownloadCSV()" style="display:flex;align-items:center;gap:6px;padding:7px 14px;border-radius:8px;border:none;background:linear-gradient(135deg,#059669,#34d399);color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;box-shadow:0 2px 8px rgba(5,150,105,.3)">
+    <button onclick="pmDownloadCSV()" style="display:flex;align-items:center;gap:6px;padding:7px 14px;border-radius:8px;border:none;background:linear-gradient(135deg,#059669,#34d399);color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;box-shadow:0 2px 8px rgba(5,150,105,.3)">
       📥 Download CSV
-    </button>
-      <button onclick="pmSyncToSheet()" id="pm-sync-btn" style="display:flex;align-items:center;gap:6px;padding:7px 14px;border-radius:8px;border:none;background:linear-gradient(135deg,#2563eb,#60a5fa);color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;box-shadow:0 2px 8px rgba(37,99,235,.3)">
-        📊 Sync to Sheet
-      </button>
-    </div>`;
+    </button>`;
 
   $('page').style.padding='12px 12px';
 
@@ -12730,47 +12725,8 @@ function pmDownloadCSV(){
 }
 
 
-async function pmSyncToSheet(){
-  const SHEET_URL='https://script.google.com/macros/s/AKfycbx745DyAxscIyC3Rn_IFG7jHjohBbgWIaz8vZsB-JMGmPcx_KIpe67aionjy2-f35UeDw/exec';
-  const btn=document.getElementById('pm-sync-btn');
-  if(btn){btn.textContent='⏳ Syncing...';btn.disabled=true;}
-  try{
-    const synced=JSON.parse(localStorage.getItem('pm_synced_refs')||'[]');
-    const DONE_ST=['Delivered','Invoiced','Paid'];
-    const newDray=(S.quotes||[]).filter(q=>DONE_ST.includes(q.status)&&q.shiflRef&&!synced.includes(q.shiflRef));
-    const newFq=(window._fqHistory||[]).filter(q=>DONE_ST.includes(q.status)&&q.shiflRef&&!synced.includes(q.shiflRef));
-    if(!newDray.length&&!newFq.length){
-      showToast('Nothing new to sync — all loads already in sheet','info',2500);
-      if(btn){btn.textContent='📊 Sync to Sheet';btn.disabled=false;}
-      return;
-    }
-    const headers=['Date','Ref #','Customer','Lane','Carrier','Mode','Status','Carrier Cost','Customer Rate','Profit','Margin %','My 15% ($)','Shifl Payout'];
-    const newRows=[];const newRefs=[];
-    [...newDray.map(q=>({q,type:'drayage',mode:'Drayage'})),...newFq.map(q=>({q,type:'freight',mode:'Freight'}))]
-    .forEach(({q,type,mode})=>{
-      const p=getShipmentProfit(q,type);
-      const profit=+(p.profit||0).toFixed(2);
-      newRows.push([q.date||'',q.shiflRef||'',q.customer||'',
-        type==='drayage'?(q.port||'')+'→'+(q.zip||''):(q.pickupZip||'')+'→'+(q.deliveryZip||''),
-        q.carrier||'',mode,q.status||'',
-        +(p.cost||0).toFixed(2),+(p.revenue||0).toFixed(2),profit,
-        p.margin?+(p.margin*100).toFixed(1):0,+(profit*0.15).toFixed(2),'FALSE']);
-      newRefs.push(q.shiflRef);
-    });
-    await fetch(SHEET_URL,{method:'POST',mode:'no-cors',body:JSON.stringify({headers})});
-    await new Promise(r=>setTimeout(r,800));
-    await fetch(SHEET_URL,{method:'POST',mode:'no-cors',body:JSON.stringify({rows:newRows})});
-    localStorage.setItem('pm_synced_refs',JSON.stringify([...synced,...newRefs]));
-    if(btn){btn.textContent='✅ '+newRows.length+' added!';btn.style.background='linear-gradient(135deg,#059669,#34d399)';}
-    setTimeout(()=>{if(btn){btn.textContent='📊 Sync to Sheet';btn.style.background='linear-gradient(135deg,#2563eb,#60a5fa)';btn.disabled=false;}},3000);
-    showToast('✅ Added '+newRows.length+' new loads to TMS Numbers tab','success',3000);
-  }catch(e){
-    if(btn){btn.textContent='❌ Failed';btn.disabled=false;}
-    showToast('Sync failed: '+e.message,'error',3000);
-  }
-}
-
-ON
+// ════════════════════════════════════════════════════════════════════
+// SMART PROFIT CALCULATION
 // Before invoiced = estimated (base + 1d chassis / base only / TL base+chassis+WH)
 // After invoiced = actual from customer invoice vs carrier invoice
 // ════════════════════════════════════════════════════════════════════
