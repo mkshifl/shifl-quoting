@@ -9513,9 +9513,14 @@ function renderProfitMonitor(){
   const allCnt    = buildRows(ALL_ST).length;
 
   $('topbar-right').innerHTML=`
-    <button onclick="pmDownloadCSV()" style="display:flex;align-items:center;gap:6px;padding:7px 14px;border-radius:8px;border:none;background:linear-gradient(135deg,#059669,#34d399);color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;box-shadow:0 2px 8px rgba(5,150,105,.3)">
-      📥 Download CSV
-    </button>`;
+    <div style="display:flex;gap:8px;align-items:center">
+      <button onclick="pmDownloadCSV()" style="display:flex;align-items:center;gap:6px;padding:7px 14px;border-radius:8px;border:none;background:linear-gradient(135deg,#059669,#34d399);color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;box-shadow:0 2px 8px rgba(5,150,105,.3)">
+        📥 Download CSV
+      </button>
+      <button onclick="pmSyncToSheet()" id="pm-sync-btn" style="display:flex;align-items:center;gap:6px;padding:7px 14px;border-radius:8px;border:none;background:linear-gradient(135deg,#2563eb,#60a5fa);color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;box-shadow:0 2px 8px rgba(37,99,235,.3)">
+        📊 Sync to Sheet
+      </button>
+    </div>`;
 
   $('page').style.padding='12px 12px';
 
@@ -12606,6 +12611,58 @@ function pmDownloadCSV(){
   a.click();
   URL.revokeObjectURL(url);
   showToast('📥 CSV downloaded — '+all.length+' shipments','success',3000);
+}
+
+
+async function pmSyncToSheet(){
+  const SHEET_URL='https://script.google.com/macros/s/AKfycbx745DyAxscIyC3Rn_IFG7jHjohBbgWIaz8vZsB-JMGmPcx_KIpe67aionjy2-f35UeDw/exec';
+  const btn=document.getElementById('pm-sync-btn');
+  if(btn){btn.textContent='⏳ Syncing...';btn.disabled=true;}
+  try{
+    const rows=pmGetAllRows();
+    const headers=['Date','Ref #','Customer','Lane','Carrier','Mode','Status','Carrier Cost','Customer Rate','Profit','Margin %','Type'];
+    const data=rows.map(r=>[
+      r.date||'',r.shiflRef||'',r.customer||'',r.lane||'',r.carrier||'',
+      r.modeLabel||'',r.status||'',
+      +(r.carrierCost||0).toFixed(2),+(r.customerRate||0).toFixed(2),+(r.profit||0).toFixed(2),
+      r.margin?+(r.margin*100).toFixed(1):0,
+      r.isActual?'Actual':'Quoted'
+    ]);
+    await fetch(SHEET_URL,{method:'POST',mode:'no-cors',body:JSON.stringify({clear:true})});
+    await new Promise(r=>setTimeout(r,800));
+    await fetch(SHEET_URL,{method:'POST',mode:'no-cors',body:JSON.stringify({headers,rows:data})});
+    if(btn){btn.textContent='✅ Synced!';btn.style.background='linear-gradient(135deg,#059669,#34d399)';}
+    setTimeout(()=>{if(btn){btn.textContent='📊 Sync to Sheet';btn.style.background='linear-gradient(135deg,#2563eb,#60a5fa)';btn.disabled=false;}},3000);
+    showToast('✅ Synced '+data.length+' rows to Google Sheet','success',3000);
+  }catch(e){
+    if(btn){btn.textContent='❌ Failed';btn.disabled=false;}
+    showToast('Sync failed: '+e.message,'error',3000);
+  }
+}
+
+function pmGetAllRows(){
+  const DONE_ST=['Delivered','Invoiced','Paid','Booked'];
+  const dray=(S.quotes||[]).filter(q=>DONE_ST.includes(q.status)).map(q=>({
+    customer:q.customer||'',shiflRef:q.shiflRef||'',
+    lane:(q.port||'')+'→'+(q.zip||''),carrier:q.carrier||'',
+    date:q.date,status:q.status,modeLabel:'Drayage',
+    carrierCost:getShipmentProfit(q,'drayage').cost,
+    customerRate:getShipmentProfit(q,'drayage').revenue,
+    profit:getShipmentProfit(q,'drayage').profit,
+    margin:getShipmentProfit(q,'drayage').margin,
+    isActual:getShipmentProfit(q,'drayage').isActual
+  }));
+  const fq=(window._fqHistory||[]).filter(q=>DONE_ST.includes(q.status)).map(q=>({
+    customer:q.customer||'',shiflRef:q.shiflRef||'',
+    lane:(q.pickupZip||'')+'→'+(q.deliveryZip||''),carrier:q.carrier||'',
+    date:q.date,status:q.status,modeLabel:'Freight',
+    carrierCost:getShipmentProfit(q,'freight').cost,
+    customerRate:getShipmentProfit(q,'freight').revenue,
+    profit:getShipmentProfit(q,'freight').profit,
+    margin:getShipmentProfit(q,'freight').margin,
+    isActual:getShipmentProfit(q,'freight').isActual
+  }));
+  return [...dray,...fq].sort((a,b)=>(b.date||'').localeCompare(a.date||''));
 }
 
 
