@@ -12620,20 +12620,31 @@ async function pmSyncToSheet(){
   if(btn){btn.textContent='⏳ Syncing...';btn.disabled=true;}
   try{
     const rows=pmGetAllRows();
-    const headers=['Date','Ref #','Customer','Lane','Carrier','Mode','Status','Carrier Cost','Customer Rate','Profit','Margin %','Type'];
-    const data=rows.map(r=>[
-      r.date||'',r.shiflRef||'',r.customer||'',r.lane||'',r.carrier||'',
-      r.modeLabel||'',r.status||'',
-      +(r.carrierCost||0).toFixed(2),+(r.customerRate||0).toFixed(2),+(r.profit||0).toFixed(2),
-      r.margin?+(r.margin*100).toFixed(1):0,
-      r.isActual?'Actual':'Quoted'
-    ]);
-    await fetch(SHEET_URL,{method:'POST',mode:'no-cors',body:JSON.stringify({clear:true})});
-    await new Promise(r=>setTimeout(r,800));
-    await fetch(SHEET_URL,{method:'POST',mode:'no-cors',body:JSON.stringify({headers,rows:data})});
+    const headers=['Date','Ref #','Customer','Lane','Carrier','Mode','Status','Carrier Cost','Customer Rate','Profit','Margin %','My 15% ($)','Shifl Payout','Type'];
+    const data=rows.map(r=>{
+      const profit=+(r.profit||0).toFixed(2);
+      const mycut=+(profit*0.15).toFixed(2);
+      return [
+        r.date||'',r.shiflRef||'',r.customer||'',r.lane||'',r.carrier||'',
+        r.modeLabel||'',r.status||'',
+        +(r.carrierCost||0).toFixed(2),+(r.customerRate||0).toFixed(2),
+        profit,
+        r.margin?+(r.margin*100).toFixed(1):0,
+        mycut,
+        'FALSE', // Shifl Payout checkbox — unchecked by default
+        r.isActual?'Actual':'Quoted'
+      ];
+    });
+
+    // Send headers first (only writes if sheet is empty)
+    await fetch(SHEET_URL,{method:'POST',mode:'no-cors',body:JSON.stringify({headers})});
+    await new Promise(r=>setTimeout(r,600));
+    // Send rows — script skips any ref# already in sheet
+    await fetch(SHEET_URL,{method:'POST',mode:'no-cors',body:JSON.stringify({rows:data})});
+
     if(btn){btn.textContent='✅ Synced!';btn.style.background='linear-gradient(135deg,#059669,#34d399)';}
     setTimeout(()=>{if(btn){btn.textContent='📊 Sync to Sheet';btn.style.background='linear-gradient(135deg,#2563eb,#60a5fa)';btn.disabled=false;}},3000);
-    showToast('✅ Synced '+data.length+' rows to Google Sheet','success',3000);
+    showToast('✅ Synced to TMS Numbers tab','success',3000);
   }catch(e){
     if(btn){btn.textContent='❌ Failed';btn.disabled=false;}
     showToast('Sync failed: '+e.message,'error',3000);
