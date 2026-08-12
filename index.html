@@ -14342,35 +14342,34 @@ function deleteTMSLoad(id){
 }
 
 // ── ADVANCE LOAD STATUS ────────────────────────────────────────────
-async function advanceTMSLoad(id,newStatus){
-  const idx=(window._fqHistory||[]).findIndex(q=>q.id===id);
-  if(idx<0) return;
-  const prevStatus=window._fqHistory[idx].status;
-  window._fqHistory[idx].status=newStatus;
-  try{localStorage.setItem('fq_history',JSON.stringify(window._fqHistory));}catch(e){}
-  // ★ FIX: Save to Supabase so refresh doesn't revert
-  try{await dbUpdateFqStatus(id,newStatus);}catch(e){console.warn('TMS status sync:',e.message);}
+async async function advanceTMSLoad(id,newStatus){
+  var fqIdx=(window._fqHistory||[]).findIndex(function(q){return q.id===id;});
+  var dIdx=(S.quotes||[]).findIndex(function(q){return q.id===id;});
+  var prevStatus=fqIdx>=0?window._fqHistory[fqIdx].status:dIdx>=0?S.quotes[dIdx].status:newStatus;
+  if(fqIdx>=0){
+    window._fqHistory[fqIdx].status=newStatus;
+    try{localStorage.setItem('fq_history',JSON.stringify(window._fqHistory));}catch(e){}
+    try{await dbUpdateFqStatus(id,newStatus);}catch(e){console.warn('TMS fq:',e);}
+  }
+  if(dIdx>=0){
+    S.quotes[dIdx].status=newStatus;
+    try{await dbUpdateStatus(id,newStatus);}catch(e){console.warn('TMS dray:',e);}
+  }
   saveTMSMeta(id,{[newStatus.toLowerCase().replace(/ /g,'_')+'_at']:new Date().toISOString()});
   incrementQuestMetric(newStatus==='Delivered'?'delivered_today':'bookings_today');
-  // Undo toast
-  const container=$('toast-container')||document.createElement('div');
+  var container=$('toast-container')||document.createElement('div');
   if(!$('toast-container')){container.id='toast-container';container.style.cssText='position:fixed;bottom:24px;right:24px;z-index:99999;display:flex;flex-direction:column;gap:8px;pointer-events:none';document.body.appendChild(container);}
-  const toast=document.createElement('div');
+  var toast=document.createElement('div');
   toast.style.cssText='background:#1a2e4a;color:#fff;padding:12px 18px;border-radius:10px;font-size:13px;font-weight:600;font-family:inherit;box-shadow:0 4px 16px rgba(0,0,0,.25);display:flex;align-items:center;gap:12px;pointer-events:all;min-width:260px';
-  toast.innerHTML=`<span>→ <strong>${newStatus}</strong></span><button style="background:rgba(255,255,255,.2);border:none;color:#fff;padding:4px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:700;font-family:inherit;white-space:nowrap">↩ Undo</button>`;
-  toast.querySelector('button').onclick=async()=>{
+  toast.innerHTML='<span>→ <strong>'+newStatus+'</strong></span><button style="background:rgba(255,255,255,.2);border:none;color:#fff;padding:4px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:700;font-family:inherit">↩ Undo</button>';
+  toast.querySelector('button').onclick=async function(){
     toast.remove();
-    const q=(window._fqHistory||[])[idx];
-    if(q){
-      q.status=prevStatus;
-      try{localStorage.setItem('fq_history',JSON.stringify(window._fqHistory));}catch(e){}
-      try{await dbUpdateFqStatus(id,prevStatus);}catch(e){}
-    }
-    showToast('↩ Reverted to '+prevStatus,'info',2000);
-    renderTMS();
+    if(fqIdx>=0&&window._fqHistory[fqIdx]){window._fqHistory[fqIdx].status=prevStatus;try{await dbUpdateFqStatus(id,prevStatus);}catch(e){}}
+    if(dIdx>=0&&S.quotes[dIdx]){S.quotes[dIdx].status=prevStatus;try{await dbUpdateStatus(id,prevStatus);}catch(e){}}
+    showToast('↩ Reverted to '+prevStatus,'info',2000);renderTMS();
   };
   container.appendChild(toast);
-  setTimeout(()=>toast.remove(),6000);
+  setTimeout(function(){toast.remove();},6000);
   renderTMS();
 }
 
