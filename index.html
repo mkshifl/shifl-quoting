@@ -12486,10 +12486,7 @@ function renderProfitMonitor(){
   const delivCnt  = buildRows(DONE_ST).length;
   const allCnt    = buildRows(ALL_ST).length;
 
-  $('topbar-right').innerHTML=`
-    <button onclick="pmDownloadCSV()" style="display:flex;align-items:center;gap:6px;padding:7px 14px;border-radius:8px;border:none;background:linear-gradient(135deg,#059669,#34d399);color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;box-shadow:0 2px 8px rgba(5,150,105,.3)">
-      📥 Download CSV
-    </button>`;
+  $('topbar-right').innerHTML='<div style="display:flex;gap:8px"><button onclick="pmDownloadCSV()" style="display:flex;align-items:center;gap:6px;padding:7px 14px;border-radius:8px;border:none;background:linear-gradient(135deg,#059669,#34d399);color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">📥 Download CSV</button><button onclick="pmSyncToSheet()" id="pm-sync-btn" style="display:flex;align-items:center;gap:6px;padding:7px 14px;border-radius:8px;border:none;background:linear-gradient(135deg,#2563eb,#60a5fa);color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">📊 Sync to Sheet</button></div>';
 
   $('page').style.padding='12px 12px';
 
@@ -26059,6 +26056,36 @@ async function saveEditedQuote(id){
   closeModal();
   const _tbody=document.getElementById('log-tbody');
   if(_tbody) _tbody.innerHTML=buildLogRows();
+}
+
+async function pmSyncToSheet(){
+  var SHEET_URL='https://script.google.com/macros/s/AKfycbx745DyAxscIyC3Rn_IFG7jHjohBbgWIaz8vZsB-JMGmPcx_KIpe67aionjy2-f35UeDw/exec';
+  var btn=document.getElementById('pm-sync-btn');
+  if(btn){btn.textContent='⏳ Syncing...';btn.disabled=true;}
+  try{
+    var synced=JSON.parse(localStorage.getItem('pm_synced_refs')||'[]');
+    var DONE=['Delivered','Invoiced','Paid'];
+    var newRows=[];var newRefs=[];
+    (S.quotes||[]).filter(function(q){return DONE.indexOf(q.status)>=0&&q.shiflRef&&synced.indexOf(q.shiflRef)<0;}).forEach(function(q){
+      var p=getShipmentProfit(q,'drayage');var profit=+(p.profit||0).toFixed(2);
+      newRows.push([q.date||'',q.shiflRef||'',q.customer||'',(q.port||'')+'→'+(q.zip||''),q.carrier||'','Drayage',q.status||'',+(p.cost||0).toFixed(2),+(p.revenue||0).toFixed(2),profit,p.margin?+(p.margin*100).toFixed(1):0,+(profit*0.15).toFixed(2),'FALSE']);
+      newRefs.push(q.shiflRef);
+    });
+    (window._fqHistory||[]).filter(function(q){return DONE.indexOf(q.status)>=0&&q.shiflRef&&synced.indexOf(q.shiflRef)<0;}).forEach(function(q){
+      var p=getShipmentProfit(q,'freight');var profit=+(p.profit||0).toFixed(2);
+      newRows.push([q.date||'',q.shiflRef||'',q.customer||'',(q.pickupZip||'')+'→'+(q.deliveryZip||''),q.carrier||'','Freight',q.status||'',+(p.cost||0).toFixed(2),+(p.revenue||0).toFixed(2),profit,p.margin?+(p.margin*100).toFixed(1):0,+(profit*0.15).toFixed(2),'FALSE']);
+      newRefs.push(q.shiflRef);
+    });
+    if(!newRows.length){showToast('Nothing new to sync','info',2000);if(btn){btn.textContent='📊 Sync to Sheet';btn.disabled=false;}return;}
+    var headers=['Date','Ref #','Customer','Lane','Carrier','Mode','Status','Carrier Cost','Customer Rate','Profit','Margin %','My 15% ($)','Shifl Payout'];
+    await fetch(SHEET_URL,{method:'POST',mode:'no-cors',body:JSON.stringify({headers:headers})});
+    await new Promise(function(r){setTimeout(r,800);});
+    await fetch(SHEET_URL,{method:'POST',mode:'no-cors',body:JSON.stringify({rows:newRows})});
+    localStorage.setItem('pm_synced_refs',JSON.stringify(synced.concat(newRefs)));
+    if(btn){btn.textContent='✅ '+newRows.length+' added!';btn.style.background='linear-gradient(135deg,#059669,#34d399)';}
+    setTimeout(function(){if(btn){btn.textContent='📊 Sync to Sheet';btn.style.background='linear-gradient(135deg,#2563eb,#60a5fa)';btn.disabled=false;}},3000);
+    showToast('✅ Added '+newRows.length+' new loads to TMS Numbers tab','success',3000);
+  }catch(e){if(btn){btn.textContent='❌ Failed';btn.disabled=false;}showToast('Sync failed: '+e.message,'error',3000);}
 }
 </script>
 /* fix 1785343934 */
