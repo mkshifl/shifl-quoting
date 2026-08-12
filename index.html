@@ -14342,7 +14342,7 @@ function deleteTMSLoad(id){
 }
 
 // ── ADVANCE LOAD STATUS ────────────────────────────────────────────
-async async function advanceTMSLoad(id,newStatus){
+async function advanceTMSLoad(id,newStatus){
   var fqIdx=(window._fqHistory||[]).findIndex(function(q){return q.id===id;});
   var dIdx=(S.quotes||[]).findIndex(function(q){return q.id===id;});
   var prevStatus=fqIdx>=0?window._fqHistory[fqIdx].status:dIdx>=0?S.quotes[dIdx].status:newStatus;
