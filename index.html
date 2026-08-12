@@ -9620,7 +9620,14 @@ function renderProfitMonitor(){
       </tr>
     </thead>
     <tbody>
-      ${all.map(q=>{
+      ${(()=>{
+        const PAGE_SIZE=30;
+        const page=S.pmPage||0;
+        const totalPages=Math.ceil(all.length/PAGE_SIZE);
+        const paged=all.slice(page*PAGE_SIZE,(page+1)*PAGE_SIZE);
+        S._pmTotalPages=totalPages;
+        S._pmTotal=all.length;
+        return paged.map(q=>{
         const myCut=q.profit*(commPct/100);
         const mc=Math.round(q.margin*100);
         const margCol=mc>=20?'#059669':mc>=12?'#d97706':'#dc2626';
@@ -9644,7 +9651,7 @@ function renderProfitMonitor(){
           <td style="padding:10px 8px;text-align:right;font-size:13px;font-weight:700;color:#7c3aed">$${Math.round(myCut).toLocaleString()}</td>
           <td style="padding:10px 8px;text-align:center"><button onclick="pmToggleSheet('${q.id}',${!q.addedToSheet})" style="width:26px;height:26px;border-radius:6px;border:2px solid ${q.addedToSheet?'#059669':'#e2e8f0'};background:${q.addedToSheet?'#059669':'#fff'};cursor:pointer;display:inline-flex;align-items:center;justify-content:center;font-size:13px" title="${q.addedToSheet?'Remove from sheet':'Mark as added to sheet'}">${q.addedToSheet?'✓':''}</button></td>
         </tr>`;
-      }).join('')}
+      }).join('')})()}
       <tr style="background:#f8fafc;border-top:2px solid #e2e8f0;font-weight:700">
         <td colspan="7" style="padding:10px 10px;font-size:12px;font-weight:700;color:#0a1628">Totals (${all.length} loads)</td>
         <td style="padding:10px 8px;text-align:right;font-size:13px;font-weight:800;color:#dc2626">$${Math.round(totalCarrier).toLocaleString()}</td>
@@ -9655,7 +9662,13 @@ function renderProfitMonitor(){
         <td style="padding:10px 8px;text-align:center;font-size:10px;color:#94a3b8">${all.filter(q=>q.addedToSheet).length} ✓</td>
       </tr>
     </tbody>
-  </table></div>`}`;
+  </table></div>
+  ${(S._pmTotal||0)>30?`<div style="display:flex;align-items:center;justify-content:center;gap:10px;padding:16px;border-top:0.5px solid #e8eaed">
+    <button onclick="if(S.pmPage>0){S.pmPage--;renderProfitMonitor()}" ${(S.pmPage||0)===0?'disabled':''} style="padding:6px 14px;border-radius:8px;border:1px solid #e8eaed;background:#fff;font-size:13px;font-weight:500;font-family:inherit;cursor:pointer">← Prev</button>
+    <span style="font-size:13px;color:#6b7280">Page ${(S.pmPage||0)+1} of ${S._pmTotalPages||1} &nbsp;·&nbsp; ${S._pmTotal} total loads</span>
+    <button onclick="if((S.pmPage||0)<(S._pmTotalPages||1)-1){S.pmPage++;renderProfitMonitor()}" ${(S.pmPage||0)>=(S._pmTotalPages||1)-1?'disabled':''} style="padding:6px 14px;border-radius:8px;border:1px solid #e8eaed;background:#fff;font-size:13px;font-weight:500;font-family:inherit;cursor:pointer">Next →</button>
+  </div>`:''}
+  \`}\`;
 }
 async function pmUpdatePrice(id, type, field, newVal){
   const val = parseFloat(newVal);
