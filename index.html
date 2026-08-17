@@ -1230,19 +1230,22 @@ function rateToDb(r){
     storage:r.storage||0,ovw43:r.ovw43||0,ovw48:r.ovw48||0,bobtail:r.bobtail||0,toll:r.toll||0};
 }
 function dbToQuote(r){
+  const fr=r.flat_rates||{...DEFAULT_FLAT_RATES};
+  const customAcc=fr._customAcc||[];
+  const flatRates={...fr};delete flatRates._customAcc;
   return {id:r.id,quoteNum:r.quote_num,date:r.date,customer:r.customer||'',port:r.port||'',
     zip:r.zip||'',ld:r.ld||'Live',carrier:r.carrier||'',destination:r.destination||'',
     carrierRates:r.carrier_costs||{},customerRates:r.customer_prices||{},
-    baseMarkup:r.base_markup||DEFAULT_BASE_MARKUP,flatRates:r.flat_rates||{...DEFAULT_FLAT_RATES},
-    customAcc:r.custom_acc||[],
+    baseMarkup:r.base_markup||DEFAULT_BASE_MARKUP,flatRates,
+    customAcc,
     profit:+r.profit||0,profitPct:+r.profit_pct||0,status:r.status||'Quoted',notes:r.notes||'',shiflRef:r.shifl_ref||''};
 }
 function quoteToDb(q){
+  const flatRatesWithAcc={...q.flatRates,_customAcc:q.customAcc||[]};
   return {id:q.id,quote_num:q.quoteNum,date:q.date,customer:q.customer||'',port:q.port||'',
     zip:q.zip||'',ld:q.ld,carrier:q.carrier||'',destination:q.destination||'',
     carrier_costs:q.carrierRates,customer_prices:q.customerRates,
-    base_markup:q.baseMarkup,flat_rates:q.flatRates,
-    custom_acc:q.customAcc||[],
+    base_markup:q.baseMarkup,flat_rates:flatRatesWithAcc,
     profit:q.profit||0,profit_pct:q.profitPct||0,status:q.status,notes:q.notes||'',shifl_ref:q.shiflRef||''};
 }
 
@@ -19212,42 +19215,6 @@ function renderBrokerTools(){
 // ─────────────────────────────────────────────────────────────
 // 1. CARGO THEFT MAP
 // ─────────────────────────────────────────────────────────────
-function renderCargoTheftMap(){
-  const HOTSPOTS=[
-    {name:'I-78 New Jersey',risk:'high',lat:40.7,lng:-74.2},
-    {name:'I-95 Maryland',risk:'high',lat:39.1,lng:-76.6},
-    {name:'I-40 California',risk:'high',lat:35.4,lng:-119.0},
-    {name:'I-10 Texas',risk:'medium',lat:29.8,lng:-95.4},
-    {name:'I-75 Georgia',risk:'medium',lat:33.7,lng:-84.4},
-  ];
-  openModal(`
-    <div style="min-width:580px">
-      <div class="modal-title">🗺️ Cargo theft hotspot map</div>
-      <div class="modal-body">
-        <div style="background:linear-gradient(135deg,#1a3a2a,#2d5a3d);border-radius:12px;height:200px;position:relative;overflow:hidden;margin-bottom:14px;display:flex;align-items:center;justify-content:center">
-          <div style="color:rgba(255,255,255,.3);font-size:13px">Interactive map — integrates with cargo theft API</div>
-          <div style="position:absolute;top:12px;left:12px;background:rgba(0,0,0,.4);border-radius:8px;padding:6px 10px;font-size:10px;color:#fff">
-            🔴 High risk &nbsp; 🟡 Medium &nbsp; 🔵 Active loads
-          </div>
-        </div>
-        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#94a3b8;margin-bottom:8px">Known hotspots</div>
-        ${HOTSPOTS.map(h=>`
-          <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #f1f5f9">
-            <div style="width:10px;height:10px;border-radius:50%;background:${h.risk==='high'?'#dc2626':'#f59e0b'};flex-shrink:0"></div>
-            <div style="flex:1;font-size:13px;font-weight:500;color:#0a1628">${h.name}</div>
-            <span style="padding:2px 8px;border-radius:99px;font-size:10px;font-weight:700;background:${h.risk==='high'?'#fee2e2':'#fef3c7'};color:${h.risk==='high'?'#991b1b':'#92400e'}">${h.risk==='high'?'High risk':'Medium'}</span>
-          </div>`).join('')}
-        <div style="background:#fff3cd;border-radius:8px;padding:10px 12px;margin-top:12px;font-size:12px;color:#856404">
-          💡 Connect to CargoNet or FreightWatch API in Settings → Integrations for live theft incident data on your active load routes.
-        </div>
-      </div>
-      <div class="modal-foot"><button class="btn blue" onclick="closeModal()">Got it</button></div>
-    </div>`);
-}
-
-// ─────────────────────────────────────────────────────────────
-// 2. RATE AGREEMENT LOCK
-// ─────────────────────────────────────────────────────────────
 function renderRateAgreements(){
   const agreements = getBrokerData('rate_agreements',[]);
   openModal(`
@@ -19359,93 +19326,6 @@ function checkMarginFloor(marginPct){
 
 // ─────────────────────────────────────────────────────────────
 // 4. CARRIER COST TREND CHART
-// ─────────────────────────────────────────────────────────────
-function renderCarrierCostTrend(){
-  // Build trend from existing quote history
-  const quotes=(S.quotes||[]).filter(q=>q.carrier&&q.carrierRates?.total>0);
-  const byCarrier={};
-  quotes.forEach(q=>{
-    if(!byCarrier[q.carrier]) byCarrier[q.carrier]=[];
-    byCarrier[q.carrier].push({date:q.date||q.created_at,cost:q.carrierRates.total,zip:q.zip});
-  });
-  const carriers=Object.keys(byCarrier).slice(0,5);
-
-  openModal(`
-    <div style="min-width:580px">
-      <div class="modal-title">📈 Carrier cost trends</div>
-      <div class="modal-body">
-        ${carriers.length===0?'<div style="text-align:center;padding:30px;color:#94a3b8">No carrier cost data yet — build some quotes first</div>':
-        carriers.map(carrier=>{
-          const loads=byCarrier[carrier].sort((a,b)=>new Date(a.date)-new Date(b.date));
-          const costs=loads.map(l=>l.cost);
-          const avg=costs.reduce((s,c)=>s+c,0)/costs.length;
-          const last=costs[costs.length-1];
-          const diff=last-avg;
-          const maxC=Math.max(...costs);
-          return `<div style="margin-bottom:16px;background:#f8fafc;border-radius:10px;padding:12px">
-            <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
-              <div style="font-size:14px;font-weight:700;color:#0a1628;flex:1">${carrier}</div>
-              <div style="font-size:13px;font-weight:600;color:#2563eb">$${Math.round(last).toLocaleString()} last</div>
-              <div style="font-size:12px;font-weight:600;color:${diff>0?'#dc2626':'#059669'}">${diff>0?'+':''}$${Math.round(diff)} vs avg</div>
-            </div>
-            <div style="display:flex;align-items:flex-end;gap:3px;height:50px;margin-bottom:4px">
-              ${costs.map(c=>`<div style="flex:1;background:${c===last?'#2563eb':'#bfdbfe'};border-radius:2px 2px 0 0;height:${Math.round((c/maxC)*100)}%"></div>`).join('')}
-            </div>
-            <div style="font-size:10px;color:#94a3b8">${loads.length} loads · Avg: $${Math.round(avg).toLocaleString()}</div>
-          </div>`;
-        }).join('')}
-      </div>
-      <div class="modal-foot"><button class="btn" onclick="closeModal()">Close</button></div>
-    </div>`);
-}
-
-// ─────────────────────────────────────────────────────────────
-// 5. BACKUP CARRIER AUTO-SUGGEST
-// ─────────────────────────────────────────────────────────────
-function renderBackupCarrier(loadId){
-  // Rank carriers by how many loads they've done on similar lanes
-  const allQuotes=S.quotes||[];
-  const targetLoad=allQuotes.find(q=>q.id===loadId)||allQuotes[0];
-  const targetZip=targetLoad?.zip||'';
-
-  const carrierStats={};
-  allQuotes.forEach(q=>{
-    if(!q.carrier) return;
-    if(!carrierStats[q.carrier]) carrierStats[q.carrier]={carrier:q.carrier,loads:0,laneMtch:0,avgCost:0,costs:[],onTime:0};
-    const s=carrierStats[q.carrier];
-    s.loads++;
-    if(q.status==='Delivered') s.onTime++;
-    if(q.carrierRates?.total) s.costs.push(q.carrierRates.total);
-    if(targetZip&&(q.zip||'').slice(0,3)===targetZip.slice(0,3)) s.laneMtch++;
-  });
-  const ranked=Object.values(carrierStats)
-    .filter(s=>s.loads>0)
-    .map(s=>({...s,avgCost:s.costs.length?Math.round(s.costs.reduce((a,b)=>a+b,0)/s.costs.length):0,otd:Math.round((s.onTime/s.loads)*100)}))
-    .sort((a,b)=>(b.laneMtch*2+b.otd)-(a.laneMtch*2+a.otd))
-    .slice(0,5);
-
-  openModal(`
-    <div style="min-width:520px">
-      <div class="modal-title">🎯 Backup carrier suggestions</div>
-      <div class="modal-body">
-        <p style="font-size:12px;color:#6b7280;margin-bottom:12px">Ranked by lane match, on-time rate, and history${targetZip?' for ZIP '+targetZip:''}.</p>
-        ${ranked.length===0?'<div style="text-align:center;padding:24px;color:#94a3b8">Build more quotes to generate suggestions</div>'
-        :ranked.map((s,i)=>`
-          <div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid #f1f5f9">
-            <div style="width:28px;height:28px;border-radius:50%;background:${i===0?'#d1fae5':i===1?'#dbeafe':'#f1f5f9'};display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:${i===0?'#065f46':i===1?'#1d4ed8':'#374151'};flex-shrink:0">${i+1}</div>
-            <div style="flex:1">
-              <div style="font-size:13px;font-weight:600;color:#0a1628">${s.carrier}</div>
-              <div style="font-size:11px;color:#64748b">${s.otd}% on-time · ${s.loads} loads · ${s.laneMtch} on this lane · Avg $${s.avgCost.toLocaleString()}</div>
-            </div>
-            <button onclick="closeModal();showToast('Reaching out to ${s.carrier}')" class="btn blue" style="font-size:11px;padding:5px 10px">Offer load</button>
-          </div>`).join('')}
-      </div>
-      <div class="modal-foot"><button class="btn" onclick="closeModal()">Close</button></div>
-    </div>`);
-}
-
-// ─────────────────────────────────────────────────────────────
-// 6. CARRIER PAYMENT HOLD
 // ─────────────────────────────────────────────────────────────
 function renderCarrierHolds(){
   const holds=getBrokerData('carrier_holds',[]);
