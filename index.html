@@ -1234,6 +1234,7 @@ function dbToQuote(r){
     zip:r.zip||'',ld:r.ld||'Live',carrier:r.carrier||'',destination:r.destination||'',
     carrierRates:r.carrier_costs||{},customerRates:r.customer_prices||{},
     baseMarkup:r.base_markup||DEFAULT_BASE_MARKUP,flatRates:r.flat_rates||{...DEFAULT_FLAT_RATES},
+    customAcc:r.custom_acc||[],
     profit:+r.profit||0,profitPct:+r.profit_pct||0,status:r.status||'Quoted',notes:r.notes||'',shiflRef:r.shifl_ref||''};
 }
 function quoteToDb(q){
@@ -1241,6 +1242,7 @@ function quoteToDb(q){
     zip:q.zip||'',ld:q.ld,carrier:q.carrier||'',destination:q.destination||'',
     carrier_costs:q.carrierRates,customer_prices:q.customerRates,
     base_markup:q.baseMarkup,flat_rates:q.flatRates,
+    custom_acc:q.customAcc||[],
     profit:q.profit||0,profit_pct:q.profitPct||0,status:q.status,notes:q.notes||'',shifl_ref:q.shiflRef||''};
 }
 
