@@ -1511,6 +1511,15 @@ const fmt=v=>(v&&v>0)?'$'+Math.round(v).toLocaleString():'—';
 const fmtD=v=>'$'+Number(v).toFixed(2);
 const pct=v=>v>0&&v<0.01?'<1%':Math.round(v*100)+'%';
 function totAll(r){return CHARGES.reduce((s,c)=>s+(Number(r[c])||0),0);}
+// Export carrier rates store the linehaul in exportBase (base is 0). Normalize the
+// selected rate so the quote-build/preview/save/email/PDF path — which all read .base —
+// uses the correct number for export moves.
+function effRate(r){
+  if(r && S.qi?.drayType==='export'){
+    return {...r, base: Number(r.exportBase||r.base)||0};
+  }
+  return r;
+}
 function totMode(r,ld){
   let t=CHARGES.reduce((s,c)=>isApplicable(c,ld)?s+(Number(r[c])||0):s,0);
   if(S.qi?.gensetEnabled&&S.qi?.gensetScope!=='customer_only')t+=Number(S.qi.gensetCarrierRate)||0;
@@ -1926,7 +1935,7 @@ function renderQuote(){
   if(!qi.triaxleScope) qi.triaxleScope='both';
   const isExport=qi.drayType==='export';const matches=getMatches();
   if(!S.selId&&matches.length) S.selId=matches[0].id;
-  const sel=matches.find(r=>r.id===S.selId)||matches[0]||null;
+  const sel=effRate(matches.find(r=>r.id===S.selId)||matches[0]||null);
   $('topbar-right').innerHTML='<button class="btn" onclick="showRepeatPicker()" title="Load a previous quote">&#x1F501; Repeat</button><button class="btn" onclick="saveDraft(\'drayage\')">&#x1F4CB; Draft</button><span id="upsell-badge" style="display:none;background:#dc2626;color:#fff;border-radius:99px;font-size:9px;font-weight:800;padding:2px 7px"></span><button class="btn" onclick="printQuote()">&#x1F5A8; Print</button><button class="btn" onclick="downloadPDF()">&#x1F4C4; PDF</button><button class="btn blue" onclick="saveQuote()">&#x1F4BE; Save quote</button><button class="btn" onclick="openPostToPortalFromBuilder()" style="background:linear-gradient(135deg,#059669,#34d399);border-color:#059669;color:#fff">&#x1F4E4; Post to portal</button>';  $('page').innerHTML=draftBanner('drayage','drayage')+`<div class="two-col">
     <div>
       <div class="card">
@@ -2019,7 +2028,7 @@ function renderQuote(){
 
 function refreshCarriersAndPreview(){
   const matches=getMatches();if(!S.selId&&matches.length) S.selId=matches[0].id;
-  const sel=matches.find(r=>r.id===S.selId)||matches[0]||null;const qi=S.qi;
+  const sel=effRate(matches.find(r=>r.id===S.selId)||matches[0]||null);const qi=S.qi;
   const h=$('carriers-head');if(h) h.innerHTML=`Carriers · ${qi.zip||'—'} · ${qi.ld}${(qi.containerCount||1)>1?` <span class="badge" style="background:#f59e0b;color:#fff">×${qi.containerCount}</span>`:''}`;
   const b=$('carriers-body');if(b) b.innerHTML=buildCarrierComparison(matches);
   const p=$('preview-body');if(p) p.innerHTML=buildPreviewHTML(sel);
@@ -2029,7 +2038,7 @@ function refreshPricingAndPreview(){
   refreshPreviewOnly();
 }
 function refreshPreviewOnly(){
-  const matches=getMatches();const sel=matches.find(r=>r.id===S.selId)||matches[0]||null;
+  const matches=getMatches();const sel=effRate(matches.find(r=>r.id===S.selId)||matches[0]||null);
   const p=$('preview-body');if(p) p.innerHTML=buildPreviewHTML(sel);
 }
 function refreshCarrierHighlight(id){
@@ -2054,7 +2063,7 @@ function onCustomerInput(v){
 }
 
 function emailQuote(){
-  const qi=S.qi;const sel=S.rates.find(r=>r.id===S.selId);
+  const qi=S.qi;const sel=effRate(S.rates.find(r=>r.id===S.selId));
   if(!qi.customerEmail){alert('No email address found. Select a customer from the contact book first.');return;}
   if(!sel){alert('Please select a carrier first.');return;}
   const ld=qi.ld;
@@ -3900,7 +3909,7 @@ function setBaseMarkup(k,v){
 }
 
 async function saveQuote(){
-  const qi=S.qi;const sel=S.rates.find(r=>r.id===S.selId);
+  const qi=S.qi;const sel=effRate(S.rates.find(r=>r.id===S.selId));
   if(!qi.zip||!sel){alert('Enter a zip code and select a carrier first.');return;}
   const ct=totMode(sel,qi.ld);
   const cuRates=CHARGES.reduce((o,c)=>{o[c]=cuRate(Number(sel[c])||0,c);return o;},{});
@@ -3929,7 +3938,7 @@ async function saveQuote(){
     window._pReqId = fromReq;
     // Auto-post charges to portal when opened from customer request
     if(fromReq){
-      var _s2=S.selId?(S.rates||[]).find(function(r){return r.id===S.selId;}):null;
+      var _s2=effRate(S.selId?(S.rates||[]).find(function(r){return r.id===S.selId;}):null);
       var _c2={};
       if(_s2){['base','chassis','prepull','det_port','det_cust','storage','ovw43','ovw48','bobtail','toll','genset','triaxle'].forEach(function(k){if(_s2[k]) _c2[k]=cuRate(Number(_s2[k])||0,k);});}
       var qi3=S.qi||{};
@@ -3968,7 +3977,7 @@ async function saveQuote(){
 // ═══════════════════════════════════════════════════════
 // PRINT & PDF
 // ═══════════════════════════════════════════════════════
-function getQuoteData(){const qi=S.qi;const sel=S.rates.find(r=>r.id===S.selId);if(!qi.zip||!sel){alert('Enter a zip and select a carrier first.');return null;}return{qi,sel,cu:cuTot(sel),ct:totMode(sel,qi.ld)};}
+function getQuoteData(){const qi=S.qi;const sel=effRate(S.rates.find(r=>r.id===S.selId));if(!qi.zip||!sel){alert('Enter a zip and select a carrier first.');return null;}return{qi,sel,cu:cuTot(sel),ct:totMode(sel,qi.ld)};}
 
 function buildPrintHTML(customer, carrier, port, zip, destination, ld, date, quoteNum, customerRates, notes, perQuote){
   const baseAmt = customerRates?.base||0;
