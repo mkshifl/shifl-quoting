@@ -14236,6 +14236,7 @@ function renderTMSDispatch(tabBar,kpis,loads){
           ${l.customerRate?` · <span style="color:var(--steel);font-weight:700">${fmtD(l.customerRate)}</span>`:''}
         </div>
         ${meta.bookingNum?`<div style="font-size:10px;color:var(--steel);font-weight:700;margin-bottom:2px">${meta.bookingNum}</div>`:''}
+        ${l.shiflRef?`<div style="font-size:10px;color:var(--steel);font-weight:700;margin-bottom:2px;font-family:monospace">Ref: ${escH(l.shiflRef)}</div>`:''}
         ${meta.arrivalDate?`<div style="margin-bottom:6px">${(()=>{
           const arr=new Date(meta.arrivalDate);const now=new Date();
           const freeDays=parseInt(meta.freeDays||5);
@@ -14298,6 +14299,7 @@ function buildTMSLoadRow(l){
     '<td class="muted" style="font-size:12px">'+escH((l.pickupZip||'—')+' → '+(l.deliveryZip||'—'))+'</td>'+
     '<td style="font-weight:600;color:var(--navy)">'+escH(l.carrier||'—')+'</td>'+
     '<td style="font-family:monospace;font-size:11px;color:var(--gray-500)">'+escH(meta.bolNum||'—')+'</td>'+
+    '<td style="font-family:monospace;font-size:11px;font-weight:'+(l.shiflRef?'700':'400')+';color:'+(l.shiflRef?'var(--steel)':'var(--gray-300)')+'">'+escH(l.shiflRef||'—')+'</td>'+
     '<td class="money" style="color:var(--steel);font-weight:700">'+fmtD(l.customerRate||0)+'</td>'+
     '<td><span style="font-weight:700;color:'+pc+'">+'+fmtD(p.profit)+'</span> '+profitBadge(p.isActual)+'</td>'+
     '<td><span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px;background:'+sc+'18;color:'+sc+'">'+escH(l.status)+'</span></td>'+
@@ -14319,7 +14321,7 @@ function renderTMSLoads(tabBar,kpis,loads){
     if(lFilt!=='all'&&l.status!==lFilt) return false;
     if(!lSrch) return true;
     const m=getTMSMeta(l.id);
-    return (l.customer||'').toLowerCase().includes(lSrch)||(m.bookingNum||'').toLowerCase().includes(lSrch)||(l.carrier||'').toLowerCase().includes(lSrch)||(l.pickupZip||'').includes(lSrch)||(l.deliveryZip||'').includes(lSrch)||(m.bolNum||'').toLowerCase().includes(lSrch);
+    return (l.customer||'').toLowerCase().includes(lSrch)||(m.bookingNum||'').toLowerCase().includes(lSrch)||(l.carrier||'').toLowerCase().includes(lSrch)||(l.pickupZip||'').includes(lSrch)||(l.deliveryZip||'').includes(lSrch)||(m.bolNum||'').toLowerCase().includes(lSrch)||(l.shiflRef||'').toLowerCase().includes(lSrch);
   });
   const filterBar='<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:14px">'+
     '<div style="display:flex;gap:4px;flex-wrap:wrap;flex:1">'+
@@ -14337,7 +14339,7 @@ function renderTMSLoads(tabBar,kpis,loads){
     '<button onclick="window.print()" style="padding:7px 14px;border:1px solid var(--gray-200);border-radius:var(--radius);background:transparent;font-size:12px;cursor:pointer;font-family:inherit;color:var(--gray-600)">🖨️ Print</button></div>';
 
   const tableHTML='<div class="tbl-wrap"><table><thead><tr>'+
-    '<th>Customer / BK#</th><th>Mode</th><th>Lane</th><th>Carrier</th><th>BOL #</th><th>Revenue</th><th>Profit</th><th>Status</th><th>Actions</th>'+
+    '<th>Customer / BK#</th><th>Mode</th><th>Lane</th><th>Carrier</th><th>BOL #</th><th>Shifl Ref #</th><th>Revenue</th><th>Profit</th><th>Status</th><th>Actions</th>'+
     '</tr></thead><tbody>'+filtLoads.map(buildTMSLoadRow).join('')+'</tbody></table></div>';
 
   const emptyHTML='<div class="empty"><div class="empty-ico">'+(lSrch||lFilt!=='all'?'🔍':'🚚')+'</div><p>'+(lSrch||lFilt!=='all'?'No loads match — try a different filter':'No loads yet')+'</p></div>';
@@ -14896,7 +14898,7 @@ function markFqPaid(id){
 
 function exportTMSLoads(){
   const loads=getTMSLoads();
-  const rows=[['Booking#','Customer','Mode','Pickup ZIP','Delivery ZIP','Carrier','BOL#','Revenue','Carrier Cost','Profit','Status','Date'],...loads.map(l=>{const m=getTMSMeta(l.id);const p=getShipmentProfit(l,'freight');return[m.bookingNum||'',l.customer||'',l.fqMode||'',l.pickupZip||'',l.deliveryZip||'',l.carrier||'',m.bolNum||'',l.customerRate||0,l.carrierRate||0,p.profit.toFixed(2),l.status,l.date];})];
+  const rows=[['Booking#','Shifl Ref#','Customer','Mode','Pickup ZIP','Delivery ZIP','Carrier','BOL#','Revenue','Carrier Cost','Profit','Status','Date'],...loads.map(l=>{const m=getTMSMeta(l.id);const p=getShipmentProfit(l,'freight');return[m.bookingNum||'',l.shiflRef||'',l.customer||'',l.fqMode||'',l.pickupZip||'',l.deliveryZip||'',l.carrier||'',m.bolNum||'',l.customerRate||0,l.carrierRate||0,p.profit.toFixed(2),l.status,l.date];})];
   const csv=rows.map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\n');
   const a=document.createElement('a');a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);a.download='TMS_Loads_'+localDateStr()+'.csv';a.click();
   showToast('CSV exported','success',2000);
