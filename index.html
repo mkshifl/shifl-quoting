@@ -2786,6 +2786,23 @@ async function saveFqRef(idx,val){
   try{localStorage.setItem('fq_history',JSON.stringify(window._fqHistory));}catch(e){}
   try{await db.from('fq_quotes').update({data:q}).eq('id',q.id);}catch(e){}
 }
+// Save Shifl Ref # from a TMS load card/row, by load id (handles freight + air stores)
+async function saveTMSRef(id,val){
+  const ref=(val||'').trim();
+  let q=(window._fqHistory||[]).find(x=>x.id===id);
+  if(q){
+    q.shiflRef=ref;
+    try{localStorage.setItem('fq_history',JSON.stringify(window._fqHistory));}catch(e){}
+    try{if(typeof db!=='undefined'&&db) await db.from('fq_quotes').update({data:q}).eq('id',id);}catch(e){}
+    return;
+  }
+  q=(window._aqHistory||[]).find(x=>x.id===id);
+  if(q){
+    q.shiflRef=ref;
+    try{localStorage.setItem('aq_history',JSON.stringify(window._aqHistory));}catch(e){}
+    try{if(typeof db!=='undefined'&&db) await db.from('fq_quotes').update({data:q}).eq('id',id);}catch(e){}
+  }
+}
 function renderFqLog(){
   updateFqInvBadge();
   const history=window._fqHistory||[];
@@ -14236,7 +14253,10 @@ function renderTMSDispatch(tabBar,kpis,loads){
           ${l.customerRate?` · <span style="color:var(--steel);font-weight:700">${fmtD(l.customerRate)}</span>`:''}
         </div>
         ${meta.bookingNum?`<div style="font-size:10px;color:var(--steel);font-weight:700;margin-bottom:2px">${meta.bookingNum}</div>`:''}
-        ${l.shiflRef?`<div style="font-size:10px;color:var(--steel);font-weight:700;margin-bottom:2px;font-family:monospace">Ref: ${escH(l.shiflRef)}</div>`:''}
+        <div style="display:flex;align-items:center;gap:4px;margin-bottom:6px" onclick="event.stopPropagation()">
+          <span style="font-size:9px;font-weight:700;color:var(--gray-400);text-transform:uppercase;letter-spacing:.04em">Ref#</span>
+          <input type="text" value="${escH(l.shiflRef||'')}" placeholder="Add ref #" onclick="event.stopPropagation()" onchange="saveTMSRef('${l.id}',this.value)" onfocus="this.style.background='#eff6ff'" onblur="this.style.background=this.value?'#eff6ff':'transparent'" style="flex:1;min-width:0;border:none;background:${l.shiflRef?'#eff6ff':'transparent'};color:${l.shiflRef?'var(--steel)':'#9ca3af'};font-weight:${l.shiflRef?'700':'400'};font-size:10px;font-family:monospace;padding:2px 5px;border-radius:4px;cursor:text;outline:none">
+        </div>
         ${meta.arrivalDate?`<div style="margin-bottom:6px">${(()=>{
           const arr=new Date(meta.arrivalDate);const now=new Date();
           const freeDays=parseInt(meta.freeDays||5);
@@ -14299,7 +14319,7 @@ function buildTMSLoadRow(l){
     '<td class="muted" style="font-size:12px">'+escH((l.pickupZip||'—')+' → '+(l.deliveryZip||'—'))+'</td>'+
     '<td style="font-weight:600;color:var(--navy)">'+escH(l.carrier||'—')+'</td>'+
     '<td style="font-family:monospace;font-size:11px;color:var(--gray-500)">'+escH(meta.bolNum||'—')+'</td>'+
-    '<td style="font-family:monospace;font-size:11px;font-weight:'+(l.shiflRef?'700':'400')+';color:'+(l.shiflRef?'var(--steel)':'var(--gray-300)')+'">'+escH(l.shiflRef||'—')+'</td>'+
+    '<td onclick="event.stopPropagation()"><input type="text" value="'+escH(l.shiflRef||'')+'" placeholder="Add ref #" onchange="saveTMSRef(\''+id+'\',this.value)" style="border:none;background:'+(l.shiflRef?'#eff6ff':'transparent')+';color:'+(l.shiflRef?'var(--steel)':'#9ca3af')+';font-weight:'+(l.shiflRef?'700':'400')+';font-size:11px;font-family:monospace;padding:2px 5px;border-radius:4px;width:92px;cursor:text;outline:none" onfocus="this.style.background=\'#eff6ff\'" onblur="this.style.background=this.value?\'#eff6ff\':\'transparent\'"></td>'+
     '<td class="money" style="color:var(--steel);font-weight:700">'+fmtD(l.customerRate||0)+'</td>'+
     '<td><span style="font-weight:700;color:'+pc+'">+'+fmtD(p.profit)+'</span> '+profitBadge(p.isActual)+'</td>'+
     '<td><span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px;background:'+sc+'18;color:'+sc+'">'+escH(l.status)+'</span></td>'+
