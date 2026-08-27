@@ -4608,11 +4608,14 @@ async function loadTlHistory(){
 function saveTlWarehouses(){try{localStorage.setItem('tl_warehouses',JSON.stringify(window._tlWarehouses));}catch(e){}}
 
 function tlCuRate(carrierVal, charge, tl){
+  const cr=Number(carrierVal)||0;
   if(charge==='base'){
-    const cr=Number(carrierVal)||0;
+    if(!cr) return 0;
     return tl.drayMarkupMode==='pct'?cr*(1+tl.drayMarkupAmount/100):cr+Number(tl.drayMarkupAmount);
   }
-  return Number(tl.drayFlatRates[charge])||0;
+  // Only bill the customer an accessory flat when the carrier actually charges for it
+  // (mirrors cuRate in the main drayage quoting tool so transload profit matches).
+  return cr>0 ? (Number(tl.drayFlatRates[charge])||0) : 0;
 }
 function tlSetFlatRate(c,v){S.tl.drayFlatRates[c]=v;refreshTlDrayPreview();}
 function tlSetBaseMarkup(k,v){S.tl['drayMarkup'+k.charAt(0).toUpperCase()+k.slice(1)]=v;refreshTlDrayPreview();}
