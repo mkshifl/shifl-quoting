@@ -1472,12 +1472,14 @@ async function initApp(){
       try{const q=await withTimeout(dbLoadQuotes(),10000,null);if(q){S.quotes=q;localStorage.setItem('shifl_quotes_cache',JSON.stringify(q));}}catch(e){}
       try{const c=await withTimeout(dbLoadCustomers(),8000,null);if(c){S.customers=c;localStorage.setItem('shifl_customers_cache',JSON.stringify(c));}}catch(e){}
       try{const fq=await withTimeout(dbLoadFqQuotes(),8000,null);if(fq){window._fqHistory=fq;localStorage.setItem('fq_history',JSON.stringify(fq));}}catch(e){}
+      try{await withTimeout(loadClaims(),8000,null);updateClaimsBadge();if(S.view==='claims')renderClaims();}catch(e){}
       try{updateActiveBadge();updateInvNavBadge();}catch(e){}
     },1000);
     try{
       realtimeChannel=db.channel('app-changes')
         .on('postgres_changes',{event:'*',schema:'public',table:'quotes'},async()=>{try{S.quotes=await dbLoadQuotes();if(S.view==='log')renderLog();if(S.view==='dash')renderDash();updateActiveBadge();}catch(e){}})
         .on('postgres_changes',{event:'*',schema:'public',table:'fq_quotes'},async()=>{try{window._fqHistory=await withTimeout(dbLoadFqQuotes(),5000,window._fqHistory);if(S.view==='freight'&&S.fqTab==='log')renderFqLog();updateActiveBadge();}catch(e){}})
+        .on('postgres_changes',{event:'*',schema:'public',table:'claims'},async()=>{try{await loadClaims();updateClaimsBadge();if(S.view==='claims')renderClaims();}catch(e){}})
         .subscribe(status=>{try{setSyncStatus(status==='SUBSCRIBED'?'on':status==='CLOSED'?'off':'loading');}catch(e){}});
     }catch(e){}
   }catch(e){console.error('initApp:',e);}
@@ -18808,7 +18810,43 @@ function getAllShipments(){
   return [...drayage,...freight,...air].sort((a,b)=>new Date(b.date)-new Date(a.date));
 }
 
+// ── Shared claims (Supabase-backed, visible to all users) ─────
+window._claimsCache = window._claimsCache || null;   // null = not yet loaded from DB
+let _claimsFetched = false;
+
+async function dbLoadClaims(){
+  if(typeof db==='undefined'||!db) return null;
+  const {data,error}=await db.from('claims').select('*').order('created_at',{ascending:false});
+  if(error) throw error;
+  return (data||[]).map(r=>typeof r.data==='object'?r.data:JSON.parse(r.data||'{}'));
+}
+
+async function loadClaims(){
+  try{
+    const rows=await dbLoadClaims();
+    if(rows){
+      window._claimsCache=rows;
+      try{localStorage.setItem('shifl_claims',JSON.stringify(rows.slice(0,300)));}catch(e){}
+    }
+  }catch(e){ /* offline or claims table not created yet — fall back to local */ }
+  return window._claimsCache;
+}
+
+// Upload one File/Blob to the shared claim-files bucket, return its public URL
+async function uploadClaimFile(claimId,file){
+  const safe=(file.name||'file').replace(/[^a-zA-Z0-9._-]/g,'_');
+  const path='claims/'+claimId+'/'+Date.now()+'_'+safe;
+  const {error}=await db.storage.from('claim-files').upload(path,file,{upsert:true,contentType:file.type||undefined});
+  if(error) throw error;
+  const {data}=db.storage.from('claim-files').getPublicUrl(path);
+  return data.publicUrl;
+}
+
 function getAllClaims(){
+  // Prefer the shared DB cache so every user sees the same list
+  if(Array.isArray(window._claimsCache)){
+    return window._claimsCache.slice().sort((a,b)=>new Date(b.filedAt||b.ts||0)-new Date(a.filedAt||a.ts||0));
+  }
   const all = [];
   try{
     const keys = Object.keys(localStorage).filter(k=>k.startsWith('tms_claims_'));
@@ -18816,40 +18854,37 @@ function getAllClaims(){
       const claims = JSON.parse(localStorage.getItem(k)||'[]');
       claims.forEach(c=>all.push(c));
     });
-    // Also check new unified claims store
     const unified = JSON.parse(localStorage.getItem('shifl_claims')||'[]');
     unified.forEach(c=>{ if(!all.find(x=>x.id===c.id)) all.push(c); });
   }catch(e){}
   return all.sort((a,b)=>new Date(b.filedAt||b.ts||0)-new Date(a.filedAt||a.ts||0));
 }
 
-function saveClaim(claim){
+async function saveClaim(claim){
+  // 1) update the shared in-memory cache immediately
+  if(!Array.isArray(window._claimsCache)) window._claimsCache=[];
+  const ci=window._claimsCache.findIndex(c=>c.id===claim.id);
+  if(ci>=0) window._claimsCache[ci]=claim; else window._claimsCache.unshift(claim);
+  // 2) persist to Supabase so it's visible to all users
+  let dbOk=false;
+  try{ if(typeof db!=='undefined'&&db){ const {error}=await db.from('claims').upsert({id:claim.id,data:claim}); if(error) throw error; dbOk=true; } }catch(e){ dbOk=false; }
+  // 3) local mirror (offline cache). Files now hold URLs, not base64, so this stays small.
   const all = JSON.parse(localStorage.getItem('shifl_claims')||'[]');
   const idx = all.findIndex(c=>c.id===claim.id);
-  if(idx>=0) all[idx]=claim;
-  else all.unshift(claim);
+  if(idx>=0) all[idx]=claim; else all.unshift(claim);
   try{
     localStorage.setItem('shifl_claims',JSON.stringify(all));
   }catch(e){
-    // Base64 photo attachments overflow the ~5MB localStorage quota, which was
-    // silently blocking the whole claim from saving. Drop the heavy image bytes
-    // (keep file names) so the claim always saves, and reclaim space from older claims.
-    if(claim.files && claim.files.length){
-      claim.files = claim.files.map(function(f){return {name:f.name, stripped:true};});
-    }
-    all.forEach(function(c){ if(c.files) c.files=c.files.map(function(f){return f.data?{name:f.name,stripped:true}:f;}); });
-    try{
-      localStorage.setItem('shifl_claims',JSON.stringify(all));
-      if(typeof showToast==='function') showToast('⚠️ Claim saved — but the photos were too large to store in-app. Keep the originals.','warn',6000);
-    }catch(e2){
-      alert('Could not save — browser storage is full even after removing photos. Delete some old claims and try again.');
-      throw e2;
-    }
+    if(claim.files) claim.files=claim.files.map(function(f){return {name:f.name,url:f.url,stripped:!f.url};});
+    all.forEach(function(c){ if(c.files) c.files=c.files.map(function(f){return f.data?{name:f.name,url:f.url,stripped:!f.url}:f;}); });
+    try{ localStorage.setItem('shifl_claims',JSON.stringify(all)); }catch(e2){}
   }
+  if(!dbOk && typeof showToast==='function') showToast('⚠️ Saved locally — could not reach the database, so other users may not see it yet.','warn',6000);
   // Update badge
-  const open = all.filter(c=>c.status!=='resolved').length;
+  const open = (window._claimsCache||all).filter(c=>c.status!=='resolved').length;
   const badge = document.getElementById('claims-badge');
   if(badge){ badge.textContent=open; badge.style.display=open>0?'inline':'none'; }
+  return dbOk;
 }
 
 const CLAIM_STATUSES = [
@@ -18868,6 +18903,8 @@ function claimStatusPill(key){
 
 function renderClaims(){
   $('topbar-right').innerHTML=`<button class="btn blue" onclick="openNewClaimWizard()">+ File new claim</button>`;
+  // Pull the shared list from Supabase once, then re-render so all users see the same claims
+  if(!_claimsFetched){ _claimsFetched=true; loadClaims().then(function(){ if(S.view==='claims') renderClaims(); }); }
   
   const claims = getAllClaims();
   const open = claims.filter(c=>c.status!=='resolved').length;
@@ -19040,19 +19077,15 @@ function claimAddFiles(){
   input.onchange = function(){
     _claimDraft.files = _claimDraft.files||[];
     Array.from(input.files).forEach(function(f){
-      var reader = new FileReader();
-      reader.onload = function(e){
-        _claimDraft.files.push({name:f.name,data:e.target.result});
-        var el = document.getElementById('cl-files-list');
-        if(el) el.innerHTML = _claimDraft.files.map(function(fi){return '<div style="display:inline-block;background:#f0f6ff;border-radius:5px;padding:2px 8px;margin:2px;font-size:11px">📎 '+fi.name+'</div>';}).join('');
-      };
-      reader.readAsDataURL(f);
+      _claimDraft.files.push({name:f.name, file:f, type:f.type, size:f.size});
     });
+    var el = document.getElementById('cl-files-list');
+    if(el) el.innerHTML = _claimDraft.files.map(function(fi){return '<div style="display:inline-block;background:#f0f6ff;border-radius:5px;padding:2px 8px;margin:2px;font-size:11px">📎 '+fi.name+'</div>';}).join('');
   };
   input.click();
 }
 
-function submitClaim(){
+async function submitClaim(){
   var type = (document.getElementById('cl-type')||{}).value||'';
   var notes = ((document.getElementById('cl-notes')||{}).value||'').trim();
   var amount = parseFloat((document.getElementById('cl-amount')||{}).value)||0;
@@ -19060,8 +19093,25 @@ function submitClaim(){
   if(!type){ alert('Please select a claim type.'); return; }
   if(!notes){ alert('Please describe the claim.'); return; }
 
+  var claimId = 'CLM-'+Date.now();
+  var btn = document.querySelector('.modal-foot .btn.blue');
+  if(btn){ btn.disabled=true; btn.textContent='Uploading…'; }
+
+  // Upload attachments to shared Storage so every user can see them
+  var draftFiles = _claimDraft.files||[];
+  var files = [];
+  var failed = 0;
+  for(var i=0;i<draftFiles.length;i++){
+    var f = draftFiles[i];
+    if(f && f.url){ files.push({name:f.name,url:f.url,type:f.type||''}); continue; }
+    if(f && f.file && typeof db!=='undefined' && db){
+      try{ var url = await uploadClaimFile(claimId,f.file); files.push({name:f.name,url:url,type:f.type||''}); }
+      catch(e){ failed++; files.push({name:f.name,stripped:true}); }
+    } else { failed++; files.push({name:(f&&f.name)||'file',stripped:true}); }
+  }
+
   var claim = {
-    id: 'CLM-'+Date.now(),
+    id: claimId,
     shipmentId: _claimDraft.shipmentId,
     mode: _claimDraft.mode,
     customer: _claimDraft.customer||'—',
@@ -19069,15 +19119,16 @@ function submitClaim(){
     notes: notes,
     amount: amount,
     against: against,
-    files: _claimDraft.files||[],
+    files: files,
     status: 'filed',
     filedAt: new Date().toISOString(),
     updates: [{status:'filed',note:'Claim filed.',ts:new Date().toISOString()}]
   };
 
-  saveClaim(claim);
+  await saveClaim(claim);
   closeModal();
-  showToast('⚖️ Claim '+claim.id+' filed successfully!');
+  if(failed) showToast('⚖️ Claim '+claim.id+' filed — but '+failed+' file(s) failed to upload.','warn',6000);
+  else showToast('⚖️ Claim '+claim.id+' filed successfully!');
   setView('claims'); render();
 }
 
@@ -19116,7 +19167,7 @@ function openClaimDetail(claimId){
       <div style="background:#f8fafc;border-radius:8px;padding:10px 13px;margin-bottom:14px;font-size:12px;color:#374151;line-height:1.6">${cl.notes}</div>
 
       ${cl.files&&cl.files.length?`<div style="margin-bottom:14px"><div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#94a3b8;margin-bottom:6px">Attachments (${cl.files.length})</div>
-        ${cl.files.map(f=>`<a href="${f.data}" download="${f.name}" style="display:inline-flex;align-items:center;gap:5px;background:#f0f6ff;border-radius:6px;padding:4px 10px;margin:2px;font-size:11px;font-weight:600;color:#2563eb;text-decoration:none">📎 ${f.name}</a>`).join('')}
+        ${cl.files.map(f=>f.url||f.data?`<a href="${f.url||f.data}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:5px;background:#f0f6ff;border-radius:6px;padding:4px 10px;margin:2px;font-size:11px;font-weight:600;color:#2563eb;text-decoration:none">📎 ${f.name}</a>`:`<span style="display:inline-flex;align-items:center;gap:5px;background:#f8fafc;border-radius:6px;padding:4px 10px;margin:2px;font-size:11px;font-weight:600;color:#94a3b8" title="File was not stored">📎 ${f.name} (not stored)</span>`).join('')}
       </div>`:''}
 
       <!-- Update log -->
@@ -19151,16 +19202,15 @@ function openClaimDetail(claimId){
   </div></div>`;
 }
 
-function addClaimUpdate(claimId){
+async function addClaimUpdate(claimId){
   const newStatus = (document.getElementById('cl-new-status')||{}).value||'filed';
   const note = ((document.getElementById('cl-update-note')||{}).value||'').trim();
-  const all = JSON.parse(localStorage.getItem('shifl_claims')||'[]');
-  const cl = all.find(c=>c.id===claimId);
+  const cl = getAllClaims().find(c=>c.id===claimId);
   if(!cl) return;
   cl.status = newStatus;
   cl.updates = cl.updates||[];
   cl.updates.push({status:newStatus,note:note,ts:new Date().toISOString()});
-  localStorage.setItem('shifl_claims',JSON.stringify(all));
+  await saveClaim(cl);
   showToast('Claim updated → '+( CLAIM_STATUSES.find(s=>s.key===newStatus)||{label:newStatus}).label);
   closeModal();
   renderClaims();
@@ -19173,7 +19223,7 @@ function updateClaimStatus(claimId){
 // Update badge on load
 function updateClaimsBadge(){
   try{
-    const all = JSON.parse(localStorage.getItem('shifl_claims')||'[]');
+    const all = Array.isArray(window._claimsCache)?window._claimsCache:JSON.parse(localStorage.getItem('shifl_claims')||'[]');
     const open = all.filter(c=>c.status!=='resolved').length;
     const badge = document.getElementById('claims-badge');
     if(badge){ badge.textContent=open; badge.style.display=open>0?'inline':'none'; }
