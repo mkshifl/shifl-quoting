@@ -18828,7 +18828,24 @@ function saveClaim(claim){
   const idx = all.findIndex(c=>c.id===claim.id);
   if(idx>=0) all[idx]=claim;
   else all.unshift(claim);
-  localStorage.setItem('shifl_claims',JSON.stringify(all));
+  try{
+    localStorage.setItem('shifl_claims',JSON.stringify(all));
+  }catch(e){
+    // Base64 photo attachments overflow the ~5MB localStorage quota, which was
+    // silently blocking the whole claim from saving. Drop the heavy image bytes
+    // (keep file names) so the claim always saves, and reclaim space from older claims.
+    if(claim.files && claim.files.length){
+      claim.files = claim.files.map(function(f){return {name:f.name, stripped:true};});
+    }
+    all.forEach(function(c){ if(c.files) c.files=c.files.map(function(f){return f.data?{name:f.name,stripped:true}:f;}); });
+    try{
+      localStorage.setItem('shifl_claims',JSON.stringify(all));
+      if(typeof showToast==='function') showToast('⚠️ Claim saved — but the photos were too large to store in-app. Keep the originals.','warn',6000);
+    }catch(e2){
+      alert('Could not save — browser storage is full even after removing photos. Delete some old claims and try again.');
+      throw e2;
+    }
+  }
   // Update badge
   const open = all.filter(c=>c.status!=='resolved').length;
   const badge = document.getElementById('claims-badge');
