@@ -2863,12 +2863,19 @@ function renderFqLog(){
     <button class="btn" onclick="syncQuotesToTeam()">🔄 Sync</button>
   </div>`;
 
-  // Status counts
+  // Status counts — booked freight flows into the TMS, so group Booked + every TMS
+  // dispatch stage under one "Sent to TMS" bucket instead of mislabeling it.
+  const TMS_STAGE=['Booked','Dispatched','In Transit','Out for Delivery'];
   const fqCounts={all:history.length};
-  ['Quoted','Booked','Delivered','Invoiced','Lost','Cancelled','Expired'].forEach(s=>{fqCounts[s]=history.filter(q=>q.status===s).length;});
+  ['Quoted','Delivered','Invoiced','Lost','Cancelled','Expired'].forEach(s=>{fqCounts[s]=history.filter(q=>q.status===s).length;});
+  fqCounts['Sent to TMS']=history.filter(q=>TMS_STAGE.includes(q.status)).length;
   const fqSrch=(S.fqLogSearch||'').toLowerCase();
   const fqFiltered=history.map((q,i)=>({q,i})).filter(({q})=>{
-    if((S.fqLogFilter||'all')!=='all'&&q.status!==S.fqLogFilter) return false;
+    const f=S.fqLogFilter||'all';
+    if(f!=='all'){
+      if(f==='Sent to TMS'){ if(!TMS_STAGE.includes(q.status)) return false; }
+      else if(q.status!==f) return false;
+    }
     if(!fqSrch) return true;
     return (q.customer||'').toLowerCase().includes(fqSrch)||(q.shiflRef||'').toLowerCase().includes(fqSrch)||(q.pickupZip||'').includes(fqSrch)||(q.deliveryZip||'').includes(fqSrch)||(q.carrier||'').toLowerCase().includes(fqSrch);
   });
@@ -2892,7 +2899,9 @@ function renderFqLog(){
       <td><span class="badge ${(p=>p.margin>=0.10?'g':'r')(getShipmentProfit(q,'freight'))}">${pct(getShipmentProfit(q,'freight').margin)}</span></td>
       <td style="font-size:11px;color:var(--gray-400);white-space:nowrap">${q.created_by_name||'—'}</td>
       <td onclick="event.stopPropagation()">
-        <select onchange="updateFqStatus(${i},this.value)" style="font-size:12px;padding:4px 7px;width:120px">
+        ${TMS_STAGE.includes(q.status)
+          ? `<span class="badge" style="background:#0d9488;color:#fff;font-weight:700" title="In the TMS · current stage: ${q.status}">🚚 Sent to TMS</span><div style="font-size:9px;color:var(--gray-400);margin-top:2px">${q.status}</div>`
+          : `<select onchange="updateFqStatus(${i},this.value)" style="font-size:12px;padding:4px 7px;width:120px">
           <option${q.status==='Quoted'?' selected':''}>Quoted</option>
           <option${q.status==='Booked'?' selected':''}>Booked</option>
           <option${q.status==='Lost'?' selected':''}>Lost</option>
@@ -2900,7 +2909,7 @@ function renderFqLog(){
           <option${q.status==='Delivered'?' selected':''}>Delivered</option>
           <option${q.status==='Invoiced'?' selected':''}>Invoiced</option>
           <option${q.status==='Paid'?' selected':''}>Paid</option>
-        </select>
+        </select>`}
       </td>
       <td onclick="event.stopPropagation()" style="white-space:nowrap">
         ${q.status==='Booked'?`<button class="btn sm ico-btn" onclick="downloadFqCarrierPDF(${i})" style="color:var(--green)">📋</button>`:''}
@@ -12839,6 +12848,7 @@ function buildPillBar(filterKey, searchKey, counts, searchPlaceholder){
     {s:'all',label:'All',color:'#1a2e4a',bg:'#1a2e4a'},
     {s:'Quoted',label:'Quoted',color:'#1a2e4a',bg:'#1a2e4a'},
     {s:'Booked',label:'Booked',color:'#16a34a',bg:'#16a34a'},
+    {s:'Sent to TMS',label:'🚚 Sent to TMS',color:'#0d9488',bg:'#0d9488'},
     {s:'Delivered',label:'Delivered',color:'#2e75b6',bg:'#2e75b6'},
     {s:'Invoiced',label:'Invoiced',color:'#7c3aed',bg:'#7c3aed'},
     {s:'Lost',label:'Lost',color:'#dc2626',bg:'#dc2626'},
