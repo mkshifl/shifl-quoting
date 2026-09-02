@@ -2914,7 +2914,7 @@ function renderFqLog(){
       <td onclick="event.stopPropagation()" style="white-space:nowrap">
         ${q.status==='Booked'?`<button class="btn sm ico-btn" onclick="downloadFqCarrierPDF(${i})" style="color:var(--green)">📋</button>`:''}
         ${q.status==='Delivered'?`<button class="btn sm ico-btn" onclick="fqSendInvoice(${i})" style="color:var(--amber)">🧾</button>`:''}
-        ${TMS_STAGE.includes(q.status)?`<button class="btn sm ico-btn" onclick="cancelFqTmsLoad(${i})" title="Cancel load — remove from TMS" style="color:var(--red)">🚫</button>`:''}
+        ${TMS_STAGE.includes(q.status)?`<button class="btn sm ico-btn" onclick="pullLoadFromTms('${q.id}')" title="Remove from TMS — sets status back to Quoted" style="color:var(--red)">↩️</button>`:''}
         <button class="btn sm ico-btn" onclick="repeatFreightQuote('${q.id}')" title="Duplicate">🔁</button>
         <button class="btn sm ico-btn" onclick="deleteFqQuote(${i})">🗑️</button>
       </td>
@@ -3021,21 +3021,35 @@ function deleteFqQuote(idx){
   renderFqLog();
 }
 
-// Cancel a load that's already been sent to the TMS (e.g. after a re-quote is approved).
-// Marks it Cancelled — which drops it off the TMS dispatch board — without deleting the quote.
-async function cancelFqTmsLoad(idx){
-  const q=(window._fqHistory||[])[idx];if(!q) return;
-  if(!confirm(`Cancel this load?\n\n${q.customer||'—'} · ${q.pickupZip||'?'} → ${q.deliveryZip||'?'} (${q.fqMode||'—'})\n\nIt will be marked Cancelled and removed from the TMS dispatch board. The quote itself is kept.`)) return;
-  if(!requireCan('update_status','Only Admins can cancel a load.')) return;
-  q.status='Cancelled';
-  q.cancelledDate=localDateStr();
-  q.cancelled_by_name=_currentUser?.name||null;
-  try{localStorage.setItem('fq_history',JSON.stringify(window._fqHistory));}catch(e){}
-  try{await dbUpdateFqStatus(q.id,'Cancelled');}catch(e){console.warn('fq cancel save:',e.message);}
-  logAction('status_changed',`${q.fqMode||'Freight'} — ${q.customer||'—'} | ${q.pickupZip||'—'} → ${q.deliveryZip||'—'} → Cancelled (removed from TMS)`,'fq_quote',q.id);
+// Pull a load back out of the TMS (e.g. after a re-quote is approved, or it was booked in error).
+// Removes it from the TMS dispatch board and returns its status to Quoted — the quote is kept,
+// so it can be re-booked or cancelled later. Works for freight and air loads (by id).
+async function pullLoadFromTms(id){
+  let q=(window._fqHistory||[]).find(x=>x.id===id); let key='fq_history', arr=window._fqHistory;
+  if(!q){ q=(window._aqHistory||[]).find(x=>x.id===id); key='aq_history'; arr=window._aqHistory; }
+  if(!q) return;
+  const from=(q.pickupZip||q.originAirport||'?'), to=(q.deliveryZip||q.destAirport||'?');
+  const reason=prompt(
+    `Remove this load from the TMS?\n\n`+
+    `${q.customer||'—'} · ${from} → ${to} (${q.fqMode||'—'})\n\n`+
+    `It will be taken off the TMS dispatch board and its status set back to QUOTED. `+
+    `The quote itself is kept, so you can re-book or cancel it later.\n\n`+
+    `Optional — reason (e.g. re-quoted, pallet count changed):`
+  );
+  if(reason===null) return; // user hit Cancel on the dialog
+  if(!requireCan('update_status','Only Admins can change a load\'s status.')) return;
+  q.status='Quoted';
+  if(reason&&reason.trim()) q.tmsPullReason=reason.trim();
+  q.pulledFromTmsDate=localDateStr();
+  q.pulled_by_name=_currentUser?.name||null;
+  try{localStorage.setItem(key,JSON.stringify(arr));}catch(e){}
+  try{await dbUpdateFqStatus(id,'Quoted');}catch(e){console.warn('pull-from-tms save:',e.message);}
+  logAction('status_changed',`${q.fqMode||'Freight'} — ${q.customer||'—'} | ${from} → ${to} → removed from TMS, back to Quoted${reason&&reason.trim()?` (${reason.trim()})`:''}`,'fq_quote',id);
   updateActiveBadge();
-  showToast('🚫 Load cancelled and removed from the TMS','info',3500);
-  renderFqLog();
+  if(typeof closeModal==='function') closeModal();
+  showToast('↩️ Load removed from the TMS — status set back to Quoted','info',4000);
+  if(S.view==='freight'&&S.fqTab==='log') renderFqLog();
+  else { try{ if(typeof renderTMS==='function') renderTMS(); }catch(e){} }
 }
 
 function showFqBookingModal(idx){
@@ -15298,6 +15312,7 @@ function openTMSLoadDetail(id){
           <button onclick="openDriverContactModal('${id}')" style="font-size:11px;padding:5px 10px;border:1px solid var(--gray-200);border-radius:var(--radius);background:transparent;cursor:pointer;font-family:inherit">🚛 Driver</button>
           <button onclick="openDetentionTimer('${id}')" style="font-size:11px;padding:5px 10px;border:1px solid var(--gray-200);border-radius:var(--radius);background:transparent;cursor:pointer;font-family:inherit">⏰ Detention</button>
           <button onclick="duplicateTMSLoad('${id}')" style="font-size:11px;padding:5px 10px;border:1px solid var(--gray-200);border-radius:var(--radius);background:transparent;cursor:pointer;font-family:inherit">📋 Duplicate</button>
+          <button onclick="pullLoadFromTms('${id}')" style="font-size:11px;padding:5px 10px;border:1px solid var(--red);border-radius:var(--radius);background:transparent;cursor:pointer;font-family:inherit;color:var(--red)" title="Remove this load from the TMS and set it back to Quoted">↩️ Remove from TMS</button>
           <button onclick="toggleBlindMode('${id}');openTMSLoadDetail('${id}')" style="font-size:11px;padding:5px 10px;border:1px solid ${meta.isBlind?'#7c3aed':'var(--gray-200)'};border-radius:var(--radius);background:${meta.isBlind?'#f5f3ff':'transparent'};cursor:pointer;font-family:inherit;color:${meta.isBlind?'#7c3aed':'inherit'}">🙈 Blind</button>
           <button onclick="aiMatchCarrier('${id}')" style="font-size:11px;padding:5px 10px;border:1px solid var(--steel);border-radius:var(--radius);background:var(--blue-bg);cursor:pointer;font-family:inherit;color:var(--steel)">🤖 AI match</button>
           <button onclick="noteTemplateMenu('tms-notes-${id}')" style="font-size:11px;padding:5px 10px;border:1px solid var(--gray-200);border-radius:var(--radius);background:transparent;cursor:pointer;font-family:inherit">📝 Templates</button>
