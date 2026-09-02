@@ -2914,6 +2914,7 @@ function renderFqLog(){
       <td onclick="event.stopPropagation()" style="white-space:nowrap">
         ${q.status==='Booked'?`<button class="btn sm ico-btn" onclick="downloadFqCarrierPDF(${i})" style="color:var(--green)">📋</button>`:''}
         ${q.status==='Delivered'?`<button class="btn sm ico-btn" onclick="fqSendInvoice(${i})" style="color:var(--amber)">🧾</button>`:''}
+        ${TMS_STAGE.includes(q.status)?`<button class="btn sm ico-btn" onclick="cancelFqTmsLoad(${i})" title="Cancel load — remove from TMS" style="color:var(--red)">🚫</button>`:''}
         <button class="btn sm ico-btn" onclick="repeatFreightQuote('${q.id}')" title="Duplicate">🔁</button>
         <button class="btn sm ico-btn" onclick="deleteFqQuote(${i})">🗑️</button>
       </td>
@@ -3017,6 +3018,23 @@ function deleteFqQuote(idx){
   window._fqHistory.splice(idx,1);
   try{localStorage.setItem('fq_history',JSON.stringify(window._fqHistory));}catch(e){}
   try{dbDeleteFqQuote(q.id);}catch(e){}
+  renderFqLog();
+}
+
+// Cancel a load that's already been sent to the TMS (e.g. after a re-quote is approved).
+// Marks it Cancelled — which drops it off the TMS dispatch board — without deleting the quote.
+async function cancelFqTmsLoad(idx){
+  const q=(window._fqHistory||[])[idx];if(!q) return;
+  if(!confirm(`Cancel this load?\n\n${q.customer||'—'} · ${q.pickupZip||'?'} → ${q.deliveryZip||'?'} (${q.fqMode||'—'})\n\nIt will be marked Cancelled and removed from the TMS dispatch board. The quote itself is kept.`)) return;
+  if(!requireCan('update_status','Only Admins can cancel a load.')) return;
+  q.status='Cancelled';
+  q.cancelledDate=localDateStr();
+  q.cancelled_by_name=_currentUser?.name||null;
+  try{localStorage.setItem('fq_history',JSON.stringify(window._fqHistory));}catch(e){}
+  try{await dbUpdateFqStatus(q.id,'Cancelled');}catch(e){console.warn('fq cancel save:',e.message);}
+  logAction('status_changed',`${q.fqMode||'Freight'} — ${q.customer||'—'} | ${q.pickupZip||'—'} → ${q.deliveryZip||'—'} → Cancelled (removed from TMS)`,'fq_quote',q.id);
+  updateActiveBadge();
+  showToast('🚫 Load cancelled and removed from the TMS','info',3500);
   renderFqLog();
 }
 
