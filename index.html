@@ -3981,7 +3981,7 @@ function onZip(v){
   if(body) body.innerHTML=buildLaneHistoryEnhanced(S.qi.zip,S.qi.ld)||buildLaneHistory(S.qi.zip,S.qi.ld);
 }
 function onLd(v){S.qi.ld=v;S.selId=null;if($('carriers-body')){refreshCarriersAndPreview();refreshPricingAndPreview();}}
-function selCarrier(id){S.selId=id;refreshCarrierHighlight(id);refreshPreviewOnly();}
+function selCarrier(id){S.selId=id;refreshCarrierHighlight(id);refreshPricingAndPreview();}
 function setFlatRate(c,v){S.qi.flatRates[c]=v;refreshPreviewOnly();}
 function setBaseMarkup(k,v){
   S.qi.baseMarkup[k]=v;
