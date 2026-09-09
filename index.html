@@ -804,6 +804,7 @@ if('caches' in window){
         <button class="sub-link" id="nav-requests" onclick="goTo('requests')">📋 Rate requests <span id="qr-nav-badge" style="background:#f59e0b;color:#fff;border-radius:99px;font-size:9px;font-weight:800;padding:1px 6px;display:none;margin-left:auto"></span></button>
         <button class="sub-link" id="nav-rates" onclick="goTo('rates')">📋 Carrier rates</button>
         <button class="sub-link" id="nav-customers" data-view="customers" onclick="goTo('customers')">👥 Customers</button>
+        <button class="sub-link" id="nav-phonebook" data-view="phonebook" onclick="goTo('phonebook')">📇 Phone Book</button>
         <button class="sub-link" id="nav-dash" data-view="dash" onclick="goTo('dash')">📊 Dashboard</button>
         <button class="sub-link" id="nav-templates-dray" onclick="renderTemplates('drayage')">📋 Templates</button>
 
@@ -1298,10 +1299,24 @@ async function dbGetNextQuoteNum(){
 }
 async function dbLoadCustomers(){
   const{data,error}=await db.from('customers').select('*').order('company');
-  if(error) throw error; return data||[];
+  if(error) throw error;
+  const rows=data||[];
+  // Keep any locally-saved phone-book locations if the DB row doesn't carry them yet
+  try{
+    const cache=JSON.parse(localStorage.getItem('shifl_customers_cache')||'[]');
+    const byId={};cache.forEach(c=>{if(c&&c.id)byId[c.id]=c;});
+    rows.forEach(r=>{if(!Array.isArray(r.locations)&&byId[r.id]&&Array.isArray(byId[r.id].locations))r.locations=byId[r.id].locations;});
+  }catch(e){}
+  return rows;
 }
 async function dbSaveCustomer(c){
-  const{error}=await db.from('customers').upsert(c); if(error) throw error;
+  let{error}=await db.from('customers').upsert(c);
+  if(error){
+    // Fallback: table may not have a 'locations' column yet — save core fields, keep locations local
+    const{locations,...bare}=c;
+    const r2=await db.from('customers').upsert(bare);
+    if(r2.error) throw r2.error;
+  }
 }
 async function dbDeleteCustomer(id){
   const{error}=await db.from('customers').delete().eq('id',id); if(error) throw error;
@@ -1583,7 +1598,7 @@ function setView(v){
   S.view=v;
   document.querySelectorAll('.nav-btn,.sub-link').forEach(b=>b.classList.remove('active'));
   const navEl=$('nav-'+v);if(navEl) navEl.classList.add('active');
-  const titles={tms:'TMS',quote:'Quote builder',customers:'Customers',rates:'Carrier rates',log:'Quote log',dash:'Dashboard',freight:'Freight Quoting',transload:'Transload Quoting',active:'Active Shipments',admin:'Admin Panel',reports:'Reports',activity:'Activity Log',auditlog:'Audit Log',carriers:'Carrier Network',air:'Air Freight',home:'Home',invoicing:'Invoicing',requests:'Rate Requests'};
+  const titles={tms:'TMS',quote:'Quote builder',customers:'Customers',phonebook:'Phone Book',rates:'Carrier rates',log:'Quote log',dash:'Dashboard',freight:'Freight Quoting',transload:'Transload Quoting',active:'Active Shipments',admin:'Admin Panel',reports:'Reports',activity:'Activity Log',auditlog:'Audit Log',carriers:'Carrier Network',air:'Air Freight',home:'Home',invoicing:'Invoicing',requests:'Rate Requests'};
   $('view-title').textContent=titles[v]||v;
   openAccFor(v);
   updateSubActive(v);
@@ -1593,6 +1608,7 @@ function render(){
   setTimeout(()=>animPage(),10);
   if(S.view==='quote')      renderQuote();
   else if(S.view==='customers')  renderCustomers();
+  else if(S.view==='phonebook')  renderPhoneBook();
   else if(S.view==='rates')      renderRates();
   else if(S.view==='log')        renderLog();
   else if(S.view==='dash')       renderDash();
@@ -1615,7 +1631,6 @@ function render(){
   else if(S.view==='lane-bids')     renderLaneBids();
   else if(S.view==='rfp')           renderRFP();
   else if(S.view==='qbr')           renderQBR();
-  else if(S.view==='re-engage')     renderReEngage();
   else if(S.view==='invoicing')    renderFullInvoicing();
   else if(S.view==='reports')    renderReports();
   else if(S.view==='auditlog')   renderAuditLog();
@@ -3803,6 +3818,176 @@ async function delCustomer(id){
   try{await dbDeleteCustomer(id);S.customers=S.customers.filter(c=>c.id!==id);
     const t=$('cust-tbody');if(t) t.innerHTML=buildCustomerRows();
   }catch(e){alert('Error: '+e.message);}finally{setSaving(false);}
+}
+// PHONE BOOK — master customers + pickup/delivery locations
+function pbNorm(){(S.customers||[]).forEach(c=>{if(!Array.isArray(c.locations))c.locations=[];});return S.customers||[];}
+function onPbSearch(v){S.pbSearch=v;const t=$('pb-list');if(t)t.innerHTML=buildPbRows();}
+function openPb(id){S.pbSelected=id;renderPhoneBook();}
+function closePb(){S.pbSelected=null;renderPhoneBook();}
+function renderPhoneBook(){
+pbNorm();
+if(S.pbSelected){const c=S.customers.find(x=>x.id===S.pbSelected);if(c){renderPhoneBookDetail(c);return;}S.pbSelected=null;}
+$('topbar-right').innerHTML=`
+<input type="text" id="pb-search" placeholder="Search customers…" value="${S.pbSearch||''}" oninput="onPbSearch(this.value)" style="width:200px">
+<button class="btn blue" onclick="showAddCustomer()">+ Add customer</button>`;
+$('page').innerHTML=`<div style="font-size:13px;color:#6b7280;margin-bottom:12px">Master customer directory — tap a customer to manage their pickup &amp; delivery locations and start a booking.</div><div id="pb-list">${buildPbRows()}</div>`;
+}
+function buildPbRows(){
+const s=(S.pbSearch||'').toLowerCase();
+const list=pbNorm().filter(c=>!s||((c.company||'')+(c.name||'')+(c.email||'')+(c.phone||'')).toLowerCase().includes(s))
+.sort((a,b)=>(a.company||'').localeCompare(b.company||''));
+if(!list.length) return `<div style="text-align:center;padding:40px"><div style="font-size:32px;margin-bottom:10px">📇</div><div style="font-size:14px;font-weight:600;color:#374151;margin-bottom:4px">${(S.pbSearch||'')?'No matches':'No customers yet'}</div><div style="font-size:12px;color:#9ca3af;margin-bottom:14px">${(S.pbSearch||'')?'Try a different search.':'Add a customer to start building your phone book.'}</div><button class="btn blue" onclick="showAddCustomer()">+ Add customer</button></div>`;
+const colors=['linear-gradient(135deg,#1e3a5f,#2563eb)','linear-gradient(135deg,#065f46,#059669)','linear-gradient(135deg,#92400e,#d97706)','linear-gradient(135deg,#6d28d9,#8b5cf6)','linear-gradient(135deg,#991b1b,#dc2626)','linear-gradient(135deg,#0c4a6e,#0284c7)'];
+return list.map((c,i)=>{
+const initials=(c.company||'?').split(' ').slice(0,2).map(w=>w[0]||'').join('').toUpperCase();
+const n=(c.locations||[]).length;
+return `<div onclick="openPb('${c.id}')" style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:10px 14px;margin-bottom:6px;display:flex;align-items:center;gap:10px;cursor:pointer;transition:box-shadow .12s" onmouseenter="this.style.boxShadow='0 2px 12px rgba(30,58,95,.1)'" onmouseleave="this.style.boxShadow='none'">
+<div style="width:36px;height:36px;border-radius:50%;background:${colors[i%colors.length]};display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff;flex-shrink:0">${initials}</div>
+<div style="flex:1;min-width:0">
+<div style="font-size:13px;font-weight:700;color:#1e3a5f;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${c.company||'—'}</div>
+<div style="font-size:11px;color:#6b7280;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${c.name||''}${c.phone?' · '+c.phone:''}${c.email?' · '+c.email:''}</div>
+</div>
+<div style="text-align:right;flex-shrink:0"><div style="font-size:14px;font-weight:800;color:#2563eb">${n}</div><div style="font-size:9px;color:#9ca3af">location${n!==1?'s':''}</div></div>
+<div style="color:#cbd5e1;font-size:18px;flex-shrink:0">›</div>
+</div>`;
+}).join('');
+}
+function renderPhoneBookDetail(c){
+if(!Array.isArray(c.locations))c.locations=[];
+$('topbar-right').innerHTML=`<button class="btn" onclick="closePb()">← All customers</button>
+<button class="btn" onclick="editCustomer('${c.id}')">✏️ Edit info</button>
+<button class="btn blue" onclick="showAddLocation('${c.id}')">+ Add location</button>`;
+const badge=t=>({pickup:'<span style="background:#dbeafe;color:#1e40af;border-radius:99px;font-size:9px;font-weight:800;padding:2px 8px">PICKUP</span>',delivery:'<span style="background:#dcfce7;color:#166534;border-radius:99px;font-size:9px;font-weight:800;padding:2px 8px">DELIVERY</span>',both:'<span style="background:#fef3c7;color:#92400e;border-radius:99px;font-size:9px;font-weight:800;padding:2px 8px">PICKUP + DELIVERY</span>'}[t]||'');
+const locs=c.locations.map(l=>{
+const addr=[l.address,l.city,l.state,l.zip].filter(Boolean).join(', ');
+const isPick=l.type==='pickup'||l.type==='both';
+const isDel=l.type==='delivery'||l.type==='both';
+return `<div style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:12px 14px;margin-bottom:8px">
+<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap">
+<div style="font-size:13px;font-weight:700;color:#0a1628">${l.label||addr||'Location'}</div>
+${badge(l.type)}
+<div style="margin-left:auto;display:flex;gap:4px">
+<button class="btn sm" onclick="showAddLocation('${c.id}','${l.id}')" style="padding:4px 8px">✏️</button>
+<button class="btn sm" onclick="delLocation('${c.id}','${l.id}')" style="padding:4px 8px;color:#dc2626;border-color:#fca5a5">🗑️</button>
+</div>
+</div>
+${addr?`<div style="font-size:12px;color:#374151;margin-bottom:3px">📍 ${addr}</div>`:''}
+${(l.contact||l.phone)?`<div style="font-size:12px;color:#6b7280;margin-bottom:3px">👤 ${l.contact||''}${l.phone?' · '+l.phone:''}</div>`:''}
+${l.hours?`<div style="font-size:12px;color:#6b7280;margin-bottom:3px">🕐 ${l.hours}</div>`:''}
+${l.notes?`<div style="font-size:11px;color:#9ca3af;margin-bottom:3px">📝 ${l.notes}</div>`:''}
+<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
+${isDel?`<button class="btn sm blue" onclick="bookFromLocation('${c.id}','${l.id}','delivery')" style="font-size:11px">📦 Book delivery (import)</button>`:''}
+${isPick?`<button class="btn sm" onclick="bookFromLocation('${c.id}','${l.id}','pickup')" style="font-size:11px">🚚 Book pickup (export)</button>`:''}
+</div>
+</div>`;
+}).join('');
+const initials=(c.company||'?').split(' ').slice(0,2).map(w=>w[0]||'').join('').toUpperCase();
+const n=c.locations.length;
+$('page').innerHTML=`
+<div style="background:linear-gradient(135deg,#1e3a5f,#2563eb);border-radius:12px;padding:16px 18px;margin-bottom:14px;color:#fff;display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+<div style="width:52px;height:52px;border-radius:50%;background:rgba(255,255,255,.18);display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:800;flex-shrink:0">${initials}</div>
+<div style="flex:1;min-width:180px">
+<div style="font-size:18px;font-weight:800">${c.company||'—'}</div>
+<div style="font-size:12px;opacity:.92;margin-top:2px">${c.name?'👤 '+c.name+'&nbsp;&nbsp;':''}${c.phone?'📞 '+c.phone+'&nbsp;&nbsp;':''}${c.email?'📧 '+c.email:''}</div>
+${c.notes?`<div style="font-size:11px;opacity:.82;margin-top:3px">📝 ${c.notes}</div>`:''}
+</div>
+<button class="btn" onclick="bookFromCustomer('${c.id}')" style="background:#fff;color:#1e3a5f;font-weight:700;flex-shrink:0">+ New booking</button>
+</div>
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+<div style="font-size:13px;font-weight:700;color:#1e3a5f">${n} pickup / delivery location${n!==1?'s':''}</div>
+<button class="btn blue" onclick="showAddLocation('${c.id}')">+ Add location</button>
+</div>
+${n?locs:`<div style="text-align:center;padding:30px;background:#fff;border:1px dashed #cbd5e1;border-radius:10px"><div style="font-size:28px;margin-bottom:8px">📍</div><div style="font-size:13px;color:#6b7280;margin-bottom:12px">No locations yet for ${c.company||'this customer'}</div><button class="btn blue" onclick="showAddLocation('${c.id}')">+ Add first location</button></div>`}`;
+}
+function locationFields(l){
+l=l||{};
+return `
+<div class="field"><label>Location label</label><input type="text" id="l-label" value="${l.label||''}" placeholder="e.g. Main warehouse, DC #2"></div>
+<div class="field"><label>Type</label>
+<select id="l-type" style="width:100%;padding:8px;border:1.5px solid var(--gray-200);border-radius:6px;font-family:inherit;font-size:13px">
+<option value="delivery" ${l.type==='delivery'?'selected':''}>Delivery</option>
+<option value="pickup" ${l.type==='pickup'?'selected':''}>Pickup</option>
+<option value="both" ${l.type==='both'?'selected':''}>Pickup + Delivery</option>
+</select>
+</div>
+<div class="field"><label>Street address</label><input type="text" id="l-address" value="${l.address||''}" placeholder="123 Industrial Ave"></div>
+<div class="g2">
+<div class="field"><label>City</label><input type="text" id="l-city" value="${l.city||''}"></div>
+<div class="field"><label>State</label><input type="text" id="l-state" value="${l.state||''}" placeholder="NJ" maxlength="2"></div>
+</div>
+<div class="g2">
+<div class="field"><label>ZIP</label><input type="text" id="l-zip" value="${l.zip||''}" placeholder="07114" maxlength="10"></div>
+<div class="field"><label>Hours</label><input type="text" id="l-hours" value="${l.hours||''}" placeholder="Mon–Fri 8–4"></div>
+</div>
+<div class="g2">
+<div class="field"><label>Site contact</label><input type="text" id="l-contact" value="${l.contact||''}" placeholder="Name"></div>
+<div class="field"><label>Contact phone</label><input type="text" id="l-phone" value="${l.phone||''}"></div>
+</div>
+<div class="field"><label>Notes</label><input type="text" id="l-notes" value="${l.notes||''}" placeholder="e.g. appointment required, liftgate"></div>`;
+}
+function showAddLocation(custId,locId){
+const c=S.customers.find(x=>x.id===custId);if(!c)return;
+if(!Array.isArray(c.locations))c.locations=[];
+const l=locId?c.locations.find(x=>x.id===locId):null;
+$('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+<div class="modal"><div class="modal-title">${l?'Edit location':'Add location'} — ${c.company||''}</div>
+${locationFields(l)}
+<div class="modal-foot"><button class="btn" onclick="closeModal()">Cancel</button>
+<button class="btn blue" onclick="submitLocation('${custId}'${locId?",'"+locId+"'":''})">Save location</button></div></div></div>`;
+}
+async function submitLocation(custId,locId){
+const c=S.customers.find(x=>x.id===custId);if(!c)return;
+if(!Array.isArray(c.locations))c.locations=[];
+const rec={
+id:locId||uid(),
+label:($('l-label')||{}).value?.trim()||'',
+type:($('l-type')||{}).value||'delivery',
+address:($('l-address')||{}).value?.trim()||'',
+city:($('l-city')||{}).value?.trim()||'',
+state:($('l-state')||{}).value?.trim().toUpperCase()||'',
+zip:($('l-zip')||{}).value?.trim()||'',
+hours:($('l-hours')||{}).value?.trim()||'',
+contact:($('l-contact')||{}).value?.trim()||'',
+phone:($('l-phone')||{}).value?.trim()||'',
+notes:($('l-notes')||{}).value?.trim()||''
+};
+if(!rec.zip&&!rec.address&&!rec.label){alert('Add at least a label, street address, or ZIP.');return;}
+if(locId){const i=c.locations.findIndex(x=>x.id===locId);if(i>=0)c.locations[i]=rec;else c.locations.push(rec);}
+else c.locations.push(rec);
+setSaving(true);
+try{await dbSaveCustomer(c);localStorage.setItem('shifl_customers_cache',JSON.stringify(S.customers));closeModal();renderPhoneBook();}
+catch(e){alert('Error: '+e.message);}finally{setSaving(false);}
+}
+async function delLocation(custId,locId){
+const c=S.customers.find(x=>x.id===custId);if(!c)return;
+if(!confirm('Delete this location?'))return;
+c.locations=(c.locations||[]).filter(x=>x.id!==locId);
+setSaving(true);
+try{await dbSaveCustomer(c);localStorage.setItem('shifl_customers_cache',JSON.stringify(S.customers));renderPhoneBook();}
+catch(e){alert('Error: '+e.message);}finally{setSaving(false);}
+}
+function bookFromCustomer(custId){
+const c=S.customers.find(x=>x.id===custId);if(!c)return;
+resetQi();
+S.qi.customer=c.company||c.name||'';S.qi.customerId=c.id;S.qi.customerEmail=c.email||'';
+S.pbSelected=null;
+setView('quote');
+if(window.showToast)showToast('📇 Started a booking for '+(c.company||'customer'),'info',3000);
+}
+function bookFromLocation(custId,locId,mode){
+const c=S.customers.find(x=>x.id===custId);if(!c)return;
+const l=(c.locations||[]).find(x=>x.id===locId);
+resetQi();
+S.qi.customer=c.company||c.name||'';S.qi.customerId=c.id;S.qi.customerEmail=c.email||'';
+if(l){
+if(mode==='pickup'){S.qi.drayType='export';S.qi.pickupZip=l.zip||'';}
+else{S.qi.drayType='import';S.qi.zip=l.zip||'';}
+const addr=[l.address,l.city,l.state,l.zip].filter(Boolean).join(', ');
+S.qi.notes=[l.label,addr,l.contact?('Contact: '+l.contact+(l.phone?' '+l.phone:'')):'',l.hours?('Hours: '+l.hours):'',l.notes].filter(Boolean).join(' · ');
+}
+S.pbSelected=null;
+setView('quote');
+if(window.showToast)showToast('📇 Prefilled '+(mode==='pickup'?'pickup':'delivery')+' booking for '+(c.company||'customer'),'info',3200);
 }
 function buildLaneHistory(zip, ld){
   if(!zip) return '';
@@ -19468,14 +19653,10 @@ function setBrokerData(key,val){localStorage.setItem('shifl_'+key,JSON.stringify
 function renderBrokerTools(){
   $('topbar-right').innerHTML='';
   const tools=[
-    {ico:'🗺️',title:'Cargo theft map',desc:'Active load routes vs theft hotspots',fn:"goTo('broker-tools');renderCargoTheftMap()"},
     {ico:'🔒',title:'Rate agreement lock',desc:'Lock contracted rates per customer/lane',fn:"renderRateAgreements()"},
     {ico:'⛔',title:'Margin floor',desc:'Block quotes below your minimum margin',fn:"renderMarginFloor()"},
-    {ico:'📈',title:'Carrier cost trends',desc:'90-day carrier rate history by lane',fn:"renderCarrierCostTrend()"},
-    {ico:'🎯',title:'Backup carrier suggest',desc:'Auto-suggest carriers when load falls through',fn:"renderBackupCarrier()"},
     {ico:'🚫',title:'Carrier payment hold',desc:'Hold payment and block dispatch per carrier',fn:"renderCarrierHolds()"},
     {ico:'🚑',title:'Load recovery',desc:'Structured workflow when carrier goes dark',fn:"renderLoadRecovery()"},
-    {ico:'🔔',title:'Re-engage lost customers',desc:'Customers quiet 60+ days with at-risk revenue',fn:"goTo('re-engage');render()"},
     {ico:'⭐',title:'Carrier relationship score',desc:'Rank your carrier network 0–100',fn:"goTo('carrier-score');render()"},
     {ico:'📊',title:'Shipper annual review',desc:'Auto-generate QBR deck for any customer',fn:"goTo('qbr');render()"},
     {ico:'🏆',title:'Lane bid history',desc:'Win/loss history and sweet spot per lane',fn:"goTo('lane-bids');render()"},
@@ -19722,42 +19903,6 @@ function advanceRecovery(loadId){
 // ─────────────────────────────────────────────────────────────
 // 8. RE-ENGAGE LOST CUSTOMERS
 // ─────────────────────────────────────────────────────────────
-function renderReEngage(){
-  $('topbar-right').innerHTML='<button class="btn blue" onclick="goTo(\'broker-tools\');renderBrokerTools()">← Broker Tools</button>';
-  const quotes=S.quotes||[];
-  const byCustomer={};
-  quotes.forEach(q=>{
-    if(!q.customer) return;
-    const d=new Date(q.date||q.created_at||0);
-    if(!byCustomer[q.customer]||d>byCustomer[q.customer].last){
-      byCustomer[q.customer]={customer:q.customer,last:d,revenue:0};
-    }
-    byCustomer[q.customer].revenue+=(q.customerRates?.total||0);
-  });
-  const now=Date.now();
-  const quiet=Object.values(byCustomer)
-    .map(c=>({...c,days:Math.round((now-c.last.getTime())/86400000)}))
-    .filter(c=>c.days>=60)
-    .sort((a,b)=>b.days-a.days);
-
-  $('page').innerHTML=`
-    <div style="font-size:18px;font-weight:800;color:#0a1628;margin-bottom:4px">🔔 Re-engage lost customers</div>
-    <div style="font-size:12px;color:#94a3b8;margin-bottom:16px">Customers quiet for 60+ days — ${quiet.length} found</div>
-    ${quiet.length===0?`<div style="text-align:center;padding:60px;color:#94a3b8"><div style="font-size:36px;margin-bottom:12px">🎉</div><div style="font-size:14px;font-weight:600;color:#374151">All customers are active</div><div style="font-size:12px;margin-top:4px">No one has been quiet for 60+ days</div></div>`
-    :quiet.map(c=>`
-      <div style="background:#fff;border-radius:10px;border:1px solid #e2e8f0;padding:14px 16px;margin-bottom:8px;display:flex;align-items:center;gap:12px">
-        <div style="flex:1">
-          <div style="font-size:14px;font-weight:700;color:#0a1628">${c.customer}</div>
-          <div style="font-size:12px;color:#64748b;margin-top:2px">Last load: ${c.last.toLocaleDateString([],{month:'short',day:'numeric',year:'numeric'})} · $${Math.round(c.revenue).toLocaleString()} lifetime revenue</div>
-        </div>
-        <div style="text-align:center;padding:6px 12px;border-radius:8px;background:${c.days>90?'#fee2e2':'#fef3c7'}">
-          <div style="font-size:16px;font-weight:800;color:${c.days>90?'#dc2626':'#d97706'}">${c.days}</div>
-          <div style="font-size:10px;color:${c.days>90?'#dc2626':'#d97706'}">days</div>
-        </div>
-        <button onclick="window.open('mailto:?subject=Checking in — freight quote for you&body=Hi, just wanted to touch base and see if you have any upcoming freight needs. We have great capacity right now. Let me know!')" class="btn blue" style="font-size:11px;padding:6px 12px">✉️ Reach out</button>
-      </div>`).join('')}`;
-}
-
 // ─────────────────────────────────────────────────────────────
 // 9. CARRIER RELATIONSHIP SCORE
 // ─────────────────────────────────────────────────────────────
@@ -20012,14 +20157,6 @@ function exportRFP(){
 // ─────────────────────────────────────────────────────────────
 // WIRE UP to existing nav items in Carriers page
 // ─────────────────────────────────────────────────────────────
-// Add quick-access buttons to carrier detail modal
-function brokerCarrierActions(carrierName){
-  return `<div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap">
-    <button onclick="renderBackupCarrier(null)" class="btn" style="font-size:11px">🎯 Use as backup</button>
-    <button onclick="renderCarrierCostTrend()" class="btn" style="font-size:11px">📈 Cost trend</button>
-    <button onclick="renderCarrierHolds()" class="btn" style="font-size:11px;color:${isCarrierOnHold(carrierName)?'#dc2626':''}">🚫 ${isCarrierOnHold(carrierName)?'On hold':'Place hold'}</button>
-  </div>`;
-}
 </script>
 
 <script>
