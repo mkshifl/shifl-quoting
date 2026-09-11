@@ -11067,7 +11067,7 @@ function openInvoiceBuilder(type, id){
       return `<div style="padding:10px 0;border-bottom:1px solid var(--gray-100)"><div style="display:flex;align-items:center;gap:10px"><input type="checkbox" id="acc-chk-${a.key}" ${isChecked?'checked':''} onchange="toggleAccRow('${a.key}',this.checked,${isHourly},${isDaily},false)" style="flex-shrink:0"><div style="flex:1"><label for="acc-chk-${a.key}" style="font-size:13px;font-weight:600;color:var(--navy);cursor:pointer">${a.label}</label><div style="font-size:11px;color:var(--gray-400)">${a.note}</div></div>${!isHourly&&!isDaily?`<input type="number" id="acc-flat-${a.key}" value="${isChecked?(sv.amount||''):''}" placeholder="0" min="0" oninput="calcInvTotal()" style="width:80px;padding:5px 7px;font-size:13px;text-align:right;${!isChecked?'opacity:.4':''}" ${!isChecked?'disabled':''}>`:`<span id="acc-amt-${a.key}" style="font-size:13px;font-weight:700;color:var(--navy);min-width:70px;text-align:right">—</span>`}</div>${detail}</div>`;
     }).join('');
     $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:600px;max-height:90vh;overflow-y:auto"><style>.inv-sm-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-400);margin-bottom:4px}</style><div class="modal-title">🧾 Invoice — ${aq.customer||'—'}</div><div class="modal-body"><div style="background:var(--blue-bg);border-radius:var(--radius);padding:8px 12px;margin-bottom:14px;font-size:12px;color:var(--gray-600)">${aq.originAirport||'—'} → ${aq.deliveryZip||'—'} · ${aq.carrier||'—'}</div><div class="g3" style="margin-bottom:14px"><div class="field"><label>Invoice #</label><input type="text" id="inv-num" value="${invNum}"></div><div class="field"><label>Invoice date</label><input type="date" id="inv-date" value="${today}"></div><div class="field"><label>Due date</label><input type="date" id="inv-due" value="${due30}"></div></div><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gray-400);margin-bottom:8px">Base charges</div><div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--gray-100);opacity:.8"><span style="font-size:13px;color:var(--navy)">${baseLabelText} <span style="font-size:10px;background:var(--gray-100);padding:1px 7px;border-radius:99px;color:var(--gray-500)">locked</span></span><span style="font-size:14px;font-weight:700;color:var(--navy)">${fmtD(baseAmt)}</span></div><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gray-400);margin:14px 0 8px">Additional charges</div>${rows}<div style="margin-top:14px;padding:12px 14px;background:var(--gray-50);border-radius:var(--radius)"><div style="display:flex;justify-content:space-between;margin-bottom:6px;font-size:13px;color:var(--gray-600)"><span>Base</span><span>${fmtD(baseAmt)}</span></div><div style="display:flex;justify-content:space-between;margin-bottom:10px;font-size:13px;color:var(--gray-600)"><span>Additional</span><span id="inv-acc-total">$0.00</span></div><div style="display:flex;justify-content:space-between;padding-top:10px;border-top:1px solid var(--gray-200)"><span style="font-size:16px;font-weight:700;color:var(--navy)">Total due</span><span style="font-size:20px;font-weight:800;color:var(--steel)" id="inv-grand-total">${fmtD(baseAmt)}</span></div></div><div class="field" style="margin-top:14px"><label>Notes</label><input type="text" id="inv-notes" value="${existing.notes||''}" placeholder="Net 30, factoring..."></div></div><div class="modal-foot"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn" onclick="previewInvoicePDF('${type}','${id}')">⬇ PDF</button><button class="btn blue" onclick="sendInvoiceToShifl('${type}','${id}')">📤 Send to SHIFL</button></div></div></div>`;
-    setTimeout(()=>{window._invBaseTotal=baseAmt;window._invType=type;window._invId=id;calcInvTotal();HOURLY.forEach(k=>{if(document.getElementById('acc-chk-'+k)?.checked)calcAccHourly(k);});DAILY.forEach(k=>{if(document.getElementById('acc-chk-'+k)?.checked)calcAccDaily(k);});},50);
+    setTimeout(()=>{window._invBaseTotal=baseAmt;window._invType=type;window._invId=id;window._invQuotedTotal=0;calcInvTotal();HOURLY.forEach(k=>{if(document.getElementById('acc-chk-'+k)?.checked)calcAccHourly(k);});DAILY.forEach(k=>{if(document.getElementById('acc-chk-'+k)?.checked)calcAccDaily(k);});},50);
     return;
   }
 
@@ -11115,7 +11115,8 @@ function openInvoiceBuilder(type, id){
   const DAILY=['storage','chassis'];
   const DUAL=['genset','triaxle','bobtail'];
 
-  const saved=existing.accessorials||{};
+  const _forceQuoted=window._invForceQuoted; window._invForceQuoted=false;
+  const saved=_forceQuoted?{}:(existing.accessorials||{});
 
   const rows=ACC.map(a=>{
     const quotedCarrier=type==='drayage'?(q.carrierRates?.[a.key]||0):0;
@@ -11200,6 +11201,10 @@ function openInvoiceBuilder(type, id){
       <div class="field"><label>Due date</label><input type="date" id="inv-due" value="${existing.invDue||due30}"></div>
     </div>
 
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:var(--radius);padding:9px 12px;margin-bottom:14px">
+      <div style="font-size:12px;color:#1e40af;display:flex;align-items:center;gap:7px"><span>✓</span><span>Charges auto-filled from the booked quote — review, adjust if needed, then send.</span></div>
+      <button type="button" onclick="window._invForceQuoted=true;openInvoiceBuilder('${type}','${id}')" style="flex-shrink:0;font-size:11px;font-weight:700;color:#1d4ed8;background:#fff;border:1px solid #bfdbfe;border-radius:6px;padding:5px 10px;cursor:pointer;white-space:nowrap">↻ Reset to quoted rates</button>
+    </div>
     <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gray-400);margin-bottom:8px">Base charges (from quote)</div>
     ${baseCharges.map(c=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--gray-100);opacity:.75">
       <span style="font-size:13px;font-weight:500;color:var(--navy)">${c.label} <span style="font-size:10px;background:var(--gray-100);padding:1px 7px;border-radius:99px;color:var(--gray-500)">locked</span></span>
@@ -11250,6 +11255,7 @@ function openInvoiceBuilder(type, id){
     window._invBaseTotal=baseTotal;
     window._invType=type;
     window._invId=id;
+    window._invQuotedTotal=baseTotal+['chassis','prepull','det_port','det_cust','storage','ovw43','ovw48','toll','bobtail','genset','triaxle'].reduce((s,k)=>s+(qRates[k]||0),0);
     calcInvTotal();
     HOURLY.forEach(k=>{ if(document.getElementById('acc-chk-'+k)?.checked) calcAccHourly(k); });
     DAILY.forEach(k=>{ if(document.getElementById('acc-chk-'+k)?.checked) calcAccDaily(k); });
@@ -11501,7 +11507,65 @@ async function downloadInvoicePDF(type,id,inv){
   }catch(e){ alert('PDF failed: '+e.message); }
 }
 async function previewInvoicePDF(type,id){ const inv=await saveInvoiceData(type,id); if(inv) await downloadInvoicePDF(type,id,inv); }
-async function sendInvoiceToShifl(type,id){ const inv=await saveInvoiceData(type,id); if(inv) openInvoiceEmailModal(type,id,inv); }
+// ═══════════════════════════════════════════════════════════════
+// CHARGE CHECK — validates a customer invoice before it's sent (warn-only)
+// ═══════════════════════════════════════════════════════════════
+const _INVCHK_LABELS={chassis:'Chassis',prepull:'Pre-pull',det_port:'Detention — port',det_cust:'Detention — customer',storage:'Storage',ovw43:'Overweight (43k)',ovw48:'Overweight (48k)',toll:'Toll',bobtail:'Bobtail',genset:'Genset',triaxle:'Triaxle'};
+function _invReadForm(){
+  const HOURLY=['det_port','det_cust'],DAILY=['storage','chassis'],DUAL=['genset','triaxle','bobtail'];
+  const ALL=['chassis','prepull','det_port','det_cust','storage','ovw43','ovw48','toll','bobtail','genset','triaxle'];
+  const base=window._invBaseTotal||0; let accTotal=0; const billed={};
+  ALL.forEach(k=>{
+    if(!document.getElementById('acc-chk-'+k)?.checked) return;
+    let amt=0,carrierRate=0;
+    if(DUAL.includes(k)){ amt=parseFloat(document.getElementById('acc-flat-'+k)?.value)||0; carrierRate=parseFloat(document.getElementById('acc-carrier-'+k)?.value)||0; }
+    else if(HOURLY.includes(k)||DAILY.includes(k)){ amt=parseFloat(document.getElementById('acc-amt-'+k)?.textContent?.replace(/[^0-9.]/g,''))||0; }
+    else { amt=parseFloat(document.getElementById('acc-flat-'+k)?.value)||0; }
+    billed[k]={amt,carrierRate}; accTotal+=amt;
+  });
+  const cc=document.getElementById('custom-charges-container');
+  if(cc){ cc.querySelectorAll('[id^="acc-flat-custom-"]').forEach((el,i)=>{ if(document.getElementById('acc-chk-custom-'+i)?.checked) accTotal+=parseFloat(el.value)||0; }); }
+  return {base,accTotal,grand:base+accTotal,billed};
+}
+function _invChargeCheck(type,id){
+  const issues=[];
+  const num=($('inv-num')||{}).value?.trim(); const due=($('inv-due')||{}).value?.trim();
+  if(!num) issues.push({sev:'red',msg:'Invoice # is blank.'});
+  if(!due) issues.push({sev:'amber',msg:'Due date is blank.'});
+  const f=_invReadForm();
+  const quoted=window._invQuotedTotal;
+  if(typeof quoted==='number'&&quoted>0){ const d=f.grand-quoted; if(Math.abs(d)>=1) issues.push({sev:'amber',msg:`Invoice total ${fmtD(f.grand)} differs from the quoted ${fmtD(quoted)} (${d>0?'+':'−'}${fmtD(Math.abs(d))}).`}); }
+  let q=null;
+  if(type==='drayage') q=S.quotes.find(x=>x.id===id);
+  else if(type==='transload') q=(window._tlHistory||[]).find(x=>x.id===id);
+  const cRates=(q&&q.carrierRates)||{};
+  Object.keys(_INVCHK_LABELS).forEach(k=>{
+    const carrierAmt=cRates[k]||0;
+    if(carrierAmt>0 && (!f.billed[k] || f.billed[k].amt<=0)) issues.push({sev:'amber',msg:`Carrier charged ${_INVCHK_LABELS[k]} (${fmtD(carrierAmt)}) but it's not billed on this invoice.`});
+    if(f.billed[k] && f.billed[k].carrierRate>0 && f.billed[k].amt>0 && f.billed[k].carrierRate>f.billed[k].amt) issues.push({sev:'red',msg:`${_INVCHK_LABELS[k]}: billing ${fmtD(f.billed[k].amt)} but the carrier costs ${fmtD(f.billed[k].carrierRate)}.`});
+    if(f.billed[k] && f.billed[k].carrierRate>0 && f.billed[k].amt<=0) issues.push({sev:'amber',msg:`${_INVCHK_LABELS[k]} has a carrier cost (${fmtD(f.billed[k].carrierRate)}) but $0 billed to the customer.`});
+  });
+  const carrierTotal=(getCarrierInvoice(id)?.grandTotal)||cRates.total||0;
+  if(carrierTotal>0 && f.grand>0 && f.grand<carrierTotal) issues.push({sev:'red',msg:`Invoice total ${fmtD(f.grand)} is below the carrier cost ${fmtD(carrierTotal)} — losing ${fmtD(carrierTotal-f.grand)}.`});
+  return issues;
+}
+function _closeInvCheck(){ const el=document.getElementById('inv-check-overlay'); if(el) el.remove(); }
+function _showInvChargeCheck(type,id,issues){
+  _closeInvCheck();
+  const red=issues.filter(i=>i.sev==='red'), amber=issues.filter(i=>i.sev!=='red');
+  const item=i=>`<div style="display:flex;align-items:flex-start;gap:9px;padding:9px 0;border-bottom:1px solid var(--gray-100)"><span style="flex-shrink:0;font-size:13px">${i.sev==='red'?'🔴':'🟠'}</span><span style="font-size:13px;color:${i.sev==='red'?'#991b1b':'#92400e'};line-height:1.45">${i.msg}</span></div>`;
+  const div=document.createElement('div');
+  div.id='inv-check-overlay'; div.className='overlay'; div.style.zIndex='99999';
+  div.onclick=(e)=>{ if(e.target===div) _closeInvCheck(); };
+  div.innerHTML=`<div class="modal" style="max-width:480px"><div class="modal-title">⚠️ Charge check — ${issues.length} to review</div><div class="modal-body"><div style="font-size:12px;color:var(--gray-500);margin-bottom:6px">This won't stop you — just confirm these are intentional before the invoice goes to SHIFL.</div>${red.map(item).join('')}${amber.map(item).join('')}</div><div class="modal-foot"><button class="btn" onclick="_closeInvCheck()">← Go back &amp; fix</button><button class="btn blue" onclick="_invSendAnyway('${type}','${id}')">Send anyway →</button></div></div>`;
+  document.body.appendChild(div);
+}
+async function _invSendAnyway(type,id){ _closeInvCheck(); const inv=await saveInvoiceData(type,id); if(inv) openInvoiceEmailModal(type,id,inv); }
+
+async function sendInvoiceToShifl(type,id){
+  try{ const issues=_invChargeCheck(type,id); if(issues&&issues.length){ _showInvChargeCheck(type,id,issues); return; } }catch(e){}
+  const inv=await saveInvoiceData(type,id); if(inv) openInvoiceEmailModal(type,id,inv);
+}
 function openInvoiceEmailModal(type,id,inv){
   const meta=_invMeta(type,id);
   const resendKey=localStorage.getItem('shifl_resend_key')||'';
