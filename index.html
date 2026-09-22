@@ -22966,7 +22966,10 @@ function _reqDetectedMethod(mode){
 }
 function _reqEmailUrl(r){
   const m=(r.notes||'').match(/https:\/\/mail\.google\.com\/[^\s)"'<]+/);
-  return m?m[0]:'';
+  if(m) return m[0];
+  // no stored permalink (older/portal request) -> open a Gmail search for it
+  const q=(r.subject||[r.customer,(r.shiflRef||r.id)].filter(Boolean).join(' ')||r.id||'').toString().trim();
+  return 'https://mail.google.com/mail/u/0/#search/'+encodeURIComponent(q);
 }
 function _matchCustomer(name){
   const n=(name||'').toString().trim().toLowerCase();
@@ -23019,7 +23022,7 @@ function renderQuoteRequests(){
                 ${(r.status!=='Cancelled'&&r.status!=='Booked')?`<button class="btn" style="font-size:11px;padding:3px 8px;border-color:#7c3aed;color:#7c3aed" onclick="openVendorRateRequest('${r.id}')">📧 Vendors</button>`:''}
                 ${r.status==='Pending'?`<button class="btn" style="font-size:11px;padding:3px 8px" onclick="openPricingEntry('${r.id}')">Enter pricing</button>`:''}
                 ${r.status==='Quoted'?`<button class="btn" style="font-size:11px;padding:3px 8px;background:#f0fdf4;color:#16a34a;border-color:#16a34a" onclick="markRequestStatus('${r.id}','Booked')">Mark booked</button>`:''}
-                ${_reqEmailUrl(r)?`<a href="${_reqEmailUrl(r)}" target="_blank" rel="noopener" class="btn" style="font-size:11px;padding:3px 8px;text-decoration:none" title="Open source email">📧</a>`:''}
+                <a href="${_reqEmailUrl(r)}" target="_blank" rel="noopener" class="btn" style="font-size:11px;padding:3px 8px;text-decoration:none" title="Open the source email in Gmail">📧</a>
                 <button class="btn" style="font-size:11px;padding:3px 8px" onclick="viewRequestDetail('${r.id}')">View</button>
                 <button class="btn" style="font-size:11px;padding:3px 8px;color:#dc2626" onclick="markRequestStatus('${r.id}','Cancelled')">✕</button>
               </div>
