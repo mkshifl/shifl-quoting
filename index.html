@@ -22994,6 +22994,7 @@ function renderQuoteRequests(){
             <td>
               <div style="display:flex;gap:4px;align-items:center">
                 ${(r.status!=='Cancelled'&&r.status!=='Booked')?`<button class="btn blue" style="font-size:11px;padding:3px 8px" onclick="loadRequestIntoQuoteBuilder('${r.id}')">📋 Quote</button>`:''}
+                ${(r.status!=='Cancelled'&&r.status!=='Booked')?`<button class="btn" style="font-size:11px;padding:3px 8px;border-color:#7c3aed;color:#7c3aed" onclick="openVendorRateRequest('${r.id}')">📧 Vendors</button>`:''}
                 ${r.status==='Pending'?`<button class="btn" style="font-size:11px;padding:3px 8px" onclick="openPricingEntry('${r.id}')">Enter pricing</button>`:''}
                 ${r.status==='Quoted'?`<button class="btn" style="font-size:11px;padding:3px 8px;background:#f0fdf4;color:#16a34a;border-color:#16a34a" onclick="markRequestStatus('${r.id}','Booked')">Mark booked</button>`:''}
                 ${_reqEmailUrl(r)?`<a href="${_reqEmailUrl(r)}" target="_blank" rel="noopener" class="btn" style="font-size:11px;padding:3px 8px;text-decoration:none" title="Open source email">📧</a>`:''}
@@ -23146,6 +23147,215 @@ function startQuoteFromRequest(id,method){
   }
   showToast(method+' quote started — '+custName+(_cm?' ✓ matched':''),'info',2500);
 }
+
+// ══ Vendor rate-request generator ════════════════════════════════════════════
+function _carrierMatchesMethod(c, method){
+  const modes=((c&&c.modes)||[]).map(x=>(x||'').toString().toLowerCase());
+  if(!modes.length) return false;
+  const m=(method||'').toLowerCase();
+  if(m==='ftl'||m==='ltl'||m==='lcl') return modes.some(x=>x.includes('ftl')||x.includes('ltl')||x.includes('lcl')||x.includes('freight')||x.includes('truck')||x.includes('otr'));
+  if(m==='drayage') return modes.some(x=>x.includes('dray'));
+  if(m==='transload') return modes.some(x=>x.includes('transload')||x.includes('dray')||x.includes('freight'));
+  return false;
+}
+function _vendorRateTemplate(method, r){
+  const ref=r.shiflRef||r.id||'[SHIFL REF]';
+  const origin=r.port||'[ORIGIN CITY, ST]';
+  const dest=r.destination||r.zip||'[DEST CITY, ST]';
+  const commodity=r.commodity||'[ ]';
+  const weight=r.weight||'[ ]';
+  const size=r.size||'[ ]';
+  const qty=r.containerCount||'[ ]';
+  const ready=r.eta||'[ ]';
+  const m=(method||'').toUpperCase();
+  if(m==='FTL') return {subject:`FTL Rate Request – ${origin} to ${dest} – ${ref}`, body:
+`Hi [Carrier / Name],
+
+Please share your best full truckload rate and transit time:
+
+PICKUP
+[Company Name]
+${origin} [ZIP]
+Hours / Appointment: [ ]
+
+DELIVERY
+[Company Name]
+${dest} [ZIP]
+Hours / Appointment: [ ]
+
+LOAD DETAILS
+Equipment: [53' Dry Van / Reefer / Flatbed / Other]
+Temp (if reefer): [ ]
+Commodity: ${commodity}
+Total weight: ${weight} lbs
+Pallet / unit count: ${qty}
+Full or partial: [ ]
+
+ACCESSORIALS
+Driver assist / load-unload: [Yes / No]
+Tarps (flatbed): [Yes / No]
+Team required: [Yes / No]
+
+Pickup date: ${ready}  |  Delivery date: [ ]
+Reference #: ${ref}`};
+  if(m==='LTL'||m==='LCL') return {subject:`${m} Rate Request – ${origin} to ${dest} – ${ref}`, body:
+`Hi [Carrier / Name],
+
+Please share your best ${m} rate and transit time for the following:
+
+PICKUP
+[Company Name]
+[Street Address City, ST ZIP]
+Location type: [Commercial / Residential / Limited access]
+Hours: [ ]  |  Appointment: [Yes / No]
+
+DELIVERY
+[Company Name]
+[Street Address]
+${dest} [ZIP]
+Location type: [Commercial / Residential / Limited access]
+Hours: [ ]  |  Appointment: [Yes / No]
+
+FREIGHT
+Commodity: ${commodity}
+Pieces: ${qty} pallets / units
+Dimensions: [L x W x H] per pallet
+Total weight: ${weight} lbs
+Freight class: [ ]
+Stackable: [Yes / No]
+
+ACCESSORIALS
+Liftgate: [Pickup / Delivery / None]
+Residential: [Pickup / Delivery / None]
+Inside pickup/delivery: [Yes / No]
+Limited access: [ ]
+
+Pickup ready date: ${ready}
+Reference #: ${ref}`};
+  if(m==='DRAYAGE') return {subject:`Drayage Rate Request – ${r.port||'[PORT/TERMINAL]'} – [Import / Export] – ${ref}`, body:
+`Hi [Carrier / Name],
+
+Please share your best drayage rate and transit time for the container move below:
+
+Move type: [Import (port -> door) / Export (door -> port)]
+Container: ${size} – Qty ${qty}
+Weight: ${weight} lbs
+Commodity: ${commodity}
+Port / Terminal: ${r.port||'[ ]'}
+
+— IMPORT —
+Delivery address: [Company, City, ST ZIP]
+
+— EXPORT —
+Pickup address: [Company, City, ST ZIP]
+
+HANDLING
+Live unload/load or Drop & hook: ${r.ld||'[ ]'}
+
+Accessorials:
+Prepull / storage:
+Chassis
+Port Detention
+Yard Storage
+Bobtail
+
+Reference #: ${ref}
+
+Please include the all-in rate, fuel/FSC
+Thanks & Regards!`};
+  if(m==='TRANSLOAD') return {subject:`Transload Rate Request – ${r.port||'[PORT]'} to ${dest} – ${ref}`, body:
+`Hi [Carrier / Name],
+
+Please share your best transload rate and transit time:
+
+INBOUND (drayage to warehouse)
+Port / Terminal: ${r.port||'[ ]'}
+Container: ${size} – Qty ${qty}
+Warehouse: [Company, City, ST ZIP]
+
+TRANSLOAD
+Cargo: ${commodity}
+Pieces / pallets: ${qty}
+Total weight: ${weight} lbs
+Handling: [Palletize / Floor-load / Re-work]
+
+OUTBOUND (delivery)
+Destination: ${dest} [ZIP]
+Equipment: [53' Dry Van / Reefer / Other]
+Full or partial: [ ]
+
+Pickup ready date: ${ready}
+Reference #: ${ref}
+
+[DRAFT TEMPLATE — replace with your standard Transload wording]`};
+  return {subject:`Rate Request – ${ref}`, body:`Hi [Carrier / Name],\n\nPlease share your best rate for ${origin} to ${dest}.\n\nReference #: ${ref}`};
+}
+function openVendorRateRequest(id, method){
+  const r=getQuoteRequests().find(x=>x.id===id);
+  if(!r){showToast('Request not found','error',2000);return;}
+  method = method || _reqDetectedMethod(r.mode) || 'FTL';
+  const tpl=_vendorRateTemplate(method, r);
+  const resendKey=localStorage.getItem('shifl_resend_key')||'';
+  const carriers=(S.carriers||[]).filter(c=>c && c.email);
+  const methodOpts=['FTL','LTL','LCL','Drayage','Transload'].map(x=>`<option value="${x}"${x.toUpperCase()===method.toUpperCase()?' selected':''}>${x}</option>`).join('');
+  const carrierRows = carriers.length ? carriers.map(c=>{
+    const match=_carrierMatchesMethod(c,method);
+    return `<label style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;cursor:pointer;${match?'background:var(--blue-bg)':''}">
+      <input type="checkbox" class="vrr-carrier" value="${(c.email||'').replace(/"/g,'&quot;')}" data-name="${(c.contact_name||c.name||'').replace(/"/g,'&quot;')}"${match?' checked':''}>
+      <span style="flex:1;min-width:0"><span style="font-weight:600;font-size:13px">${c.name||'—'}</span> <span style="font-size:11px;color:#9ca3af">${c.email}</span>${match?` <span style="font-size:9px;background:var(--steel);color:#fff;padding:1px 6px;border-radius:99px">${method}</span>`:''}</span>
+    </label>`;}).join('') : `<div style="font-size:12px;color:#9ca3af;padding:8px">No carriers with an email saved yet — add emails in Carrier Network, or use the field below.</div>`;
+  openModal(`
+    <div class="modal-title" style="margin-bottom:2px">📧 Quote vendors — ${r.customer}</div>
+    <div style="font-size:12px;color:#9ca3af;margin-bottom:14px">Request ${r.id} · changing method regenerates the template</div>
+    ${!resendKey?`<div style="background:#fffbeb;border:1px solid #fbbf24;border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:12px;color:#92400e">⚠️ Resend API key not set — Admin → Settings to enable sending.</div>`:''}
+    <div style="display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap">
+      <div><label style="font-size:11px;font-weight:700;color:#666;display:block;margin-bottom:3px">Method</label>
+        <select onchange="openVendorRateRequest('${id}',this.value)" style="padding:7px 10px;border:1px solid #d1d5db;border-radius:8px;font-size:13px">${methodOpts}</select></div>
+      <div style="flex:1;min-width:220px"><label style="font-size:11px;font-weight:700;color:#666;display:block;margin-bottom:3px">Subject</label>
+        <input id="vrr-subject" value="${tpl.subject.replace(/"/g,'&quot;')}" style="width:100%;padding:7px 10px;border:1px solid #d1d5db;border-radius:8px;font-size:13px"></div>
+    </div>
+    <label style="font-size:11px;font-weight:700;color:#666;display:block;margin-bottom:3px">Message — fill in the remaining [brackets] before sending</label>
+    <textarea id="vrr-body" rows="13" style="width:100%;padding:10px 12px;border:1px solid #d1d5db;border-radius:8px;font-size:12px;font-family:ui-monospace,monospace;line-height:1.5;resize:vertical">${tpl.body.replace(/&/g,'&amp;').replace(/</g,'&lt;')}</textarea>
+    <div style="margin-top:12px">
+      <label style="font-size:11px;font-weight:700;color:#666;display:block;margin-bottom:4px">Send to carriers (mode-matched are pre-checked)</label>
+      <div style="max-height:150px;overflow:auto;border:1px solid var(--gray-100);border-radius:8px;padding:4px">${carrierRows}</div>
+      <input id="vrr-extra" placeholder="Additional emails, comma-separated" style="width:100%;margin-top:8px;padding:7px 10px;border:1px solid #d1d5db;border-radius:8px;font-size:13px">
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
+      <button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn blue" id="vrr-send-btn" onclick="doSendVendorRateRequest('${id}')">📧 Send rate request</button>
+    </div>
+  `);
+}
+async function doSendVendorRateRequest(id){
+  const r=getQuoteRequests().find(x=>x.id===id);
+  if(!r) return;
+  const key=localStorage.getItem('shifl_resend_key')||'';
+  if(!key){alert('Resend API key not set. Admin → Settings to add it.');return;}
+  const subject=(($('vrr-subject')||{}).value||('Rate Request — '+r.id)).trim();
+  const body=($('vrr-body')||{}).value||'';
+  const recips=[];
+  document.querySelectorAll('.vrr-carrier:checked').forEach(cb=>recips.push({email:cb.value, name:cb.getAttribute('data-name')||''}));
+  (($('vrr-extra')||{}).value||'').split(',').map(x=>x.trim()).filter(Boolean).forEach(e=>recips.push({email:e,name:''}));
+  if(!recips.length){alert('Select at least one carrier or add an email.');return;}
+  const btn=$('vrr-send-btn'); if(btn){btn.textContent='Sending...';btn.disabled=true;}
+  const reply=(typeof _currentUser!=='undefined'&&_currentUser&&_currentUser.email)||'trucking@shifl.com';
+  let sent=0, fail=0;
+  for(const rc of recips){
+    const personalized=body.replace(/\[Carrier \/ Name\]/g, rc.name||'there');
+    const html=`<div style="font-family:ui-monospace,Menlo,monospace;white-space:pre-wrap;font-size:13px;color:#1a2e4a;line-height:1.55">${personalized.replace(/&/g,'&amp;').replace(/</g,'&lt;')}</div>`;
+    try{
+      const resp=await fetch('https://api.resend.com/emails',{method:'POST',headers:{'Authorization':'Bearer '+key,'Content-Type':'application/json'},
+        body:JSON.stringify({from:'Shifl Trucking <trucking@shifl.com>', to:[rc.email], reply_to:reply, subject, html, text:personalized})});
+      if(resp.ok) sent++; else { fail++; console.warn('vrr send fail', await resp.text()); }
+    }catch(e){ fail++; console.warn('vrr send err', e && e.message); }
+  }
+  try{ logAction('vendor_rate_request', r.id+' → '+sent+' carrier(s) · '+subject, 'request', id); }catch(e){}
+  if(btn){btn.textContent='📧 Send rate request';btn.disabled=false;}
+  closeModal();
+  showToast(sent+' rate request'+(sent===1?'':'s')+' sent'+(fail?(' · '+fail+' failed'):''), fail?'error':'success', 3500);
+}
+
 
 function markRequestStatus(id,status){
   const all=getQuoteRequests();
