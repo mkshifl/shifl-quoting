@@ -22927,6 +22927,36 @@ function submitQuoteRequest(){
   renderQuoteRequests();
 }
 
+function _reqNeedsReview(r){
+  const c=(r.customer||'').toString().trim().toLowerCase();
+  const noCust=!c||c==='unknown'||c==='—';
+  const noLane=!(r.port||r.destination||r.zip);
+  return noCust||noLane;
+}
+function _reqDetectedMethod(mode){
+  const m=(mode||'').toString().toLowerCase();
+  if(m==='ftl') return 'FTL';
+  if(m==='ltl') return 'LTL';
+  if(m==='lcl') return 'LCL';
+  if(m==='drayage'||m==='dray') return 'Drayage';
+  if(m==='transload') return 'Transload';
+  return null;
+}
+function _reqEmailUrl(r){
+  const m=(r.notes||'').match(/https:\/\/mail\.google\.com\/[^\s)"'<]+/);
+  return m?m[0]:'';
+}
+function _matchCustomer(name){
+  const n=(name||'').toString().trim().toLowerCase();
+  if(!n||n==='unknown') return null;
+  const list=(typeof S!=='undefined'&&S.customers)||[];
+  let hit=list.find(c=>((c.company||c.name||'').toString().toLowerCase())===n);
+  if(hit) return hit;
+  if(n.length>=4){
+    hit=list.find(c=>{const cn=(c.company||c.name||'').toString().toLowerCase();return cn&&(cn.includes(n)||n.includes(cn));});
+  }
+  return hit||null;
+}
 function renderQuoteRequests(){
   const all=getQuoteRequests();
   const el=document.getElementById('page');
@@ -22953,7 +22983,7 @@ function renderQuoteRequests(){
         </tr></thead>
         <tbody>${all.map(r=>`
           <tr>
-            <td style="font-weight:700;font-size:14px;color:var(--navy,#1a2e4a)">${r.customer}</td>
+            <td style="font-weight:700;font-size:14px;color:var(--navy,#1a2e4a)">${r.customer||'—'}${_reqNeedsReview(r)?' <span title="Needs review — verify customer &amp; details" style="font-size:10px;background:#fef2f2;color:#dc2626;padding:1px 7px;border-radius:99px;font-weight:700;vertical-align:middle">⚠ review</span>':''}</td>
             <td style="font-size:12px;color:#666">${r.port||'—'}</td>
             <td>${r.destination||r.zip}</td>
             <td style="text-align:center">${r.containerCount||1}</td>
@@ -22966,6 +22996,7 @@ function renderQuoteRequests(){
                 ${(r.status!=='Cancelled'&&r.status!=='Booked')?`<button class="btn blue" style="font-size:11px;padding:3px 8px" onclick="loadRequestIntoQuoteBuilder('${r.id}')">📋 Quote</button>`:''}
                 ${r.status==='Pending'?`<button class="btn" style="font-size:11px;padding:3px 8px" onclick="openPricingEntry('${r.id}')">Enter pricing</button>`:''}
                 ${r.status==='Quoted'?`<button class="btn" style="font-size:11px;padding:3px 8px;background:#f0fdf4;color:#16a34a;border-color:#16a34a" onclick="markRequestStatus('${r.id}','Booked')">Mark booked</button>`:''}
+                ${_reqEmailUrl(r)?`<a href="${_reqEmailUrl(r)}" target="_blank" rel="noopener" class="btn" style="font-size:11px;padding:3px 8px;text-decoration:none" title="Open source email">📧</a>`:''}
                 <button class="btn" style="font-size:11px;padding:3px 8px" onclick="viewRequestDetail('${r.id}')">View</button>
                 <button class="btn" style="font-size:11px;padding:3px 8px;color:#dc2626" onclick="markRequestStatus('${r.id}','Cancelled')">✕</button>
               </div>
@@ -23061,6 +23092,7 @@ function savePricingToRequest(id){
 function loadRequestIntoQuoteBuilder(id){
   const req=getQuoteRequests().find(r=>r.id===id);
   if(!req){showToast('Request not found','error',2000);return;}
+  const detected=_reqDetectedMethod(req.mode);
   const methods=[
     {m:'FTL',ico:'🚛',d:'Full truckload'},
     {m:'LTL',ico:'📦',d:'Less-than-truckload'},
@@ -23070,12 +23102,12 @@ function loadRequestIntoQuoteBuilder(id){
   ];
   openModal(`
     <div class="modal-title" style="margin-bottom:2px">Build quote — ${req.customer}</div>
-    <div style="font-size:12px;color:#9ca3af;margin-bottom:16px">Request ${req.id} · choose a method to continue</div>
+    <div style="font-size:12px;color:#9ca3af;margin-bottom:16px">Request ${req.id} · choose a method${detected?` — we detected <strong style="color:var(--steel)">${detected}</strong>`:''}</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-      ${methods.map(x=>`<button onclick="startQuoteFromRequest('${id}','${x.m}')" style="display:flex;align-items:center;gap:12px;padding:15px;border:2px solid var(--gray-200);border-radius:12px;background:#fff;cursor:pointer;font-family:inherit;text-align:left" onmouseenter="this.style.borderColor='var(--steel)';this.style.background='var(--blue-bg)'" onmouseleave="this.style.borderColor='var(--gray-200)';this.style.background='#fff'">
+      ${methods.map(x=>{const sel=x.m===detected;return `<button onclick="startQuoteFromRequest('${id}','${x.m}')" style="display:flex;align-items:center;gap:12px;padding:15px;border:2px solid ${sel?'var(--steel)':'var(--gray-200)'};border-radius:12px;background:${sel?'var(--blue-bg)':'#fff'};cursor:pointer;font-family:inherit;text-align:left;box-shadow:${sel?'0 0 0 3px var(--blue-mid,rgba(46,117,182,.18))':'none'}" onmouseenter="this.style.borderColor='var(--steel)';this.style.background='var(--blue-bg)'" onmouseleave="this.style.borderColor='${sel?'var(--steel)':'var(--gray-200)'}';this.style.background='${sel?'var(--blue-bg)':'#fff'}'">
         <span style="font-size:24px;line-height:1">${x.ico}</span>
-        <span style="min-width:0"><span style="display:block;font-weight:700;font-size:15px;color:var(--navy,#1a2e4a)">${x.m}</span><span style="font-size:11px;color:#9ca3af">${x.d}</span></span>
-      </button>`).join('')}
+        <span style="min-width:0"><span style="display:block;font-weight:700;font-size:15px;color:var(--navy,#1a2e4a)">${x.m}${sel?' <span style="font-size:9px;background:var(--steel);color:#fff;padding:1px 6px;border-radius:99px;font-weight:700;vertical-align:middle">detected</span>':''}</span><span style="font-size:11px;color:#9ca3af">${x.d}</span></span>
+      </button>`;}).join('')}
     </div>
     <div style="margin-top:16px;text-align:right"><button class="btn" onclick="closeModal()">Cancel</button></div>
   `);
@@ -23090,25 +23122,29 @@ function startQuoteFromRequest(id,method){
   const dest=req.zip||req.destination||'';
   const ref=`Req ${req.id}`+(req.notes?(' · '+req.notes):'');
   const email=req.customer_email||req.customerEmail||'';
+  const _cm=_matchCustomer(req.customer);
+  const custName=_cm?(_cm.company||_cm.name||req.customer):req.customer;
+  const custId=_cm?(_cm.id||null):null;
+  const custEmail=_cm?(_cm.email||email):email;
   if(method==='Drayage'){
-    S.qi={...S.qi, customer:req.customer, customerEmail:email, port:req.port||S.qi.port,
+    S.qi={...S.qi, customer:custName, customerId:custId, customerEmail:custEmail, port:req.port||S.qi.port,
       zip:dest, containerCount:req.containerCount||1, ld:req.ld||'Live',
       commodity:req.commodity||'', notes:ref, shiflRef:req.id};
     _markReqQuoted(id); if(typeof closeModal==='function')closeModal(); setView('quote');
   } else if(method==='Transload'){
-    S.tl={...defaultTlState(), customer:req.customer, customerEmail:email,
+    S.tl={...defaultTlState(), customer:custName, customerId:custId, customerEmail:custEmail,
       drayPort:req.port||'', drayZip:req.zip||'', outDeliveryZip:dest,
       palletCount:req.containerCount||'', notes:ref, shiflRef:req.id};
     _markReqQuoted(id); if(typeof closeModal==='function')closeModal(); setView('transload');
   } else {
-    S.fq={...S.fq, customer:req.customer, mode:method,
+    S.fq={...S.fq, customer:custName, mode:method,
       equipment:(method==='LCL'?'LTL':((S.fq&&S.fq.equipment)||'Dry Van')),
       pickupZip:'', deliveryZip:dest, weight:req.weight||'',
       palletCount:req.containerCount||'', notes:ref, shiflRef:req.id};
     _markReqQuoted(id); if(typeof closeModal==='function')closeModal(); setView('freight');
     try{ setFreightMode(method); }catch(e){}
   }
-  showToast(method+' quote started — '+req.customer,'info',2500);
+  showToast(method+' quote started — '+custName+(_cm?' ✓ matched':''),'info',2500);
 }
 
 function markRequestStatus(id,status){
