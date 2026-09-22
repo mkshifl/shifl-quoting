@@ -23295,7 +23295,6 @@ function openVendorRateRequest(id, method){
   if(!r){showToast('Request not found','error',2000);return;}
   method = method || _reqDetectedMethod(r.mode) || 'FTL';
   const tpl=_vendorRateTemplate(method, r);
-  const resendKey=localStorage.getItem('shifl_resend_key')||'';
   const carriers=(S.carriers||[]).filter(c=>c && c.email);
   const methodOpts=['FTL','LTL','LCL','Drayage','Transload'].map(x=>`<option value="${x}"${x.toUpperCase()===method.toUpperCase()?' selected':''}>${x}</option>`).join('');
   const carrierRows = carriers.length ? carriers.map(c=>{
@@ -23307,7 +23306,7 @@ function openVendorRateRequest(id, method){
   openModal(`
     <div class="modal-title" style="margin-bottom:2px">📧 Quote vendors — ${r.customer}</div>
     <div style="font-size:12px;color:#9ca3af;margin-bottom:14px">Request ${r.id} · changing method regenerates the template</div>
-    ${!resendKey?`<div style="background:#fffbeb;border:1px solid #fbbf24;border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:12px;color:#92400e">⚠️ Resend API key not set — Admin → Settings to enable sending.</div>`:''}
+    <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:9px 12px;margin-bottom:12px;font-size:12px;color:#1e40af">📤 Sends from <strong>trucking@shifl.com</strong> via your Google sender — queued and delivered within ~1 minute.</div>
     <div style="display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap">
       <div><label style="font-size:11px;font-weight:700;color:#666;display:block;margin-bottom:3px">Method</label>
         <select onchange="openVendorRateRequest('${id}',this.value)" style="padding:7px 10px;border:1px solid #d1d5db;border-radius:8px;font-size:13px">${methodOpts}</select></div>
@@ -23330,32 +23329,35 @@ function openVendorRateRequest(id, method){
 async function doSendVendorRateRequest(id){
   const r=getQuoteRequests().find(x=>x.id===id);
   if(!r) return;
-  const key=localStorage.getItem('shifl_resend_key')||'';
-  if(!key){alert('Resend API key not set. Admin → Settings to add it.');return;}
   const subject=(($('vrr-subject')||{}).value||('Rate Request — '+r.id)).trim();
   const body=($('vrr-body')||{}).value||'';
   const recips=[];
   document.querySelectorAll('.vrr-carrier:checked').forEach(cb=>recips.push({email:cb.value, name:cb.getAttribute('data-name')||''}));
   (($('vrr-extra')||{}).value||'').split(',').map(x=>x.trim()).filter(Boolean).forEach(e=>recips.push({email:e,name:''}));
   if(!recips.length){alert('Select at least one carrier or add an email.');return;}
-  const btn=$('vrr-send-btn'); if(btn){btn.textContent='Sending...';btn.disabled=true;}
-  const reply=(typeof _currentUser!=='undefined'&&_currentUser&&_currentUser.email)||'trucking@shifl.com';
-  let sent=0, fail=0;
-  for(const rc of recips){
-    const personalized=body.replace(/\[Carrier \/ Name\]/g, rc.name||'there');
-    const html=`<div style="font-family:ui-monospace,Menlo,monospace;white-space:pre-wrap;font-size:13px;color:#1a2e4a;line-height:1.55">${personalized.replace(/&/g,'&amp;').replace(/</g,'&lt;')}</div>`;
-    try{
-      const resp=await fetch('https://api.resend.com/emails',{method:'POST',headers:{'Authorization':'Bearer '+key,'Content-Type':'application/json'},
-        body:JSON.stringify({from:'Shifl Trucking <trucking@shifl.com>', to:[rc.email], reply_to:reply, subject, html, text:personalized})});
-      if(resp.ok) sent++; else { fail++; console.warn('vrr send fail', await resp.text()); }
-    }catch(e){ fail++; console.warn('vrr send err', e && e.message); }
+  const btn=$('vrr-send-btn'); if(btn){btn.textContent='Queuing...';btn.disabled=true;}
+  // Queue each email into Supabase; the Google sender script delivers them from trucking@shifl.com
+  const rows=recips.map(rc=>({
+    to_email: rc.email,
+    cc_email: null,
+    subject: subject,
+    body_text: body.replace(/\[Carrier \/ Name\]/g, rc.name||'there'),
+    from_alias: 'trucking@shifl.com',
+    status: 'queued',
+    meta: 'vendor_rate_request '+r.id,
+    created_at: new Date().toISOString()
+  }));
+  try{
+    const {error}=await db.from('outbound_emails').insert(rows);
+    if(error) throw new Error(error.message);
+    try{ logAction('vendor_rate_request', r.id+' → '+rows.length+' carrier(s) queued · '+subject, 'request', id); }catch(e){}
+    closeModal();
+    showToast(rows.length+' rate request'+(rows.length===1?'':'s')+' queued — sending from trucking@shifl.com within ~1 min','success',4200);
+  }catch(e){
+    if(btn){btn.textContent='📧 Send rate request';btn.disabled=false;}
+    alert('Could not queue the emails: '+e.message+'\n\nMake sure the outbound_emails table exists in Supabase (see setup).');
   }
-  try{ logAction('vendor_rate_request', r.id+' → '+sent+' carrier(s) · '+subject, 'request', id); }catch(e){}
-  if(btn){btn.textContent='📧 Send rate request';btn.disabled=false;}
-  closeModal();
-  showToast(sent+' rate request'+(sent===1?'':'s')+' sent'+(fail?(' · '+fail+' failed'):''), fail?'error':'success', 3500);
 }
-
 
 function markRequestStatus(id,status){
   const all=getQuoteRequests();
