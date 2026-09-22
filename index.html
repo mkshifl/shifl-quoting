@@ -18736,42 +18736,64 @@ async function updateReqBadge(){
 }
 
 async function renderCustomerRequests(){
-  $('topbar-right').innerHTML = '';
-  $('page').innerHTML = `
-  <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:75vh;text-align:center;padding:40px 20px">
-
-    <div style="font-size:90px;margin-bottom:20px;line-height:1">🏖️</div>
-
-    <div style="font-size:64px;font-weight:900;color:#0a1628;letter-spacing:-3px;line-height:1;margin-bottom:10px">
-      COMING SOON
-    </div>
-
-    <div style="font-size:22px;font-weight:700;color:#2563eb;margin-bottom:24px">
-      We're still building this part 🏗️
-    </div>
-
-    <div style="background:linear-gradient(135deg,#0a1628,#1e3a5f);border-radius:16px;padding:28px 36px;max-width:520px;margin-bottom:28px;box-shadow:0 8px 32px rgba(10,22,40,.3)">
-      <div style="font-size:16px;color:#93c5fd;line-height:2">
-        🌊 Our developers are currently on a beach somewhere<br>
-        🍹 sipping piña coladas and pretending to work<br>
-        🦀 The crabs ate the source code<br>
-        🚢 We'll ship it when the tide comes in<br>
-        🦞 The lobsters are in charge now
-      </div>
-    </div>
-
-    <div style="font-size:14px;color:#94a3b8;margin-bottom:28px;max-width:420px;line-height:1.6">
-      Customer quote requests, real-time notifications, approval flows — all coming. <strong style="color:#374151">Soon™</strong>
-    </div>
-
-    <button onclick="goTo('quote')" style="padding:14px 32px;border-radius:12px;border:none;background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;box-shadow:0 4px 20px rgba(37,99,235,.4)">
-      🏗️ Go build a quote instead
-    </button>
-
-  </div>`;
+  const tr=document.getElementById('topbar-right'); if(tr) tr.innerHTML='';
+  await loadQuoteRequestsFromDB();
+  renderQuoteRequests();
 }
-
-
+// Pull email/portal requests from Supabase and MERGE them into the local queue
+// (by id, non-destructively) so they show in the Rate requests view.
+async function loadQuoteRequestsFromDB(){
+  try{
+    if(typeof db==='undefined' || !db) return;
+    const {data,error}=await db.from('quote_requests')
+      .select('*').eq('type','quote_request')
+      .order('created_at',{ascending:false});
+    if(error){ console.warn('load quote_requests:',error.message); return; }
+    const local=getQuoteRequests();
+    const have=new Set(local.map(r=>r.id));
+    const incoming=(data||[]).filter(r=>!have.has(r.id)).map(r=>({
+      id:r.id,
+      customer:r.customer||r.customer_email||'—',
+      customer_email:r.customer_email||'',
+      port:r.port||'',
+      zip:r.zip||'',
+      destination:r.destination||r.zip||'',
+      containerCount:r.ctrs||1,
+      size:r.size||'',
+      ld:r.ld||'Live',
+      commodity:r.commodity||'',
+      weight:r.weight||'',
+      eta:r.eta||'',
+      booking:r.booking||'',
+      mode:r.mode||'',
+      notes:r.notes||'',
+      status:_reqStatusToDisplay(r.status),
+      source:'email/portal',
+      createdAt:r.created_at||new Date().toISOString(),
+      pricing:null
+    }));
+    if(incoming.length) saveQuoteRequests(incoming.concat(local)); // newest first
+  }catch(e){ console.warn('load quote_requests failed:', e && e.message); }
+}
+function _reqStatusToDisplay(st){
+  st=(st||'').toString().toLowerCase();
+  if(st==='rates_received'||st==='rates received') return 'Rates received';
+  if(st==='quoted'||st==='counter') return 'Quoted';
+  if(st==='booked') return 'Booked';
+  if(st==='declined'||st==='cancelled'||st==='canceled') return 'Cancelled';
+  return 'Pending';
+}
+function _reqStatusToDB(disp){
+  return ({'Pending':'new','Rates received':'rates_received','Quoted':'quoted','Booked':'booked','Cancelled':'cancelled'})[disp]||'new';
+}
+// Write a status change back to Supabase for DB-originated requests (skip local 'QR-' entries)
+async function _syncReqStatusToDB(id,displayStatus){
+  try{
+    if(typeof db==='undefined' || !db) return;
+    if(!id || String(id).indexOf('QR-')===0) return;
+    await db.from('quote_requests').update({status:_reqStatusToDB(displayStatus)}).eq('id',id);
+  }catch(e){}
+}
 async function ensureQuoteRequestsTable(){
   // Quick check
   const {error} = await db.from('quote_requests').select('id').limit(1);
@@ -23030,6 +23052,7 @@ function savePricingToRequest(id){
   };
   all[idx].status='Rates received';
   saveQuoteRequests(all);
+  _syncReqStatusToDB(id,'Rates received');
   closeModal();
   showToast('Pricing saved — status: Priced','success',2500);
   renderQuoteRequests();
@@ -23050,7 +23073,7 @@ function loadRequestIntoQuoteBuilder(id){
   S.qi.shiflRef=req.id;
   // Mark as Quoted
   const idx=all.findIndex(r=>r.id===id);
-  if(idx>=0){all[idx].status='Quoted';saveQuoteRequests(all);}
+  if(idx>=0){all[idx].status='Quoted';saveQuoteRequests(all);_syncReqStatusToDB(id,'Quoted');}
   closeModal&&closeModal();
   setView('quote');
   showToast('Request loaded into quote builder — '+(req.pricing?.carrier||'select a carrier'),'info',3000);
@@ -23062,6 +23085,7 @@ function markRequestStatus(id,status){
   if(idx<0) return;
   all[idx].status=status;
   saveQuoteRequests(all);
+  _syncReqStatusToDB(id,status);
   renderQuoteRequests();
   showToast(id+' → '+status,'success',2000);
 }
