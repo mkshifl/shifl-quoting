@@ -18766,6 +18766,9 @@ async function loadQuoteRequestsFromDB(){
       eta:r.eta||'',
       booking:r.booking||'',
       mode:r.mode||'',
+      subject:r.subject||'',
+      pickup_type:r.pickup_type||'',
+      delivery_type:r.delivery_type||'',
       notes:r.notes||'',
       status:_reqStatusToDisplay(r.status),
       source:'email/portal',
@@ -22927,6 +22930,25 @@ function submitQuoteRequest(){
   renderQuoteRequests();
 }
 
+function _reqTypeBadge(label, type){
+  if(!type||type==='unknown') return '';
+  const comm=(type==='commercial');
+  const bg=comm?'#eff6ff':'#fef3c7', c=comm?'#1d4ed8':'#92400e', ico=comm?'🏢':'🏠';
+  return `<span style="font-size:11px;font-weight:700;padding:2px 9px;border-radius:99px;background:${bg};color:${c}">${ico} ${label}: ${type}</span>`;
+}
+async function _loadVendorResponses(ref){
+  const box=document.getElementById('vr-resp-box'); if(!box) return;
+  try{
+    const {data,error}=await db.from('vendor_responses').select('*').eq('request_ref',ref).order('received_at',{ascending:false});
+    if(error) throw error;
+    if(!data||!data.length){ box.innerHTML='<div style="font-size:12px;color:#9ca3af">No vendor replies logged yet.</div>'; return; }
+    box.innerHTML=data.map(v=>`<div style="border:1px solid var(--gray-100,#eee);border-radius:8px;padding:8px 10px;margin-bottom:6px">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px"><span style="font-weight:700;font-size:13px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${v.carrier_name||v.carrier_email||'Carrier'}</span>${v.quoted_rate?`<span style="font-weight:800;color:var(--green,#16a34a);white-space:nowrap">${v.quoted_rate}</span>`:'<span style="font-size:11px;color:#9ca3af">no rate parsed</span>'}</div>
+      <div style="font-size:11px;color:#666;margin-top:2px">${v.transit?('🚚 '+v.transit+' · '):''}${v.received_at?new Date(v.received_at).toLocaleString():''}</div>
+      ${v.notes?`<div style="font-size:11px;color:#444;margin-top:3px">${v.notes}</div>`:''}
+    </div>`).join('');
+  }catch(e){ box.innerHTML='<div style="font-size:12px;color:#dc2626">Could not load responses.</div>'; }
+}
 function _reqNeedsReview(r){
   const c=(r.customer||'').toString().trim().toLowerCase();
   const noCust=!c||c==='unknown'||c==='—';
@@ -23375,10 +23397,11 @@ function viewRequestDetail(id){
   if(!req) return;
   openModal(`
     <div style="min-width:440px">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-        <h3 style="margin:0;font-size:15px;color:var(--navy,#1a2e4a)">${req.id}</h3>
-        <span style="font-size:11px;font-weight:700;padding:2px 10px;border-radius:99px;background:${({Pending:'#fef3c7',Priced:'#dbeafe',Quoted:'#ede9fe',Booked:'#dcfce7',Cancelled:'#fee2e2'}[req.status]||'#f3f4f6')};color:${({Pending:'#92400e',Priced:'#1d4ed8',Quoted:'#6d28d9',Booked:'#166534',Cancelled:'#991b1b'}[req.status]||'#374151')}">${req.status}</span>
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px;gap:10px">
+        <div style="min-width:0"><h3 style="margin:0;font-size:15px;color:var(--navy,#1a2e4a)">${req.subject||req.customer||('Request '+req.id)}</h3><div style="font-size:10px;color:#9ca3af;font-family:ui-monospace,monospace;margin-top:2px">${req.id}</div></div>
+        <span style="font-size:11px;font-weight:700;padding:2px 10px;border-radius:99px;white-space:nowrap;background:${({Pending:'#fef3c7',Priced:'#dbeafe','Rates received':'#dbeafe',Quoted:'#ede9fe',Booked:'#dcfce7',Cancelled:'#fee2e2'}[req.status]||'#f3f4f6')};color:${({Pending:'#92400e',Priced:'#1d4ed8','Rates received':'#1d4ed8',Quoted:'#6d28d9',Booked:'#166534',Cancelled:'#991b1b'}[req.status]||'#374151')}">${req.status}</span>
       </div>
+      ${(req.pickup_type||req.delivery_type)?`<div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">${_reqTypeBadge('Pickup',req.pickup_type)}${_reqTypeBadge('Delivery',req.delivery_type)}</div>`:''}
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:13px;margin-bottom:10px">
         ${[['Customer',req.customer],['Port',req.port],['Destination',req.destination||req.zip],['Containers',req.containerCount],['Size',req.size],['Live/Drop',req.ld],['Commodity',req.commodity||'—'],['Weight',req.weight||'—'],['ETA',req.eta||'—'],['Created by',req.createdBy||'—']].map(([l,v])=>`
           <div style="background:var(--gray-50,#f8f9fa);border-radius:6px;padding:7px 10px">
@@ -23397,13 +23420,15 @@ function viewRequestDetail(id){
           </div>
           ${req.pricing.notes?`<div style="font-size:11px;color:#666;margin-top:6px">${req.pricing.notes}</div>`:''}
         </div>`:''}
+      <div style="margin:12px 0 4px"><div style="font-size:11px;font-weight:700;color:#666;text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px">Vendor responses</div><div id="vr-resp-box"><div style="font-size:12px;color:#9ca3af">Loading…</div></div></div>
       <div style="display:flex;gap:8px;justify-content:flex-end">
-        ${req.status==='Pending'?`<button class="btn blue" onclick="closeModal();openPricingEntry('${req.id}')">Enter pricing</button>`:''}
-        ${req.status==='Priced'?`<button class="btn blue" onclick="closeModal();loadRequestIntoQuoteBuilder('${req.id}')">Build quote →</button>`:''}
+        ${(req.status!=='Cancelled'&&req.status!=='Booked')?`<button class="btn blue" onclick="closeModal();loadRequestIntoQuoteBuilder('${req.id}')">📋 Quote</button>`:''}
+        ${req.status==='Pending'?`<button class="btn" onclick="closeModal();openPricingEntry('${req.id}')">Enter pricing</button>`:''}
         <button class="btn" onclick="closeModal()">Close</button>
       </div>
     </div>
   `);
+  _loadVendorResponses(req.id);
 }
 
 // Wire to nav — add "Rate Requests" button in sidebar if not present
