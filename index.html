@@ -2743,7 +2743,7 @@ function renderFqBuilder(){
             placeholder="e.g. 5.4" min="0" step="0.01" style="font-size:15px;font-weight:600"></div>`:''}
         `:''}
         <div class="field"><label>Special instructions (optional)</label>
-          <input type="text" value="${fq.notes}" oninput="fqField('notes',this.value)" placeholder="e.g. liftgate, appointment, hazmat"></div>
+          <input type="text" value="${_esc(fq.notes)}" oninput="fqField('notes',this.value)" placeholder="e.g. liftgate, appointment, hazmat"></div>
         <div class="field"><label>Shifl Ref #</label>
           <input type="text" value="${fq.shiflRef||''}" oninput="fqField('shiflRef',this.value)" placeholder="Assigned after booking"></div>
         ${fq.mode==='LTL'||(fq.mode==='LCL'&&fq.equipment==='LTL')||fq.mode==='FTL'?`
@@ -5520,7 +5520,7 @@ function buildTlStep4(tl){
     <div class="field" style="margin-top:16px">
       <label>Notes for customer (optional)</label>
       <textarea rows="3" oninput="S.tl.notes=this.value" placeholder="Add any conditions or instructions…"
-        style="width:100%;padding:8px 10px;font-size:12px;border:1px solid var(--gray-200);border-radius:var(--radius);resize:vertical;font-family:inherit">${tl.notes}</textarea>
+        style="width:100%;padding:8px 10px;font-size:12px;border:1px solid var(--gray-200);border-radius:var(--radius);resize:vertical;font-family:inherit">${_esc(tl.notes)}</textarea>
     </div>
     <div class="field" style="margin-top:12px">
       <label>Shifl Ref #</label>
@@ -22951,6 +22951,12 @@ async function _loadVendorResponses(ref){
     </div>`).join('');
   }catch(e){ box.innerHTML='<div style="font-size:12px;color:#dc2626">Could not load responses.</div>'; }
 }
+function _esc(s){return (s==null?'':String(s)).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function _cleanReqNotes(n){
+  return (n||'').split('\n')
+    .filter(l=>!/^\s*(—\s*)?Auto-ingested from email/i.test(l) && !/^\s*Source email:/i.test(l))
+    .join('\n').trim();
+}
 function _reqAgeDays(r){
   const d=r.createdAt||r.created_at||r.date;
   if(!d) return 0;
@@ -23210,7 +23216,7 @@ function startQuoteFromRequest(id,method){
   const req=getQuoteRequests().find(r=>r.id===id);
   if(!req){showToast('Request not found','error',2000);return;}
   const dest=req.zip||req.destination||'';
-  const ref=`Req ${req.id}`+(req.notes?(' · '+req.notes):'');
+  const ref=_cleanReqNotes(req.notes);
   const email=req.customer_email||req.customerEmail||'';
   const _cm=_matchCustomer(req.customer);
   const custName=_cm?(_cm.company||_cm.name||req.customer):req.customer;
