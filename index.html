@@ -18770,6 +18770,7 @@ async function loadQuoteRequestsFromDB(){
       pickup_type:r.pickup_type||'',
       delivery_type:r.delivery_type||'',
       notes:r.notes||'',
+      hot:!!r.hot,
       status:_reqStatusToDisplay(r.status),
       source:'email/portal',
       createdAt:r.created_at||new Date().toISOString(),
@@ -22982,6 +22983,22 @@ function _matchCustomer(name){
   }
   return hit||null;
 }
+function _syncReqHotToDB(id,hot){
+  try{
+    if(typeof db==='undefined'||!db) return;
+    if(!id||String(id).indexOf('QR-')===0) return; // local-only manual entries
+    db.from('quote_requests').update({hot:!!hot}).eq('id',id);
+  }catch(e){}
+}
+function toggleReqHot(id){
+  const all=getQuoteRequests(); const idx=all.findIndex(r=>r.id===id);
+  if(idx<0) return;
+  all[idx].hot=!all[idx].hot;
+  saveQuoteRequests(all);
+  _syncReqHotToDB(id, all[idx].hot);
+  renderQuoteRequests();
+  showToast(all[idx].hot?'🔥 Marked HOT':'Unmarked HOT','success',1800);
+}
 function renderQuoteRequests(){
   const all=getQuoteRequests();
   const el=document.getElementById('page');
@@ -23006,9 +23023,9 @@ function renderQuoteRequests(){
           <th>Customer</th><th>Port</th><th>Destination</th>
           <th>Ctrs</th><th>Size</th><th>ETA</th><th>Status</th><th>Req ID</th><th>Actions</th>
         </tr></thead>
-        <tbody>${all.map(r=>`
-          <tr>
-            <td style="font-weight:700;font-size:14px;color:var(--navy,#1a2e4a)">${r.customer||'—'}${_reqNeedsReview(r)?' <span title="Needs review — verify customer &amp; details" style="font-size:10px;background:#fef2f2;color:#dc2626;padding:1px 7px;border-radius:99px;font-weight:700;vertical-align:middle">⚠ review</span>':''}</td>
+        <tbody>${all.slice().sort((a,b)=>(b.hot?1:0)-(a.hot?1:0)).map(r=>`
+          <tr style="${r.hot?'box-shadow:inset 3px 0 0 #dc2626;background:#fff8f8':''}">
+            <td style="font-weight:700;font-size:14px;color:var(--navy,#1a2e4a)">${r.hot?'<span style="font-size:10px;background:#dc2626;color:#fff;padding:1px 7px;border-radius:99px;font-weight:800;vertical-align:middle;margin-right:5px">🔥 HOT</span>':''}${r.customer||'—'}${_reqNeedsReview(r)?' <span title="Needs review — verify customer &amp; details" style="font-size:10px;background:#fef2f2;color:#dc2626;padding:1px 7px;border-radius:99px;font-weight:700;vertical-align:middle">⚠ review</span>':''}</td>
             <td style="font-size:12px;color:#666">${r.port||'—'}</td>
             <td>${r.destination||r.zip}</td>
             <td style="text-align:center">${r.containerCount||1}</td>
@@ -23018,6 +23035,7 @@ function renderQuoteRequests(){
             <td style="font-size:11px;color:#9ca3af;font-family:ui-monospace,monospace">${r.id}</td>
             <td>
               <div style="display:flex;gap:4px;align-items:center">
+                <button class="btn" style="font-size:12px;padding:3px 7px;${r.hot?'background:#dc2626;color:#fff;border-color:#dc2626':'color:#dc2626;border-color:#fca5a5'}" title="${r.hot?'Unmark HOT':'Mark as HOT'}" onclick="toggleReqHot('${r.id}')">🔥</button>
                 ${(r.status!=='Cancelled'&&r.status!=='Booked')?`<button class="btn blue" style="font-size:11px;padding:3px 8px" onclick="loadRequestIntoQuoteBuilder('${r.id}')">📋 Quote</button>`:''}
                 ${(r.status!=='Cancelled'&&r.status!=='Booked')?`<button class="btn" style="font-size:11px;padding:3px 8px;border-color:#7c3aed;color:#7c3aed" onclick="openVendorRateRequest('${r.id}')">📧 Vendors</button>`:''}
                 ${r.status==='Pending'?`<button class="btn" style="font-size:11px;padding:3px 8px" onclick="openPricingEntry('${r.id}')">Enter pricing</button>`:''}
