@@ -18781,6 +18781,7 @@ async function loadQuoteRequestsFromDB(){
 }
 function _reqStatusToDisplay(st){
   st=(st||'').toString().toLowerCase();
+  if(st==='working') return 'Working';
   if(st==='rates_received'||st==='rates received') return 'Rates received';
   if(st==='quoted'||st==='counter') return 'Quoted';
   if(st==='booked') return 'Booked';
@@ -18788,7 +18789,7 @@ function _reqStatusToDisplay(st){
   return 'Pending';
 }
 function _reqStatusToDB(disp){
-  return ({'Pending':'new','Rates received':'rates_received','Quoted':'quoted','Booked':'booked','Cancelled':'cancelled'})[disp]||'new';
+  return ({'Pending':'new','Working':'working','Rates received':'rates_received','Quoted':'quoted','Booked':'booked','Cancelled':'cancelled'})[disp]||'new';
 }
 // Write a status change back to Supabase for DB-originated requests (skip local 'QR-' entries)
 async function _syncReqStatusToDB(id,displayStatus){
@@ -22983,6 +22984,28 @@ function _matchCustomer(name){
   }
   return hit||null;
 }
+function editReqCustomer(id){
+  const req=getQuoteRequests().find(r=>r.id===id); if(!req) return;
+  openModal(`
+    <div style="min-width:360px">
+      <h3 style="margin:0 0 4px;font-size:15px;color:var(--navy,#1a2e4a)">✏️ Edit customer name</h3>
+      <div style="font-size:11px;color:#9ca3af;margin-bottom:12px;font-family:ui-monospace,monospace">${id}</div>
+      <input id="edit-cust-name" value="${(req.customer||'').replace(/"/g,'&quot;')}" placeholder="Customer name" style="width:100%;padding:9px 11px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;font-family:inherit" onkeydown="if(event.key==='Enter')saveReqCustomer('${id}')">
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
+        <button class="btn" onclick="closeModal()">Cancel</button>
+        <button class="btn blue" onclick="saveReqCustomer('${id}')">Save</button>
+      </div>
+    </div>`);
+  setTimeout(()=>{const el=document.getElementById('edit-cust-name');if(el){el.focus();el.select();}},60);
+}
+function saveReqCustomer(id){
+  const el=document.getElementById('edit-cust-name'); if(!el) return;
+  const v=(el.value||'').trim(); if(!v){alert('Enter a customer name.');return;}
+  const all=getQuoteRequests(); const idx=all.findIndex(r=>r.id===id); if(idx<0) return;
+  all[idx].customer=v; saveQuoteRequests(all);
+  try{ if(typeof db!=='undefined'&&db&&String(id).indexOf('QR-')!==0){ db.from('quote_requests').update({customer:v}).eq('id',id); } }catch(e){}
+  closeModal(); renderQuoteRequests(); showToast('Customer updated','success',1800);
+}
 function _syncReqHotToDB(id,hot){
   try{
     if(typeof db==='undefined'||!db) return;
@@ -23005,9 +23028,9 @@ function renderQuoteRequests(){
   if(!el) return;
 
   const STATUS_COLORS={
-    Pending:'#f59e0b','Rates received':'#2e75b6',Quoted:'#7c3aed',Booked:'#16a34a',Cancelled:'#dc2626'
+    Pending:'#f59e0b',Working:'#0891b2','Rates received':'#2e75b6',Quoted:'#7c3aed',Booked:'#16a34a',Cancelled:'#dc2626'
   };
-  const counts={'Pending':0,'Rates received':0,'Quoted':0,'Booked':0};
+  const counts={'Pending':0,'Working':0,'Rates received':0,'Quoted':0,'Booked':0};
   all.forEach(r=>{if(counts[r.status]!==undefined)counts[r.status]++;});
 
   el.innerHTML=`
@@ -23025,7 +23048,7 @@ function renderQuoteRequests(){
         </tr></thead>
         <tbody>${all.slice().sort((a,b)=>(b.hot?1:0)-(a.hot?1:0)).map(r=>`
           <tr style="${r.hot?'box-shadow:inset 3px 0 0 #dc2626;background:#fff8f8':''}">
-            <td style="font-weight:700;font-size:14px;color:var(--navy,#1a2e4a)">${r.hot?'<span style="font-size:10px;background:#dc2626;color:#fff;padding:1px 7px;border-radius:99px;font-weight:800;vertical-align:middle;margin-right:5px">🔥 HOT</span>':''}${r.customer||'—'}${_reqNeedsReview(r)?' <span title="Needs review — verify customer &amp; details" style="font-size:10px;background:#fef2f2;color:#dc2626;padding:1px 7px;border-radius:99px;font-weight:700;vertical-align:middle">⚠ review</span>':''}</td>
+            <td style="font-weight:700;font-size:14px;color:var(--navy,#1a2e4a)">${r.hot?'<span style="font-size:10px;background:#dc2626;color:#fff;padding:1px 7px;border-radius:99px;font-weight:800;vertical-align:middle;margin-right:5px">🔥 HOT</span>':''}${r.customer||'—'}${_reqNeedsReview(r)?' <span title="Needs review — verify customer &amp; details" style="font-size:10px;background:#fef2f2;color:#dc2626;padding:1px 7px;border-radius:99px;font-weight:700;vertical-align:middle">⚠ review</span>':''} <button onclick="editReqCustomer('${r.id}')" title="Edit customer name" style="border:none;background:none;cursor:pointer;font-size:11px;color:#9ca3af;padding:0 2px;vertical-align:middle">✏️</button></td>
             <td style="font-size:12px;color:#666">${r.port||'—'}</td>
             <td>${r.destination||r.zip}</td>
             <td style="text-align:center">${r.containerCount||1}</td>
@@ -23038,7 +23061,8 @@ function renderQuoteRequests(){
                 <button class="btn" style="font-size:12px;padding:3px 7px;${r.hot?'background:#dc2626;color:#fff;border-color:#dc2626':'color:#dc2626;border-color:#fca5a5'}" title="${r.hot?'Unmark HOT':'Mark as HOT'}" onclick="toggleReqHot('${r.id}')">🔥</button>
                 ${(r.status!=='Cancelled'&&r.status!=='Booked')?`<button class="btn blue" style="font-size:11px;padding:3px 8px" onclick="loadRequestIntoQuoteBuilder('${r.id}')">📋 Quote</button>`:''}
                 ${(r.status!=='Cancelled'&&r.status!=='Booked')?`<button class="btn" style="font-size:11px;padding:3px 8px;border-color:#7c3aed;color:#7c3aed" onclick="openVendorRateRequest('${r.id}')">📧 Vendors</button>`:''}
-                ${r.status==='Pending'?`<button class="btn" style="font-size:11px;padding:3px 8px" onclick="openPricingEntry('${r.id}')">Enter pricing</button>`:''}
+                ${(r.status!=='Cancelled'&&r.status!=='Booked'&&r.status!=='Working'&&r.status!=='Quoted')?`<button class="btn" style="font-size:11px;padding:3px 8px;color:#0891b2;border-color:#67e8f9" onclick="markRequestStatus('${r.id}','Working')">⏳ Working</button>`:''}
+                ${(r.status!=='Cancelled'&&r.status!=='Booked'&&r.status!=='Quoted')?`<button class="btn" style="font-size:11px;padding:3px 8px;color:#7c3aed;border-color:#c4b5fd" onclick="markRequestStatus('${r.id}','Quoted')">✓ Quoted</button>`:''}
                 ${r.status==='Quoted'?`<button class="btn" style="font-size:11px;padding:3px 8px;background:#f0fdf4;color:#16a34a;border-color:#16a34a" onclick="markRequestStatus('${r.id}','Booked')">Mark booked</button>`:''}
                 <a href="${_reqEmailUrl(r)}" target="_blank" rel="noopener" class="btn" style="font-size:11px;padding:3px 8px;text-decoration:none" title="Open the source email in Gmail">📧</a>
                 <button class="btn" style="font-size:11px;padding:3px 8px" onclick="viewRequestDetail('${r.id}')">View</button>
@@ -23444,7 +23468,6 @@ function viewRequestDetail(id){
       <div style="margin:12px 0 4px"><div style="font-size:11px;font-weight:700;color:#666;text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px">Vendor responses</div><div id="vr-resp-box"><div style="font-size:12px;color:#9ca3af">Loading…</div></div></div>
       <div style="display:flex;gap:8px;justify-content:flex-end">
         ${(req.status!=='Cancelled'&&req.status!=='Booked')?`<button class="btn blue" onclick="closeModal();loadRequestIntoQuoteBuilder('${req.id}')">📋 Quote</button>`:''}
-        ${req.status==='Pending'?`<button class="btn" onclick="closeModal();openPricingEntry('${req.id}')">Enter pricing</button>`:''}
         <button class="btn" onclick="closeModal()">Close</button>
       </div>
     </div>
