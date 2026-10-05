@@ -882,6 +882,12 @@ if('caches' in window){
           <span id="inv-nav-badge" style="display:none;background:#dc2626;color:#fff;border-radius:99px;font-size:10px;font-weight:700;padding:1px 7px">0</span>
         </span>
       </button>
+      <button class="acc-btn" id="nav-paige" data-view="paige" onclick="goTo('paige')" style="font-size:13px">
+        <span style="display:flex;align-items:center;gap:10px">
+          <span style="font-size:15px">📋</span>Paige
+          <span id="paige-nav-badge" style="display:none;background:#dc2626;color:#fff;border-radius:99px;font-size:10px;font-weight:700;padding:1px 7px;margin-left:auto">0</span>
+        </span>
+      </button>
       <button class="acc-btn" id="nav-claims" data-view="claims" onclick="goTo('claims')" style="font-size:13px">
         <span style="display:flex;align-items:center;gap:10px">
           <span style="font-size:15px">⚖️</span>Claims
@@ -1499,6 +1505,7 @@ async function initApp(){
       try{const fq=await withTimeout(dbLoadFqQuotes(),8000,null);if(fq){window._fqHistory=fq;localStorage.setItem('fq_history',JSON.stringify(fq));}}catch(e){}
       try{await withTimeout(loadClaims(),8000,null);updateClaimsBadge();if(S.view==='claims')renderClaims();}catch(e){}
       try{updateActiveBadge();updateInvNavBadge();}catch(e){}
+      try{await syncCarrierChase();}catch(e){}
     },1000);
     try{
       realtimeChannel=db.channel('app-changes')
@@ -1636,6 +1643,7 @@ function render(){
   else if(S.view==='rfp')           renderRFP();
   else if(S.view==='qbr')           renderQBR();
   else if(S.view==='invoicing')    renderFullInvoicing();
+  else if(S.view==='paige')        renderPaige();
   else if(S.view==='reports')    renderReports();
   else if(S.view==='auditlog')   renderAuditLog();
   else if(S.view==='freight')    renderFreight();
@@ -23049,6 +23057,81 @@ function toggleReqHot(id){
   _syncReqHotToDB(id, all[idx].hot);
   renderQuoteRequests();
   showToast(all[idx].hot?'🔥 Marked HOT':'Unmarked HOT','success',1800);
+}
+function _carrierEmailByName(name){
+  if(!name) return '';
+  const c=(S.carriers||[]).find(c=>((c.company||c.name||'').toString().toLowerCase())===name.toString().toLowerCase());
+  return c?(c.email||''):'';
+}
+function _chaseFromShip(q,mode){
+  const carrier=q.carrier||q.outCarrier||q.drayCarrier||'';
+  let lane='';
+  if(mode==='drayage') lane=`${q.port||''} → ${q.zip||q.destination||''}`;
+  else if(mode==='freight') lane=`${q.pickupZip||q.origin||''} → ${q.deliveryZip||q.destination||''}`;
+  else lane=`${q.drayPort||''} → ${q.outDeliveryZip||q.destination||''}`;
+  return {quote_id:String(q.id), shifl_ref:q.shiflRef||q.shifl_ref||String(q.id), mode, customer:q.customer||'',
+    carrier_name:carrier, carrier_email:_carrierEmailByName(carrier)||null, lane,
+    delivered_at:new Date().toISOString(), status:'active'};
+}
+async function syncCarrierChase(){
+  if(typeof db==='undefined'||!db) return;
+  const delivered=[];
+  (S.quotes||[]).forEach(q=>{ if(q&&q.status==='Delivered') delivered.push(_chaseFromShip(q,'drayage')); });
+  (window._fqHistory||[]).forEach(q=>{ if(q&&q.status==='Delivered') delivered.push(_chaseFromShip(q,'freight')); });
+  (window._tlHistory||[]).forEach(q=>{ if(q&&q.status==='Delivered') delivered.push(_chaseFromShip(q,'transload')); });
+  if(!delivered.length) return;
+  try{
+    const {data:existing}=await db.from('carrier_chase').select('quote_id,carrier_email');
+    const have=new Map((existing||[]).map(r=>[r.quote_id,r]));
+    const toInsert=delivered.filter(s=>!have.has(s.quote_id));
+    if(toInsert.length) await db.from('carrier_chase').insert(toInsert);
+    for(const s of delivered){ const ex=have.get(s.quote_id); if(ex&&!ex.carrier_email&&s.carrier_email){ await db.from('carrier_chase').update({carrier_email:s.carrier_email,carrier_name:s.carrier_name}).eq('quote_id',s.quote_id); } }
+  }catch(e){ console.warn('carrier_chase sync:', e&&e.message); }
+}
+async function markChase(id,what){
+  const f=what==='pod'?{pod_status:'received',pod_received_at:new Date().toISOString()}:{invoice_status:'received',invoice_received_at:new Date().toISOString()};
+  try{ await db.from('carrier_chase').update(f).eq('id',id); }catch(e){}
+  renderPaige();
+}
+async function stopChase(id){ try{ await db.from('carrier_chase').update({status:'stopped'}).eq('id',id); }catch(e){} renderPaige(); }
+async function renderPaige(){
+  const tr=document.getElementById('topbar-right'); if(tr) tr.innerHTML='';
+  $('page').innerHTML='<div style="padding:24px;color:#9ca3af;font-size:13px">Loading Paige…</div>';
+  try{ await syncCarrierChase(); }catch(e){}
+  let rows=[];
+  try{ const {data,error}=await db.from('carrier_chase').select('*').order('created_at',{ascending:false}); if(error)throw error; rows=data||[]; }
+  catch(e){ $('page').innerHTML='<div style="padding:24px;color:#dc2626;font-size:13px">Could not load Paige — make sure the <b>carrier_chase</b> table exists in Supabase (run the setup SQL).</div>'; return; }
+  const active=rows.filter(r=>r.status==='active'), noEmail=rows.filter(r=>r.status==='no_email'), done=rows.filter(r=>r.status==='done');
+  const awaitingPod=active.filter(r=>r.pod_status!=='received').length, awaitingInv=active.filter(r=>r.invoice_status!=='received').length;
+  const kpi=(l,v,c)=>`<div class="kpi"><div class="kpi-lbl">${l}</div><div class="kpi-val" style="color:${c}">${v}</div></div>`;
+  const chip=(ok,label)=>`<span style="font-size:11px;font-weight:700;padding:2px 9px;border-radius:99px;background:${ok?'#dcfce7':'#fef3c7'};color:${ok?'#166534':'#92400e'}">${ok?'✓ '+label:'⏳ '+label}</span>`;
+  const bsm='font-size:11px;padding:3px 8px';
+  const rowHtml=r=>`<tr${r.status==='no_email'?' style="background:#fff7ed"':''}>
+    <td style="padding:10px 12px;font-weight:700;font-size:13px;color:var(--navy,#1a2e4a)">${r.shifl_ref||'—'}<div style="font-size:10px;color:#9ca3af;font-weight:400;text-transform:uppercase">${r.mode||''}</div></td>
+    <td style="padding:10px 12px;font-size:12px">${r.customer||'—'}</td>
+    <td style="padding:10px 12px;font-size:12px">${r.carrier_name||'—'}${r.carrier_email?'':'<div style="font-size:10px;color:#dc2626">⚠ no email</div>'}</td>
+    <td style="padding:10px 12px;font-size:11px;color:#666">${r.lane||''}</td>
+    <td style="padding:10px 12px">${chip(r.pod_status==='received','POD')}</td>
+    <td style="padding:10px 12px">${chip(r.invoice_status==='received','Inv')}</td>
+    <td style="padding:10px 12px;font-size:11px;color:#666">${r.followup_count||0} nudge${(r.followup_count||0)===1?'':'s'}${r.last_followup_at?'<br>'+new Date(r.last_followup_at).toLocaleDateString():''}</td>
+    <td style="padding:10px 12px"><div style="display:flex;gap:4px;justify-content:flex-end;flex-wrap:wrap">
+      ${r.pod_status!=='received'?`<button class="btn" style="${bsm}" title="Mark POD received" onclick="markChase('${r.id}','pod')">✓ POD</button>`:''}
+      ${r.invoice_status!=='received'?`<button class="btn" style="${bsm}" title="Mark invoice received" onclick="markChase('${r.id}','invoice')">✓ Inv</button>`:''}
+      <a class="btn" style="${bsm};text-decoration:none" href="https://mail.google.com/mail/u/0/#search/${encodeURIComponent(r.shifl_ref||'')}" target="_blank" rel="noopener" title="Open the email thread">📧</a>
+      <button class="btn" style="${bsm};color:#dc2626;border-color:#fca5a5" title="Stop chasing" onclick="stopChase('${r.id}')">✕</button>
+    </div></td></tr>`;
+  const th=t=>`<th style="text-align:left;padding:9px 12px;font-size:10px;color:#9ca3af;text-transform:uppercase;letter-spacing:.05em">${t}</th>`;
+  $('page').innerHTML=`
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:3px"><span style="font-size:22px">📋</span><h2 style="margin:0;font-size:18px;color:var(--navy,#1a2e4a)">Paige</h2><span style="font-size:12px;color:#9ca3af">POD &amp; invoice chaser</span></div>
+    <div style="font-size:12px;color:#9ca3af;margin-bottom:16px">Automatically chases carriers for PODs and invoices — one email thread per shipment, morning &amp; afternoon.</div>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px">
+      ${kpi('Awaiting POD',awaitingPod,'#ea580c')}${kpi('Awaiting invoice',awaitingInv,'#d97706')}${kpi('Missing carrier email',noEmail.length,noEmail.length?'#dc2626':'#16a34a')}${kpi('Completed',done.length,'#16a34a')}
+    </div>
+    ${(active.length||noEmail.length)?`<div style="border:1px solid var(--gray-100,#eee);border-radius:12px;overflow:auto"><table style="width:100%;border-collapse:collapse">
+      <thead><tr style="background:var(--gray-50,#f8fafc);border-bottom:1px solid var(--gray-100,#eee)">${th('Shifl Ref')}${th('Customer')}${th('Carrier')}${th('Lane')}${th('POD')}${th('Invoice')}${th('Follow-ups')}${th('')}</tr></thead>
+      <tbody>${[...noEmail,...active].map(rowHtml).join('')}</tbody></table></div>`
+      :'<div class="empty"><div class="empty-ico">✅</div><p>Nothing to chase — every delivered shipment is squared away.</p></div>'}
+    ${done.length?`<div style="margin-top:14px;font-size:12px;color:#9ca3af">${done.length} completed and closed.</div>`:''}`;
 }
 function renderQuoteRequests(){
   const all=getQuoteRequests();
