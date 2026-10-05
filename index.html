@@ -23125,10 +23125,12 @@ async function renderPaige(){
   const awaitPod =rows.filter(r=>r.carrier_email && r.pod_status!=='received' && !bothIn(r));
   const awaitInv =rows.filter(r=>r.carrier_email && r.pod_status==='received' && r.invoice_status!=='received');
   const done     =rows.filter(r=>bothIn(r));
+  const received =rows.filter(r=>r.pod_file_url||r.invoice_file_url);
   const tabs=[
     {id:'email',  label:'⚠ Needs email',     n:needEmail.length, c:'#dc2626', rows:needEmail},
     {id:'pod',    label:'📄 Awaiting POD',    n:awaitPod.length,  c:'#ea580c', rows:awaitPod},
     {id:'invoice',label:'🧾 Awaiting invoice',n:awaitInv.length,  c:'#d97706', rows:awaitInv},
+    {id:'received',label:'📎 Received PODs',  n:received.length,  c:'#0891b2', rows:received},
     {id:'done',   label:'✓ Done',            n:done.length,      c:'#16a34a', rows:done}
   ];
   const cur=tabs.find(t=>t.id===S.paigeTab)||tabs[1];
@@ -23153,9 +23155,11 @@ async function renderPaige(){
         ${threadLink(r)}
         <button class="btn" style="font-size:11px;padding:5px 11px;color:#9ca3af" title="Stop chasing" onclick="stopChase('${r.id}')">✕</button></div>`;
     } else {
-      actions=`<div style="display:flex;gap:12px;margin-top:9px;font-size:11px;color:#16a34a;flex-wrap:wrap;align-items:center">
-        <span>✓ POD${r.pod_received_at?' · '+new Date(r.pod_received_at).toLocaleDateString():''}</span>
-        <span>✓ Invoice${r.invoice_received_at?' · '+new Date(r.invoice_received_at).toLocaleDateString():''}</span>
+      const podDl=r.pod_file_url?`<a class="btn" style="font-size:11px;padding:5px 11px;text-decoration:none;color:#16a34a;border-color:#86efac" href="${r.pod_file_url}" target="_blank" rel="noopener" title="${r.pod_file_name||'POD'}">📄 Download POD</a>`:'';
+      const invDl=r.invoice_file_url?`<a class="btn" style="font-size:11px;padding:5px 11px;text-decoration:none;color:#7c3aed;border-color:#c4b5fd" href="${r.invoice_file_url}" target="_blank" rel="noopener" title="${r.invoice_file_name||'Invoice'}">🧾 Download invoice</a>`:'';
+      actions=`<div style="display:flex;gap:8px;margin-top:9px;flex-wrap:wrap;align-items:center;font-size:11px;color:#64748b">
+        ${podDl||`<span style="color:#16a34a">✓ POD${r.pod_received_at?' · '+new Date(r.pod_received_at).toLocaleDateString():''}</span>`}
+        ${invDl||(r.invoice_status==='received'?`<span style="color:#16a34a">✓ Invoice${r.invoice_received_at?' · '+new Date(r.invoice_received_at).toLocaleDateString():''}</span>`:'')}
         ${threadLink(r)}</div>`;
     }
     return `<div style="border:1px solid var(--gray-100,#eef2f6);border-radius:12px;padding:13px 16px;margin-bottom:10px;background:#fff">
@@ -23168,7 +23172,7 @@ async function renderPaige(){
   };
   const tabBar=`<div style="display:flex;gap:4px;background:var(--gray-100,#f1f5f9);padding:3px;border-radius:10px;width:fit-content;max-width:100%;overflow:auto;margin-bottom:18px">
     ${tabs.map(t=>`<button onclick="S.paigeTab='${t.id}';renderPaige()" style="padding:7px 14px;border:none;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;background:${S.paigeTab===t.id?'#fff':'transparent'};color:${S.paigeTab===t.id?t.c:'#64748b'};box-shadow:${S.paigeTab===t.id?'0 1px 3px rgba(0,0,0,.08)':'none'}">${t.label}${t.n?` <span style="background:${t.c};color:#fff;border-radius:99px;font-size:10px;padding:1px 6px">${t.n}</span>`:''}</button>`).join('')}</div>`;
-  const emptyMsg={email:'No missing carrier emails — nice.',pod:'No PODs outstanding.',invoice:'No invoices outstanding.',done:'Nothing completed yet.'}[S.paigeTab];
+  const emptyMsg={email:'No missing carrier emails — nice.',pod:'No PODs outstanding.',invoice:'No invoices outstanding.',received:'No PODs or invoices received yet.',done:'Nothing completed yet.'}[S.paigeTab];
   $('page').innerHTML=`
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:3px"><span style="font-size:22px">📋</span><h2 style="margin:0;font-size:18px;color:var(--navy,#1a2e4a)">Paige</h2><span style="font-size:12px;color:#94a3b8">POD &amp; invoice chaser</span></div>
     <div style="font-size:12px;color:#94a3b8;margin-bottom:16px">Chases carriers automatically — one thread per shipment, morning &amp; afternoon. Click a shipment to tell her what to do.</div>
