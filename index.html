@@ -23088,6 +23088,11 @@ async function syncCarrierChase(){
     for(const s of delivered){ const ex=have.get(s.quote_id); if(ex&&!ex.carrier_email&&s.carrier_email){ await db.from('carrier_chase').update({carrier_email:s.carrier_email,carrier_name:s.carrier_name}).eq('quote_id',s.quote_id); } }
   }catch(e){ console.warn('carrier_chase sync:', e&&e.message); }
 }
+async function paigeCommand(id,cmd){
+  try{ await db.from('carrier_chase').update({command:cmd,command_at:new Date().toISOString()}).eq('id',id); }catch(e){}
+  showToast(cmd==='request_invoice'?'🧾 Paige will ask for the invoice (within ~15 min)':'📄 Paige will ask for the POD (within ~15 min)','success',3000);
+  renderPaige();
+}
 async function markChase(id,what){
   const f=what==='pod'?{pod_status:'received',pod_received_at:new Date().toISOString()}:{invoice_status:'received',invoice_received_at:new Date().toISOString()};
   try{ await db.from('carrier_chase').update(f).eq('id',id); }catch(e){}
@@ -23113,8 +23118,10 @@ async function renderPaige(){
     <td style="padding:10px 12px;font-size:11px;color:#666">${r.lane||''}</td>
     <td style="padding:10px 12px">${chip(r.pod_status==='received','POD')}</td>
     <td style="padding:10px 12px">${chip(r.invoice_status==='received','Inv')}</td>
-    <td style="padding:10px 12px;font-size:11px;color:#666">${r.followup_count||0} nudge${(r.followup_count||0)===1?'':'s'}${r.last_followup_at?'<br>'+new Date(r.last_followup_at).toLocaleDateString():''}</td>
+    <td style="padding:10px 12px;font-size:11px;color:#666">${r.followup_count||0} nudge${(r.followup_count||0)===1?'':'s'}${r.last_followup_at?'<br>'+new Date(r.last_followup_at).toLocaleDateString():''}${r.command?'<br><span style="color:#0891b2;font-weight:700">⏳ '+(r.command==='request_invoice'?'invoice':'POD')+' requested</span>':''}</td>
     <td style="padding:10px 12px"><div style="display:flex;gap:4px;justify-content:flex-end;flex-wrap:wrap">
+      ${r.pod_status!=='received'?`<button class="btn" style="${bsm};color:#0891b2;border-color:#67e8f9" title="Tell Paige to ask the carrier for the POD now" onclick="paigeCommand('${r.id}','request_pod')">📄 Ask POD</button>`:''}
+      ${r.invoice_status!=='received'?`<button class="btn" style="${bsm};color:#7c3aed;border-color:#c4b5fd" title="Tell Paige to ask the carrier for the invoice now" onclick="paigeCommand('${r.id}','request_invoice')">🧾 Ask Inv</button>`:''}
       ${r.pod_status!=='received'?`<button class="btn" style="${bsm}" title="Mark POD received" onclick="markChase('${r.id}','pod')">✓ POD</button>`:''}
       ${r.invoice_status!=='received'?`<button class="btn" style="${bsm}" title="Mark invoice received" onclick="markChase('${r.id}','invoice')">✓ Inv</button>`:''}
       <a class="btn" style="${bsm};text-decoration:none" href="https://mail.google.com/mail/u/0/#search/${encodeURIComponent(r.shifl_ref||'')}" target="_blank" rel="noopener" title="Open the email thread">📧</a>
