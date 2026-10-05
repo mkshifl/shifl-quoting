@@ -23088,9 +23088,13 @@ async function syncCarrierChase(){
     for(const s of delivered){ const ex=have.get(s.quote_id); if(ex&&!ex.carrier_email&&s.carrier_email){ await db.from('carrier_chase').update({carrier_email:s.carrier_email,carrier_name:s.carrier_name}).eq('quote_id',s.quote_id); } }
   }catch(e){ console.warn('carrier_chase sync:', e&&e.message); }
 }
-async function paigeCommand(id,cmd){
+async function paigeCommand(id,which,current){
+  current=current||'';
+  const pod=(current==='request_pod'||current==='request_both')||which==='request_pod';
+  const inv=(current==='request_invoice'||current==='request_both')||which==='request_invoice';
+  const cmd=(pod&&inv)?'request_both':(inv?'request_invoice':'request_pod');
   try{ await db.from('carrier_chase').update({command:cmd,command_at:new Date().toISOString()}).eq('id',id); }catch(e){}
-  showToast(cmd==='request_invoice'?'🧾 Paige will ask for the invoice (within ~15 min)':'📄 Paige will ask for the POD (within ~15 min)','success',3000);
+  showToast(which==='request_invoice'?'🧾 Paige will ask for the invoice (within ~15 min)':'📄 Paige will ask for the POD (within ~15 min)','success',3000);
   renderPaige();
 }
 async function markChase(id,what){
@@ -23132,23 +23136,20 @@ async function renderPaige(){
   const card=r=>{
     const modeChip=`<span style="font-size:9px;text-transform:uppercase;letter-spacing:.04em;background:var(--gray-100,#f1f5f9);color:#64748b;padding:1px 7px;border-radius:99px;font-weight:700">${r.mode||''}</span>`;
     const activity = r.command
-      ? `<span style="color:#0891b2;font-weight:700">⏳ ${r.command==='request_invoice'?'invoice':'POD'} request queued…</span>`
+      ? `<span style="color:#0891b2;font-weight:700">⏳ ${r.command==='request_both'?'POD + invoice':(r.command==='request_invoice'?'invoice':'POD')} request queued…</span>`
       : (r.followup_count? `${r.followup_count} nudge${r.followup_count===1?'':'s'}${r.last_followup_at?' · last '+new Date(r.last_followup_at).toLocaleDateString():''}` : 'no contact yet');
     let actions='';
     if(S.paigeTab==='email'){
       actions=`<div style="display:flex;gap:6px;margin-top:10px">
         <input id="pgmail-${r.id}" type="email" placeholder="carrier@email.com" style="flex:1;min-width:0;padding:7px 10px;border:1px solid #d1d5db;border-radius:8px;font-size:12px;font-family:inherit" onkeydown="if(event.key==='Enter')savePaigeCarrierEmail('${r.id}')">
         <button class="btn blue" style="font-size:11px;padding:6px 12px;white-space:nowrap" onclick="savePaigeCarrierEmail('${r.id}')">Save email</button></div>`;
-    } else if(S.paigeTab==='pod'){
+    } else if(S.paigeTab==='pod'||S.paigeTab==='invoice'){
+      const podOut=r.pod_status!=='received', invOut=r.invoice_status!=='received';
       actions=`<div style="display:flex;gap:5px;margin-top:10px;flex-wrap:wrap">
-        <button class="btn blue" style="font-size:11px;padding:5px 11px" onclick="paigeCommand('${r.id}','request_pod')">📄 Ask for POD</button>
-        <button class="btn" style="font-size:11px;padding:5px 11px;color:#16a34a;border-color:#86efac" onclick="markChase('${r.id}','pod')">✓ Got POD</button>
-        ${threadLink(r)}
-        <button class="btn" style="font-size:11px;padding:5px 11px;color:#9ca3af" title="Stop chasing" onclick="stopChase('${r.id}')">✕</button></div>`;
-    } else if(S.paigeTab==='invoice'){
-      actions=`<div style="display:flex;gap:5px;margin-top:10px;flex-wrap:wrap">
-        <button class="btn blue" style="font-size:11px;padding:5px 11px" onclick="paigeCommand('${r.id}','request_invoice')">🧾 Ask for invoice</button>
-        <button class="btn" style="font-size:11px;padding:5px 11px;color:#16a34a;border-color:#86efac" onclick="markChase('${r.id}','invoice')">✓ Got invoice</button>
+        ${podOut?`<button class="btn blue" style="font-size:11px;padding:5px 11px" onclick="paigeCommand('${r.id}','request_pod','${r.command||''}')">📄 Ask for POD</button>
+        <button class="btn" style="font-size:11px;padding:5px 11px;color:#16a34a;border-color:#86efac" onclick="markChase('${r.id}','pod')">✓ Got POD</button>`:''}
+        ${invOut?`<button class="btn blue" style="font-size:11px;padding:5px 11px" onclick="paigeCommand('${r.id}','request_invoice','${r.command||''}')">🧾 Ask for invoice</button>
+        <button class="btn" style="font-size:11px;padding:5px 11px;color:#16a34a;border-color:#86efac" onclick="markChase('${r.id}','invoice')">✓ Got invoice</button>`:''}
         ${threadLink(r)}
         <button class="btn" style="font-size:11px;padding:5px 11px;color:#9ca3af" title="Stop chasing" onclick="stopChase('${r.id}')">✕</button></div>`;
     } else {
