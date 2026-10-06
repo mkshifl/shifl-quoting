@@ -23063,9 +23063,22 @@ function toggleReqHot(id){
   renderQuoteRequests();
   showToast(all[idx].hot?'🔥 Marked HOT':'Unmarked HOT','success',1800);
 }
+function _normName(n){ return (n||'').toString().trim().toLowerCase().replace(/\s+/g,' '); }
+async function loadCarrierEmailDir(){
+  if(typeof db==='undefined'||!db) return;
+  try{ const {data}=await db.from('carrier_emails').select('name,email'); window._carrierEmailDir={}; (data||[]).forEach(r=>{ if(r.name&&r.email) window._carrierEmailDir[r.name]=r.email; }); }catch(e){ window._carrierEmailDir=window._carrierEmailDir||{}; }
+}
+async function rememberCarrierEmail(name,email){
+  if(!name||!email) return;
+  const key=_normName(name);
+  window._carrierEmailDir=window._carrierEmailDir||{}; window._carrierEmailDir[key]=email;
+  try{ await db.from('carrier_emails').upsert({name:key,email:email,display_name:name,updated_at:new Date().toISOString()},{onConflict:'name'}); }catch(e){}
+}
 function _carrierEmailByName(name){
   if(!name) return '';
-  const c=(S.carriers||[]).find(c=>((c.company||c.name||'').toString().toLowerCase())===name.toString().toLowerCase());
+  const key=_normName(name);
+  if(window._carrierEmailDir && window._carrierEmailDir[key]) return window._carrierEmailDir[key];
+  const c=(S.carriers||[]).find(c=>_normName(c.company||c.name)===key);
   return c?(c.email||''):'';
 }
 function _chaseFromShip(q,mode){
@@ -23080,6 +23093,7 @@ function _chaseFromShip(q,mode){
 }
 async function syncCarrierChase(){
   if(typeof db==='undefined'||!db) return;
+  await loadCarrierEmailDir();
   const delivered=[];
   (S.quotes||[]).forEach(q=>{ if(q&&q.status==='Delivered') delivered.push(_chaseFromShip(q,'drayage')); });
   (window._fqHistory||[]).forEach(q=>{ if(q&&q.status==='Delivered') delivered.push(_chaseFromShip(q,'freight')); });
@@ -23112,8 +23126,11 @@ async function savePaigeCarrierEmail(id){
   const el=document.getElementById('pgmail-'+id); if(!el) return;
   const v=(el.value||'').trim();
   if(!v||v.indexOf('@')<1){alert('Enter a valid carrier email.');return;}
+  const carrierName=el.getAttribute('data-carrier')||'';
   try{ await db.from('carrier_chase').update({carrier_email:v,status:'active',note:null}).eq('id',id); }catch(e){}
-  showToast('✅ Email saved — Paige can reach them now','success',2500);
+  if(carrierName){ try{ await db.from('carrier_chase').update({carrier_email:v,status:'active',note:null}).eq('carrier_name',carrierName).is('carrier_email',null); }catch(e){} }
+  await rememberCarrierEmail(carrierName,v);
+  showToast('✅ Saved — Paige will remember '+(carrierName||'this carrier')+' from now on','success',3200);
   renderPaige();
 }
 function _pgActionLabel(a){
@@ -23172,7 +23189,7 @@ async function renderPaige(){
     let actions='';
     if(S.paigeTab==='email'){
       actions=`<div style="display:flex;gap:6px;margin-top:10px">
-        <input id="pgmail-${r.id}" type="email" placeholder="carrier@email.com" style="flex:1;min-width:0;padding:7px 10px;border:1px solid #d1d5db;border-radius:8px;font-size:12px;font-family:inherit" onkeydown="if(event.key==='Enter')savePaigeCarrierEmail('${r.id}')">
+        <input id="pgmail-${r.id}" data-carrier="${(r.carrier_name||'').replace(/"/g,'&quot;')}" type="email" placeholder="carrier@email.com" style="flex:1;min-width:0;padding:7px 10px;border:1px solid #d1d5db;border-radius:8px;font-size:12px;font-family:inherit" onkeydown="if(event.key==='Enter')savePaigeCarrierEmail('${r.id}')">
         <button class="btn blue" style="font-size:11px;padding:6px 12px;white-space:nowrap" onclick="savePaigeCarrierEmail('${r.id}')">Save email</button></div>`;
     } else if(S.paigeTab==='pod'||S.paigeTab==='invoice'){
       const podOut=r.pod_status!=='received', invOut=r.invoice_status!=='received';
