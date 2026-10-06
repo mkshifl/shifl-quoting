@@ -11714,7 +11714,12 @@ async function doSendReminder(type,id){
   }catch(e){ if(btn){btn.textContent='📨 Send reminder';btn.disabled=false;} alert('Send failed: '+e.message+'\n\nCheck your Resend API key.'); }
 }
 
-function renderFullInvoicing(){
+async function loadPaigeInvoices(){
+  if(typeof db==='undefined'||!db) return;
+  try{ const {data}=await db.from('carrier_chase').select('shifl_ref,invoice_file_url,invoice_file_name'); window._paigeInvByRef={}; (data||[]).forEach(r=>{ if(r.shifl_ref&&r.invoice_file_url) window._paigeInvByRef[r.shifl_ref]=r; }); }catch(e){ window._paigeInvByRef=window._paigeInvByRef||{}; }
+}
+async function renderFullInvoicing(){
+  try{ await loadPaigeInvoices(); }catch(e){}
   const mainTab=S.invMainTab||'customer';
   const subTab=S.allInvTab||'pending';
 
@@ -11985,7 +11990,7 @@ function renderCarrierInvoiceTab(all,subTab){
           <div class="ivt-ref">${q.shiflRef||'—'}</div>
           <div class="ivt-amt" style="color:${hot?'#dc2626':'#d97706'}">${fmtD(q.carrierAmount)}</div>
           <div>${_invAging(days,false)}</div>
-          <div class="ivt-act"><button class="btn sm" style="color:#d97706;border-color:#fbbf24;white-space:nowrap" onclick="openCarrierInvoiceBuilder('${q.type}','${q.id}')">📤 AP Invoice</button></div>
+          <div class="ivt-act">${(window._paigeInvByRef&&window._paigeInvByRef[q.shiflRef]&&window._paigeInvByRef[q.shiflRef].invoice_file_url)?`<a class="btn sm" style="color:#7c3aed;border-color:#c4b5fd;text-decoration:none;white-space:nowrap" href="${window._paigeInvByRef[q.shiflRef].invoice_file_url}" target="_blank" rel="noopener" title="Carrier invoice Paige captured">📎 Invoice</a> `:''}<button class="btn sm" style="color:#d97706;border-color:#fbbf24;white-space:nowrap" onclick="openCarrierInvoiceBuilder('${q.type}','${q.id}')">📤 AP Invoice</button></div>
         </div>`;}).join('')}
       ${_invNoResults()}</div>`;
   } else {
@@ -23111,6 +23116,10 @@ async function savePaigeCarrierEmail(id){
   showToast('✅ Email saved — Paige can reach them now','success',2500);
   renderPaige();
 }
+function _pgActionLabel(a){
+  return ({first_contact:'📨 POD request sent',pod_requested:'📄 POD requested',invoice_requested:'🧾 Invoice requested',both_requested:'📄🧾 POD + invoice requested',followup_sent:'🔔 Follow-up sent',pod_received:'✅ POD received',invoice_received:'✅ Invoice received',completed:'🎉 Completed',escalated:'⚠ Escalated'})[a]||a;
+}
+function togglePaigeHistory(id){ const el=document.getElementById('pgh-'+id); if(el) el.style.display=el.style.display==='none'?'block':'none'; }
 async function renderPaige(){
   const tr=document.getElementById('topbar-right'); if(tr) tr.innerHTML='';
   if(!S.paigeTab) S.paigeTab='pod';
@@ -23120,6 +23129,24 @@ async function renderPaige(){
   try{ const {data,error}=await db.from('carrier_chase').select('*').order('created_at',{ascending:false}); if(error)throw error; rows=data||[]; }
   catch(e){ $('page').innerHTML='<div style="padding:24px;color:#dc2626;font-size:13px">Could not load Paige — make sure the <b>carrier_chase</b> table exists in Supabase (run the setup SQL).</div>'; return; }
   rows=rows.filter(r=>r.status!=='stopped');
+  let acts=[];
+  try{ const {data}=await db.from('paige_activity').select('*').order('created_at',{ascending:false}).limit(250); acts=data||[]; }catch(e){}
+  const actByRef={}; acts.forEach(a=>{ (actByRef[a.shifl_ref]=actByRef[a.shifl_ref]||[]).push(a); });
+  // ---- stats ----
+  const dBetween=(a,b)=>{ if(!a||!b) return null; const d=(new Date(b)-new Date(a))/86400000; return d>=0?d:null; };
+  const avg=a=>a.length?(a.reduce((s,x)=>s+x,0)/a.length):null, fmtD=x=>x==null?'—':x.toFixed(1)+'d';
+  const podDays=rows.map(r=>dBetween(r.delivered_at,r.pod_received_at)).filter(x=>x!=null);
+  const invDays=rows.map(r=>dBetween(r.delivered_at,r.invoice_received_at)).filter(x=>x!=null);
+  const avgPod=avg(podDays), avgInv=avg(invDays);
+  const escalatedCount=rows.filter(r=>r.escalated&&r.status==='active').length;
+  const byCar={}; rows.forEach(r=>{ const d=dBetween(r.delivered_at,r.pod_received_at); if(d!=null){(byCar[r.carrier_name||'?']=byCar[r.carrier_name||'?']||[]).push(d);} });
+  let slow=null,slowA=0; Object.keys(byCar).forEach(c=>{ const a=avg(byCar[c]); if(a>slowA){slowA=a;slow=c;} });
+  const kpi=(l,v,c)=>`<div class="kpi" style="min-width:120px"><div class="kpi-lbl">${l}</div><div class="kpi-val" style="color:${c||'var(--navy,#1a2e4a)'}">${v}</div></div>`;
+  const statsStrip=`<div style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap">
+    ${kpi('Avg to POD',fmtD(avgPod))}${kpi('Avg to invoice',fmtD(avgInv))}
+    ${kpi('Escalated',escalatedCount,escalatedCount?'#dc2626':'#16a34a')}
+    <div class="kpi" style="min-width:170px"><div class="kpi-lbl">Slowest carrier</div><div class="kpi-val" style="font-size:14px">${slow?slow+' · '+fmtD(slowA):'—'}</div></div></div>`;
+  // ---- buckets ----
   const bothIn=r=>r.pod_status==='received'&&r.invoice_status==='received';
   const needEmail=rows.filter(r=>!r.carrier_email && !bothIn(r));
   const awaitPod =rows.filter(r=>r.carrier_email && r.pod_status!=='received' && !bothIn(r));
@@ -23131,12 +23158,14 @@ async function renderPaige(){
     {id:'pod',    label:'📄 Awaiting POD',    n:awaitPod.length,  c:'#ea580c', rows:awaitPod},
     {id:'invoice',label:'🧾 Awaiting invoice',n:awaitInv.length,  c:'#d97706', rows:awaitInv},
     {id:'received',label:'📎 Received PODs',  n:received.length,  c:'#0891b2', rows:received},
-    {id:'done',   label:'✓ Done',            n:done.length,      c:'#16a34a', rows:done}
+    {id:'done',   label:'✓ Done',            n:done.length,      c:'#16a34a', rows:done},
+    {id:'activity',label:'📣 Activity',       n:0,                c:'#6366f1', rows:[]}
   ];
   const cur=tabs.find(t=>t.id===S.paigeTab)||tabs[1];
   const threadLink=r=>`<a class="btn" style="font-size:11px;padding:4px 10px;text-decoration:none" href="https://mail.google.com/mail/u/0/#search/${encodeURIComponent(r.shifl_ref||'')}" target="_blank" rel="noopener" title="Open the email thread">📧 Thread</a>`;
   const card=r=>{
     const modeChip=`<span style="font-size:9px;text-transform:uppercase;letter-spacing:.04em;background:var(--gray-100,#f1f5f9);color:#64748b;padding:1px 7px;border-radius:99px;font-weight:700">${r.mode||''}</span>`;
+    const escBadge=r.escalated?`<span style="font-size:10px;background:#fef2f2;color:#dc2626;padding:1px 7px;border-radius:99px;font-weight:800;margin-left:6px">⚠ Escalated</span>`:'';
     const activity = r.command
       ? `<span style="color:#0891b2;font-weight:700">⏳ ${r.command==='request_both'?'POD + invoice':(r.command==='request_invoice'?'invoice':'POD')} request queued…</span>`
       : (r.followup_count? `${r.followup_count} nudge${r.followup_count===1?'':'s'}${r.last_followup_at?' · last '+new Date(r.last_followup_at).toLocaleDateString():''}` : 'no contact yet');
@@ -23162,22 +23191,36 @@ async function renderPaige(){
         ${invDl||(r.invoice_status==='received'?`<span style="color:#16a34a">✓ Invoice${r.invoice_received_at?' · '+new Date(r.invoice_received_at).toLocaleDateString():''}</span>`:'')}
         ${threadLink(r)}</div>`;
     }
+    const hist=actByRef[r.shifl_ref]||[];
+    const histHtml=hist.length?`<button onclick="togglePaigeHistory('${r.id}')" style="margin-top:8px;border:none;background:none;color:#0891b2;font-size:11px;cursor:pointer;padding:0;font-family:inherit">🕐 history (${hist.length})</button>
+      <div id="pgh-${r.id}" style="display:none;margin-top:6px;border-top:1px solid var(--gray-50,#f1f5f9);padding-top:7px">${hist.slice(0,15).map(a=>`<div style="font-size:11px;color:#64748b;padding:2px 0"><span style="color:#94a3b8">${new Date(a.created_at).toLocaleString()}</span> — ${_pgActionLabel(a.action)}${a.detail?' · '+a.detail:''}</div>`).join('')}</div>`:'';
     return `<div style="border:1px solid var(--gray-100,#eef2f6);border-radius:12px;padding:13px 16px;margin-bottom:10px;background:#fff">
       <div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px">
-        <div style="min-width:0"><span style="font-weight:800;font-size:15px;color:var(--navy,#1a2e4a)">${r.shifl_ref||'—'}</span> ${modeChip}</div>
+        <div style="min-width:0"><span style="font-weight:800;font-size:15px;color:var(--navy,#1a2e4a)">${r.shifl_ref||'—'}</span> ${modeChip}${escBadge}</div>
         <span style="font-size:11px;color:#94a3b8;white-space:nowrap">${activity}</span>
       </div>
       <div style="font-size:13px;color:#334155;margin-top:4px">${r.customer||'—'} <span style="color:#cbd5e1">·</span> ${r.carrier_name||'<span style=\"color:#dc2626\">carrier?</span>'} <span style="color:#cbd5e1">·</span> <span style="color:#64748b">${r.lane||''}</span></div>
-      ${actions}</div>`;
+      ${actions}${histHtml}</div>`;
   };
   const tabBar=`<div style="display:flex;gap:4px;background:var(--gray-100,#f1f5f9);padding:3px;border-radius:10px;width:fit-content;max-width:100%;overflow:auto;margin-bottom:18px">
     ${tabs.map(t=>`<button onclick="S.paigeTab='${t.id}';renderPaige()" style="padding:7px 14px;border:none;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;background:${S.paigeTab===t.id?'#fff':'transparent'};color:${S.paigeTab===t.id?t.c:'#64748b'};box-shadow:${S.paigeTab===t.id?'0 1px 3px rgba(0,0,0,.08)':'none'}">${t.label}${t.n?` <span style="background:${t.c};color:#fff;border-radius:99px;font-size:10px;padding:1px 6px">${t.n}</span>`:''}</button>`).join('')}</div>`;
   const emptyMsg={email:'No missing carrier emails — nice.',pod:'No PODs outstanding.',invoice:'No invoices outstanding.',received:'No PODs or invoices received yet.',done:'Nothing completed yet.'}[S.paigeTab];
+  let body;
+  if(S.paigeTab==='activity'){
+    body = acts.length? `<div style="border:1px solid var(--gray-100,#eef2f6);border-radius:12px;overflow:hidden;background:#fff">${acts.slice(0,120).map(a=>`
+      <div style="display:flex;gap:10px;padding:9px 14px;border-bottom:1px solid var(--gray-50,#f1f5f9);font-size:12px;align-items:baseline;flex-wrap:wrap">
+        <span style="color:#94a3b8;white-space:nowrap;font-size:11px;min-width:135px">${new Date(a.created_at).toLocaleString()}</span>
+        <span style="font-weight:700;color:var(--navy,#1a2e4a)">${a.shifl_ref||''}</span>
+        <span style="color:#334155">${_pgActionLabel(a.action)}</span>
+        ${a.detail?`<span style="color:#94a3b8">${a.detail}</span>`:''}</div>`).join('')}</div>`
+      : `<div class="empty"><div class="empty-ico">📣</div><p>No activity logged yet.</p></div>`;
+  } else {
+    body = cur.rows.length? cur.rows.map(card).join('') : `<div class="empty"><div class="empty-ico">✅</div><p>${emptyMsg}</p></div>`;
+  }
   $('page').innerHTML=`
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:3px"><span style="font-size:22px">📋</span><h2 style="margin:0;font-size:18px;color:var(--navy,#1a2e4a)">Paige</h2><span style="font-size:12px;color:#94a3b8">POD &amp; invoice chaser</span></div>
     <div style="font-size:12px;color:#94a3b8;margin-bottom:16px">Chases carriers automatically — one thread per shipment, morning &amp; afternoon. Click a shipment to tell her what to do.</div>
-    ${tabBar}
-    ${cur.rows.length? cur.rows.map(card).join('') : `<div class="empty"><div class="empty-ico">✅</div><p>${emptyMsg}</p></div>`}`;
+    ${statsStrip}${tabBar}${body}`;
 }
 
 function renderQuoteRequests(){
