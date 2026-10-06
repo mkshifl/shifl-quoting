@@ -888,10 +888,10 @@ if('caches' in window){
           <span id="paige-nav-badge" style="display:none;background:#dc2626;color:#fff;border-radius:99px;font-size:10px;font-weight:700;padding:1px 7px;margin-left:auto">0</span>
         </span>
       </button>
-      <button class="acc-btn" id="nav-josh" data-view="josh" onclick="goTo('josh')" style="font-size:13px">
+      <button class="acc-btn" id="nav-mario" data-view="mario" onclick="goTo('mario')" style="font-size:13px">
         <span style="display:flex;align-items:center;gap:10px">
-          <span style="font-size:15px">💬</span>Josh
-          <span id="josh-nav-badge" style="display:none;background:#2563eb;color:#fff;border-radius:99px;font-size:10px;font-weight:700;padding:1px 7px;margin-left:auto">0</span>
+          <span style="font-size:15px">💬</span>Mario
+          <span id="mario-nav-badge" style="display:none;background:#2563eb;color:#fff;border-radius:99px;font-size:10px;font-weight:700;padding:1px 7px;margin-left:auto">0</span>
         </span>
       </button>
       <button class="acc-btn" id="nav-claims" data-view="claims" onclick="goTo('claims')" style="font-size:13px">
@@ -1650,7 +1650,7 @@ function render(){
   else if(S.view==='qbr')           renderQBR();
   else if(S.view==='invoicing')    renderFullInvoicing();
   else if(S.view==='paige')        renderPaige();
-  else if(S.view==='josh')         renderJosh();
+  else if(S.view==='mario')         renderMario();
   else if(S.view==='reports')    renderReports();
   else if(S.view==='auditlog')   renderAuditLog();
   else if(S.view==='freight')    renderFreight();
@@ -23253,20 +23253,20 @@ async function startQuoteChase(info){
   const row={quote_ref:String(info.ref),shifl_ref:info.shiflRef||String(info.ref),customer:info.customer||'',customer_contact:info.contact||'',customer_email:info.email||'',mode:info.mode||'',lane:info.lane||'',amount:info.amount||'',sent_at:new Date().toISOString(),status:'active'};
   try{ await db.from('quote_chase').upsert([row],{onConflict:'quote_ref',ignoreDuplicates:true}); }catch(e){ console.warn('startQuoteChase',e&&e.message); }
 }
-async function joshCommand(id){ try{ await db.from('quote_chase').update({command:'nudge',command_at:new Date().toISOString()}).eq('id',id); }catch(e){} showToast('📨 Josh will nudge them (within ~15 min)','success',2800); renderJosh(); }
-async function markJosh(id,outcome){ try{ await db.from('quote_chase').update({status:outcome}).eq('id',id); }catch(e){} showToast(outcome==='booked'?'🎉 Marked booked':'Marked lost','success',2000); renderJosh(); }
-async function stopJosh(id){ try{ await db.from('quote_chase').update({status:'stopped'}).eq('id',id); }catch(e){} renderJosh(); }
-async function saveJoshEmail(id){ const el=document.getElementById('jmail-'+id); if(!el) return; const v=(el.value||'').trim(); if(!v||v.indexOf('@')<1){alert('Enter a valid email.');return;} try{ await db.from('quote_chase').update({customer_email:v,status:'active'}).eq('id',id); }catch(e){} showToast('✅ Email saved','success',2000); renderJosh(); }
+async function marioCommand(id){ try{ await db.from('quote_chase').update({command:'nudge',command_at:new Date().toISOString()}).eq('id',id); }catch(e){} showToast('📨 Mario will nudge them (within ~15 min)','success',2800); renderMario(); }
+async function markMario(id,outcome){ try{ await db.from('quote_chase').update({status:outcome}).eq('id',id); }catch(e){} showToast(outcome==='booked'?'🎉 Marked booked':'Marked lost','success',2000); renderMario(); }
+async function stopMario(id){ try{ await db.from('quote_chase').update({status:'stopped'}).eq('id',id); }catch(e){} renderMario(); }
+async function saveMarioEmail(id){ const el=document.getElementById('jmail-'+id); if(!el) return; const v=(el.value||'').trim(); if(!v||v.indexOf('@')<1){alert('Enter a valid email.');return;} try{ await db.from('quote_chase').update({customer_email:v,status:'active'}).eq('id',id); }catch(e){} showToast('✅ Email saved','success',2000); renderMario(); }
 function _jActionLabel(a){ return ({nudge1_sent:'📨 1st follow-up',nudge2_sent:'📨 2nd follow-up',manual_nudge:'📨 Nudge (manual)',booked:'🎉 Booked',lost:'✗ Lost'})[a]||a; }
-async function renderJosh(){
+async function renderMario(){
   const tr=document.getElementById('topbar-right'); if(tr) tr.innerHTML='';
-  if(!S.joshTab) S.joshTab='open';
-  $('page').innerHTML='<div style="padding:24px;color:#9ca3af;font-size:13px">Loading Josh…</div>';
+  if(!S.marioTab) S.marioTab='open';
+  $('page').innerHTML='<div style="padding:24px;color:#9ca3af;font-size:13px">Loading Mario…</div>';
   let rows=[];
   try{ const {data,error}=await db.from('quote_chase').select('*').order('created_at',{ascending:false}); if(error)throw error; rows=data||[]; }
-  catch(e){ $('page').innerHTML='<div style="padding:24px;color:#dc2626;font-size:13px">Could not load Josh — make sure the <b>quote_chase</b> table exists in Supabase (run the setup SQL).</div>'; return; }
+  catch(e){ $('page').innerHTML='<div style="padding:24px;color:#dc2626;font-size:13px">Could not load Mario — make sure the <b>quote_chase</b> table exists in Supabase (run the setup SQL).</div>'; return; }
   rows=rows.filter(r=>r.status!=='stopped');
-  let acts=[]; try{ const {data}=await db.from('josh_activity').select('*').order('created_at',{ascending:false}).limit(250); acts=data||[]; }catch(e){}
+  let acts=[]; try{ const {data}=await db.from('mario_activity').select('*').order('created_at',{ascending:false}).limit(250); acts=data||[]; }catch(e){}
   const actByRef={}; acts.forEach(a=>{(actByRef[a.shifl_ref]=actByRef[a.shifl_ref]||[]).push(a);});
   const needEmail=rows.filter(r=>!r.customer_email && r.status!=='booked' && r.status!=='lost');
   const open=rows.filter(r=>r.status==='active' && r.customer_email);
@@ -23282,21 +23282,21 @@ async function renderJosh(){
     {id:'lost',label:'✗ Lost',n:lost.length,c:'#64748b',rows:lost},
     {id:'activity',label:'📣 Activity',n:0,c:'#6366f1',rows:[]}
   ];
-  const cur=tabs.find(t=>t.id===S.joshTab)||tabs[1];
+  const cur=tabs.find(t=>t.id===S.marioTab)||tabs[1];
   const threadLink=r=>`<a class="btn" style="font-size:11px;padding:4px 10px;text-decoration:none" href="https://mail.google.com/mail/u/0/#search/${encodeURIComponent(r.shifl_ref||'')}" target="_blank" rel="noopener" title="Open the email thread">📧 Thread</a>`;
   const card=r=>{
     const modeChip=r.mode?`<span style="font-size:9px;text-transform:uppercase;letter-spacing:.04em;background:var(--gray-100,#f1f5f9);color:#64748b;padding:1px 7px;border-radius:99px;font-weight:700">${r.mode}</span>`:'';
     const activity = r.command?`<span style="color:#2563eb;font-weight:700">⏳ nudge queued…</span>`:(r.nudge2_at?'2 nudges · awaiting reply':r.nudge1_at?'1 nudge · awaiting reply':(r.gmail_thread_id?'contacted':'quote sent — 1st nudge in ~4h'));
     let actions='';
-    if(S.joshTab==='email'){
-      actions=`<div style="display:flex;gap:6px;margin-top:10px"><input id="jmail-${r.id}" type="email" placeholder="customer@email.com" value="${(r.customer_email||'').replace(/"/g,'&quot;')}" style="flex:1;min-width:0;padding:7px 10px;border:1px solid #d1d5db;border-radius:8px;font-size:12px;font-family:inherit" onkeydown="if(event.key==='Enter')saveJoshEmail('${r.id}')"><button class="btn blue" style="font-size:11px;padding:6px 12px;white-space:nowrap" onclick="saveJoshEmail('${r.id}')">Save email</button></div>`;
-    } else if(S.joshTab==='open'){
+    if(S.marioTab==='email'){
+      actions=`<div style="display:flex;gap:6px;margin-top:10px"><input id="jmail-${r.id}" type="email" placeholder="customer@email.com" value="${(r.customer_email||'').replace(/"/g,'&quot;')}" style="flex:1;min-width:0;padding:7px 10px;border:1px solid #d1d5db;border-radius:8px;font-size:12px;font-family:inherit" onkeydown="if(event.key==='Enter')saveMarioEmail('${r.id}')"><button class="btn blue" style="font-size:11px;padding:6px 12px;white-space:nowrap" onclick="saveMarioEmail('${r.id}')">Save email</button></div>`;
+    } else if(S.marioTab==='open'){
       actions=`<div style="display:flex;gap:5px;margin-top:10px;flex-wrap:wrap">
-        <button class="btn blue" style="font-size:11px;padding:5px 11px" onclick="joshCommand('${r.id}')">📨 Nudge now</button>
-        <button class="btn" style="font-size:11px;padding:5px 11px;color:#16a34a;border-color:#86efac" onclick="markJosh('${r.id}','booked')">✓ Booked</button>
-        <button class="btn" style="font-size:11px;padding:5px 11px;color:#64748b" onclick="markJosh('${r.id}','lost')">✗ Lost</button>
+        <button class="btn blue" style="font-size:11px;padding:5px 11px" onclick="marioCommand('${r.id}')">📨 Nudge now</button>
+        <button class="btn" style="font-size:11px;padding:5px 11px;color:#16a34a;border-color:#86efac" onclick="markMario('${r.id}','booked')">✓ Booked</button>
+        <button class="btn" style="font-size:11px;padding:5px 11px;color:#64748b" onclick="markMario('${r.id}','lost')">✗ Lost</button>
         ${threadLink(r)}
-        <button class="btn" style="font-size:11px;padding:5px 11px;color:#9ca3af" title="Stop chasing" onclick="stopJosh('${r.id}')">✕</button></div>`;
+        <button class="btn" style="font-size:11px;padding:5px 11px;color:#9ca3af" title="Stop chasing" onclick="stopMario('${r.id}')">✕</button></div>`;
     } else {
       actions=`<div style="display:flex;gap:8px;margin-top:9px;align-items:center;font-size:11px;color:#64748b">${r.status==='booked'?'<span style="color:#16a34a">🎉 Booked</span>':'<span>✗ Lost</span>'} ${threadLink(r)}</div>`;
     }
@@ -23307,16 +23307,16 @@ async function renderJosh(){
       <div style="font-size:13px;color:#334155;margin-top:4px">${r.customer||'—'} <span style="color:#cbd5e1">·</span> <span style="color:#64748b">${r.lane||''}</span></div>
       ${actions}${histHtml}</div>`;
   };
-  const tabBar=`<div style="display:flex;gap:4px;background:var(--gray-100,#f1f5f9);padding:3px;border-radius:10px;width:fit-content;max-width:100%;overflow:auto;margin-bottom:18px">${tabs.map(t=>`<button onclick="S.joshTab='${t.id}';renderJosh()" style="padding:7px 14px;border:none;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;background:${S.joshTab===t.id?'#fff':'transparent'};color:${S.joshTab===t.id?t.c:'#64748b'};box-shadow:${S.joshTab===t.id?'0 1px 3px rgba(0,0,0,.08)':'none'}">${t.label}${t.n?` <span style="background:${t.c};color:#fff;border-radius:99px;font-size:10px;padding:1px 6px">${t.n}</span>`:''}</button>`).join('')}</div>`;
-  const emptyMsg={email:'No missing customer emails.',open:'No open quotes to chase.',booked:'No bookings yet.',lost:'Nothing lost.'}[S.joshTab];
+  const tabBar=`<div style="display:flex;gap:4px;background:var(--gray-100,#f1f5f9);padding:3px;border-radius:10px;width:fit-content;max-width:100%;overflow:auto;margin-bottom:18px">${tabs.map(t=>`<button onclick="S.marioTab='${t.id}';renderMario()" style="padding:7px 14px;border:none;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;background:${S.marioTab===t.id?'#fff':'transparent'};color:${S.marioTab===t.id?t.c:'#64748b'};box-shadow:${S.marioTab===t.id?'0 1px 3px rgba(0,0,0,.08)':'none'}">${t.label}${t.n?` <span style="background:${t.c};color:#fff;border-radius:99px;font-size:10px;padding:1px 6px">${t.n}</span>`:''}</button>`).join('')}</div>`;
+  const emptyMsg={email:'No missing customer emails.',open:'No open quotes to chase.',booked:'No bookings yet.',lost:'Nothing lost.'}[S.marioTab];
   let body;
-  if(S.joshTab==='activity'){
+  if(S.marioTab==='activity'){
     body = acts.length? `<div style="border:1px solid var(--gray-100,#eef2f6);border-radius:12px;overflow:hidden;background:#fff">${acts.slice(0,120).map(a=>`<div style="display:flex;gap:10px;padding:9px 14px;border-bottom:1px solid var(--gray-50,#f1f5f9);font-size:12px;align-items:baseline;flex-wrap:wrap"><span style="color:#94a3b8;white-space:nowrap;font-size:11px;min-width:135px">${new Date(a.created_at).toLocaleString()}</span><span style="font-weight:700;color:var(--navy,#1a2e4a)">${a.shifl_ref||''}</span><span style="color:#334155">${_jActionLabel(a.action)}</span>${a.detail?`<span style="color:#94a3b8">${a.detail}</span>`:''}</div>`).join('')}</div>` : `<div class="empty"><div class="empty-ico">📣</div><p>No activity yet.</p></div>`;
   } else {
     body = cur.rows.length? cur.rows.map(card).join('') : `<div class="empty"><div class="empty-ico">✅</div><p>${emptyMsg}</p></div>`;
   }
   $('page').innerHTML=`
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:3px"><span style="font-size:22px">💬</span><h2 style="margin:0;font-size:18px;color:var(--navy,#1a2e4a)">Josh</h2><span style="font-size:12px;color:#94a3b8">quote &amp; booking chaser</span></div>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:3px"><span style="font-size:22px">💬</span><h2 style="margin:0;font-size:18px;color:var(--navy,#1a2e4a)">Mario</h2><span style="font-size:12px;color:#94a3b8">quote &amp; booking chaser</span></div>
     <div style="font-size:12px;color:#94a3b8;margin-bottom:16px">Chases customers to book open quotes — nudges 4h after a quote goes out, again next morning, then on your click. Mark Booked / Lost and he stops.</div>
     ${statsStrip}${tabBar}${body}`;
 }
