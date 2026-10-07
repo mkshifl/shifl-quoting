@@ -23262,6 +23262,12 @@ async function marioReply(id){
 async function marioDismiss(id){ try{ await db.from('mario_inbox').update({status:'dismissed'}).eq('id',id); }catch(e){} renderMario(); }
 function marioPick(id,idx){ const ta=document.getElementById('mreply-'+id); const d=window._marioDrafts&&window._marioDrafts[id]; if(ta&&d&&d[idx]) ta.value=d[idx].body||''; }
 function toggleMarioEmail(id){ const el=document.getElementById('mexp-'+id); if(el){ el.style.display=el.style.display==='none'?'block':'none'; } }
+function marioWriteOwn(id){ const ta=document.getElementById('mreply-'+id); if(ta){ ta.value=''; ta.focus(); } }
+async function marioDismissAll(pile){
+  if(!confirm('Dismiss every email in this pile?')) return;
+  try{ await db.from('mario_inbox').update({status:'dismissed'}).eq('pile',pile).eq('status','new'); }catch(e){}
+  showToast('Pile cleared','success',1800); renderMario();
+}
 async function renderMario(){
   const tr=document.getElementById('topbar-right'); if(tr) tr.innerHTML='';
   if(!S.marioTab) S.marioTab='quote';
@@ -23291,7 +23297,7 @@ async function renderMario(){
     const replyUI = canReply? `
       <div id="mexp-${r.id}" style="display:none;margin-top:10px;border-top:1px solid var(--gray-50,#f1f5f9);padding-top:10px">
         <div style="font-size:11px;font-weight:700;color:#64748b;margin-bottom:6px">Mario's reply options — pick one, edit, send:</div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">${drafts.map((d,i)=>`<button class="btn" style="font-size:11px;padding:4px 10px" onclick="marioPick('${r.id}',${i})">${d.label||('Option '+(i+1))}</button>`).join('')||'<span style="font-size:11px;color:#9ca3af">No drafts — write your own below.</span>'}</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">${drafts.map((d,i)=>`<button class="btn" style="font-size:11px;padding:4px 10px" onclick="marioPick('${r.id}',${i})">${d.label||('Option '+(i+1))}</button>`).join('')}<button class="btn" style="font-size:11px;padding:4px 10px;color:#6366f1;border-color:#c7d2fe" onclick="marioWriteOwn('${r.id}')">✏️ Write my own</button></div>
         <textarea id="mreply-${r.id}" rows="7" placeholder="Pick an option above, or write your reply…" style="width:100%;padding:9px 11px;border:1px solid #d1d5db;border-radius:8px;font-size:12px;font-family:inherit;line-height:1.5;resize:vertical"></textarea>
         <div style="display:flex;gap:6px;justify-content:flex-end;margin-top:8px">
           <a class="btn" style="font-size:11px;padding:5px 11px;text-decoration:none" href="${gmailLink}" target="_blank" rel="noopener">📧 Open in Gmail</a>
@@ -23314,10 +23320,11 @@ async function renderMario(){
   const tabBar=`<div style="display:flex;gap:4px;background:var(--gray-100,#f1f5f9);padding:3px;border-radius:10px;width:fit-content;max-width:100%;overflow:auto;margin-bottom:18px">${tabs.map(t=>`<button onclick="S.marioTab='${t.id}';renderMario()" style="padding:7px 14px;border:none;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;background:${S.marioTab===t.id?'#fff':'transparent'};color:${S.marioTab===t.id?t.c:'#64748b'};box-shadow:${S.marioTab===t.id?'0 1px 3px rgba(0,0,0,.08)':'none'}">${t.label}${t.n?` <span style="background:${t.c};color:#fff;border-radius:99px;font-size:10px;padding:1px 6px">${t.n}</span>`:''}</button>`).join('')}</div>`;
   const emptyMsg={quote:'No quote requests waiting.',followup:'Nothing needs a follow-up.',other:'Inbox is clear.',replied:'Nothing replied yet.'}[S.marioTab];
   const body = cur.rows.length? cur.rows.map(card).join('') : `<div class="empty"><div class="empty-ico">✅</div><p>${emptyMsg}</p></div>`;
+  const dismissAllBar = (cur.rows.length && ['quote','followup','other'].includes(S.marioTab)) ? `<div style="margin-bottom:10px"><button class="btn" style="font-size:11px;padding:4px 11px;color:#9ca3af" onclick="marioDismissAll('${S.marioTab}',${cur.rows.length})">🗑 Dismiss all (${cur.rows.length})</button></div>` : '';
   $('page').innerHTML=`
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:3px"><span style="font-size:22px">💬</span><h2 style="margin:0;font-size:18px;color:var(--navy,#1a2e4a)">Mario</h2><span style="font-size:12px;color:#94a3b8">inbox assistant</span></div>
     <div style="font-size:12px;color:#94a3b8;margin-bottom:16px">Reads every email and sorts it into piles. Hit Reply, pick one of his drafts, tweak it, and he sends it — he never emails on his own.</div>
-    ${tabBar}${body}`;
+    ${tabBar}${dismissAllBar}${body}`;
 }
 
 function renderQuoteRequests(){
