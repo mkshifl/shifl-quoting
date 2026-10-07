@@ -23253,73 +23253,73 @@ async function startQuoteChase(info){
   const row={quote_ref:String(info.ref),shifl_ref:info.shiflRef||String(info.ref),customer:info.customer||'',customer_contact:info.contact||'',customer_email:info.email||'',mode:info.mode||'',lane:info.lane||'',amount:info.amount||'',sent_at:new Date().toISOString(),status:'active'};
   try{ await db.from('quote_chase').upsert([row],{onConflict:'quote_ref',ignoreDuplicates:true}); }catch(e){ console.warn('startQuoteChase',e&&e.message); }
 }
-async function marioCommand(id){ try{ await db.from('quote_chase').update({command:'nudge',command_at:new Date().toISOString()}).eq('id',id); }catch(e){} showToast('📨 Mario will nudge them (within ~15 min)','success',2800); renderMario(); }
-async function markMario(id,outcome){ try{ await db.from('quote_chase').update({status:outcome}).eq('id',id); }catch(e){} showToast(outcome==='booked'?'🎉 Marked booked':'Marked lost','success',2000); renderMario(); }
-async function stopMario(id){ try{ await db.from('quote_chase').update({status:'stopped'}).eq('id',id); }catch(e){} renderMario(); }
-async function saveMarioEmail(id){ const el=document.getElementById('jmail-'+id); if(!el) return; const v=(el.value||'').trim(); if(!v||v.indexOf('@')<1){alert('Enter a valid email.');return;} try{ await db.from('quote_chase').update({customer_email:v,status:'active'}).eq('id',id); }catch(e){} showToast('✅ Email saved','success',2000); renderMario(); }
-function _jActionLabel(a){ return ({nudge1_sent:'📨 1st follow-up',nudge2_sent:'📨 2nd follow-up',manual_nudge:'📨 Nudge (manual)',booked:'🎉 Booked',lost:'✗ Lost'})[a]||a; }
+async function marioReply(id){
+  const ta=document.getElementById('mreply-'+id); if(!ta) return;
+  const text=(ta.value||'').trim(); if(!text){alert('Pick or write a reply first.');return;}
+  try{ await db.from('mario_inbox').update({command:'send',reply_text:text,command_at:new Date().toISOString()}).eq('id',id); }catch(e){}
+  showToast('📨 Mario will send your reply (within ~1 min)','success',3000); renderMario();
+}
+async function marioDismiss(id){ try{ await db.from('mario_inbox').update({status:'dismissed'}).eq('id',id); }catch(e){} renderMario(); }
+function marioPick(id,idx){ const ta=document.getElementById('mreply-'+id); const d=window._marioDrafts&&window._marioDrafts[id]; if(ta&&d&&d[idx]) ta.value=d[idx].body||''; }
+function toggleMarioEmail(id){ const el=document.getElementById('mexp-'+id); if(el){ el.style.display=el.style.display==='none'?'block':'none'; } }
 async function renderMario(){
   const tr=document.getElementById('topbar-right'); if(tr) tr.innerHTML='';
-  if(!S.marioTab) S.marioTab='open';
+  if(!S.marioTab) S.marioTab='quote';
   $('page').innerHTML='<div style="padding:24px;color:#9ca3af;font-size:13px">Loading Mario…</div>';
   let rows=[];
-  try{ const {data,error}=await db.from('quote_chase').select('*').order('created_at',{ascending:false}); if(error)throw error; rows=data||[]; }
-  catch(e){ $('page').innerHTML='<div style="padding:24px;color:#dc2626;font-size:13px">Could not load Mario — make sure the <b>quote_chase</b> table exists in Supabase (run the setup SQL).</div>'; return; }
-  rows=rows.filter(r=>r.status!=='stopped');
-  let acts=[]; try{ const {data}=await db.from('mario_activity').select('*').order('created_at',{ascending:false}).limit(250); acts=data||[]; }catch(e){}
-  const actByRef={}; acts.forEach(a=>{(actByRef[a.shifl_ref]=actByRef[a.shifl_ref]||[]).push(a);});
-  const needEmail=rows.filter(r=>!r.customer_email && r.status!=='booked' && r.status!=='lost');
-  const open=rows.filter(r=>r.status==='active' && r.customer_email);
-  const booked=rows.filter(r=>r.status==='booked');
-  const lost=rows.filter(r=>r.status==='lost');
-  const winRate=(booked.length+lost.length)? Math.round(100*booked.length/(booked.length+lost.length)) : null;
-  const kpi=(l,v,c)=>`<div class="kpi" style="min-width:120px"><div class="kpi-lbl">${l}</div><div class="kpi-val" style="color:${c||'var(--navy,#1a2e4a)'}">${v}</div></div>`;
-  const statsStrip=`<div style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap">${kpi('Open quotes',open.length,'#2563eb')}${kpi('Booked',booked.length,'#16a34a')}${kpi('Lost',lost.length,'#64748b')}${kpi('Win rate',winRate==null?'—':winRate+'%',(winRate!=null&&winRate>=50)?'#16a34a':'#d97706')}</div>`;
+  try{ const {data,error}=await db.from('mario_inbox').select('*').order('received_at',{ascending:false}).limit(300); if(error)throw error; rows=data||[]; }
+  catch(e){ $('page').innerHTML='<div style="padding:24px;color:#dc2626;font-size:13px">Could not load Mario — make sure the <b>mario_inbox</b> table exists in Supabase (run the setup SQL).</div>'; return; }
+  const active=rows.filter(r=>r.status==='new');
+  const quote=active.filter(r=>r.pile==='quote');
+  const followup=active.filter(r=>r.pile==='followup');
+  const other=active.filter(r=>r.pile==='other');
+  const replied=rows.filter(r=>r.status==='replied');
   const tabs=[
-    {id:'email',label:'⚠ Needs email',n:needEmail.length,c:'#dc2626',rows:needEmail},
-    {id:'open',label:'💬 Chasing',n:open.length,c:'#2563eb',rows:open},
-    {id:'booked',label:'🎉 Booked',n:booked.length,c:'#16a34a',rows:booked},
-    {id:'lost',label:'✗ Lost',n:lost.length,c:'#64748b',rows:lost},
-    {id:'activity',label:'📣 Activity',n:0,c:'#6366f1',rows:[]}
+    {id:'quote',label:'📝 Needs quote',n:quote.length,c:'#2563eb',rows:quote},
+    {id:'followup',label:'🔔 Needs follow-up',n:followup.length,c:'#d97706',rows:followup},
+    {id:'other',label:'📥 Everything else',n:other.length,c:'#64748b',rows:other},
+    {id:'replied',label:'✅ Replied',n:replied.length,c:'#16a34a',rows:replied}
   ];
-  const cur=tabs.find(t=>t.id===S.marioTab)||tabs[1];
-  const threadLink=r=>`<a class="btn" style="font-size:11px;padding:4px 10px;text-decoration:none" href="https://mail.google.com/mail/u/0/#search/${encodeURIComponent(r.shifl_ref||'')}" target="_blank" rel="noopener" title="Open the email thread">📧 Thread</a>`;
+  const cur=tabs.find(t=>t.id===S.marioTab)||tabs[0];
+  window._marioDrafts={};
   const card=r=>{
-    const modeChip=r.mode?`<span style="font-size:9px;text-transform:uppercase;letter-spacing:.04em;background:var(--gray-100,#f1f5f9);color:#64748b;padding:1px 7px;border-radius:99px;font-weight:700">${r.mode}</span>`:'';
-    const activity = r.command?`<span style="color:#2563eb;font-weight:700">⏳ nudge queued…</span>`:(r.nudge2_at?'2 nudges · awaiting reply':r.nudge1_at?'1 nudge · awaiting reply':(r.gmail_thread_id?'contacted':'quote sent — 1st nudge in ~4h'));
-    let actions='';
-    if(S.marioTab==='email'){
-      actions=`<div style="display:flex;gap:6px;margin-top:10px"><input id="jmail-${r.id}" type="email" placeholder="customer@email.com" value="${(r.customer_email||'').replace(/"/g,'&quot;')}" style="flex:1;min-width:0;padding:7px 10px;border:1px solid #d1d5db;border-radius:8px;font-size:12px;font-family:inherit" onkeydown="if(event.key==='Enter')saveMarioEmail('${r.id}')"><button class="btn blue" style="font-size:11px;padding:6px 12px;white-space:nowrap" onclick="saveMarioEmail('${r.id}')">Save email</button></div>`;
-    } else if(S.marioTab==='open'){
-      actions=`<div style="display:flex;gap:5px;margin-top:10px;flex-wrap:wrap">
-        <button class="btn blue" style="font-size:11px;padding:5px 11px" onclick="marioCommand('${r.id}')">📨 Nudge now</button>
-        <button class="btn" style="font-size:11px;padding:5px 11px;color:#16a34a;border-color:#86efac" onclick="markMario('${r.id}','booked')">✓ Booked</button>
-        <button class="btn" style="font-size:11px;padding:5px 11px;color:#64748b" onclick="markMario('${r.id}','lost')">✗ Lost</button>
-        ${threadLink(r)}
-        <button class="btn" style="font-size:11px;padding:5px 11px;color:#9ca3af" title="Stop chasing" onclick="stopMario('${r.id}')">✕</button></div>`;
-    } else {
-      actions=`<div style="display:flex;gap:8px;margin-top:9px;align-items:center;font-size:11px;color:#64748b">${r.status==='booked'?'<span style="color:#16a34a">🎉 Booked</span>':'<span>✗ Lost</span>'} ${threadLink(r)}</div>`;
-    }
-    const hist=actByRef[r.shifl_ref]||[];
-    const histHtml=hist.length?`<button onclick="togglePaigeHistory('${r.id}')" style="margin-top:8px;border:none;background:none;color:#2563eb;font-size:11px;cursor:pointer;padding:0;font-family:inherit">🕐 history (${hist.length})</button><div id="pgh-${r.id}" style="display:none;margin-top:6px;border-top:1px solid var(--gray-50,#f1f5f9);padding-top:7px">${hist.slice(0,15).map(a=>`<div style="font-size:11px;color:#64748b;padding:2px 0"><span style="color:#94a3b8">${new Date(a.created_at).toLocaleString()}</span> — ${_jActionLabel(a.action)}${a.detail?' · '+a.detail:''}</div>`).join('')}</div>`:'';
+    let drafts=[]; try{ drafts=typeof r.draft_options==='string'?JSON.parse(r.draft_options||'[]'):(r.draft_options||[]); }catch(e){ drafts=[]; }
+    window._marioDrafts[r.id]=drafts;
+    const when=r.received_at?new Date(r.received_at).toLocaleString():'';
+    const gmailLink=`https://mail.google.com/mail/u/0/#all/${r.thread_id||''}`;
+    const canReply=r.status==='new' && (r.pile==='quote'||r.pile==='followup');
+    const replyUI = canReply? `
+      <div id="mexp-${r.id}" style="display:none;margin-top:10px;border-top:1px solid var(--gray-50,#f1f5f9);padding-top:10px">
+        <div style="font-size:11px;font-weight:700;color:#64748b;margin-bottom:6px">Mario's reply options — pick one, edit, send:</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">${drafts.map((d,i)=>`<button class="btn" style="font-size:11px;padding:4px 10px" onclick="marioPick('${r.id}',${i})">${d.label||('Option '+(i+1))}</button>`).join('')||'<span style="font-size:11px;color:#9ca3af">No drafts — write your own below.</span>'}</div>
+        <textarea id="mreply-${r.id}" rows="7" placeholder="Pick an option above, or write your reply…" style="width:100%;padding:9px 11px;border:1px solid #d1d5db;border-radius:8px;font-size:12px;font-family:inherit;line-height:1.5;resize:vertical"></textarea>
+        <div style="display:flex;gap:6px;justify-content:flex-end;margin-top:8px">
+          <a class="btn" style="font-size:11px;padding:5px 11px;text-decoration:none" href="${gmailLink}" target="_blank" rel="noopener">📧 Open in Gmail</a>
+          <button class="btn" style="font-size:11px;padding:5px 11px;color:#9ca3af" onclick="marioDismiss('${r.id}')">Dismiss</button>
+          <button class="btn blue" style="font-size:11px;padding:5px 11px" onclick="marioReply('${r.id}')">📨 Send via Mario</button>
+        </div>
+      </div>`:'';
+    const actionRow = r.status==='replied'
+      ? `<div style="margin-top:8px;font-size:11px;color:#16a34a">✅ Replied${r.replied_at?' · '+new Date(r.replied_at).toLocaleDateString():''} · <a href="${gmailLink}" target="_blank" rel="noopener" style="color:#2563eb;text-decoration:none">open thread</a></div>`
+      : (canReply
+        ? `<div style="margin-top:8px"><button class="btn blue" style="font-size:11px;padding:4px 11px" onclick="toggleMarioEmail('${r.id}')">✍️ Reply</button> <button class="btn" style="font-size:11px;padding:4px 11px;color:#9ca3af" onclick="marioDismiss('${r.id}')">Dismiss</button></div>`
+        : `<div style="margin-top:8px"><a class="btn" style="font-size:11px;padding:4px 11px;text-decoration:none" href="${gmailLink}" target="_blank" rel="noopener">📧 Open</a> <button class="btn" style="font-size:11px;padding:4px 11px;color:#9ca3af" onclick="marioDismiss('${r.id}')">Dismiss</button></div>`);
     return `<div style="border:1px solid var(--gray-100,#eef2f6);border-radius:12px;padding:13px 16px;margin-bottom:10px;background:#fff">
-      <div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px"><div style="min-width:0"><span style="font-weight:800;font-size:15px;color:var(--navy,#1a2e4a)">${r.shifl_ref||'—'}</span> ${modeChip}${r.amount?`<span style="font-size:12px;color:#16a34a;font-weight:700;margin-left:6px">${r.amount}</span>`:''}</div><span style="font-size:11px;color:#94a3b8;white-space:nowrap">${activity}</span></div>
-      <div style="font-size:13px;color:#334155;margin-top:4px">${r.customer||'—'} <span style="color:#cbd5e1">·</span> <span style="color:#64748b">${r.lane||''}</span></div>
-      ${actions}${histHtml}</div>`;
+      <div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px"><div style="min-width:0;font-weight:700;font-size:13px;color:var(--navy,#1a2e4a);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.subject||'(no subject)'}</div><span style="font-size:11px;color:#94a3b8;white-space:nowrap">${when}</span></div>
+      <div style="font-size:12px;color:#64748b;margin-top:2px">${r.from_name||r.from_email||''}${(r.from_name&&r.from_email)?' · '+r.from_email:''}</div>
+      ${r.summary?`<div style="font-size:12px;color:#334155;margin-top:6px"><span style="color:#2563eb;font-weight:700">Mario:</span> ${r.summary}</div>`:''}
+      ${r.snippet?`<div style="font-size:11px;color:#94a3b8;margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.snippet}</div>`:''}
+      ${actionRow}${replyUI}</div>`;
   };
   const tabBar=`<div style="display:flex;gap:4px;background:var(--gray-100,#f1f5f9);padding:3px;border-radius:10px;width:fit-content;max-width:100%;overflow:auto;margin-bottom:18px">${tabs.map(t=>`<button onclick="S.marioTab='${t.id}';renderMario()" style="padding:7px 14px;border:none;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;background:${S.marioTab===t.id?'#fff':'transparent'};color:${S.marioTab===t.id?t.c:'#64748b'};box-shadow:${S.marioTab===t.id?'0 1px 3px rgba(0,0,0,.08)':'none'}">${t.label}${t.n?` <span style="background:${t.c};color:#fff;border-radius:99px;font-size:10px;padding:1px 6px">${t.n}</span>`:''}</button>`).join('')}</div>`;
-  const emptyMsg={email:'No missing customer emails.',open:'No open quotes to chase.',booked:'No bookings yet.',lost:'Nothing lost.'}[S.marioTab];
-  let body;
-  if(S.marioTab==='activity'){
-    body = acts.length? `<div style="border:1px solid var(--gray-100,#eef2f6);border-radius:12px;overflow:hidden;background:#fff">${acts.slice(0,120).map(a=>`<div style="display:flex;gap:10px;padding:9px 14px;border-bottom:1px solid var(--gray-50,#f1f5f9);font-size:12px;align-items:baseline;flex-wrap:wrap"><span style="color:#94a3b8;white-space:nowrap;font-size:11px;min-width:135px">${new Date(a.created_at).toLocaleString()}</span><span style="font-weight:700;color:var(--navy,#1a2e4a)">${a.shifl_ref||''}</span><span style="color:#334155">${_jActionLabel(a.action)}</span>${a.detail?`<span style="color:#94a3b8">${a.detail}</span>`:''}</div>`).join('')}</div>` : `<div class="empty"><div class="empty-ico">📣</div><p>No activity yet.</p></div>`;
-  } else {
-    body = cur.rows.length? cur.rows.map(card).join('') : `<div class="empty"><div class="empty-ico">✅</div><p>${emptyMsg}</p></div>`;
-  }
+  const emptyMsg={quote:'No quote requests waiting.',followup:'Nothing needs a follow-up.',other:'Inbox is clear.',replied:'Nothing replied yet.'}[S.marioTab];
+  const body = cur.rows.length? cur.rows.map(card).join('') : `<div class="empty"><div class="empty-ico">✅</div><p>${emptyMsg}</p></div>`;
   $('page').innerHTML=`
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:3px"><span style="font-size:22px">💬</span><h2 style="margin:0;font-size:18px;color:var(--navy,#1a2e4a)">Mario</h2><span style="font-size:12px;color:#94a3b8">quote &amp; booking chaser</span></div>
-    <div style="font-size:12px;color:#94a3b8;margin-bottom:16px">Chases customers to book open quotes — nudges 4h after a quote goes out, again next morning, then on your click. Mark Booked / Lost and he stops.</div>
-    ${statsStrip}${tabBar}${body}`;
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:3px"><span style="font-size:22px">💬</span><h2 style="margin:0;font-size:18px;color:var(--navy,#1a2e4a)">Mario</h2><span style="font-size:12px;color:#94a3b8">inbox assistant</span></div>
+    <div style="font-size:12px;color:#94a3b8;margin-bottom:16px">Reads every email and sorts it into piles. Hit Reply, pick one of his drafts, tweak it, and he sends it — he never emails on his own.</div>
+    ${tabBar}${body}`;
 }
+
 function renderQuoteRequests(){
   const all=getQuoteRequests();
   const el=document.getElementById('page');
