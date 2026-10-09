@@ -11428,6 +11428,7 @@ async function saveInvoiceData(type, id){
       q.status='Invoiced';
       q.invoiceNum=num;
       q.totalCustomer=grandTotal;
+      try{await dbSaveTlQuote(q);}catch(e){}   // persist to Supabase so it survives a refresh
       try{localStorage.setItem('tl_history',JSON.stringify(window._tlHistory));}catch(e){}
     }
   } else if(type==='freight'){
@@ -11436,6 +11437,7 @@ async function saveInvoiceData(type, id){
       q.status='Invoiced';
       q.invoiceNum=num;
       q.customerRate=grandTotal;
+      try{await dbSaveFqQuote(q);}catch(e){}   // persist to Supabase so it survives a refresh
       try{localStorage.setItem('fq_history',JSON.stringify(window._fqHistory));}catch(e){}
     }
   } else if(type==='air'){
