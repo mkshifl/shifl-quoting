@@ -18797,9 +18797,21 @@ async function loadQuoteRequestsFromDB(){
       status:_reqStatusToDisplay(r.status),
       source:'email/portal',
       createdAt:r.created_at||new Date().toISOString(),
+      marioMemory:r.mario_memory||null,
+      marioQuoted:!!r.mario_quoted,
+      quotedAmount:r.quoted_amount||null,
+      carrier:r.carrier||'',
       pricing:null
     }));
-    if(incoming.length) saveQuoteRequests(incoming.concat(local)); // newest first
+    // Merge Mario's quote-memory updates onto requests we already have cached.
+    const dbById={}; (data||[]).forEach(r=>{dbById[r.id]=r;});
+    let changed=false;
+    local.forEach(r=>{
+      const d=dbById[r.id]; if(!d) return;
+      if(d.mario_memory && JSON.stringify(d.mario_memory)!==JSON.stringify(r.marioMemory||null)){ r.marioMemory=d.mario_memory; changed=true; }
+      if(d.mario_quoted && !r.marioQuoted){ r.marioQuoted=true; r.quotedAmount=d.quoted_amount||r.quotedAmount; r.carrier=d.carrier||r.carrier; if(r.status==='Pending') r.status='Quoted'; changed=true; }
+    });
+    if(incoming.length||changed) saveQuoteRequests(incoming.concat(local)); // newest first
   }catch(e){ console.warn('load quote_requests failed:', e && e.message); }
 }
 function _reqStatusToDisplay(st){
@@ -23329,6 +23341,39 @@ async function renderMario(){
     ${tabBar}${dismissAllBar}${body}`;
 }
 
+function _reqMarioBadge(r){
+  if(!r.marioMemory) return '';
+  const m=r.marioMemory; const n=(m.history||[]).length;
+  const lbl=r.marioQuoted?`🧠 Mario quoted ${_usdReq(m.suggest_sell)}`:`🧠 ${n} prior on this lane`;
+  const bg=r.marioQuoted?'#f5f3ff':'#eff6ff', col=r.marioQuoted?'#7c3aed':'#2e75b6';
+  return ` <button onclick="toggleMarioPanel('${r.id}')" title="Mario found past quotes on this lane — click to see them" style="font-size:10px;background:${bg};color:${col};border:1px solid ${col}55;padding:1px 8px;border-radius:99px;font-weight:700;cursor:pointer;vertical-align:middle">${lbl} ▾</button>`;
+}
+function _usdReq(n){ return n==null?'—':'$'+(Number(n)||0).toLocaleString('en-US'); }
+function _reqMarioPanel(r){
+  if(!r.marioMemory) return '';
+  const m=r.marioMemory;
+  const rows=(m.history||[]).map(h=>`<tr>
+    <td style="padding:3px 8px;color:#6b7280;white-space:nowrap">${h.on||'—'}</td>
+    <td style="padding:3px 8px"><span style="font-size:10px;padding:1px 6px;border-radius:99px;font-weight:700;background:${h.dir==='sell'?'#f0fdf4':'#fff7ed'};color:${h.dir==='sell'?'#16a34a':'#c2410c'}">${h.dir==='sell'?'SELL':'BUY'}</span></td>
+    <td style="padding:3px 8px;color:#374151">${(h.who||'—')}${h.mode&&h.mode!=='unknown'?` <span style="color:#9ca3af;font-size:10px">· ${h.mode}</span>`:''}</td>
+    <td style="padding:3px 8px;font-weight:700;color:var(--navy,#1a2e4a);text-align:right">${_usdReq(h.rate)}</td>
+    <td style="padding:3px 8px;color:#9ca3af;font-size:11px">${(h.detail||'').slice(0,60)}</td></tr>`).join('');
+  const sug=`<div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:10px;font-size:12px">
+    <span><b style="color:#16a34a">Suggested sell:</b> ${_usdReq(m.suggest_sell)}</span>
+    <span><b style="color:#c2410c">Last buy:</b> ${_usdReq(m.suggest_buy)}</span>
+    ${m.suggest_carrier?`<span><b style="color:#6b7280">Carrier:</b> ${m.suggest_carrier}</span>`:''}
+    ${m.suggest_sell!=null&&m.suggest_buy!=null?`<span><b style="color:#7c3aed">Spread:</b> ${_usdReq(m.suggest_sell-m.suggest_buy)}</span>`:''}</div>`;
+  return `<tr id="mario-panel-${r.id}" style="display:none"><td colspan="9" style="background:#fafafe;border-left:3px solid #7c3aed;padding:12px 16px">
+    <div style="font-size:12px;font-weight:700;color:#7c3aed;margin-bottom:8px">🧠 Mario's quote memory — ${m.lane||''} ${r.marioQuoted?'<span style="font-size:10px;color:#9ca3af;font-weight:500">· pre-filled to Quoted from the most recent sell; edit before you send</span>':'<span style="font-size:10px;color:#9ca3af;font-weight:500">· history only — price it yourself</span>'}</div>
+    ${sug}
+    <table style="width:100%;border-collapse:collapse;font-size:12px;background:#fff;border-radius:8px;overflow:hidden">
+      <thead><tr style="background:#f3f4f6;color:#6b7280;font-size:10px;text-transform:uppercase">
+        <th style="padding:4px 8px;text-align:left">Date</th><th style="padding:4px 8px;text-align:left">Side</th><th style="padding:4px 8px;text-align:left">Customer / Carrier</th><th style="padding:4px 8px;text-align:right">Rate</th><th style="padding:4px 8px;text-align:left">Notes</th>
+      </tr></thead><tbody>${rows||'<tr><td colspan="5" style="padding:8px;color:#9ca3af">No detail</td></tr>'}</tbody></table>
+  </td></tr>`;
+}
+function toggleMarioPanel(id){ const el=document.getElementById('mario-panel-'+id); if(el) el.style.display=el.style.display==='none'?'table-row':'none'; }
+
 function renderQuoteRequests(){
   const all=getQuoteRequests();
   const el=document.getElementById('page');
@@ -23355,7 +23400,7 @@ function renderQuoteRequests(){
         </tr></thead>
         <tbody>${all.slice().sort((a,b)=>(b.hot?1:0)-(a.hot?1:0)).map(r=>`
           <tr style="${_reqRowStyle(r)}">
-            <td style="font-weight:700;font-size:14px;color:var(--navy,#1a2e4a)">${r.hot?'<span style="font-size:10px;background:#dc2626;color:#fff;padding:1px 7px;border-radius:99px;font-weight:800;vertical-align:middle;margin-right:5px">🔥 HOT</span>':''}${r.customer||'—'}${_reqAgeChip(r)}${_reqNeedsReview(r)?' <span title="Needs review — verify customer &amp; details" style="font-size:10px;background:#fef2f2;color:#dc2626;padding:1px 7px;border-radius:99px;font-weight:700;vertical-align:middle">⚠ review</span>':''} <button onclick="editReqCustomer('${r.id}')" title="Edit customer name" style="border:none;background:none;cursor:pointer;font-size:11px;color:#9ca3af;padding:0 2px;vertical-align:middle">✏️</button></td>
+            <td style="font-weight:700;font-size:14px;color:var(--navy,#1a2e4a)">${r.hot?'<span style="font-size:10px;background:#dc2626;color:#fff;padding:1px 7px;border-radius:99px;font-weight:800;vertical-align:middle;margin-right:5px">🔥 HOT</span>':''}${r.customer||'—'}${_reqAgeChip(r)}${_reqNeedsReview(r)?' <span title="Needs review — verify customer &amp; details" style="font-size:10px;background:#fef2f2;color:#dc2626;padding:1px 7px;border-radius:99px;font-weight:700;vertical-align:middle">⚠ review</span>':''} <button onclick="editReqCustomer('${r.id}')" title="Edit customer name" style="border:none;background:none;cursor:pointer;font-size:11px;color:#9ca3af;padding:0 2px;vertical-align:middle">✏️</button>${_reqMarioBadge(r)}</td>
             <td style="font-size:12px;color:#666">${r.port||'—'}</td>
             <td>${r.destination||r.zip}</td>
             <td style="text-align:center">${r.containerCount||1}</td>
@@ -23376,7 +23421,7 @@ function renderQuoteRequests(){
                 <button class="btn" style="font-size:11px;padding:3px 8px;color:#dc2626" onclick="markRequestStatus('${r.id}','Cancelled')">✕</button>
               </div>
             </td>
-          </tr>`).join('')}
+          </tr>${_reqMarioPanel(r)}`).join('')}
         </tbody>
       </table></div>`}
     </div>`;
