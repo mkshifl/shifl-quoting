@@ -1303,6 +1303,11 @@ async function dbUpdateQuoteStatus(id,status){
   const q=(S.quotes||[]).find(x=>x.id===id);
   _logStatusEvent(id,status,{mode:'drayage',customer:q&&q.customer,lane:q?`${q.port||''} → ${q.zip||''}`:'',amount:q&&q.customerRates&&q.customerRates.total});
 }
+// Alias used by the dispatch board (advanceTMSLoad) for drayage loads. This was
+// referenced but never defined — drayage board moves were silently failing. Route
+// it through dbUpdateQuoteStatus so it persists to the DB AND logs a stage event.
+async function dbUpdateStatus(id,status){ return dbUpdateQuoteStatus(id,status); }
+
 // Append-only log of every stage mark (booked → … → delivered → invoiced → paid),
 // so the end-of-day report can count what moved today. Best-effort, never blocks.
 async function _logStatusEvent(id,status,meta){
@@ -7366,6 +7371,7 @@ async function confirmBooking(id, downloadSheet){
     q.status='Booked';
     q.booked_by=_currentUser?.id||null;
     q.booked_by_name=_currentUser?.name||null;
+    _logStatusEvent(id,'Booked',{mode:'drayage',customer:q.customer,lane:`${q.port||''} → ${q.zip||''}`,amount:q.customerRates&&q.customerRates.total});
     closeModal();
     setTimeout(fireConfetti,200);
     showToast('🎉 Quote booked!','success',4000);
