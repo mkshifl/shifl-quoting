@@ -1300,6 +1300,23 @@ async function dbSaveQuote(q){
 async function dbUpdateQuoteStatus(id,status){
   const {error}=await db.from('quotes').update({status}).eq('id',id);
   if(error) throw error;
+  const q=(S.quotes||[]).find(x=>x.id===id);
+  _logStatusEvent(id,status,{mode:'drayage',customer:q&&q.customer,lane:q?`${q.port||''} → ${q.zip||''}`:'',amount:q&&q.customerRates&&q.customerRates.total});
+}
+// Append-only log of every stage mark (booked → … → delivered → invoiced → paid),
+// so the end-of-day report can count what moved today. Best-effort, never blocks.
+async function _logStatusEvent(id,status,meta){
+  try{
+    if(typeof db==='undefined'||!db||!status) return;
+    meta=meta||{};
+    await db.from('status_events').insert({
+      quote_id:id, to_status:status, mode:meta.mode||null,
+      customer:meta.customer||null, lane:meta.lane||null,
+      amount:(meta.amount!=null&&!isNaN(meta.amount))?Number(meta.amount):null,
+      user_name:(typeof _currentUser!=='undefined'&&_currentUser)?_currentUser.name:null,
+      at:new Date().toISOString()
+    });
+  }catch(e){ /* silent — logging must never break a status change */ }
 }
 async function dbDeleteQuote(id){
   const {error}=await db.from('quotes').delete().eq('id',id);
@@ -1352,6 +1369,7 @@ async function dbUpdateFqStatus(id,status){
   q.status=status;
   const{error}=await db.from('fq_quotes').update({data:q}).eq('id',id);
   if(error) throw error;
+  _logStatusEvent(id,status,{mode:(q.fqMode||'freight').toLowerCase(),customer:q.customer,lane:`${q.pickupZip||''} → ${q.deliveryZip||''}`,amount:q.customerRate});
 }
 async function dbDeleteFqQuote(id){
   const{error}=await db.from('fq_quotes').delete().eq('id',id);
@@ -1371,6 +1389,7 @@ async function dbUpdateTlStatus(id,status){
   q.status=status;
   const{error}=await db.from('tl_quotes').update({data:q}).eq('id',id);
   if(error) throw error;
+  _logStatusEvent(id,status,{mode:'transload',customer:q.customer,lane:`${q.drayPort||''} → ${q.outDeliveryZip||''}`,amount:q.totalCustomer});
 }
 async function dbDeleteTlQuote(id){
   const{error}=await db.from('tl_quotes').delete().eq('id',id);
@@ -9734,6 +9753,7 @@ async function updateAqStatus(idx,status){
   q.status=status;
   try{localStorage.setItem('aq_history',JSON.stringify(window._aqHistory));}catch(e){}
   try{await db.from('fq_quotes').update({data:q}).eq('id',q.id);}catch(e){}
+  _logStatusEvent(q.id,status,{mode:'air',customer:q.customer,lane:`${q.originAirport||''} → ${q.deliveryZip||''}`,amount:q.customerRate});
   renderAqLog();
 }
 
@@ -11430,6 +11450,7 @@ async function saveInvoiceData(type, id){
       q.totalCustomer=grandTotal;
       try{await dbSaveTlQuote(q);}catch(e){}   // persist to Supabase so it survives a refresh
       try{localStorage.setItem('tl_history',JSON.stringify(window._tlHistory));}catch(e){}
+      _logStatusEvent(id,'Invoiced',{mode:'transload',customer:q.customer,amount:grandTotal});
     }
   } else if(type==='freight'){
     const q=(window._fqHistory||[]).find(x=>x.id===id);
@@ -11439,6 +11460,7 @@ async function saveInvoiceData(type, id){
       q.customerRate=grandTotal;
       try{await dbSaveFqQuote(q);}catch(e){}   // persist to Supabase so it survives a refresh
       try{localStorage.setItem('fq_history',JSON.stringify(window._fqHistory));}catch(e){}
+      _logStatusEvent(id,'Invoiced',{mode:(q.fqMode||'freight').toLowerCase(),customer:q.customer,amount:grandTotal});
     }
   } else if(type==='air'){
     const q=(window._aqHistory||[]).find(x=>x.id===id);
@@ -11449,6 +11471,7 @@ async function saveInvoiceData(type, id){
       try{await dbSaveAqQuote(q);}catch(e){}
       try{localStorage.setItem('aq_history',JSON.stringify(window._aqHistory));}catch(e){}
       try{localStorage.setItem('fq_history',JSON.stringify(window._fqHistory));}catch(e){}
+      _logStatusEvent(id,'Invoiced',{mode:'air',customer:q.customer,amount:grandTotal});
     }
   }
 
