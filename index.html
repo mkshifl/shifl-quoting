@@ -803,6 +803,7 @@ if('caches' in window){
         <button class="sub-link" id="nav-log" data-view="log" onclick="goTo('log')">📁 Quote log</button>
         <button class="sub-link" id="nav-requests" onclick="goTo('requests')">📋 Rate requests <span id="qr-nav-badge" style="background:#f59e0b;color:#fff;border-radius:99px;font-size:9px;font-weight:800;padding:1px 6px;display:none;margin-left:auto"></span></button>
         <button class="sub-link" id="nav-rates" onclick="goTo('rates')">📋 Carrier rates</button>
+        <button class="sub-link" id="nav-carrierquotes" data-view="carrierquotes" onclick="goTo('carrierquotes')">🚚 Carrier quotes</button>
         <button class="sub-link" id="nav-customers" data-view="customers" onclick="goTo('customers')">👥 Customers</button>
         <button class="sub-link" id="nav-dash" data-view="dash" onclick="goTo('dash')">📊 Dashboard</button>
         <button class="sub-link" id="nav-templates-dray" onclick="renderTemplates('drayage')">📋 Templates</button>
@@ -1639,7 +1640,7 @@ function setView(v){
   S.view=v;
   document.querySelectorAll('.nav-btn,.sub-link').forEach(b=>b.classList.remove('active'));
   const navEl=$('nav-'+v);if(navEl) navEl.classList.add('active');
-  const titles={tms:'TMS',quote:'Quote builder',customers:'Customers',phonebook:'Phone Book',rates:'Carrier rates',log:'Quote log',dash:'Dashboard',freight:'Freight Quoting',transload:'Transload Quoting',active:'Active Shipments',admin:'Admin Panel',reports:'Reports',activity:'Activity Log',auditlog:'Audit Log',carriers:'Carrier Network',air:'Air Freight',home:'Home',invoicing:'Invoicing',requests:'Rate Requests'};
+  const titles={tms:'TMS',quote:'Quote builder',customers:'Customers',phonebook:'Phone Book',rates:'Carrier rates',carrierquotes:'Carrier quotes',log:'Quote log',dash:'Dashboard',freight:'Freight Quoting',transload:'Transload Quoting',active:'Active Shipments',admin:'Admin Panel',reports:'Reports',activity:'Activity Log',auditlog:'Audit Log',carriers:'Carrier Network',air:'Air Freight',home:'Home',invoicing:'Invoicing',requests:'Rate Requests'};
   $('view-title').textContent=titles[v]||v;
   openAccFor(v);
   updateSubActive(v);
@@ -1651,6 +1652,7 @@ function render(){
   else if(S.view==='customers')  renderCustomers();
   else if(S.view==='phonebook')  renderPhoneBook();
   else if(S.view==='rates')      renderRates();
+  else if(S.view==='carrierquotes') renderCarrierQuotes();
   else if(S.view==='log')        renderLog();
   else if(S.view==='dash')       renderDash();
   else if(S.view==='active')     renderActive();
@@ -6838,6 +6840,54 @@ function toggleRateRow(rid){
   arr.style.color=isOpen?'#9ca3af':'#2563eb';
 }
 
+
+async function renderCarrierQuotes(){
+  const el=$('page'); if(!el) return;
+  el.innerHTML='<div class="loading-page"><div class="spin" style="margin:0 auto 12px"></div><div style="color:var(--gray-400);font-size:13px">Loading carrier quotes…</div></div>';
+  let rows=[];
+  try{
+    const{data,error}=await db.from('quote_memory').select('*').eq('direction','buy').order('quoted_on',{ascending:false}).limit(500);
+    if(error) throw error;
+    rows=data||[];
+  }catch(e){
+    el.innerHTML=`<div style="padding:48px 24px;text-align:center;color:var(--gray-500)"><div style="font-size:40px;margin-bottom:10px">🚚</div><div style="font-weight:700;margin-bottom:6px;color:var(--navy,#1a2e4a)">Carrier quotes aren't set up yet</div><div style="font-size:13px;color:#9ca3af;max-width:440px;margin:0 auto">Mario stores the carrier rates he spots in your email here. Make sure the <code>quote_memory</code> table exists in Supabase and Mario's <code>harvestQuotes</code> job is running.</div></div>`;
+    return;
+  }
+  const esc=s=>(s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  const fmtRate=r=>{const n=Number(r);return isNaN(n)||!r?esc(r||'—'):'$'+n.toLocaleString('en-US');};
+  const total=rows.length;
+  const bodyRows=rows.map(r=>{
+    const lane=[r.origin||r.origin_zip,r.dest||r.dest_zip].filter(Boolean).join(' → ')||'—';
+    const mode=(r.mode&&r.mode!=='unknown')?r.mode.toUpperCase():'';
+    const search=[r.carrier,lane,r.mode,r.counterparty_email].map(x=>(x||'').toLowerCase()).join(' ');
+    return `<tr data-s="${esc(search)}">
+      <td style="font-weight:700;color:var(--navy,#1a2e4a)">${esc(r.carrier||r.counterparty_email||'—')}</td>
+      <td style="font-size:13px">${esc(lane)}${mode?` <span style="font-size:10px;color:#9ca3af">· ${esc(mode)}</span>`:''}</td>
+      <td style="font-weight:800;color:var(--green,#16a34a)">${fmtRate(r.rate)}</td>
+      <td style="font-size:12px;color:#666;white-space:nowrap">${esc(r.quoted_on||'—')}</td>
+      <td style="font-size:12px;color:#9ca3af;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(r.rate_detail||r.subject||'')}">${esc(r.rate_detail||r.subject||'—')}</td>
+    </tr>`;
+  }).join('');
+  el.innerHTML=`
+    <div style="padding:0 0 16px">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;flex-wrap:wrap">
+        <h3 style="margin:0;font-size:16px;color:var(--navy,#1a2e4a)">🚚 Carrier quotes</h3>
+        <span style="font-size:12px;color:#9ca3af">${total} rate${total===1?'':'s'} Mario captured from email</span>
+        <input id="cq-search" oninput="_cqFilter()" placeholder="Search carrier or lane…" style="margin-left:auto;padding:7px 11px;border:1px solid #d1d5db;border-radius:8px;font-size:13px;min-width:220px">
+      </div>
+      ${total===0?`<div class="empty"><div class="empty-ico">🚚</div><p>No carrier quotes captured yet</p><small>Mario files carrier rates here as he reads your email. Run harvestQuotes or wait for the hourly job.</small></div>`:`
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>Carrier</th><th>Lane</th><th>Rate</th><th>Date</th><th>Notes / source</th></tr></thead>
+        <tbody id="cq-tbody">${bodyRows}</tbody>
+      </table></div>`}
+    </div>`;
+}
+function _cqFilter(){
+  const q=($('cq-search')?.value||'').toLowerCase().trim();
+  document.querySelectorAll('#cq-tbody tr').forEach(tr=>{
+    tr.style.display=(!q||(tr.getAttribute('data-s')||'').includes(q))?'':'none';
+  });
+}
 
 function renderRates(){
   const matchCount=S.rSearch?S.rates.filter(r=>(r.carrier+r.zip+r.destination+r.region+r.notes).toLowerCase().includes(S.rSearch.toLowerCase())).length:S.rates.length;
