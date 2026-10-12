@@ -2021,7 +2021,7 @@ function renderQuote(){
   const isExport=qi.drayType==='export';const matches=getMatches();
   if(!S.selId&&matches.length) S.selId=matches[0].id;
   const sel=effRate(matches.find(r=>r.id===S.selId)||matches[0]||null);syncQuoteAccFromRate(sel);
-  $('topbar-right').innerHTML='<button class="btn" onclick="showRepeatPicker()" title="Load a previous quote">&#x1F501; Repeat</button><button class="btn" onclick="saveDraft(\'drayage\')">&#x1F4CB; Draft</button><span id="upsell-badge" style="display:none;background:#dc2626;color:#fff;border-radius:99px;font-size:9px;font-weight:800;padding:2px 7px"></span><button class="btn" onclick="printQuote()">&#x1F5A8; Print</button><button class="btn" onclick="downloadPDF()">&#x1F4C4; PDF</button><button class="btn blue" onclick="saveQuote()">&#x1F4BE; Save quote</button><button class="btn" onclick="openPostToPortalFromBuilder()" style="background:linear-gradient(135deg,#059669,#34d399);border-color:#059669;color:#fff">&#x1F4E4; Post to portal</button>';  $('page').innerHTML=draftBanner('drayage','drayage')+`<div class="two-col">
+  $('topbar-right').innerHTML='<button class="btn" onclick="showRepeatPicker()" title="Load a previous quote">&#x1F501; Repeat</button><button class="btn" onclick="saveDraft(\'drayage\')">&#x1F4CB; Draft</button><span id="upsell-badge" style="display:none;background:#dc2626;color:#fff;border-radius:99px;font-size:9px;font-weight:800;padding:2px 7px"></span><button class="btn" onclick="printQuote()">&#x1F5A8; Print</button><button class="btn" onclick="downloadPDF()">&#x1F4C4; PDF</button><button class="btn" onclick="askMario(\'drayage\')" style="background:#f5f3ff;border-color:#c4b5fd;color:#7c3aed">&#x1F50E; Ask Mario</button><button class="btn blue" onclick="saveQuote()">&#x1F4BE; Save quote</button><button class="btn" onclick="openPostToPortalFromBuilder()" style="background:linear-gradient(135deg,#059669,#34d399);border-color:#059669;color:#fff">&#x1F4E4; Post to portal</button>';  $('page').innerHTML=draftBanner('drayage','drayage')+`<div class="two-col">
     <div>
       <div class="card">
         <div class="sec-head" style="display:flex;align-items:center;justify-content:space-between">
@@ -2509,7 +2509,7 @@ function needsPalletCount(fq){
 
 function renderFreight(){
   const tab=S.fqTab||'builder';
-  $('topbar-right').innerHTML=tab==='carriers'?`<button class="btn blue" onclick="showAddFqRate()">+ Add rate</button>`:'';
+  $('topbar-right').innerHTML=tab==='carriers'?`<button class="btn blue" onclick="showAddFqRate()">+ Add rate</button>`:(tab==='builder'?`<button class="btn" onclick="askMario('freight')" style="background:#f5f3ff;border-color:#c4b5fd;color:#7c3aed">🔎 Ask Mario</button>`:'');
   if(tab==='log')        return renderFqLog();
   if(tab==='carriers')   return renderFqCarriers();
   if(tab==='dash')       return renderFqDashboard();
@@ -23973,15 +23973,100 @@ Reference #: ${ref}
 [DRAFT TEMPLATE — replace with your standard Transload wording]`};
   return {subject:`Rate Request – ${ref}`, body:`Hi [Carrier / Name],\n\nPlease share your best rate for ${origin} to ${dest}.\n\nReference #: ${ref}`};
 }
+// ═══════════════════════════════════════════════════════════════════════════
+//  ASK MARIO — from the quote builder: check for a forgotten quote, then draft
+//  a rate request to carriers and send each on its own thread. Approval-gated.
+// ═══════════════════════════════════════════════════════════════════════════
+async function askMario(mode){
+  let ctx;
+  if(mode==='drayage'){
+    const q=S.qi||{};
+    if(!q.zip){showToast('Enter the destination zip first','error',2600);return;}
+    ctx={method:'Drayage',customer:q.customer||'',origin:q.port||'',destZip:(String(q.zip).match(/\d{5}/)||[''])[0]||q.zip,
+         dest:q.destination||q.zip||'',size:q.size||'',containerCount:q.containerCount||1,commodity:q.commodity||'',weight:''};
+  } else {
+    const f=S.fq||{};
+    if(!f.pickupZip||!f.deliveryZip||!f.mode){showToast('Enter pickup zip, delivery zip, and method first','error',3200);return;}
+    ctx={method:f.mode,customer:f.customer||'',origin:f.pickupZip,destZip:(String(f.deliveryZip).match(/\d{5}/)||[''])[0]||f.deliveryZip,
+         dest:f.deliveryZip,size:'',containerCount:1,commodity:f.commodity||'',weight:f.weight||'',palletCount:f.palletCount||'',equipment:f.equipment||''};
+  }
+  showToast('Mario is checking your emails & TMS…','info',1600);
+  const matches=await _askMarioDedupe(ctx);
+  _askMarioModal(ctx,matches);
+}
+// Look for a quote we may have already given on this lane (email memory + quote log).
+async function _askMarioDedupe(ctx){
+  const out=[]; const dz=(ctx.destZip||'').match(/\d{5}/)?.[0];
+  if(!dz) return out;
+  try{
+    const {data}=await db.from('quote_memory').select('*').eq('dest_zip',dz).gt('rate',0).order('quoted_on',{ascending:false}).limit(8);
+    (data||[]).forEach(r=>out.push({who:(r.direction==='sell'?r.customer:r.carrier)||'—',dir:r.direction,rate:r.rate,date:r.quoted_on,mode:(r.mode||'').toUpperCase(),src:'email'}));
+  }catch(e){}
+  try{
+    const {data}=await db.from('quotes').select('customer,zip,status,customer_prices,date').eq('zip',dz).order('date',{ascending:false}).limit(6);
+    (data||[]).forEach(r=>out.push({who:r.customer||'—',dir:'sell',rate:(r.customer_prices&&r.customer_prices.total)||null,date:r.date,mode:'DRAYAGE',src:'quote log',status:r.status}));
+  }catch(e){}
+  return out;
+}
+function _askMarioModal(ctx,matches){
+  const lane=`${_esc(ctx.origin||'—')} → ${_esc(ctx.dest||ctx.destZip||'—')}`;
+  const mlist=(matches&&matches.length)?`
+    <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:12px 14px;margin-bottom:14px">
+      <div style="font-size:13px;font-weight:800;color:#92400e;margin-bottom:8px">⚠ We may have quoted this lane before</div>
+      ${matches.slice(0,8).map(m=>`<div style="display:flex;justify-content:space-between;gap:10px;font-size:12px;padding:4px 0;border-top:1px solid #fef3c7">
+        <span style="min-width:0"><strong>${_esc(m.who)}</strong> <span style="font-size:10px;background:${m.dir==='sell'?'#dcfce7':'#fff7ed'};color:${m.dir==='sell'?'#166534':'#c2410c'};padding:0 6px;border-radius:99px">${m.dir==='sell'?'SELL':'BUY'}</span> <span style="color:#9ca3af">${_esc(m.mode||'')}${m.status?' · '+_esc(m.status):''}</span></span>
+        <span style="white-space:nowrap;color:#111;font-weight:700">${m.rate?(typeof m.rate==='number'?fmtD(m.rate):_esc(m.rate)):'—'} <span style="color:#9ca3af;font-weight:400">${_esc(m.date||'')}</span></span>
+      </div>`).join('')}
+      <div style="font-size:11px;color:#b45309;margin-top:8px">Check these before sending a new request — you may already have a rate.</div>
+    </div>`:`
+    <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:13px;color:#166534">✓ No prior quote found on this lane. Good to source fresh rates.</div>`;
+  openModal(`
+    <div style="min-width:480px;max-width:560px">
+      <div style="background:#f5f3ff;border-radius:10px;padding:14px 16px;margin-bottom:16px;display:flex;align-items:center;gap:12px">
+        <span style="font-size:26px">🔎</span>
+        <div><div style="font-size:15px;font-weight:800;color:#5b21b6">Ask Mario</div>
+        <div style="font-size:12px;color:#7c3aed">${ctx.method} · ${lane}</div></div>
+      </div>
+      ${mlist}
+      <div style="font-size:12px;color:#666;margin-bottom:14px">Want Mario to source rates? He'll draft the rate request, let you fill in the details, suggest carriers for this lane (and let you add more), and send each on its own thread.</div>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button class="btn" onclick="closeModal()">Close</button>
+        <button class="btn blue" style="background:#7c3aed;border-color:#7c3aed" onclick="_askMarioSend()">📧 Draft rate request →</button>
+      </div>
+    </div>`);
+  window._askMarioCtx=ctx;
+}
+async function _askMarioSend(){
+  const ctx=window._askMarioCtx; if(!ctx) return;
+  closeModal();
+  showToast('Setting up the rate request…','info',1500);
+  const id=await createRequestFromBuilder(ctx);
+  openVendorRateRequest(id, ctx.method);
+}
+async function createRequestFromBuilder(ctx){
+  const id='QR-'+Date.now();
+  const req={id,customer:ctx.customer||'(from quote builder)',port:ctx.origin||'',zip:ctx.destZip||'',destination:ctx.dest||ctx.destZip||'',
+    mode:(ctx.method||'').toLowerCase(),size:ctx.size||'',containerCount:ctx.containerCount||1,weight:ctx.weight||'',commodity:ctx.commodity||'',
+    status:'Working',createdAt:new Date().toISOString(),source:'ask_mario',pricing:null};
+  const all=getQuoteRequests(); all.unshift(req); saveQuoteRequests(all);
+  try{ if(typeof db!=='undefined'&&db){
+    await db.from('quote_requests').insert({id,type:'quote_request',customer:req.customer,port:req.port,zip:req.zip,destination:req.destination,
+      mode:req.mode,ctrs:req.containerCount,size:req.size,weight:req.weight,commodity:req.commodity,status:'working',created_at:req.createdAt});
+  }}catch(e){ console.warn('askMario request insert:', e&&e.message); }
+  return id;
+}
+
 function openVendorRateRequest(id, method){
   const r=getQuoteRequests().find(x=>x.id===id);
   if(!r){showToast('Request not found','error',2000);return;}
   method = method || _reqDetectedMethod(r.mode) || 'FTL';
   const tpl=_vendorRateTemplate(method, r);
   const carriers=(S.carriers||[]).filter(c=>c && c.email);
+  // Carriers that serve this lane, from your Carrier rates table (pre-checked too).
+  const laneCarrierNames=new Set((S.rates||[]).filter(rt=>rt&&rt.active&&rt.zip===r.zip).map(rt=>(rt.carrier||'').toLowerCase()).filter(Boolean));
   const methodOpts=['FTL','LTL','LCL','Drayage','Transload'].map(x=>`<option value="${x}"${x.toUpperCase()===method.toUpperCase()?' selected':''}>${x}</option>`).join('');
   const carrierRows = carriers.length ? carriers.map(c=>{
-    const match=_carrierMatchesMethod(c,method);
+    const match=_carrierMatchesMethod(c,method) || laneCarrierNames.has((c.name||'').toLowerCase());
     return `<label style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;cursor:pointer;${match?'background:var(--blue-bg)':''}">
       <input type="checkbox" class="vrr-carrier" value="${(c.email||'').replace(/"/g,'&quot;')}" data-name="${(c.contact_name||c.name||'').replace(/"/g,'&quot;')}"${match?' checked':''}>
       <span style="flex:1;min-width:0"><span style="font-weight:600;font-size:13px">${c.name||'—'}</span> <span style="font-size:11px;color:#9ca3af">${c.email}</span>${match?` <span style="font-size:9px;background:var(--steel);color:#fff;padding:1px 6px;border-radius:99px">${method}</span>`:''}</span>
