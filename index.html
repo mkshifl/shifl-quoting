@@ -437,14 +437,7 @@ input:focus,select:focus,textarea:focus{
 }
 #cs-dropdown-menu button:hover{background:var(--gray-50)}
 
-/* ── Neg Coach + TMS button match ── */
-#topbar-neg-coach{
-  padding:6px 13px!important;border-radius:8px!important;
-  border:1.5px solid var(--navy)!important;background:#fff!important;
-  color:var(--navy)!important;font-size:12px!important;font-weight:700!important;
-  height:32px!important;
-}
-#topbar-neg-coach:hover{background:var(--navy)!important;color:#fff!important}
+/* ── TMS button match ── */
 #topbar-tms-btn{
   padding:6px 14px!important;border-radius:8px!important;
   height:32px!important;font-size:12px!important;font-weight:700!important;
@@ -455,7 +448,6 @@ input:focus,select:focus,textarea:focus{
 
 /* Hide clock on narrow screens */
 @media(max-width:1200px){#topbar-clock{display:none!important}}
-@media(max-width:960px){#topbar-neg-coach{display:none!important}}
 
 /* Carrier onboarding modal scroll */
 .modal{max-height:90vh;overflow-y:auto}
@@ -973,8 +965,6 @@ if('caches' in window){
             <button onclick="showComingSoon('Live Tracking');document.getElementById('cs-dropdown-menu').classList.remove('open')">📡 Live Tracking</button>
           </div>
         </div>
-        <!-- Neg Coach Button -->
-        <button id="topbar-neg-coach" onclick="openRateNegotiationCoach()">💬 Coach</button>
         <!-- TMS Button -->
         <button id="topbar-tms-btn" onclick="goTo('tms')" style="background:linear-gradient(135deg,#1a2e4a,#2e75b6);border:none;color:#fff;cursor:pointer;display:flex;align-items:center;gap:5px;border-radius:8px">🚚 TMS</button>
         <div class="topbar-right" id="topbar-right"></div>
@@ -24252,7 +24242,6 @@ document.addEventListener('DOMContentLoaded',function(){
    - Insurance lapse predictor
    - Performance decline alert
    - Carrier fit scorer
-   - Rate negotiation coach
    - On-time trend detector
    ============================================================ */
 
@@ -24568,82 +24557,6 @@ function runCarrierFit(){
               <span style="font-size:11px;font-weight:700;color:${color}">${v}/${max}</span>
             </div>
           </div>`).join('')}
-      </div>
-    </div>`;
-}
-
-// ── RATE NEGOTIATION COACH ────────────────────────────────────
-function openRateNegotiationCoach(){
-  openModal(`
-    <div style="min-width:500px">
-      <h3 style="margin:0 0 12px;font-size:15px;color:var(--navy,#1a2e4a)">💬 Rate negotiation coach</h3>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
-        <div>
-          <label style="font-size:11px;font-weight:700;color:#666;display:block;margin-bottom:3px">Carrier</label>
-          <input id="rnc-carrier" type="text" placeholder="Carrier name" style="width:100%;padding:6px 9px;border:1px solid #d1d5db;border-radius:7px;font-size:13px;box-sizing:border-box">
-        </div>
-        <div>
-          <label style="font-size:11px;font-weight:700;color:#666;display:block;margin-bottom:3px">Lane</label>
-          <input id="rnc-lane" type="text" placeholder="e.g. NJ → TX" style="width:100%;padding:6px 9px;border:1px solid #d1d5db;border-radius:7px;font-size:13px;box-sizing:border-box">
-        </div>
-        <div>
-          <label style="font-size:11px;font-weight:700;color:#666;display:block;margin-bottom:3px">Their asking rate</label>
-          <input id="rnc-ask" type="number" placeholder="$0" style="width:100%;padding:6px 9px;border:1px solid #d1d5db;border-radius:7px;font-size:13px;box-sizing:border-box">
-        </div>
-        <div>
-          <label style="font-size:11px;font-weight:700;color:#666;display:block;margin-bottom:3px">Your target rate</label>
-          <input id="rnc-target" type="number" placeholder="$0" style="width:100%;padding:6px 9px;border:1px solid #d1d5db;border-radius:7px;font-size:13px;box-sizing:border-box">
-        </div>
-        <div>
-          <label style="font-size:11px;font-weight:700;color:#666;display:block;margin-bottom:3px">Your volume on this lane (mo)</label>
-          <input id="rnc-vol" type="number" placeholder="# loads/month" style="width:100%;padding:6px 9px;border:1px solid #d1d5db;border-radius:7px;font-size:13px;box-sizing:border-box">
-        </div>
-        <div>
-          <label style="font-size:11px;font-weight:700;color:#666;display:block;margin-bottom:3px">Market tone</label>
-          <select id="rnc-mkt" style="width:100%;padding:6px 9px;border:1px solid #d1d5db;border-radius:7px;font-size:13px;box-sizing:border-box">
-            <option value="soft">Soft (capacity available)</option>
-            <option value="balanced">Balanced</option>
-            <option value="tight">Tight (capacity scarce)</option>
-          </select>
-        </div>
-      </div>
-      <button class="btn blue" style="width:100%;justify-content:center;margin-bottom:12px" onclick="generateNegScript()">Generate negotiation script</button>
-      <div id="rnc-result"></div>
-      <div style="text-align:right"><button class="btn" onclick="closeModal()">Close</button></div>
-    </div>
-  `);
-}
-
-function generateNegScript(){
-  const carrier=document.getElementById('rnc-carrier')?.value.trim()||'the carrier';
-  const lane=document.getElementById('rnc-lane')?.value.trim()||'this lane';
-  const ask=parseFloat(document.getElementById('rnc-ask')?.value)||0;
-  const target=parseFloat(document.getElementById('rnc-target')?.value)||0;
-  const vol=parseInt(document.getElementById('rnc-vol')?.value)||0;
-  const mkt=document.getElementById('rnc-mkt')?.value||'balanced';
-  const gap=ask-target;
-  const el=document.getElementById('rnc-result');
-  if(!el) return;
-
-  const mktLine=mkt==='soft'?`The market is currently soft on this lane — capacity is available and rates are trending down. You have leverage.`
-    :mkt==='tight'?`Market is tight right now, so acknowledge that but lean on your volume and reliability as differentiators.`
-    :`Market is balanced. Come in confident with your data.`;
-
-  const volLine=vol>=4?`You're moving ${vol} loads/month on this lane — that's a meaningful book of business. Use it.`
-    :vol>=2?`You have ${vol} loads/month — not huge, but consistent and predictable. Carriers value reliability.`
-    :`Volume is light, so lean more on relationship and future growth potential.`;
-
-  el.innerHTML=`
-    <div style="background:var(--blue-bg,#eff6ff);border-radius:10px;padding:14px 16px;border-left:4px solid var(--steel,#2e75b6)">
-      <div style="font-size:11px;font-weight:700;color:#1d4ed8;text-transform:uppercase;margin-bottom:10px">Negotiation playbook</div>
-      <div style="font-size:12px;color:#374151;line-height:1.7">
-        <strong>Situation:</strong> ${mktLine}<br><br>
-        <strong>Opening move:</strong> ${ask&&target?`Don't accept $${ask.toLocaleString()} — open at $${(target*0.97).toFixed(0)} and let them counter. Your real floor is $${target.toLocaleString()}.`:'Set your opening offer 3–5% below your target and let them negotiate up to it.'}<br><br>
-        <strong>Your leverage:</strong> ${volLine}<br><br>
-        <strong>What to say:</strong><br>
-        <em style="background:#dbeafe;border-radius:4px;padding:2px 6px;display:block;margin:6px 0">"Hey [${carrier}], we want to lock in a rate for ${lane}. We're moving consistent volume and we pay on time, every time. Based on where the market is sitting, we were thinking ${target?'$'+target.toLocaleString():'[your target]'}. What can you do?"</em>
-        <strong>If they push back:</strong> Ask what they'd need on volume to make it work, or offer a net-7 quick-pay in exchange for a lower rate (saves them factoring fees).<br><br>
-        ${gap>0&&ask>0?`<strong>Gap to close: $${gap.toLocaleString()}</strong> — that's ${vol>0?'$'+(gap*vol*12).toLocaleString()+'/year on your book':''} — worth the conversation.`:''}
       </div>
     </div>`;
 }
