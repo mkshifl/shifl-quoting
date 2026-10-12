@@ -23539,9 +23539,10 @@ async function renderDraftQuotes(){
       <p style="font-size:12px;color:#9ca3af;margin:0 0 16px;max-width:620px">Mario builds a draft customer quote from the cheapest carrier rate that came in (Drayage / FTL / LTL) plus your markup. Review, tweak the price, and approve — nothing goes to the customer until you do.</p>
       ${ready.length===0?`<div class="empty"><div class="empty-ico">🧮</div><p>No drafts waiting</p><small>When carrier rates come in on a rate request, Mario's draft shows up here.</small></div>`:ready.map(card).join('')}
       ${approved.length?`<div style="margin-top:26px"><div style="font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#9ca3af;margin-bottom:10px">Approved by you (${approved.length})</div>
-        ${approved.slice(0,20).map(r=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 12px;border:1px solid var(--gray-100,#f1f5f9);border-radius:8px;margin-bottom:6px;background:#fff">
-          <div><span style="font-weight:700;color:var(--navy,#1a2e4a)">${_esc(r.customer||'—')}</span> <span style="font-size:11px;color:#9ca3af">${_esc(r.carrier||'')}</span></div>
-          <div style="font-weight:800;color:#16a34a">${fmtD(r.quotedAmount||0)}</div>
+        ${approved.slice(0,20).map(r=>`<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 12px;border:1px solid var(--gray-100,#f1f5f9);border-radius:8px;margin-bottom:6px;background:#fff">
+          <div style="min-width:0"><span style="font-weight:700;color:var(--navy,#1a2e4a)">${_esc(r.customer||'—')}</span> <span style="font-size:11px;color:#9ca3af">${_esc(r.carrier||'')}</span></div>
+          <div style="display:flex;align-items:center;gap:10px"><span style="font-weight:800;color:#16a34a">${fmtD(r.quotedAmount||0)}</span>
+          <button class="btn" style="font-size:11px;padding:3px 8px" onclick="draftQuotePDFForReq('${r.id}')">📄 PDF</button></div>
         </div>`).join('')}</div>`:''}
     </div>`;
   updateDraftNavBadge();
@@ -23618,7 +23619,7 @@ function _dqMargin(){
     <div style="font-size:11px;color:#9ca3af;margin-top:2px">Carrier cost ${fmtD(cost)} · sell ${fmtD(sell)}</div>
   </div>`;
 }
-function approveDraftQuote(id,cost){
+async function approveDraftQuote(id,cost){
   const sell=parseFloat(($('dq-sell')||{}).value)||0;
   const mode=($('dq-mode')||{}).value||'FTL';
   const mk=parseFloat(($('dq-markup')||{}).value);
@@ -23628,14 +23629,58 @@ function approveDraftQuote(id,cost){
   r.status='Quoted'; r.quotedAmount=sell; r.carrier=(r.cheapest&&r.cheapest.carrier)||r.carrier||''; r.marioQuoted=true;
   r.pricing={carrier:r.carrier,base:cost,customerSell:sell,mode:mode,pricedAt:new Date().toISOString(),source:'mario_draft'};
   saveQuoteRequests(all);
-  // Persist to Supabase for DB-originated requests (local 'QR-' ids stay local).
-  try{ if(typeof db!=='undefined'&&db&&!/^QR-/.test(id)){
+  // Persist to Supabase (Ask-Mario QR- requests are in the DB too, so always try).
+  try{ if(typeof db!=='undefined'&&db){
     db.from('quote_requests').update({status:'quoted',quoted_amount:sell,carrier:r.carrier,quoted_at:new Date().toISOString(),mario_quoted:true}).eq('id',id).then(()=>{});
   }}catch(e){}
   try{logAction('quote_created',`Mario draft approved — ${r.customer||'—'} · ${mode} · ${fmtD(sell)} (carrier ${fmtD(cost)})`,'quote_request',id);}catch(e){}
   closeModal();
-  showToast('✅ Quote approved → '+fmtD(sell),'success',2500);
-  renderQuoteRequests();
+  showToast('✅ Quote approved → '+fmtD(sell)+' · building PDF…','success',2800);
+  if(S.view==='draftquotes') renderDraftQuotes(); else renderQuoteRequests();
+  // One-click customer quote PDF.
+  try{ await _draftQuotePDF({customer:r.customer, lane:`${r.port||''}${(r.destination||r.zip)?' → '+(r.destination||r.zip):''}`, mode:mode, sell:sell, ref:r.id, date:localDateStr()}); }catch(e){ console.warn('quote PDF:',e&&e.message); }
+}
+// Re-download the customer PDF for an already-approved draft.
+async function draftQuotePDFForReq(id){
+  const r=getQuoteRequests().find(x=>x.id===id); if(!r){showToast('Not found','error',1800);return;}
+  const mode=(r.pricing&&r.pricing.mode)||_reqDetectedMethod(r.mode)||'Freight';
+  try{ await _draftQuotePDF({customer:r.customer, lane:`${r.port||''}${(r.destination||r.zip)?' → '+(r.destination||r.zip):''}`, mode:mode, sell:r.quotedAmount||(r.pricing&&r.pricing.customerSell)||0, ref:r.id, date:localDateStr()}); }catch(e){showToast('PDF failed','error',2000);}
+}
+// Clean customer-facing quote PDF (no carrier cost shown).
+async function _draftQuotePDF(o){
+  if(typeof loadJsPDF==='function'){ if(!await loadJsPDF()){showToast('PDF library failed to load','error',2500);return;} }
+  const {jsPDF}=window.jspdf; const doc=new jsPDF({unit:'pt',format:'letter'});
+  const navy=[26,46,74], gray=[107,114,128], line=[229,231,235];
+  const A=s=>String(s==null?'':s).replace(/→/g,' to ').replace(/[^\x20-\x7E\xA0-\xFF]/g,'');  // jsPDF base font is Latin-1 only
+  doc.setFillColor(...navy); doc.rect(0,0,612,96,'F');
+  doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.setFontSize(26); doc.text('SHIFL',40,52);
+  doc.setFont('helvetica','normal'); doc.setFontSize(13); doc.text('QUOTE',572,42,{align:'right'});
+  doc.setFontSize(9); doc.setTextColor(205,214,228); doc.text('trucking@shifl.com',572,60,{align:'right'});
+  let y=132;
+  doc.setTextColor(...navy); doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.text('PREPARED FOR',40,y);
+  doc.setFont('helvetica','normal'); doc.setFontSize(14); doc.setTextColor(40,40,40); doc.text(A(o.customer||'-'),40,y+18);
+  doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(...navy); doc.text('QUOTE #',572,y,{align:'right'});
+  doc.setFont('helvetica','normal'); doc.setFontSize(11); doc.setTextColor(40,40,40); doc.text(A(o.ref||'-'),572,y+16,{align:'right'});
+  doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(...navy); doc.text('DATE',572,y+34,{align:'right'});
+  doc.setFont('helvetica','normal'); doc.setFontSize(11); doc.setTextColor(40,40,40); doc.text(A(o.date||localDateStr()),572,y+50,{align:'right'});
+  y+=92;
+  doc.setDrawColor(...line); doc.setFillColor(248,250,252); doc.roundedRect(40,y,532,88,8,8,'FD');
+  doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.setTextColor(...navy); doc.text(A((o.mode||'Freight'))+' - Transportation Service',56,y+26);
+  doc.setFont('helvetica','normal'); doc.setFontSize(11); doc.setTextColor(60,60,60);
+  doc.text('Lane:  '+A(o.lane||'-'),56,y+50);
+  doc.text('Service:  '+A(o.mode||'-'),56,y+70);
+  y+=112;
+  doc.setFillColor(...navy); doc.roundedRect(332,y,240,58,8,8,'F');
+  doc.setTextColor(205,214,228); doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.text('ALL-IN QUOTED RATE',352,y+23);
+  doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.setFontSize(23); doc.text(fmtD(o.sell||0),352,y+48);
+  y+=86;
+  doc.setTextColor(...gray); doc.setFont('helvetica','normal'); doc.setFontSize(9);
+  doc.text('This quote is valid for 14 days from the date above. Rate is all-in unless otherwise noted, and is subject to equipment availability and any accessorials incurred at pickup or delivery.',40,y,{maxWidth:532});
+  y+=46; doc.setDrawColor(...line); doc.line(40,y,572,y); y+=18;
+  doc.setFontSize(9); doc.setTextColor(...gray);
+  doc.text('Thank you for the opportunity — reply to confirm and we’ll get it booked.',40,y);
+  doc.text('Shifl Trucking  ·  trucking@shifl.com',40,y+16);
+  doc.save('Shifl Quote - '+String(o.customer||'quote').replace(/[^a-z0-9]+/gi,'_')+'.pdf');
 }
 
 function renderQuoteRequests(){
