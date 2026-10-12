@@ -802,6 +802,7 @@ if('caches' in window){
         <button class="sub-link" id="nav-quote" data-view="quote" onclick="goTo('quote')">🏗️ Quote builder</button>
         <button class="sub-link" id="nav-log" data-view="log" onclick="goTo('log')">📁 Quote log</button>
         <button class="sub-link" id="nav-requests" onclick="goTo('requests')">📋 Rate requests <span id="qr-nav-badge" style="background:#f59e0b;color:#fff;border-radius:99px;font-size:9px;font-weight:800;padding:1px 6px;display:none;margin-left:auto"></span></button>
+        <button class="sub-link" id="nav-draftquotes" onclick="goTo('draftquotes')">🧮 Mario's quotes <span id="dq-nav-badge" style="background:#7c3aed;color:#fff;border-radius:99px;font-size:9px;font-weight:800;padding:1px 6px;display:none;margin-left:auto"></span></button>
         <button class="sub-link" id="nav-rates" onclick="goTo('rates')">📋 Carrier rates</button>
         <button class="sub-link" id="nav-carrierquotes" data-view="carrierquotes" onclick="goTo('carrierquotes')">🚚 Carrier quotes</button>
         <button class="sub-link" id="nav-customers" data-view="customers" onclick="goTo('customers')">👥 Customers</button>
@@ -1640,7 +1641,7 @@ function setView(v){
   S.view=v;
   document.querySelectorAll('.nav-btn,.sub-link').forEach(b=>b.classList.remove('active'));
   const navEl=$('nav-'+v);if(navEl) navEl.classList.add('active');
-  const titles={tms:'TMS',quote:'Quote builder',customers:'Customers',phonebook:'Phone Book',rates:'Carrier rates',carrierquotes:'Carrier quotes',log:'Quote log',dash:'Dashboard',freight:'Freight Quoting',transload:'Transload Quoting',active:'Active Shipments',admin:'Admin Panel',reports:'Reports',activity:'Activity Log',auditlog:'Audit Log',carriers:'Carrier Network',air:'Air Freight',home:'Home',invoicing:'Invoicing',requests:'Rate Requests'};
+  const titles={tms:'TMS',quote:'Quote builder',customers:'Customers',phonebook:'Phone Book',rates:'Carrier rates',carrierquotes:'Carrier quotes',draftquotes:"Mario's quotes",log:'Quote log',dash:'Dashboard',freight:'Freight Quoting',transload:'Transload Quoting',active:'Active Shipments',admin:'Admin Panel',reports:'Reports',activity:'Activity Log',auditlog:'Audit Log',carriers:'Carrier Network',air:'Air Freight',home:'Home',invoicing:'Invoicing',requests:'Rate Requests'};
   $('view-title').textContent=titles[v]||v;
   openAccFor(v);
   updateSubActive(v);
@@ -1653,6 +1654,7 @@ function render(){
   else if(S.view==='phonebook')  renderPhoneBook();
   else if(S.view==='rates')      renderRates();
   else if(S.view==='carrierquotes') renderCarrierQuotes();
+  else if(S.view==='draftquotes')   renderDraftQuotes();
   else if(S.view==='log')        renderLog();
   else if(S.view==='dash')       renderDash();
   else if(S.view==='active')     renderActive();
@@ -18890,14 +18892,25 @@ async function loadQuoteRequestsFromDB(){
       if(d.mario_memory && JSON.stringify(d.mario_memory)!==JSON.stringify(r.marioMemory||null)){ r.marioMemory=d.mario_memory; changed=true; }
       if(d.mario_quoted && !r.marioQuoted){ r.marioQuoted=true; r.quotedAmount=d.quoted_amount||r.quotedAmount; r.carrier=d.carrier||r.carrier; if(r.status==='Pending') r.status='Quoted'; changed=true; }
     });
-    // Count carrier rate replies filed against each request (Mario's carrier desk → vendor_responses).
+    // Carrier rate replies per request (count + cheapest) — feeds the 💰 badge and Mario's draft quote.
     try{
-      const {data:vr}=await db.from('vendor_responses').select('request_ref');
-      const cnt={}; (vr||[]).forEach(v=>{ if(v.request_ref) cnt[v.request_ref]=(cnt[v.request_ref]||0)+1; });
+      const {data:vr}=await db.from('vendor_responses').select('request_ref,quoted_rate,carrier_name');
+      const cnt={}, cheap={};
+      const parseRate=s=>{const n=parseFloat(String(s==null?'':s).replace(/[^0-9.]/g,''));return isNaN(n)?null:n;};
+      (vr||[]).forEach(v=>{ if(!v.request_ref) return;
+        cnt[v.request_ref]=(cnt[v.request_ref]||0)+1;
+        const n=parseRate(v.quoted_rate);
+        if(n!=null&&n>0&&(!cheap[v.request_ref]||n<cheap[v.request_ref].cost)) cheap[v.request_ref]={cost:n,carrier:v.carrier_name||''};
+      });
       const al=incoming.concat(local);
-      al.forEach(r=>{ const c=cnt[r.id]||0; if(c!==(r.carrierRateCount||0)){ r.carrierRateCount=c; changed=true; } });
+      al.forEach(r=>{
+        const c=cnt[r.id]||0; if(c!==(r.carrierRateCount||0)){ r.carrierRateCount=c; changed=true; }
+        const ch=cheap[r.id]||null;
+        if(JSON.stringify(ch)!==JSON.stringify(r.cheapest||null)){ r.cheapest=ch; changed=true; }
+      });
     }catch(e){}
     if(incoming.length||changed) saveQuoteRequests(incoming.concat(local)); // newest first
+    try{updateDraftNavBadge();}catch(e){}
   }catch(e){ console.warn('load quote_requests failed:', e && e.message); }
 }
 function _reqStatusToDisplay(st){
@@ -23464,6 +23477,167 @@ function _reqCarrierBadge(r){
   return ` <button onclick="viewRequestDetail('${r.id}')" title="${n} carrier rate${n===1?'':'s'} came in — click to view" style="font-size:10px;background:#f0fdf4;color:#16a34a;border:1px solid #16a34a55;padding:1px 8px;border-radius:99px;font-weight:700;cursor:pointer;vertical-align:middle">💰 ${n} carrier rate${n===1?'':'s'} in</button>`;
 }
 
+// ── Mario's draft quote (cheapest carrier + your markup) — requires approval ──
+const DRAFT_MODES=['Drayage','FTL','LTL'];
+function _draftMarkups(){ try{return JSON.parse(localStorage.getItem('quote_markup')||'{}');}catch(e){return {};} }
+function getMarkup(mode){ const m=_draftMarkups(); const def={Drayage:0.18,FTL:0.15,LTL:0.20}; return (m[mode]!=null?m[mode]:(def[mode]!=null?def[mode]:0.18)); }
+function setMarkup(mode,pct){ const m=_draftMarkups(); m[mode]=pct; try{localStorage.setItem('quote_markup',JSON.stringify(m));}catch(e){} }
+function _draftSell(cost,mode){ return Math.round(cost*(1+getMarkup(mode))); }
+// Which requests can Mario draft: a cheapest carrier rate is in, mode is one of the 3, not already quoted/booked/cancelled.
+function _reqDraftable(r){
+  if(!r.cheapest||!(r.cheapest.cost>0)) return false;
+  if(r.draftDismissed) return false;
+  if(['Quoted','Booked','Cancelled'].includes(r.status)) return false;
+  const method=_reqDetectedMethod(r.mode);
+  return !!(method && DRAFT_MODES.includes(method));
+}
+function _reqDraftBadge(r){
+  if(!_reqDraftable(r)) return '';
+  const method=_reqDetectedMethod(r.mode);
+  const sell=_draftSell(r.cheapest.cost,method);
+  return ` <button onclick="openDraftQuote('${r.id}')" title="Mario drafted a quote — review & approve" style="font-size:10px;background:#f5f3ff;color:#7c3aed;border:1px solid #7c3aed55;padding:1px 8px;border-radius:99px;font-weight:700;cursor:pointer;vertical-align:middle">🧮 Draft quote ${fmtD(sell)}</button>`;
+}
+// Dedicated page: every quote Mario drafted, waiting for approval.
+async function renderDraftQuotes(){
+  const el=$('page'); if(!el) return;
+  el.innerHTML='<div class="loading-page"><div class="spin" style="margin:0 auto 12px"></div><div style="color:var(--gray-400);font-size:13px">Loading Mario\'s quotes…</div></div>';
+  try{ await loadQuoteRequestsFromDB(); }catch(e){}
+  const all=getQuoteRequests();
+  const ready=all.filter(_reqDraftable);
+  const approved=all.filter(r=>r.marioQuoted && r.status==='Quoted');
+  const card=r=>{
+    const method=_reqDetectedMethod(r.mode);
+    const cost=r.cheapest.cost, carrier=r.cheapest.carrier||'(carrier)';
+    const sell=_draftSell(cost,method); const profit=sell-cost; const pct=sell>0?profit/sell:0; const good=pct>=0.10;
+    const lane=`${r.port||r.origin||'—'}${(r.destination||r.zip)?` → ${r.destination||r.zip}`:''}`;
+    return `<div style="border:1px solid var(--gray-200,#e5e7eb);border-left:4px solid #7c3aed;border-radius:12px;padding:14px 16px;margin-bottom:12px;background:#fff">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap">
+        <div style="min-width:0">
+          <div style="font-weight:800;font-size:15px;color:var(--navy,#1a2e4a)">${_esc(r.customer||'—')} <span style="font-size:10px;background:#f5f3ff;color:#7c3aed;padding:1px 8px;border-radius:99px;font-weight:700;vertical-align:middle">${method}</span></div>
+          <div style="font-size:12px;color:#666;margin-top:2px">${_esc(lane)}</div>
+          <div style="font-size:12px;color:#9ca3af;margin-top:4px">Cheapest carrier in: <strong style="color:#444">${_esc(carrier)}</strong> @ <strong style="color:#dc2626">${fmtD(cost)}</strong></div>
+        </div>
+        <div style="text-align:right;flex-shrink:0">
+          <div style="font-size:10px;font-weight:700;color:#9ca3af;text-transform:uppercase">Mario's sell</div>
+          <div style="font-size:22px;font-weight:800;color:#7c3aed">${fmtD(sell)}</div>
+          <div style="font-size:11px;font-weight:700;color:${good?'#16a34a':'#d97706'}">+${fmtD(profit)} · ${(pct*100).toFixed(0)}% margin</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px;flex-wrap:wrap">
+        <button class="btn" style="font-size:12px;color:#dc2626" onclick="dismissDraft('${r.id}')">Dismiss</button>
+        <button class="btn" style="font-size:12px" onclick="viewRequestDetail('${r.id}')">View request</button>
+        <button class="btn blue" style="font-size:12px;background:#7c3aed;border-color:#7c3aed" onclick="openDraftQuote('${r.id}')">Review &amp; approve</button>
+      </div>
+    </div>`;
+  };
+  el.innerHTML=`
+    <div style="padding:0 0 16px">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:4px;flex-wrap:wrap">
+        <h3 style="margin:0;font-size:16px;color:var(--navy,#1a2e4a)">🧮 Mario's quotes</h3>
+        <span style="font-size:12px;color:#9ca3af">${ready.length} draft${ready.length===1?'':'s'} waiting for your approval</span>
+      </div>
+      <p style="font-size:12px;color:#9ca3af;margin:0 0 16px;max-width:620px">Mario builds a draft customer quote from the cheapest carrier rate that came in (Drayage / FTL / LTL) plus your markup. Review, tweak the price, and approve — nothing goes to the customer until you do.</p>
+      ${ready.length===0?`<div class="empty"><div class="empty-ico">🧮</div><p>No drafts waiting</p><small>When carrier rates come in on a rate request, Mario's draft shows up here.</small></div>`:ready.map(card).join('')}
+      ${approved.length?`<div style="margin-top:26px"><div style="font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#9ca3af;margin-bottom:10px">Approved by you (${approved.length})</div>
+        ${approved.slice(0,20).map(r=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 12px;border:1px solid var(--gray-100,#f1f5f9);border-radius:8px;margin-bottom:6px;background:#fff">
+          <div><span style="font-weight:700;color:var(--navy,#1a2e4a)">${_esc(r.customer||'—')}</span> <span style="font-size:11px;color:#9ca3af">${_esc(r.carrier||'')}</span></div>
+          <div style="font-weight:800;color:#16a34a">${fmtD(r.quotedAmount||0)}</div>
+        </div>`).join('')}</div>`:''}
+    </div>`;
+  updateDraftNavBadge();
+}
+function dismissDraft(id){
+  const all=getQuoteRequests(); const r=all.find(x=>x.id===id); if(!r) return;
+  r.draftDismissed=true; saveQuoteRequests(all);
+  showToast('Draft dismissed','info',1800);
+  updateDraftNavBadge();
+  if(S.view==='draftquotes') renderDraftQuotes(); else renderQuoteRequests();
+}
+function updateDraftNavBadge(){
+  try{
+    const n=getQuoteRequests().filter(_reqDraftable).length;
+    const b=$('dq-nav-badge'); if(b){ b.textContent=n; b.style.display=n?'':'none'; }
+  }catch(e){}
+}
+
+function openDraftQuote(id){
+  const r=getQuoteRequests().find(x=>x.id===id); if(!r||!r.cheapest){showToast('No carrier rate to draft from','error',2000);return;}
+  const method=_reqDetectedMethod(r.mode)||'FTL';
+  const cost=r.cheapest.cost;
+  window._dqDraft={id:id,cost:cost};
+  const carrier=r.cheapest.carrier||'(carrier)';
+  const modeOpts=DRAFT_MODES.map(m=>`<option value="${m}"${m===method?' selected':''}>${m}</option>`).join('');
+  openModal(`
+    <div style="min-width:460px;max-width:520px">
+      <div style="background:#f5f3ff;border-radius:10px;padding:14px 16px;margin-bottom:16px;display:flex;align-items:center;gap:12px">
+        <span style="font-size:26px">🧮</span>
+        <div><div style="font-size:15px;font-weight:800;color:#5b21b6">Mario's draft quote</div>
+        <div style="font-size:12px;color:#7c3aed">${_esc(r.customer||'—')} · ${_esc(r.port||'')}${r.destination||r.zip?` → ${_esc(r.destination||r.zip)}`:''}</div></div>
+      </div>
+      <div style="font-size:12px;color:#666;margin-bottom:12px">Cheapest carrier rate in: <strong>${_esc(carrier)}</strong> at <strong style="color:#dc2626">${fmtD(cost)}</strong>. Set your markup, then approve to put it on the request at <strong>Quoted</strong>. Nothing is sent to the customer automatically.</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;align-items:end">
+        <div><label style="font-size:11px;font-weight:700;color:#666;display:block;margin-bottom:3px">Mode</label>
+          <select id="dq-mode" onchange="_dqRecalc('${id}')" style="width:100%;padding:7px 9px;border:1px solid #d1d5db;border-radius:7px;font-size:13px">${modeOpts}</select></div>
+        <div><label style="font-size:11px;font-weight:700;color:#666;display:block;margin-bottom:3px">Markup %</label>
+          <input id="dq-markup" type="number" step="1" oninput="_dqRecalc('${id}')" style="width:100%;padding:7px 9px;border:1px solid #d1d5db;border-radius:7px;font-size:13px">
+        </div>
+        <div><label style="font-size:11px;font-weight:700;color:#666;display:block;margin-bottom:3px">Customer sell $</label>
+          <input id="dq-sell" type="number" oninput="_dqMargin()" style="width:100%;padding:7px 9px;border:1px solid #d1d5db;border-radius:7px;font-size:13px;font-weight:700">
+        </div>
+      </div>
+      <div id="dq-margin" style="margin-top:12px"></div>
+      <div style="margin-top:18px;display:flex;gap:8px;justify-content:flex-end">
+        <button class="btn" onclick="closeModal()">Cancel</button>
+        <button class="btn blue" style="background:#7c3aed;border-color:#7c3aed" onclick="approveDraftQuote('${id}',${cost})">✓ Approve → Quoted</button>
+      </div>
+    </div>`);
+  // seed markup + sell
+  const mk=$('dq-markup'); if(mk) mk.value=Math.round(getMarkup(method)*100);
+  _dqRecalc(id);
+}
+function _dqRecalc(id){
+  const r=getQuoteRequests().find(x=>x.id===id); if(!r||!r.cheapest) return;
+  const mode=($('dq-mode')||{}).value||'FTL';
+  const mk=parseFloat(($('dq-markup')||{}).value);
+  const markup=isNaN(mk)?getMarkup(mode):mk/100;
+  if(isNaN(mk)&&$('dq-markup')) $('dq-markup').value=Math.round(getMarkup(mode)*100);
+  const sell=Math.round(r.cheapest.cost*(1+markup));
+  if($('dq-sell')) $('dq-sell').value=sell;
+  _dqMargin();
+}
+function _dqMargin(){
+  const d=window._dqDraft||{}; const cost=d.cost||0;
+  const sell=parseFloat(($('dq-sell')||{}).value)||0;
+  const el=$('dq-margin'); if(!el) return;
+  const profit=sell-cost; const pct=sell>0?profit/sell:0; const good=pct>=0.10;
+  el.innerHTML=`<div style="background:${good?'#f0fdf4':'#fffbeb'};border-radius:8px;padding:10px 12px;border-left:3px solid ${good?'#16a34a':'#f59e0b'}">
+    <div style="display:flex;justify-content:space-between;align-items:baseline">
+      <span style="font-size:12px;font-weight:700;color:${good?'#166534':'#92400e'}">Margin</span>
+      <span style="font-size:18px;font-weight:800;color:${good?'#166534':'#d97706'}">${fmtD(profit)} <span style="font-size:12px;font-weight:700">(${(pct*100).toFixed(0)}%)</span></span>
+    </div>
+    <div style="font-size:11px;color:#9ca3af;margin-top:2px">Carrier cost ${fmtD(cost)} · sell ${fmtD(sell)}</div>
+  </div>`;
+}
+function approveDraftQuote(id,cost){
+  const sell=parseFloat(($('dq-sell')||{}).value)||0;
+  const mode=($('dq-mode')||{}).value||'FTL';
+  const mk=parseFloat(($('dq-markup')||{}).value);
+  if(!(sell>0)){showToast('Enter a sell price','error',2000);return;}
+  if(!isNaN(mk)) setMarkup(mode,mk/100);  // remember "your markup" for this mode
+  const all=getQuoteRequests(); const r=all.find(x=>x.id===id); if(!r) return;
+  r.status='Quoted'; r.quotedAmount=sell; r.carrier=(r.cheapest&&r.cheapest.carrier)||r.carrier||''; r.marioQuoted=true;
+  r.pricing={carrier:r.carrier,base:cost,customerSell:sell,mode:mode,pricedAt:new Date().toISOString(),source:'mario_draft'};
+  saveQuoteRequests(all);
+  // Persist to Supabase for DB-originated requests (local 'QR-' ids stay local).
+  try{ if(typeof db!=='undefined'&&db&&!/^QR-/.test(id)){
+    db.from('quote_requests').update({status:'quoted',quoted_amount:sell,carrier:r.carrier,quoted_at:new Date().toISOString(),mario_quoted:true}).eq('id',id).then(()=>{});
+  }}catch(e){}
+  try{logAction('quote_created',`Mario draft approved — ${r.customer||'—'} · ${mode} · ${fmtD(sell)} (carrier ${fmtD(cost)})`,'quote_request',id);}catch(e){}
+  closeModal();
+  showToast('✅ Quote approved → '+fmtD(sell),'success',2500);
+  renderQuoteRequests();
+}
+
 function renderQuoteRequests(){
   const all=getQuoteRequests();
   const el=document.getElementById('page');
@@ -23490,7 +23664,7 @@ function renderQuoteRequests(){
         </tr></thead>
         <tbody>${all.slice().sort((a,b)=>(b.hot?1:0)-(a.hot?1:0)).map(r=>`
           <tr style="${_reqRowStyle(r)}">
-            <td style="font-weight:700;font-size:14px;color:var(--navy,#1a2e4a)">${r.hot?'<span style="font-size:10px;background:#dc2626;color:#fff;padding:1px 7px;border-radius:99px;font-weight:800;vertical-align:middle;margin-right:5px">🔥 HOT</span>':''}${r.customer||'—'}${_reqAgeChip(r)}${_reqNeedsReview(r)?' <span title="Needs review — verify customer &amp; details" style="font-size:10px;background:#fef2f2;color:#dc2626;padding:1px 7px;border-radius:99px;font-weight:700;vertical-align:middle">⚠ review</span>':''} <button onclick="editReqCustomer('${r.id}')" title="Edit customer name" style="border:none;background:none;cursor:pointer;font-size:11px;color:#9ca3af;padding:0 2px;vertical-align:middle">✏️</button>${_reqMarioBadge(r)}${_reqCarrierBadge(r)}</td>
+            <td style="font-weight:700;font-size:14px;color:var(--navy,#1a2e4a)">${r.hot?'<span style="font-size:10px;background:#dc2626;color:#fff;padding:1px 7px;border-radius:99px;font-weight:800;vertical-align:middle;margin-right:5px">🔥 HOT</span>':''}${r.customer||'—'}${_reqAgeChip(r)}${_reqNeedsReview(r)?' <span title="Needs review — verify customer &amp; details" style="font-size:10px;background:#fef2f2;color:#dc2626;padding:1px 7px;border-radius:99px;font-weight:700;vertical-align:middle">⚠ review</span>':''} <button onclick="editReqCustomer('${r.id}')" title="Edit customer name" style="border:none;background:none;cursor:pointer;font-size:11px;color:#9ca3af;padding:0 2px;vertical-align:middle">✏️</button>${_reqMarioBadge(r)}${_reqCarrierBadge(r)}${_reqDraftBadge(r)}</td>
             <td style="font-size:12px;color:#666">${r.port||'—'}</td>
             <td>${r.destination||r.zip}</td>
             <td style="text-align:center">${r.containerCount||1}</td>
