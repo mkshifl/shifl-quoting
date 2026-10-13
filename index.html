@@ -24045,49 +24045,68 @@ Reference #: ${ref}
 //    • rates on file for this lane → "Have Mario build the quote"
 //    • no rates          → "Mario, get me quoted"  (sources rates from carriers)
 // ═══════════════════════════════════════════════════════════════════════════
+// Drayage matches that share the SAME point of origin (the port) as the quote —
+// not just the same delivery zip. A Newark rate must not fill a Savannah quote.
+function _marioDrayMatches(){
+  var qi=S.qi||{};
+  var ms=getMatches();                      // same dest zip + L/D (export already matches pickup zip = origin)
+  if(qi.drayType!=='export'){
+    var port=String(qi.port||'').trim().toLowerCase();
+    if(port){
+      var exact=ms.filter(function(r){return String(r.port||'').trim().toLowerCase()===port;});
+      return {matches:exact, hadOtherPort: ms.length>exact.length};
+    }
+  }
+  return {matches:ms, hadOtherPort:false};
+}
 function marioCTA(mode){
-  var label, amber=false;
+  var label, amber=false, hasRate=false;
   if(mode==='drayage'){
-    var zip=S.qi&&S.qi.zip;
-    var has=zip?(S.rates||[]).some(function(r){return r.active&&r.zip===zip;}):false;
-    if(!zip) label='🔎 Have Mario quote this';
-    else if(has) label='⚡ Have Mario build the quote';
-    else { label='📨 Mario, get me quoted'; amber=true; }
+    var qi=S.qi||{};
+    if(!qi.zip){ label='🔎 Have Mario quote this'; }
+    else {
+      hasRate=_marioDrayMatches().matches.length>0;
+      if(hasRate) label='⚡ Have Mario build the quote';
+      else { label='📨 Mario, get me quoted'; amber=true; }
+    }
   } else {
     var m=(S.fq&&S.fq._ctaMode)||'build';
     if(m==='checking') label='🔎 Mario is checking…';
     else if(m==='getquoted'){ label='📨 Mario, get me quoted'; amber=true; }
-    else label='⚡ Have Mario build the quote';
+    else { label='⚡ Have Mario build the quote'; hasRate=true; }
   }
   var bg=amber?'#fffbeb':'#f5f3ff', bd=amber?'#f59e0b':'#7c3aed', col=amber?'#b45309':'#7c3aed';
-  return '<button id="mario-cta-btn" class="btn" onclick="marioGo(\''+mode+'\')" style="background:'+bg+';border:1.5px solid '+bd+';color:'+col+';font-weight:800">'+label+'</button>';
+  var primary='<button id="mario-cta-btn" class="btn" onclick="marioGo(\''+mode+'\')" style="background:'+bg+';border:1.5px solid '+bd+';color:'+col+';font-weight:800">'+label+'</button>';
+  // Even when a pocket rate exists, always let the user send a fresh request to carriers.
+  var requote = hasRate ? '<button class="btn" onclick="askMario(\''+mode+'\')" title="Send a fresh rate request to carriers" style="background:#fff;border:1.5px solid #e5e7eb;color:#6b7280;font-weight:700">📨 Requote</button>' : '';
+  return '<span id="mario-cta-wrap" style="display:inline-flex;gap:6px;align-items:center">'+primary+requote+'</span>';
 }
-function _marioUpdateCTA(mode){ var b=$('mario-cta-btn'); if(b) b.outerHTML=marioCTA(mode); }
+function _marioUpdateCTA(mode){ var w=$('mario-cta-wrap'); if(w){ w.outerHTML=marioCTA(mode); return; } var b=$('mario-cta-btn'); if(b) b.outerHTML=marioCTA(mode); }
 
 async function marioGo(mode){
   if(mode==='drayage'){
-    var zip=S.qi&&S.qi.zip;
-    if(!zip){showToast('Enter the destination zip first','error',2400);return;}
-    var has=(S.rates||[]).some(function(r){return r.active&&r.zip===zip;});
-    if(has) return marioBuildDrayage();
+    var qi=S.qi||{};
+    if(!qi.zip){showToast('Enter the destination zip first','error',2400);return;}
+    if(_marioDrayMatches().matches.length) return marioBuildDrayage();
     return askMario('drayage');
   }
   var f=S.fq||{};
   if(!f.pickupZip||!f.deliveryZip||!f.mode){showToast('Enter pickup zip, delivery zip, and method first','error',3200);return;}
-  if(f._cheapest&&f._cheapest.cost>0) return marioBuildFreight();
+  if(f._cheapest&&f._cheapest.cost>0&&f._cheapest.originMatch) return marioBuildFreight();
   showToast('Mario is checking for rates…','info',1500);
-  var ch=await _marioLaneCheapest(f.deliveryZip);
-  if(ch&&ch.cost>0){ f._cheapest=ch; return marioBuildFreight(); }
+  var ch=await _marioLaneCheapest(f.deliveryZip, f.pickupZip);
+  if(ch&&ch.cost>0&&ch.originMatch){ f._cheapest=ch; return marioBuildFreight(); }
   return askMario('freight');
 }
-// Mario builds the drayage quote: select the cheapest matching carrier, done.
+// Mario builds the drayage quote: select the cheapest matching carrier for the SAME port.
 function marioBuildDrayage(){
-  var matches=getMatches();
+  var dm=_marioDrayMatches(), matches=dm.matches;
   if(!matches.length) return askMario('drayage');
   S.selId=matches[0].id;
   try{refreshCarriersAndPreview();}catch(e){}
   renderQuote();
-  showToast('⚡ Mario built it — cheapest carrier: '+(matches[0].carrier||'—')+'. Review your price, then Save, PDF or email.','success',4600);
+  var portTxt=matches[0].port?(' · '+matches[0].port):'';
+  showToast('⚡ Mario built it — cheapest carrier: '+(matches[0].carrier||'—')+portTxt+'. Review your price, then Save, PDF or email.','success',4600);
 }
 // Mario builds the freight quote: fill the cheapest carrier rate he has on file + suggest the sell.
 function marioBuildFreight(){
@@ -24101,24 +24120,33 @@ function marioBuildFreight(){
   renderFreight();
   showToast('⚡ Mario built it — '+(ch.carrier||'carrier')+' @ '+fmtD(ch.cost)+' · suggested sell '+fmtD(sell)+' ('+Math.round(markup*100)+'% markup). Set your price & save.','success',5200);
 }
-// Cheapest carrier rate we have on file for a lane (from Mario's captured carrier quotes).
-async function _marioLaneCheapest(destZip){
+// Cheapest carrier rate on file for a lane — only an ORIGIN-confirmed match counts as a real
+// pocket rate. A rate for the same delivery zip but a different (or unknown) pickup is NOT a match.
+async function _marioLaneCheapest(destZip, originZip){
   var dz=(String(destZip||'').match(/\d{5}/)||[''])[0]; if(!dz) return null;
+  var oz=(String(originZip||'').match(/\d{5}/)||[''])[0];
   try{
-    var r=await db.from('quote_memory').select('rate,carrier').eq('direction','buy').eq('dest_zip',dz).gt('rate',0).order('rate',{ascending:true}).limit(1);
-    if(r.data&&r.data.length) return {cost:Number(r.data[0].rate), carrier:r.data[0].carrier||''};
+    var r=await db.from('quote_memory').select('rate,carrier,origin_zip').eq('direction','buy').eq('dest_zip',dz).gt('rate',0).order('rate',{ascending:true}).limit(25);
+    var rows=(r.data||[]).map(function(x){return {cost:Number(x.rate),carrier:x.carrier||'',oz:(String(x.origin_zip||'').match(/\d{5}/)||[''])[0]};}).filter(function(x){return x.cost>0;});
+    if(!rows.length) return null;
+    if(oz){
+      var conf=rows.filter(function(x){return x.oz===oz;});              // same point of origin
+      if(conf.length) return {cost:conf[0].cost, carrier:conf[0].carrier, originMatch:true};
+      return {cost:rows[0].cost, carrier:rows[0].carrier, originMatch:false}; // dest matches, origin differs/unknown
+    }
+    return {cost:rows[0].cost, carrier:rows[0].carrier, originMatch:false};   // no pickup given → can't confirm
   }catch(e){}
   return null;
 }
-// After the freight builder renders, quietly check if we have rates and flip the button label.
+// After the freight builder renders, quietly check if we have an origin-matched rate and flip the label.
 async function _marioFreightCheck(){
   var f=S.fq; if(!f||!f.pickupZip||!f.deliveryZip||!f.mode) return;
   if(!/\d{5}/.test(String(f.deliveryZip))) return;
   var laneKey=f.pickupZip+'>'+f.deliveryZip+':'+f.mode;
   if(f._ctaLane===laneKey) return;
   f._ctaLane=laneKey; f._ctaMode='checking'; _marioUpdateCTA('freight');
-  var ch=await _marioLaneCheapest(f.deliveryZip);
-  f._cheapest=ch||null; f._ctaMode=(ch&&ch.cost>0)?'build':'getquoted';
+  var ch=await _marioLaneCheapest(f.deliveryZip, f.pickupZip);
+  f._cheapest=ch||null; f._ctaMode=(ch&&ch.cost>0&&ch.originMatch)?'build':'getquoted';
   _marioUpdateCTA('freight');
 }
 
