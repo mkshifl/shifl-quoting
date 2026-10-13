@@ -2011,7 +2011,7 @@ function renderQuote(){
   const isExport=qi.drayType==='export';const matches=getMatches();
   if(!S.selId&&matches.length) S.selId=matches[0].id;
   const sel=effRate(matches.find(r=>r.id===S.selId)||matches[0]||null);syncQuoteAccFromRate(sel);
-  $('topbar-right').innerHTML='<button class="btn" onclick="showRepeatPicker()" title="Load a previous quote">&#x1F501; Repeat</button><button class="btn" onclick="saveDraft(\'drayage\')">&#x1F4CB; Draft</button><span id="upsell-badge" style="display:none;background:#dc2626;color:#fff;border-radius:99px;font-size:9px;font-weight:800;padding:2px 7px"></span><button class="btn" onclick="printQuote()">&#x1F5A8; Print</button><button class="btn" onclick="downloadPDF()">&#x1F4C4; PDF</button><button class="btn" onclick="askMario(\'drayage\')" style="background:#f5f3ff;border-color:#c4b5fd;color:#7c3aed">&#x1F50E; Ask Mario</button><button class="btn blue" onclick="saveQuote()">&#x1F4BE; Save quote</button><button class="btn" onclick="openPostToPortalFromBuilder()" style="background:linear-gradient(135deg,#059669,#34d399);border-color:#059669;color:#fff">&#x1F4E4; Post to portal</button>';  $('page').innerHTML=draftBanner('drayage','drayage')+`<div class="two-col">
+  $('topbar-right').innerHTML='<button class="btn" onclick="showRepeatPicker()" title="Load a previous quote">&#x1F501; Repeat</button><button class="btn" onclick="saveDraft(\'drayage\')">&#x1F4CB; Draft</button><span id="upsell-badge" style="display:none;background:#dc2626;color:#fff;border-radius:99px;font-size:9px;font-weight:800;padding:2px 7px"></span><button class="btn" onclick="printQuote()">&#x1F5A8; Print</button><button class="btn" onclick="downloadPDF()">&#x1F4C4; PDF</button>'+marioCTA('drayage')+'<button class="btn blue" onclick="saveQuote()">&#x1F4BE; Save quote</button><button class="btn" onclick="openPostToPortalFromBuilder()" style="background:linear-gradient(135deg,#059669,#34d399);border-color:#059669;color:#fff">&#x1F4E4; Post to portal</button>';  $('page').innerHTML=draftBanner('drayage','drayage')+`<div class="two-col">
     <div>
       <div class="card">
         <div class="sec-head" style="display:flex;align-items:center;justify-content:space-between">
@@ -2499,7 +2499,8 @@ function needsPalletCount(fq){
 
 function renderFreight(){
   const tab=S.fqTab||'builder';
-  $('topbar-right').innerHTML=tab==='carriers'?`<button class="btn blue" onclick="showAddFqRate()">+ Add rate</button>`:(tab==='builder'?`<button class="btn" onclick="askMario('freight')" style="background:#f5f3ff;border-color:#c4b5fd;color:#7c3aed">🔎 Ask Mario</button>`:'');
+  $('topbar-right').innerHTML=tab==='carriers'?`<button class="btn blue" onclick="showAddFqRate()">+ Add rate</button>`:(tab==='builder'?marioCTA('freight'):'');
+  if(tab==='builder') setTimeout(_marioFreightCheck,60);
   if(tab==='log')        return renderFqLog();
   if(tab==='carriers')   return renderFqCarriers();
   if(tab==='dash')       return renderFqDashboard();
@@ -24008,6 +24009,88 @@ Reference #: ${ref}
 [DRAFT TEMPLATE — replace with your standard Transload wording]`};
   return {subject:`Rate Request – ${ref}`, body:`Hi [Carrier / Name],\n\nPlease share your best rate for ${origin} to ${dest}.\n\nReference #: ${ref}`};
 }
+// ═══════════════════════════════════════════════════════════════════════════
+//  MARIO QUOTE CTA — one prominent button in the builder that adapts:
+//    • rates on file for this lane → "Have Mario build the quote"
+//    • no rates          → "Mario, get me quoted"  (sources rates from carriers)
+// ═══════════════════════════════════════════════════════════════════════════
+function marioCTA(mode){
+  var label, amber=false;
+  if(mode==='drayage'){
+    var zip=S.qi&&S.qi.zip;
+    var has=zip?(S.rates||[]).some(function(r){return r.active&&r.zip===zip;}):false;
+    if(!zip) label='🔎 Have Mario quote this';
+    else if(has) label='⚡ Have Mario build the quote';
+    else { label='📨 Mario, get me quoted'; amber=true; }
+  } else {
+    var m=(S.fq&&S.fq._ctaMode)||'build';
+    if(m==='checking') label='🔎 Mario is checking…';
+    else if(m==='getquoted'){ label='📨 Mario, get me quoted'; amber=true; }
+    else label='⚡ Have Mario build the quote';
+  }
+  var bg=amber?'#fffbeb':'#f5f3ff', bd=amber?'#f59e0b':'#7c3aed', col=amber?'#b45309':'#7c3aed';
+  return '<button id="mario-cta-btn" class="btn" onclick="marioGo(\''+mode+'\')" style="background:'+bg+';border:1.5px solid '+bd+';color:'+col+';font-weight:800">'+label+'</button>';
+}
+function _marioUpdateCTA(mode){ var b=$('mario-cta-btn'); if(b) b.outerHTML=marioCTA(mode); }
+
+async function marioGo(mode){
+  if(mode==='drayage'){
+    var zip=S.qi&&S.qi.zip;
+    if(!zip){showToast('Enter the destination zip first','error',2400);return;}
+    var has=(S.rates||[]).some(function(r){return r.active&&r.zip===zip;});
+    if(has) return marioBuildDrayage();
+    return askMario('drayage');
+  }
+  var f=S.fq||{};
+  if(!f.pickupZip||!f.deliveryZip||!f.mode){showToast('Enter pickup zip, delivery zip, and method first','error',3200);return;}
+  if(f._cheapest&&f._cheapest.cost>0) return marioBuildFreight();
+  showToast('Mario is checking for rates…','info',1500);
+  var ch=await _marioLaneCheapest(f.deliveryZip);
+  if(ch&&ch.cost>0){ f._cheapest=ch; return marioBuildFreight(); }
+  return askMario('freight');
+}
+// Mario builds the drayage quote: select the cheapest matching carrier, done.
+function marioBuildDrayage(){
+  var matches=getMatches();
+  if(!matches.length) return askMario('drayage');
+  S.selId=matches[0].id;
+  try{refreshCarriersAndPreview();}catch(e){}
+  renderQuote();
+  showToast('⚡ Mario built it — cheapest carrier: '+(matches[0].carrier||'—')+'. Review your price, then Save, PDF or email.','success',4600);
+}
+// Mario builds the freight quote: fill the cheapest carrier rate he has on file + suggest the sell.
+function marioBuildFreight(){
+  var f=S.fq, ch=f&&f._cheapest;
+  if(!ch||!(ch.cost>0)) return askMario('freight');
+  var markup=(typeof getMarkup==='function')?getMarkup(f.mode||'FTL'):0.15;
+  var sell=Math.round(ch.cost*(1+markup));
+  if(!Array.isArray(f.carriers)||!f.carriers.length) f.carriers=[{name:'',rate:''}];
+  f.carriers[0]={name:ch.carrier||'(carrier)', rate:ch.cost};
+  f.selCarrierIdx=0;
+  renderFreight();
+  showToast('⚡ Mario built it — '+(ch.carrier||'carrier')+' @ '+fmtD(ch.cost)+' · suggested sell '+fmtD(sell)+' ('+Math.round(markup*100)+'% markup). Set your price & save.','success',5200);
+}
+// Cheapest carrier rate we have on file for a lane (from Mario's captured carrier quotes).
+async function _marioLaneCheapest(destZip){
+  var dz=(String(destZip||'').match(/\d{5}/)||[''])[0]; if(!dz) return null;
+  try{
+    var r=await db.from('quote_memory').select('rate,carrier').eq('direction','buy').eq('dest_zip',dz).gt('rate',0).order('rate',{ascending:true}).limit(1);
+    if(r.data&&r.data.length) return {cost:Number(r.data[0].rate), carrier:r.data[0].carrier||''};
+  }catch(e){}
+  return null;
+}
+// After the freight builder renders, quietly check if we have rates and flip the button label.
+async function _marioFreightCheck(){
+  var f=S.fq; if(!f||!f.pickupZip||!f.deliveryZip||!f.mode) return;
+  if(!/\d{5}/.test(String(f.deliveryZip))) return;
+  var laneKey=f.pickupZip+'>'+f.deliveryZip+':'+f.mode;
+  if(f._ctaLane===laneKey) return;
+  f._ctaLane=laneKey; f._ctaMode='checking'; _marioUpdateCTA('freight');
+  var ch=await _marioLaneCheapest(f.deliveryZip);
+  f._cheapest=ch||null; f._ctaMode=(ch&&ch.cost>0)?'build':'getquoted';
+  _marioUpdateCTA('freight');
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 //  ASK MARIO — from the quote builder: check for a forgotten quote, then draft
 //  a rate request to carriers and send each on its own thread. Approval-gated.
