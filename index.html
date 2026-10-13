@@ -189,7 +189,9 @@ tbody td{padding:11px 14px;color:#374151;vertical-align:middle;font-size:13px}
 .alert.err{background:var(--red-bg);border-color:var(--red);color:var(--red)}
 /* Modal */
 .overlay{position:fixed;inset:0;background:rgba(0,0,0,.42);display:flex;align-items:center;justify-content:center;z-index:200}
-.modal{background:var(--white);border-radius:16px;padding:0;width:780px;min-width:min(780px,92vw);max-width:92vw;max-height:90vh;overflow-y:auto;box-shadow:0 24px 64px rgba(0,0,0,.18)}
+.modal{background:var(--white);border-radius:16px;padding:0;width:780px;min-width:min(780px,92vw);max-width:92vw;max-height:90vh;overflow-y:auto;box-shadow:0 24px 64px rgba(0,0,0,.18);position:relative}
+.modal-x{position:absolute;top:10px;right:12px;width:30px;height:30px;border:none;background:rgba(0,0,0,.05);border-radius:8px;font-size:20px;line-height:1;color:var(--gray-500);cursor:pointer;z-index:5;display:flex;align-items:center;justify-content:center;padding:0;font-family:inherit;transition:background .12s}
+.modal-x:hover{background:rgba(0,0,0,.12);color:var(--gray-900)}
 .modal-title{font-size:16px;font-weight:700;color:var(--gray-900);padding:20px 24px;border-bottom:1px solid var(--gray-100);margin:0}
 .modal-foot{display:flex;gap:8px;justify-content:flex-end;padding:14px 20px;border-top:1px solid var(--gray-100);background:var(--gray-50);margin:0}
 .modal-body{padding:20px 24px}
@@ -2231,7 +2233,7 @@ function loadFqRates(){try{window._fqRates=JSON.parse(localStorage.getItem('fq_r
 function saveFqRates(){try{localStorage.setItem('fq_rates',JSON.stringify(window._fqRates));}catch(e){}}
 
 function showAddFqRate(){
-  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  $('modal-root').innerHTML=`<div class="overlay">
     <div class="modal"><div class="modal-title">Add freight carrier rate</div>
     ${fqRateFields(null)}
     <div class="modal-foot"><button class="btn" onclick="closeModal()">Cancel</button>
@@ -2447,7 +2449,7 @@ function submitAddFqRate(){
 }
 function editFqRate(id){
   const r=window._fqRates.find(r=>r.id===id);if(!r) return;
-  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  $('modal-root').innerHTML=`<div class="overlay">
     <div class="modal"><div class="modal-title">Edit — ${r.carrier}</div>
     ${fqRateFields(r)}
     <div class="modal-foot"><button class="btn" onclick="closeModal()">Cancel</button>
@@ -3129,7 +3131,7 @@ async function pullLoadFromTms(id){
 
 function showFqBookingModal(idx){
   const q=(window._fqHistory||[])[idx];if(!q) return;
-  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  $('modal-root').innerHTML=`<div class="overlay">
     <div class="modal" style="width:660px">
       <div style="background:var(--green);border-radius:10px;padding:16px 20px;margin-bottom:20px;display:flex;align-items:center;gap:12px">
         <span style="font-size:28px">✅</span>
@@ -3296,7 +3298,7 @@ function showFqQuoteModal(idx){
       +'</div>':'';
   const notesHtml=q.notes
     ?'<div style="background:var(--gray-50);border-radius:var(--radius);padding:10px 14px;margin-bottom:14px;font-size:13px;color:var(--gray-600)"><strong>Notes:</strong> '+q.notes+'</div>':'';
-  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  $('modal-root').innerHTML=`<div class="overlay">
     <div class="modal" style="width:720px">
       <div style="background:var(--navy);border-radius:10px;padding:16px 20px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between">
         <div style="display:flex;align-items:center;gap:12px">
@@ -3811,7 +3813,7 @@ function customerFields(c){
 }
 
 function showAddCustomer(){
-  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  $('modal-root').innerHTML=`<div class="overlay">
     <div class="modal"><div class="modal-title">Add customer</div>
     ${customerFields(null)}
     <div class="modal-foot"><button class="btn" onclick="closeModal()">Cancel</button>
@@ -3832,7 +3834,7 @@ async function submitAddCustomer(){
 
 function editCustomer(id){
   const c=S.customers.find(c=>c.id===id);if(!c) return;
-  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  $('modal-root').innerHTML=`<div class="overlay">
     <div class="modal"><div class="modal-title">Edit — ${c.company}</div>
     ${customerFields(c)}
     <div class="modal-foot"><button class="btn" onclick="closeModal()">Cancel</button>
@@ -3968,7 +3970,7 @@ function showAddLocation(custId,locId){
 const c=S.customers.find(x=>x.id===custId);if(!c)return;
 if(!Array.isArray(c.locations))c.locations=[];
 const l=locId?c.locations.find(x=>x.id===locId):null;
-$('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+$('modal-root').innerHTML=`<div class="overlay">
 <div class="modal"><div class="modal-title">${l?'Edit location':'Add location'} — ${c.company||''}</div>
 ${locationFields(l)}
 <div class="modal-foot"><button class="btn" onclick="closeModal()">Cancel</button>
@@ -4091,7 +4093,7 @@ function showManageSpecialZips(){
     <td class="muted small">${z.notes||'—'}</td>
     <td><button class="btn sm ico-btn" onclick="deleteSpecialZip(${i})">🗑️</button></td>
   </tr>`).join('');
-  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  $('modal-root').innerHTML=`<div class="overlay">
     <div class="modal" style="width:660px">
       <div class="modal-title">Special ZIP Codes</div>
       <p style="font-size:12px;color:var(--gray-500);margin-bottom:12px">Tag zips as Residential or Free Drop — a badge appears in the quote builder and on PDFs.</p>
@@ -4127,7 +4129,7 @@ function loadCustomCFS(){try{window._customCFS=JSON.parse(localStorage.getItem('
 function saveCustomCFS(){try{localStorage.setItem('custom_cfs',JSON.stringify(window._customCFS));}catch(e){}}
 function getAllCFS(){return[...US_CFS,...(window._customCFS||[])];}
 function showAddCustomCFS(){
-  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  $('modal-root').innerHTML=`<div class="overlay">
     <div class="modal"><div class="modal-title">Add CFS location</div>
     <div class="field"><label>CFS / Warehouse name *</label>
       <input type="text" id="cfs-name" placeholder="e.g. XYZ Warehouse"></div>
@@ -4569,7 +4571,7 @@ function showBolModal(idx, source){
   if(!q.destCity && (q.destination||q.zip)) q = {...q, destCity:q.destination||q.zip};
   if(!q.commodityDesc && q.commodity) q = {...q, commodityDesc:q.commodity};
   const bolNum='BOL-'+localDateStr().replace(/-/g,'')+'-'+(idx+1).toString().padStart(3,'0');
-  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  $('modal-root').innerHTML=`<div class="overlay">
     <div class="modal" style="width:740px">
       <div class="modal-title">📝 Generate Bill of Lading</div>
       <div style="background:var(--blue-bg);border-radius:var(--radius);padding:12px 14px;margin-bottom:16px;font-size:12px;color:var(--gray-600)">
@@ -5693,7 +5695,7 @@ function showTlQuoteModal(idx){
       tlRows+=secRow(def.label+(qty>1?' x '+qty:''),(parseFloat(item.carrierCost)||0)*qty,(parseFloat(item.customerPrice)||0)*qty);
     });
   } else {tlRows=secRow('Full transload service',parseFloat(q.tlFlatCarrier)||0,parseFloat(q.tlFlatCustomer)||0);}
-  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  $('modal-root').innerHTML=`<div class="overlay">
     <div class="modal" style="width:680px">
       <div style="background:var(--navy);border-radius:10px;padding:16px 20px;margin-bottom:20px;display:flex;justify-content:space-between;align-items:center">
         <div><div style="font-size:17px;font-weight:800;color:#fff">Transload Quote</div>
@@ -5763,7 +5765,7 @@ function renderTlWarehouses(){
 }
 function showAddTlWarehouse(prefill){
   const p=prefill||{};
-  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  $('modal-root').innerHTML=`<div class="overlay">
     <div class="modal"><div class="modal-title">Add warehouse</div>
     <div class="g2">
       <div class="field"><label>Warehouse name *</label><input type="text" id="wh-name" value="${p.name||''}" placeholder="e.g. XYZ Logistics"></div>
@@ -6960,7 +6962,7 @@ function showBulkEdit(){
         oninput="" onfocus="document.getElementById('bulk-chk-${c}').checked=true;this.style.opacity=1;this.disabled=false">
     </div>`).join('');
 
-  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  $('modal-root').innerHTML=`<div class="overlay">
     <div class="modal" style="width:720px">
       <div class="modal-title">Bulk edit accessorials</div>
       <div style="background:var(--amber-bg,#fffbeb);border:1px solid #fbbf24;border-radius:var(--radius);padding:10px 14px;margin-bottom:16px;font-size:13px">
@@ -7090,7 +7092,7 @@ function rateFields(r){
 }
 const _modalXBtn='<button onclick="closeRateModal()" style="position:absolute;top:12px;right:14px;background:none;border:none;font-size:22px;cursor:pointer;color:var(--gray-400);line-height:1" title="Close">×</button>';
 function showAddRate(){
-  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeRateModal()"><div class="modal" style="position:relative">${_modalXBtn}<div class="modal-title">Add carrier rate</div>${rateFields(null)}<div class="modal-foot"><button class="btn" onclick="closeRateModal()">Cancel</button><button class="btn blue" onclick="submitAdd()">Save rate</button></div></div></div>`;
+  $('modal-root').innerHTML=`<div class="overlay"><div class="modal" style="position:relative">${_modalXBtn}<div class="modal-title">Add carrier rate</div>${rateFields(null)}<div class="modal-foot"><button class="btn" onclick="closeRateModal()">Cancel</button><button class="btn blue" onclick="submitAdd()">Save rate</button></div></div></div>`;
   setTimeout(captureModalState,50);
 }
 async function submitAdd(){
@@ -7103,7 +7105,7 @@ async function submitAdd(){
 }
 function editRate(id){
   if(!requireCan('edit_rates','Only Admins can edit carrier rates.')) return;const r=S.rates.find(r=>r.id===id);if(!r) return;
-  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeRateModal()"><div class="modal" style="position:relative">${_modalXBtn}<div class="modal-title">Edit rate — ${r.carrier}</div>${rateFields(r)}<div class="modal-foot"><button class="btn" onclick="closeRateModal()">Cancel</button><button class="btn blue" onclick="submitEdit('${id}')">Save changes</button></div></div></div>`;
+  $('modal-root').innerHTML=`<div class="overlay"><div class="modal" style="position:relative">${_modalXBtn}<div class="modal-title">Edit rate — ${r.carrier}</div>${rateFields(r)}<div class="modal-foot"><button class="btn" onclick="closeRateModal()">Cancel</button><button class="btn blue" onclick="submitEdit('${id}')">Save changes</button></div></div></div>`;
   setTimeout(captureModalState,50);
 }
 async function submitEdit(id){
@@ -7120,7 +7122,7 @@ function downloadTemplate(){const hdrs=['Region','Carrier','Port','Destination',
 function triggerImport(){$('csv-fi').value='';$('csv-fi').click();}
 function handleCSVFile(input){const file=input.files[0];if(!file) return;const reader=new FileReader();reader.onload=e=>{try{const rows=parseCSV(e.target.result);if(!rows.length){alert('No data rows found.');return;}showImportPreview(rows);}catch(err){alert('Could not read CSV: '+err.message);}};reader.readAsText(file);}
 function parseCSV(text){const lines=text.trim().split(/\r?\n/);if(lines.length<2) return [];function parseLine(line){const cols=[];let cur='';let inQ=false;for(let i=0;i<line.length;i++){const ch=line[i];if(ch==='"'){inQ=!inQ;}else if(ch===','&&!inQ){cols.push(cur.trim());cur='';}else{cur+=ch;}}cols.push(cur.trim());return cols;}const headers=parseLine(lines[0]).map(h=>h.toLowerCase().replace(/[^a-z0-9]/g,''));const MAP={region:'region',carrier:'carrier',port:'port',destination:'destination',dest:'destination',zip:'zip',liveordrop:'ld',mode:'ld',ld:'ld',active:'active',base:'base',chassis:'chassis',prepull:'prepull',detport:'det_port',detentioncust:'det_cust',detcust:'det_cust',storage:'storage',ovw43k:'ovw43',ovw43:'ovw43',ovw48k:'ovw48',ovw48:'ovw48',bobtail:'bobtail',toll:'toll',notes:'notes'};return lines.slice(1).map(line=>{const l2=line.trim();if(!l2) return null;const cols=parseLine(l2);const row={};headers.forEach((h,idx)=>{const f=MAP[h];if(f) row[f]=cols[idx]||'';});return row.carrier?row:null;}).filter(Boolean);}
-function showImportPreview(rows){_importRows=rows;$('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal"><div class="modal-title">Import preview — ${rows.length} rate${rows.length!==1?'s':''} found</div><div style="overflow-x:auto;max-height:280px;overflow-y:auto;border:1px solid var(--gray-200);border-radius:var(--radius)"><table style="width:100%;font-size:12px"><thead style="position:sticky;top:0;background:var(--gray-50)"><tr><th>Carrier</th><th>Destination</th><th>Zip</th><th>Mode</th><th>Import</th><th>Export</th><th>Chassis</th></tr></thead><tbody>${rows.slice(0,25).map(r=>`<tr><td class="bold">${r.carrier}</td><td>${r.destination||'—'}</td><td>${r.zip||'—'}</td><td>${r.ld||'Live'}</td><td>${r.base||0}</td><td>${r.chassis||0}</td></tr>`).join('')}</tbody></table></div>${rows.length>25?`<p class="muted small" style="margin-top:6px">…and ${rows.length-25} more</p>`:''}<div style="margin-top:12px;padding:10px;background:var(--gray-50);border-radius:var(--radius);font-size:13px"><label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="import-replace" style="width:auto"><span>⚠️ <strong>Replace all existing rates</strong> — deletes everything first (leave unchecked to add alongside)</span></label></div><div class="modal-foot"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn blue" onclick="confirmImport()">Import ${rows.length} rate${rows.length!==1?'s':''}</button></div></div></div>`;}
+function showImportPreview(rows){_importRows=rows;$('modal-root').innerHTML=`<div class="overlay"><div class="modal"><div class="modal-title">Import preview — ${rows.length} rate${rows.length!==1?'s':''} found</div><div style="overflow-x:auto;max-height:280px;overflow-y:auto;border:1px solid var(--gray-200);border-radius:var(--radius)"><table style="width:100%;font-size:12px"><thead style="position:sticky;top:0;background:var(--gray-50)"><tr><th>Carrier</th><th>Destination</th><th>Zip</th><th>Mode</th><th>Import</th><th>Export</th><th>Chassis</th></tr></thead><tbody>${rows.slice(0,25).map(r=>`<tr><td class="bold">${r.carrier}</td><td>${r.destination||'—'}</td><td>${r.zip||'—'}</td><td>${r.ld||'Live'}</td><td>${r.base||0}</td><td>${r.chassis||0}</td></tr>`).join('')}</tbody></table></div>${rows.length>25?`<p class="muted small" style="margin-top:6px">…and ${rows.length-25} more</p>`:''}<div style="margin-top:12px;padding:10px;background:var(--gray-50);border-radius:var(--radius);font-size:13px"><label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="import-replace" style="width:auto"><span>⚠️ <strong>Replace all existing rates</strong> — deletes everything first (leave unchecked to add alongside)</span></label></div><div class="modal-foot"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn blue" onclick="confirmImport()">Import ${rows.length} rate${rows.length!==1?'s':''}</button></div></div></div>`;}
 async function confirmImport(){
   const rows=_importRows;if(!rows?.length){alert('Nothing to import.');return;}
   const replace=$('import-replace')&&$('import-replace').checked;
@@ -7345,7 +7347,7 @@ function showBookingModal(id){
     .sort((a,b)=>totMode(a,q.ld)-totMode(b,q.ld));
   const opts=carriersOnZip.map(r=>`<option value="${r.id}"${r.carrier===q.carrier?' selected':''}>${r.carrier} — carrier total: ${fmt(totMode(r,q.ld))}</option>`).join('');
 
-  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  $('modal-root').innerHTML=`<div class="overlay">
     <div class="modal" style="width:720px">
       <div style="background:var(--green);border-radius:10px;padding:16px 20px;margin-bottom:20px;display:flex;align-items:center;gap:12px">
         <span style="font-size:28px">✅</span>
@@ -7608,7 +7610,7 @@ function showQuoteModal(id){
   const ld=q.ld;const statusColors={Quoted:'a',Booked:'g',Lost:'gr',Cancelled:'gr'};
   const chargeRows=CHARGES.map(c=>{if(!isApplicable(c,ld)) return '';const cuv=q.customerRates?.[c]||0;const cv=q.carrierRates?.[c]||0;if(!cuv&&!cv) return '';const note=c==='ovw43'?'Over 43,000 lb':c==='ovw48'?'Over 48,000 lb':c==='det_port'?'At port':c==='det_cust'?'At customer':'';return `<tr style="border-bottom:1px solid var(--gray-100)"><td style="padding:8px 12px;color:var(--gray-600)">${LABELS[c]}${note?`<div class="charge-note">${note}</div>`:''}</td><td style="padding:8px 12px;text-align:right;color:var(--gray-400);font-size:12px">${cv>0?fmtD(cv):'—'}</td><td style="padding:8px 12px;text-align:right;font-weight:600;color:var(--steel)">${cuv>0?fmtD(cuv):'—'}</td><td style="padding:8px 12px;text-align:right;font-size:12px;color:var(--green)">${cuv>0&&cv>0?'+'+fmtD(cuv-cv):''}</td></tr>`;}).join('');
   const cuTotal=q.customerRates?.total||0;const cvTotal=q.carrierRates?.total||0;const profit=q.profit||0;const margin=q.profitPct||0;
-  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal" style="width:740px">
+  $('modal-root').innerHTML=`<div class="overlay"><div class="modal" style="width:740px">
     <div style="background:var(--navy);border-radius:10px;padding:16px 20px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between">
       <div style="display:flex;align-items:center;gap:12px">
         <svg width="36" height="36" viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg"><rect width="60" height="60" rx="10" fill="rgba(255,255,255,.15)"/><polygon points="10,50 25,14 44,45" fill="white"/><polygon points="25,14 44,45 53,37" fill="rgba(255,255,255,.72)"/><polygon points="10,50 44,45 53,37 53,50" fill="rgba(255,255,255,.90)"/><line x1="25" y1="14" x2="44" y2="50" stroke="rgba(59,142,208,.5)" stroke-width="1.8"/></svg>
@@ -7748,6 +7750,35 @@ function setDashFilter(f){S.dashFilter=f;renderDash();}
 // SHARED
 // ═══════════════════════════════════════════════════════
 function closeModal(){$('modal-root').innerHTML='';}
+// Modals never close on an outside click (prevents losing work). They close only via
+// the X, a Cancel/Close button, or the Escape key. This injects an X into any modal
+// that doesn't already have one, and wires Escape to close the topmost modal.
+function _activeModalCloser(){
+  // Rate modals guard unsaved changes via closeRateModal; use it when present.
+  try{ if(typeof rateModalChanged==='function' && $('r-carrier')) return closeRateModal; }catch(e){}
+  return closeModal;
+}
+(function(){
+  function ensureX(){
+    var root=document.getElementById('modal-root'); if(!root) return;
+    var m=root.querySelector('.modal'); if(!m) return;
+    if(getComputedStyle(m).position==='static') m.style.position='relative';
+    var hasX=m.querySelector('.modal-x,[title="Close"]')||
+      Array.prototype.some.call(m.querySelectorAll('button'),function(b){return /^[×✕✖]$/.test((b.textContent||'').trim());});
+    if(hasX) return;
+    var x=document.createElement('button');
+    x.className='modal-x'; x.type='button'; x.title='Close'; x.textContent='×';
+    x.onclick=function(){ _activeModalCloser()(); };
+    m.appendChild(x);
+  }
+  var root=document.getElementById('modal-root');
+  if(root && window.MutationObserver){ new MutationObserver(ensureX).observe(root,{childList:true,subtree:true}); }
+  document.addEventListener('keydown',function(e){
+    if(e.key!=='Escape') return;
+    var r=document.getElementById('modal-root');
+    if(r && r.querySelector('.modal')){ e.preventDefault(); _activeModalCloser()(); }
+  });
+})();
 document.addEventListener('keydown',e=>{if(e.key==='Escape') closeModal();});
 
 // ═══════════════════════════════════════════════════════
@@ -7914,7 +7945,7 @@ function logout(){
 // ── Edit own profile ──────────────────────────────────────────────────────
 function showEditMyProfile(){
   if(!_currentUser) return;
-  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  $('modal-root').innerHTML=`<div class="overlay">
     <div class="modal"><div class="modal-title">My profile</div>
     <div class="field"><label>Your name</label>
       <input type="text" id="mp-name" value="${_currentUser.name}" placeholder="Your name"></div>
@@ -8055,7 +8086,7 @@ function copyPortalLink(){
 }
 function showCreateUser(){
   if(_currentUser?.role!=='super_admin'){alert('Only a Super Admin can create new users.');return;}
-  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  $('modal-root').innerHTML=`<div class="overlay">
     <div class="modal"><div class="modal-title">Add team member</div>
     <div class="g2">
       <div class="field"><label>Full name *</label><input type="text" id="nu-name" placeholder="e.g. Julianny Garcia"></div>
@@ -8124,7 +8155,7 @@ async function showEditUser(id){
   if(!can('edit_users')){alert('You do not have permission to edit users.');return;}
   const{data:u}=await db.from('app_users').select('*').eq('id',id).single();
   if(!u) return;
-  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  $('modal-root').innerHTML=`<div class="overlay">
     <div class="modal"><div class="modal-title">Edit user — ${u.name}</div>
     <div class="g2">
       <div class="field"><label>Full name</label><input type="text" id="eu-name" value="${u.name}" placeholder="Full name"></div>
@@ -8187,7 +8218,7 @@ async function deleteUser(id,name){
   }catch(e){alert('Error: '+e.message);}
 }
 function showResetPassword(id,name){
-  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  $('modal-root').innerHTML=`<div class="overlay">
     <div class="modal"><div class="modal-title">Reset password — ${name}</div>
     <div class="field"><label>New password</label><input type="password" id="rp-pw" placeholder="Enter new password"></div>
     <div class="modal-foot">
@@ -8363,7 +8394,7 @@ async function renderCarriers(){
 async function showCarrierModal(id) {
   let c={};
   if(id){ const{data}=await db.from('carriers').select('*').eq('id',id).single(); c=data||{}; }
-  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  $('modal-root').innerHTML=`<div class="overlay">
     <div class="modal" style="max-width:500px">
       <div class="modal-title">${id?'Edit carrier':'Add carrier'}</div>
       <div class="field"><label>Carrier name *</label><input type="text" id="car-name" value="${c.name||''}" placeholder="e.g. Eagle Express Freight"></div>
@@ -8435,7 +8466,7 @@ async function showCarrierDetail(id){
     <td style="padding:9px 12px">${statusPill(q.status)}</td>
   </tr>`).join('');
 
-  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  $('modal-root').innerHTML=`<div class="overlay">
     <div class="modal" style="max-width:700px;max-height:88vh;overflow-y:auto">
       <div class="modal-title" style="display:flex;align-items:center;justify-content:space-between">
         <span>${c.name}</span>
@@ -8512,7 +8543,7 @@ async function sendQuoteToCarrier(quoteId){
   const userEmail = _currentUser?.email||'';
   const userName  = _currentUser?.name||'Shifl Team';
 
-  $('modal-root').innerHTML = `<div class="overlay" onclick="if(event.target===this)closeModal()">
+  $('modal-root').innerHTML = `<div class="overlay">
     <div class="modal" style="max-width:500px">
       <div class="modal-title">📧 Email quote to carrier</div>
       ${!resendKey?`<div style="background:#fffbeb;border:1px solid #fbbf24;border-radius:var(--radius);padding:12px 14px;margin-bottom:14px;font-size:13px;color:#92400e">
@@ -8642,7 +8673,7 @@ async function testResendKey(){
   if(!k){alert('Save a Resend API key first.');return;}
 
   // Show modal to enter test destination
-  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:500px">
+  $('modal-root').innerHTML=`<div class="overlay"><div class="modal" style="max-width:500px">
     <div class="modal-title">🔬 Test Email Connection</div>
     <p style="font-size:13px;color:var(--gray-500);margin-bottom:16px">Enter the email address to send the test to. Use the email address you signed up to Resend with for best results.</p>
     <div class="field"><label>Send test to *</label>
@@ -9380,7 +9411,7 @@ function fqSendInvoice(idx){ const q=(window._fqHistory||[])[idx]; if(q) openInv
 
 function fqMarkPaid(idx){
   const q=(window._fqHistory||[])[idx];if(!q) return;
-  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:500px">
+  $('modal-root').innerHTML=`<div class="overlay"><div class="modal" style="max-width:500px">
     <div class="modal-title">✅ Mark as Paid — ${q.customer||'—'}</div>
     <div style="background:var(--gray-50);border-radius:var(--radius);padding:12px 14px;margin-bottom:16px;display:flex;justify-content:space-between">
       <div><div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--gray-400)">Invoice ${q.invoiceNum||'—'}</div><div style="font-size:13px;color:var(--gray-600)">${q.customer}</div></div>
@@ -10061,7 +10092,7 @@ function sendInvoiceFromShipment(type,id){ openInvoiceBuilder(type,id); }
 function sendDrayInvoice(type,id){ openInvoiceBuilder(type,id); }
 
 async function markDrayPaid(type,id){
-  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:500px">
+  $('modal-root').innerHTML=`<div class="overlay"><div class="modal" style="max-width:500px">
     <div class="modal-title">✅ Mark as Paid</div>
     <div class="field"><label>Date payment received</label><input type="date" id="dpaid-date" value="${localDateStr()}"></div>
     <div class="field"><label>Payment notes</label><input type="text" id="dpaid-notes" placeholder="ACH, check #, factored…"></div>
@@ -10265,7 +10296,7 @@ function changeShipmentCarrier(type,id,currentCarrier){
     }
   }
 
-  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:480px">
+  $('modal-root').innerHTML=`<div class="overlay"><div class="modal" style="max-width:480px">
     <div class="modal-title">🚛 Change Carrier</div>
     ${rateRows
       ?`<div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-400);margin-bottom:10px">
@@ -10953,7 +10984,7 @@ function deleteTemplate(mode, id) {
 }
 
 function showSaveTemplateModal(mode) {
-  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:500px">
+  $('modal-root').innerHTML=`<div class="overlay"><div class="modal" style="max-width:500px">
     <div class="modal-title">💾 Save as template</div>
     <div class="field"><label>Template name *</label>
       <input type="text" id="tpl-name" placeholder="e.g. NY/NJ → 07728 Live" autofocus>
@@ -11151,7 +11182,7 @@ function openInvoiceBuilder(type, id){
       else{const flatAmt=sv.amount||0;}
       return `<div style="padding:10px 0;border-bottom:1px solid var(--gray-100)"><div style="display:flex;align-items:center;gap:10px"><input type="checkbox" id="acc-chk-${a.key}" ${isChecked?'checked':''} onchange="toggleAccRow('${a.key}',this.checked,${isHourly},${isDaily},false)" style="flex-shrink:0"><div style="flex:1"><label for="acc-chk-${a.key}" style="font-size:13px;font-weight:600;color:var(--navy);cursor:pointer">${a.label}</label><div style="font-size:11px;color:var(--gray-400)">${a.note}</div></div>${!isHourly&&!isDaily?`<input type="number" id="acc-flat-${a.key}" value="${isChecked?(sv.amount||''):''}" placeholder="0" min="0" oninput="calcInvTotal()" style="width:80px;padding:5px 7px;font-size:13px;text-align:right;${!isChecked?'opacity:.4':''}" ${!isChecked?'disabled':''}>`:`<span id="acc-amt-${a.key}" style="font-size:13px;font-weight:700;color:var(--navy);min-width:70px;text-align:right">—</span>`}</div>${detail}</div>`;
     }).join('');
-    $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:600px;max-height:90vh;overflow-y:auto"><style>.inv-sm-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-400);margin-bottom:4px}</style><div class="modal-title">🧾 Invoice — ${aq.customer||'—'}</div><div class="modal-body"><div style="background:var(--blue-bg);border-radius:var(--radius);padding:8px 12px;margin-bottom:14px;font-size:12px;color:var(--gray-600)">${aq.originAirport||'—'} → ${aq.deliveryZip||'—'} · ${aq.carrier||'—'}</div><div class="g3" style="margin-bottom:14px"><div class="field"><label>Invoice #</label><input type="text" id="inv-num" value="${invNum}"></div><div class="field"><label>Invoice date</label><input type="date" id="inv-date" value="${today}"></div><div class="field"><label>Due date</label><input type="date" id="inv-due" value="${due30}"></div></div><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gray-400);margin-bottom:8px">Base charges</div><div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--gray-100);opacity:.8"><span style="font-size:13px;color:var(--navy)">${baseLabelText} <span style="font-size:10px;background:var(--gray-100);padding:1px 7px;border-radius:99px;color:var(--gray-500)">locked</span></span><span style="font-size:14px;font-weight:700;color:var(--navy)">${fmtD(baseAmt)}</span></div><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gray-400);margin:14px 0 8px">Additional charges</div>${rows}<div style="margin-top:14px;padding:12px 14px;background:var(--gray-50);border-radius:var(--radius)"><div style="display:flex;justify-content:space-between;margin-bottom:6px;font-size:13px;color:var(--gray-600)"><span>Base</span><span>${fmtD(baseAmt)}</span></div><div style="display:flex;justify-content:space-between;margin-bottom:10px;font-size:13px;color:var(--gray-600)"><span>Additional</span><span id="inv-acc-total">$0.00</span></div><div style="display:flex;justify-content:space-between;padding-top:10px;border-top:1px solid var(--gray-200)"><span style="font-size:16px;font-weight:700;color:var(--navy)">Total due</span><span style="font-size:20px;font-weight:800;color:var(--steel)" id="inv-grand-total">${fmtD(baseAmt)}</span></div></div><div class="field" style="margin-top:14px"><label>Notes</label><input type="text" id="inv-notes" value="${existing.notes||''}" placeholder="Net 30, factoring..."></div></div><div class="modal-foot"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn" onclick="previewInvoicePDF('${type}','${id}')">⬇ PDF</button><button class="btn blue" onclick="sendInvoiceToShifl('${type}','${id}')">📤 Send to SHIFL</button></div></div></div>`;
+    $('modal-root').innerHTML=`<div class="overlay"><div class="modal" style="max-width:600px;max-height:90vh;overflow-y:auto"><style>.inv-sm-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-400);margin-bottom:4px}</style><div class="modal-title">🧾 Invoice — ${aq.customer||'—'}</div><div class="modal-body"><div style="background:var(--blue-bg);border-radius:var(--radius);padding:8px 12px;margin-bottom:14px;font-size:12px;color:var(--gray-600)">${aq.originAirport||'—'} → ${aq.deliveryZip||'—'} · ${aq.carrier||'—'}</div><div class="g3" style="margin-bottom:14px"><div class="field"><label>Invoice #</label><input type="text" id="inv-num" value="${invNum}"></div><div class="field"><label>Invoice date</label><input type="date" id="inv-date" value="${today}"></div><div class="field"><label>Due date</label><input type="date" id="inv-due" value="${due30}"></div></div><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gray-400);margin-bottom:8px">Base charges</div><div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--gray-100);opacity:.8"><span style="font-size:13px;color:var(--navy)">${baseLabelText} <span style="font-size:10px;background:var(--gray-100);padding:1px 7px;border-radius:99px;color:var(--gray-500)">locked</span></span><span style="font-size:14px;font-weight:700;color:var(--navy)">${fmtD(baseAmt)}</span></div><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gray-400);margin:14px 0 8px">Additional charges</div>${rows}<div style="margin-top:14px;padding:12px 14px;background:var(--gray-50);border-radius:var(--radius)"><div style="display:flex;justify-content:space-between;margin-bottom:6px;font-size:13px;color:var(--gray-600)"><span>Base</span><span>${fmtD(baseAmt)}</span></div><div style="display:flex;justify-content:space-between;margin-bottom:10px;font-size:13px;color:var(--gray-600)"><span>Additional</span><span id="inv-acc-total">$0.00</span></div><div style="display:flex;justify-content:space-between;padding-top:10px;border-top:1px solid var(--gray-200)"><span style="font-size:16px;font-weight:700;color:var(--navy)">Total due</span><span style="font-size:20px;font-weight:800;color:var(--steel)" id="inv-grand-total">${fmtD(baseAmt)}</span></div></div><div class="field" style="margin-top:14px"><label>Notes</label><input type="text" id="inv-notes" value="${existing.notes||''}" placeholder="Net 30, factoring..."></div></div><div class="modal-foot"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn" onclick="previewInvoicePDF('${type}','${id}')">⬇ PDF</button><button class="btn blue" onclick="sendInvoiceToShifl('${type}','${id}')">📤 Send to SHIFL</button></div></div></div>`;
     setTimeout(()=>{window._invBaseTotal=baseAmt;window._invType=type;window._invId=id;window._invQuotedTotal=0;calcInvTotal();HOURLY.forEach(k=>{if(document.getElementById('acc-chk-'+k)?.checked)calcAccHourly(k);});DAILY.forEach(k=>{if(document.getElementById('acc-chk-'+k)?.checked)calcAccDaily(k);});},50);
     return;
   }
@@ -11263,7 +11294,7 @@ function openInvoiceBuilder(type, id){
   const custom=saved.custom||{};
   const baseTotal=baseCharges.reduce((s,c)=>s+c.amount,0);
 
-  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  $('modal-root').innerHTML=`<div class="overlay">
   <div class="modal" style="max-width:600px;max-height:90vh;overflow-y:auto">
     <style>
       .inv-sm-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-400);margin-bottom:4px}
@@ -11661,7 +11692,7 @@ function openInvoiceEmailModal(type,id,inv){
   const resendKey=localStorage.getItem('shifl_resend_key')||'';
   const billTo=localStorage.getItem('shifl_billing_email')||'';
   const userEmail=(typeof _currentUser!=='undefined'&&_currentUser?.email)||'';
-  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:500px">
+  $('modal-root').innerHTML=`<div class="overlay"><div class="modal" style="max-width:500px">
     <div class="modal-title">📤 Send invoice to SHIFL</div>
     ${!resendKey?`<div style="background:#fffbeb;border:1px solid #fbbf24;border-radius:var(--radius);padding:12px 14px;margin-bottom:14px;font-size:13px;color:#92400e">⚠️ <strong>Resend API key not set.</strong> Admin Panel → Settings → Resend API key to enable email.</div>`:''}
     <div class="field"><label>To — SHIFL billing *</label><input type="email" id="inv-send-to" value="${billTo}" placeholder="billing@shifl.com"></div>
@@ -11740,7 +11771,7 @@ function sendPaymentReminder(type,id){
   const resendKey=localStorage.getItem('shifl_resend_key')||'';
   const dueTxt=days>0?`is now ${days} day${days>1?'s':''} past due (was due ${inv.invDue||'—'})`:`is due ${inv.invDue||'soon'}`;
   const defaultMsg=`Hi,\n\nA quick reminder that invoice ${inv.invNum} for ${fmtD(inv.grandTotal||0)} ${dueTxt}.\n\nThe invoice is attached for your reference. If payment is already on the way, please disregard.\n\nThank you,\nShifl Logistics`;
-  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:520px">
+  $('modal-root').innerHTML=`<div class="overlay"><div class="modal" style="max-width:520px">
     <div class="modal-title">📨 Payment reminder ${days>0?`<span style="font-size:12px;font-weight:700;color:#dc2626;background:#fef2f2;padding:2px 9px;border-radius:99px;margin-left:6px">${days}d overdue</span>`:''}</div>
     ${!resendKey?`<div style="background:#fffbeb;border:1px solid #fbbf24;border-radius:var(--radius);padding:12px 14px;margin-bottom:14px;font-size:13px;color:#92400e">⚠️ <strong>Resend API key not set.</strong> Admin Panel → Settings to enable email.</div>`:''}
     <div class="field"><label>To — customer *</label><input type="email" id="rem-to" value="${to}" placeholder="ap@customer.com"></div>
@@ -12218,7 +12249,7 @@ function openCarrierInvoiceBuilder(type, id){
     </div>`;
   }).join('');
 
-  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  $('modal-root').innerHTML=`<div class="overlay">
   <div class="modal" style="max-width:600px;max-height:90vh;overflow-y:auto">
     <style>.inv-sm-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-400);margin-bottom:4px}</style>
 
@@ -12434,7 +12465,7 @@ function openFqCarrierInvoice(idx){
       </div>
     </div>`;}).join('');
 
-  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  $('modal-root').innerHTML=`<div class="overlay">
   <div class="modal" style="max-width:580px;max-height:90vh;overflow-y:auto">
     <!-- Tab header -->
     <div style="display:flex;gap:0;margin-bottom:18px;border-bottom:2px solid var(--gray-100)">
@@ -12651,7 +12682,7 @@ function repeatDrayageQuote(id){
   const bm = q.baseMarkup||{};
   const fr = q.flatRates||{};
 
-  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  $('modal-root').innerHTML=`<div class="overlay">
   <div class="modal" style="max-width:600px;max-height:90vh;overflow-y:auto">
     <div class="modal-title">🔁 Repeat shipment</div>
     <div style="background:#fffbeb;border:1.5px solid #fbbf24;border-radius:var(--radius);padding:10px 14px;margin-bottom:16px;font-size:13px;color:#92400e;font-weight:600">
@@ -12793,7 +12824,7 @@ function repeatFreightQuote(idOrIdx){
   if(!q){ alert('Quote not found.'); return; }
   const isLCL=q.fqMode==='LCL';
 
-  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  $('modal-root').innerHTML=`<div class="overlay">
   <div class="modal" style="max-width:580px;max-height:90vh;overflow-y:auto">
     <div class="modal-title">🔁 Duplicate ${q.fqMode} shipment</div>
     <div style="background:#fffbeb;border:1.5px solid #fbbf24;border-radius:var(--radius);padding:10px 14px;margin-bottom:16px;font-size:13px;color:#92400e;font-weight:600">
@@ -12892,7 +12923,7 @@ function confirmRepeatFreight(origId){
 
 function showRepeatPicker(){
   const recent=S.quotes.filter(q=>q.status!=='Draft').slice(0,20);
-  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  $('modal-root').innerHTML=`<div class="overlay">
   <div class="modal" style="max-width:520px">
     <div class="modal-title">🔁 Repeat a shipment</div>
     <p style="font-size:13px;color:var(--gray-500);margin-bottom:14px">Select a previous quote to pre-fill this builder with its lane, carrier, and pricing.</p>
@@ -13869,7 +13900,7 @@ function showSavedIndicator(){
 function showCarrierCheckIn(quoteId){
   const q=S.quotes.find(q=>q.id===quoteId);if(!q) return;
   const carrierEmail=S.rates.find(r=>r.carrier===q.carrier)?.email||'';
-  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  $('modal-root').innerHTML=`<div class="overlay">
   <div class="modal" style="max-width:500px">
     <div class="modal-title">📱 Carrier check-in — ${q.carrier||'—'}</div>
     <div style="background:var(--blue-bg);border-radius:var(--radius);padding:10px 14px;margin-bottom:14px;font-size:13px;color:var(--steel)">
@@ -13908,7 +13939,7 @@ async function sendCarrierCheckIn(quoteId){
 function showTrackingModal(type,id){
   const q=type==='drayage'?S.quotes.find(q=>q.id===id):null;
   const existing=getTrackingLink(id);
-  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  $('modal-root').innerHTML=`<div class="overlay">
   <div class="modal" style="max-width:460px">
     <div class="modal-title">📍 Load tracking — ${q?.customer||'Shipment'}</div>
     <div class="field"><label>Tracking URL</label>
@@ -14949,7 +14980,7 @@ function openBOLBuilder(id){
   const bolNum=meta.bolNum||('BOL-'+Date.now().toString().slice(-6));
   const uploaded=getBolUpload(id); // existing uploaded BOL if any
 
-  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  $('modal-root').innerHTML=`<div class="overlay">
   <div class="modal" style="max-width:640px;max-height:92vh;overflow-y:auto">
     <div class="modal-title" style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--gray-100)">
       <span>📄 Bill of Lading — ${q.customer||'—'}</span>
@@ -15291,7 +15322,7 @@ function openTMSLoadDetail(id){
       <div style="width:20px;height:20px;border-radius:50%;background:${done?tmsStatusColor(s):'var(--gray-100)'};display:flex;align-items:center;justify-content:center;font-size:11px;color:${done?'#fff':'var(--gray-300)'};flex-shrink:0">${done?'✓':'○'}</div>
       <div style="flex:1"><div style="font-size:12px;font-weight:${done?700:400};color:${done?'var(--navy)':'var(--gray-400)'}">${s}</div>${ts?`<div style="font-size:10px;color:var(--gray-400)">${new Date(ts).toLocaleString('en-US',{timeZone:'America/New_York',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}</div>`:''}</div>
     </div>`;}).join('');
-  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  $('modal-root').innerHTML=`<div class="overlay">
   <div class="modal" style="max-width:520px">
     <div class="modal-title">🚚 ${q.customer||'Load'} — ${q.fqMode}</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px">
@@ -15816,7 +15847,7 @@ function openTMSLoadDetail(id){
 
 // ── 3. CHECK-CALL MODAL ───────────────────────────────────────────
 function openCheckcallModal(id){
-  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  $('modal-root').innerHTML=`<div class="overlay">
   <div class="modal" style="max-width:500px">
     <div class="modal-title">📞 Log check call</div>
     <div class="field"><label>Driver location</label><input type="text" id="cc-loc" placeholder="e.g. Columbus, OH — I-70 westbound"></div>
@@ -15840,7 +15871,7 @@ function logCheckcall(id){
 
 // ── 4. POD UPLOAD ────────────────────────────────────────────────
 function openPODUpload(id){
-  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  $('modal-root').innerHTML=`<div class="overlay">
   <div class="modal" style="max-width:500px">
     <div class="modal-title">📎 Upload Proof of Delivery</div>
     <div style="border:2px dashed var(--gray-200);border-radius:var(--radius);padding:24px;text-align:center;cursor:pointer;margin-bottom:14px" onclick="$('pod-file').click()">
@@ -15872,7 +15903,7 @@ function savePOD(id){
 
 // ── 5. CLAIMS MODAL ───────────────────────────────────────────────
 function openClaimModal(id){
-  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  $('modal-root').innerHTML=`<div class="overlay">
   <div class="modal" style="max-width:500px">
     <div class="modal-title">⚠️ File a claim</div>
     <div class="g2">
@@ -15980,7 +16011,7 @@ function renderTMSCapacity(tabBar){
   </tbody></table></div>`:`<div class="empty"><div class="empty-ico">🚚</div><p>No available trucks logged — add carrier capacity to match with loads</p></div>`}`;
 }
 function openAddCapacity(){
-  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  $('modal-root').innerHTML=`<div class="overlay">
   <div class="modal" style="max-width:460px">
     <div class="modal-title">+ Add available truck</div>
     <div class="g2">
@@ -16197,7 +16228,7 @@ function quoteExpiryBadge(q){
 // ── WIN / LOSS REASON TRACKING ────────────────────────────────────
 const LOSS_REASONS=['Price too high','Carrier issue','Transit time','Customer went direct','Competitor','Load cancelled','Other'];
 function openLostReasonModal(type,id){
-  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  $('modal-root').innerHTML=`<div class="overlay">
   <div class="modal" style="max-width:500px">
     <div class="modal-title">📉 Why was this quote lost?</div>
     <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px">
@@ -16242,7 +16273,7 @@ function custTagBadges(name){
 }
 function openTagModal(customerName){
   const current=getCustomerTags(customerName);
-  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  $('modal-root').innerHTML=`<div class="overlay">
   <div class="modal" style="max-width:500px">
     <div class="modal-title">🏷️ Tags — ${escH(customerName)}</div>
     <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px">
@@ -16266,7 +16297,7 @@ function saveAddressBook(list){localStorage.setItem('address_book',JSON.stringif
 function addAddress(addr){const book=getAddressBook();if(!book.find(a=>a.name===addr.name)){book.unshift(addr);saveAddressBook(book);}return book;}
 function openAddressBook(callback){
   const book=getAddressBook();
-  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  $('modal-root').innerHTML=`<div class="overlay">
   <div class="modal" style="max-width:480px">
     <div class="modal-title">📍 Address book</div>
     <div style="max-height:300px;overflow-y:auto">
@@ -16379,7 +16410,7 @@ function generateEODSummary(){
   const booked=[...todayQ,...todayFQ].filter(q=>['Booked','Delivered','Invoiced','Paid'].includes(q.status));
   const rev=booked.reduce((s,q)=>s+(q.customerRate||0),0);
   const profit=booked.reduce((s,q)=>s+getShipmentProfit(q,'freight').profit,0);
-  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  $('modal-root').innerHTML=`<div class="overlay">
   <div class="modal" style="max-width:480px">
     <div class="modal-title">📊 End of day summary — ${today}</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
@@ -16398,7 +16429,7 @@ function generateEODSummary(){
 // ── BULK INVOICE SEND ─────────────────────────────────────────────
 function openBulkInvoice(){
   const eligible=[...(S.quotes||[]),...(window._fqHistory||[])].filter(q=>q.status==='Delivered'&&!getInvoice(q.id));
-  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  $('modal-root').innerHTML=`<div class="overlay">
   <div class="modal" style="max-width:520px">
     <div class="modal-title">📤 Bulk invoice send</div>
     <div style="font-size:13px;color:var(--gray-500);margin-bottom:12px">${eligible.length} delivered loads without invoices</div>
@@ -16475,7 +16506,7 @@ function renderAgentLeaderboard(){
 
 // ── AI QUOTE ASSISTANT (uses Anthropic API) ────────────────────────
 async function openAIQuoteAssistant(){
-  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  $('modal-root').innerHTML=`<div class="overlay">
   <div class="modal" style="max-width:520px">
     <div class="modal-title">🤖 AI Quote Assistant</div>
     <div style="font-size:13px;color:var(--gray-500);margin-bottom:12px">Describe the load in plain English — I'll fill in the quote details.</div>
@@ -16526,7 +16557,7 @@ function openQuoteComparison(ids){
   const quotes=ids.map(id=>[...(S.quotes||[]),...(window._fqHistory||[])].find(q=>q.id===id)).filter(Boolean);
   if(quotes.length<2){showToast('Select at least 2 quotes to compare','info');return;}
   const fields=['customer','pickupZip','deliveryZip','carrierRate','customerRate','carrier','weight','status'];
-  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  $('modal-root').innerHTML=`<div class="overlay">
   <div class="modal" style="max-width:620px;overflow-x:auto">
     <div class="modal-title">📊 Quote comparison</div>
     <table style="width:100%;border-collapse:collapse;font-size:12px">
@@ -16566,7 +16597,7 @@ async function aiMatchCarrier(loadId){
     return{name:c.name,score,loads:allLoads.length,lanePairs:laneLoads.length,onTimeRate:Math.round(onTimeRate*100),avgRate};
   }).filter(c=>!isBlacklisted(c.name)).sort((a,b)=>b.score-a.score).slice(0,5);
 
-  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  $('modal-root').innerHTML=`<div class="overlay">
   <div class="modal" style="max-width:480px">
     <div class="modal-title">🤖 AI Carrier Match — ${escH(q.pickupZip||'?')} → ${escH(q.deliveryZip||'?')}</div>
     <div style="font-size:12px;color:var(--gray-500);margin-bottom:12px">Ranked by lane history, on-time rate, and availability</div>
@@ -16655,7 +16686,7 @@ function duplicateTMSLoad(id){
 // These are stored in TMS meta and shown on load detail
 function openDriverContactModal(id){
   const meta=getTMSMeta(id);
-  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  $('modal-root').innerHTML=`<div class="overlay">
   <div class="modal" style="max-width:500px">
     <div class="modal-title">🚛 Driver details</div>
     <div class="field"><label>Driver name</label><input type="text" id="drv-name" value="${escH(meta.driverName||'')}" placeholder="Driver full name"></div>
@@ -16713,7 +16744,7 @@ function blindBadge(id){return getTMSMeta(id).isBlind?'<span style="font-size:10
 // ── FREIGHT CLASS DISPUTE ─────────────────────────────────────────
 function openFreightClassDispute(id){
   const meta=getTMSMeta(id);
-  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  $('modal-root').innerHTML=`<div class="overlay">
   <div class="modal" style="max-width:500px">
     <div class="modal-title">⚠️ Freight class dispute</div>
     <div class="g2">
@@ -16738,7 +16769,7 @@ function saveCarrierW9(name,data){localStorage.setItem('w9_'+name,JSON.stringify
 function w9Badge(name){const w=getCarrierW9(name);return w.onFile?`<span style="font-size:10px;background:#f0fdf4;color:#16a34a;padding:1px 7px;border-radius:99px;font-weight:700">W-9 ✓</span>`:'<span style="font-size:10px;background:#fff5f5;color:#dc2626;padding:1px 7px;border-radius:99px;font-weight:700">W-9 missing</span>';}
 function openW9Modal(carrierName){
   const w=getCarrierW9(carrierName);
-  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  $('modal-root').innerHTML=`<div class="overlay">
   <div class="modal" style="max-width:500px">
     <div class="modal-title">📋 W-9 — ${escH(carrierName)}</div>
     <div class="field"><label>EIN / Tax ID</label><input type="text" id="w9-ein" value="${escH(w.ein||'')}" placeholder="XX-XXXXXXX"></div>
@@ -16770,7 +16801,7 @@ function certBadges(name){
 }
 function openCertModal(carrierName){
   const certs=getCarrierCerts(carrierName);
-  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  $('modal-root').innerHTML=`<div class="overlay">
   <div class="modal" style="max-width:500px">
     <div class="modal-title">🏆 Certifications — ${escH(carrierName)}</div>
     <div style="margin-bottom:14px">
@@ -16818,7 +16849,7 @@ function openLaneContractsPage(){
   </tbody></table></div>`:'<div class="empty"><div class="empty-ico">📄</div><p>No dedicated lane contracts — add contracts to lock in rates and volumes</p></div>'}`;
 }
 function openAddLaneContract(){
-  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  $('modal-root').innerHTML=`<div class="overlay">
   <div class="modal" style="max-width:500px">
     <div class="modal-title">+ New lane contract</div>
     <div class="g2">
@@ -16877,7 +16908,7 @@ function renderRealTimeMargin(){
 // ── LOAD NOTE TEMPLATES ───────────────────────────────────────────
 
 function noteTemplateMenu(targetId){
-  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  $('modal-root').innerHTML=`<div class="overlay">
   <div class="modal" style="max-width:500px">
     <div class="modal-title">📝 Note templates</div>
     <div style="display:flex;flex-direction:column;gap:6px">
@@ -16954,7 +16985,7 @@ function getIntermodalLegs(id){return JSON.parse(localStorage.getItem('intermoda
 function saveIntermodalLegs(id,legs){localStorage.setItem('intermodal_'+id,JSON.stringify(legs));}
 function openIntermodalBuilder(id){
   const legs=getIntermodalLegs(id);
-  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  $('modal-root').innerHTML=`<div class="overlay">
   <div class="modal" style="max-width:520px">
     <div class="modal-title">🔀 Intermodal legs</div>
     <div id="legs-list" style="margin-bottom:12px">
@@ -17011,7 +17042,7 @@ function updateClaimStatus(loadId,claimId,status,settlementAmt){
 
 // ── LANE RFP BUILDER ─────────────────────────────────────────────
 function openLaneRFP(){
-  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  $('modal-root').innerHTML=`<div class="overlay">
   <div class="modal" style="max-width:560px">
     <div class="modal-title">📋 Lane RFP Builder</div>
     <div class="field"><label>RFP name / project</label><input type="text" id="rfp-name" placeholder="e.g. Q3 2026 Northeast Lanes RFP"></div>
@@ -17107,7 +17138,7 @@ function renderAnnualCarrierReview(tabBar,loads){
 
 function showPayTermsModal(carrierName){
   const current=getCarrierPayTerms(carrierName);
-  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  $('modal-root').innerHTML=`<div class="overlay">
   <div class="modal" style="max-width:500px">
     <div class="modal-title">💳 Pay terms — ${escH(carrierName)}</div>
     <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px">
@@ -17230,7 +17261,7 @@ function saveLoadTemplate(tmpl){const t=getLoadTemplates();t.unshift({...tmpl,id
 function deleteLoadTemplate(id){const t=getLoadTemplates().filter(t=>t.id!==id);localStorage.setItem('load_templates',JSON.stringify(t));renderTMSTemplates();}
 function openSaveTemplate(loadId){
   const q=(window._fqHistory||[]).find(q=>q.id===loadId);if(!q) return;
-  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  $('modal-root').innerHTML=`<div class="overlay">
   <div class="modal" style="max-width:500px">
     <div class="modal-title">💾 Save as template</div>
     <div class="field"><label>Template name</label><input type="text" id="tmpl-name" value="${escH((q.fqMode||'FTL')+' '+q.pickupZip+' → '+q.deliveryZip)}" placeholder="e.g. Weekly Newark to Chicago FTL"></div>
@@ -17259,7 +17290,7 @@ function renderTMSTemplates(tabBar){
   else{const c=document.createElement('div');c.innerHTML=section;$('page').appendChild(c);}
 }
 function openAddTemplate(){
-  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  $('modal-root').innerHTML=`<div class="overlay">
   <div class="modal" style="max-width:500px">
     <div class="modal-title">+ New load template</div>
     <div class="field"><label>Template name *</label><input type="text" id="ta-name" placeholder="e.g. Weekly Chicago FTL"></div>
@@ -17285,7 +17316,7 @@ function openDailyDispatchReport(){
   const active=loads.filter(l=>['Dispatched','In Transit','Out for Delivery'].includes(l.status));
   const delivering=loads.filter(l=>{const m=getTMSMeta(l.id);return m.deliveryAppt&&m.deliveryAppt.startsWith(today);});
   const overdue=getOverdueLoads();
-  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  $('modal-root').innerHTML=`<div class="overlay">
   <div class="modal" style="max-width:560px;max-height:85vh;overflow-y:auto">
     <div class="modal-title">📋 Daily dispatch report — ${today}</div>
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px">
@@ -17313,7 +17344,7 @@ function openDailyDispatchReport(){
 // ── BULK LOAD ADVANCE ─────────────────────────────────────────────
 function openBulkAdvance(){
   const loads=getTMSLoads().filter(l=>nextTMSStatus(l.status));
-  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  $('modal-root').innerHTML=`<div class="overlay">
   <div class="modal" style="max-width:540px">
     <div class="modal-title">☑️ Bulk status advance</div>
     <div style="font-size:13px;color:var(--gray-500);margin-bottom:12px">Select loads to move to their next status</div>
@@ -17389,7 +17420,7 @@ function logNoShow(loadId,carrier,reason){
 }
 function getCarrierNoShows(name){return (JSON.parse(localStorage.getItem('carrier_noshows_count')||'{}')[name]||0);}
 function openNoShowModal(loadId,carrier){
-  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  $('modal-root').innerHTML=`<div class="overlay">
   <div class="modal" style="max-width:500px">
     <div class="modal-title">🚫 Log carrier no-show</div>
     <div style="font-size:13px;color:var(--navy);font-weight:700;margin-bottom:12px">${escH(carrier)}</div>
@@ -17408,7 +17439,7 @@ function openLoadRecovery(loadId){
   // Find available carriers for this lane
   const history=(window._fqHistory||[]).filter(l=>l.carrier&&['Delivered','Invoiced','Paid'].includes(l.status)&&l.pickupZip===q.pickupZip&&l.deliveryZip===q.deliveryZip);
   const carriers=[...new Set(history.map(l=>l.carrier))].filter(c=>c!==q.carrier&&!isBlacklisted(c));
-  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  $('modal-root').innerHTML=`<div class="overlay">
   <div class="modal" style="max-width:500px">
     <div class="modal-title">🔄 Load recovery — find replacement carrier</div>
     <div style="background:#fff5f5;border:1px solid #fca5a5;border-radius:var(--radius);padding:8px 12px;margin-bottom:12px;font-size:12px;color:var(--red);font-weight:600">Original carrier cancelled — ${escH(q.carrier||'Unknown')}</div>
@@ -17439,7 +17470,7 @@ function checkLoadCompletion(id){
   ];
   const incomplete=checks.filter(c=>!c.done);
   if(incomplete.length>0){
-    $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+    $('modal-root').innerHTML=`<div class="overlay">
     <div class="modal" style="max-width:500px">
       <div class="modal-title">📋 Delivery checklist</div>
       <div style="font-size:13px;color:var(--gray-500);margin-bottom:12px">Complete these before marking delivered:</div>
@@ -17466,7 +17497,7 @@ function logCarrierRejection(loadId,carrier,reason){
   localStorage.setItem('carrier_rejections',JSON.stringify(rl));
 }
 function openRejectionModal(loadId){
-  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  $('modal-root').innerHTML=`<div class="overlay">
   <div class="modal" style="max-width:500px">
     <div class="modal-title">📝 Log carrier rejection</div>
     <div class="field"><label>Carrier that declined</label><input type="text" id="rej-carrier" placeholder="Carrier name"></div>
@@ -17499,7 +17530,7 @@ function timeInStatusBadge(l){
 // ── LOAD RE-ROUTE TOOL ────────────────────────────────────────────
 function openRerouteTool(id){
   const q=(window._fqHistory||[]).find(q=>q.id===id);if(!q) return;
-  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  $('modal-root').innerHTML=`<div class="overlay">
   <div class="modal" style="max-width:500px">
     <div class="modal-title">🔀 Re-route load</div>
     <div style="background:#fffbeb;border:1px solid #fbbf24;border-radius:var(--radius);padding:8px 12px;margin-bottom:12px;font-size:12px;color:#92400e">⚠️ Original: ${escH(q.pickupZip||'?')} → ${escH(q.deliveryZip||'?')}</div>
@@ -17528,7 +17559,7 @@ function applyReroute(id){
 function openLoadMerge(){
   const bookedLoads=getTMSLoads().filter(l=>l.status==='Booked');
   if(bookedLoads.length<2){showToast('Need at least 2 booked loads to merge','info');return;}
-  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  $('modal-root').innerHTML=`<div class="overlay">
   <div class="modal" style="max-width:480px">
     <div class="modal-title">🔀 Merge loads into one FTL</div>
     <div style="font-size:13px;color:var(--gray-500);margin-bottom:12px">Select 2 loads on the same lane to consolidate</div>
@@ -17661,7 +17692,7 @@ function getQuoteAssignee(id){return localStorage.getItem('qassign_'+id)||'';}
 function setQuoteAssignee(id,name){localStorage.setItem('qassign_'+id,name);}
 function openAssignQuote(type,id){
   const agents=getAgentWinRates?Object.keys(getAgentWinRates()):[];
-  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  $('modal-root').innerHTML=`<div class="overlay">
   <div class="modal" style="max-width:500px">
     <div class="modal-title">👤 Assign quote</div>
     <div class="field"><label>Assign to</label>
@@ -17690,7 +17721,7 @@ function checkQuoteReminders(){
   if(due.length) localStorage.setItem('quote_reminders',JSON.stringify(getQuoteReminders().map(r=>({...r,shown:r.date===today?true:r.shown}))));
 }
 function openReminderModal(quoteId){
-  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  $('modal-root').innerHTML=`<div class="overlay">
   <div class="modal" style="max-width:500px">
     <div class="modal-title">🔔 Set follow-up reminder</div>
     <div class="field"><label>Remind me on</label><input type="date" id="rem-date" value="${localDateStr()}"></div>
@@ -17710,7 +17741,7 @@ function addNegotiationEntry(id,party,amount,note){
 }
 function openNegotiationModal(id){
   const log=getNegotiationLog(id);
-  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  $('modal-root').innerHTML=`<div class="overlay">
   <div class="modal" style="max-width:500px">
     <div class="modal-title">🤝 Negotiation log</div>
     <div style="max-height:200px;overflow-y:auto;margin-bottom:12px">
@@ -17767,7 +17798,7 @@ async function applyRateSuggestion(pickupZip,deliveryZip,mode){
 
 // ── AI CHAT ASSISTANT ─────────────────────────────────────────────
 function openAIChat(){
-  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  $('modal-root').innerHTML=`<div class="overlay">
   <div class="modal" style="max-width:520px">
     <div class="modal-title">🤖 AI Assistant</div>
     <div id="ai-chat-msgs" style="height:250px;overflow-y:auto;border:1px solid var(--gray-200);border-radius:var(--radius);padding:12px;margin-bottom:12px;background:var(--gray-50)">
@@ -17951,7 +17982,7 @@ async function lookupDOT(dotNumber,targetName){
 }
 function openDOTModal(carrierName){
   const p=getCarrierProfile(carrierName);
-  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  $('modal-root').innerHTML=`<div class="overlay">
   <div class="modal" style="max-width:500px">
     <div class="modal-title">🔍 DOT / Authority info — ${escH(carrierName)}</div>
     <div class="g2">
@@ -17997,7 +18028,7 @@ const STATUS_OPTS=['Available','In a call','Away','Do not disturb'];
 function statusColor(s){return{'Available':'var(--green)','In a call':'var(--amber)','Away':'var(--gray-400)','Do not disturb':'var(--red)'}[s]||'var(--gray-400)';}
 function statusDot(status){return`<span style="width:8px;height:8px;border-radius:50%;background:${statusColor(status)};display:inline-block;margin-right:4px"></span>`;}
 function openStatusPicker(){
-  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  $('modal-root').innerHTML=`<div class="overlay">
   <div class="modal" style="max-width:500px">
     <div class="modal-title">Set your status</div>
     <div style="display:flex;flex-direction:column;gap:8px">
@@ -18080,7 +18111,7 @@ function renderTeamGoals(){
 }
 function openGoalSetter(){
   const g=getTeamGoals();
-  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  $('modal-root').innerHTML=`<div class="overlay">
   <div class="modal" style="max-width:500px">
     <div class="modal-title">🎯 Set team goals</div>
     <div class="g2">
@@ -18138,7 +18169,7 @@ function generateWeeklyReport(){
   const weekAgo=new Date(Date.now()-7*864e5).toISOString().slice(0,10);
   const loads=[...(S.quotes||[]),...(window._fqHistory||[])].filter(q=>q.date>=weekAgo&&['Booked','Delivered','Invoiced','Paid'].includes(q.status));
   const rev=loads.reduce((s,q)=>s+(q.customerRate||0),0);const profit=loads.reduce((s,q)=>s+getShipmentProfit(q,'freight').profit,0);
-  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  $('modal-root').innerHTML=`<div class="overlay">
   <div class="modal" style="max-width:500px">
     <div class="modal-title">📊 Weekly performance report</div>
     <div style="font-size:13px;color:var(--gray-500);margin-bottom:14px">Week of ${weekAgo} to ${localDateStr()}</div>
@@ -18203,7 +18234,7 @@ function saveHomeWidgets(list){localStorage.setItem('home_widgets',JSON.stringif
 function openWidgetCustomizer(){
   const current=getHomeWidgets();
   const all=[{id:'realtime',label:'💰 Real-time margin'},{id:'streak',label:'🔥 Streak & compliment'},{id:'quest',label:'⚡ Daily quest'},{id:'pipeline',label:'🚚 Pipeline'},{id:'quickactions',label:'⚡ Quick actions'},{id:'goals',label:'🎯 Team goals'},{id:'announcements',label:'📢 Announcements'},{id:'leaderboard',label:'🏆 Leaderboard preview'},{id:'performance',label:'📊 Performance summary'}];
-  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  $('modal-root').innerHTML=`<div class="overlay">
   <div class="modal" style="max-width:500px">
     <div class="modal-title">🎨 Customize home screen</div>
     <div style="font-size:12px;color:var(--gray-500);margin-bottom:12px">Choose which widgets appear on your home screen</div>
@@ -19550,7 +19581,7 @@ function renderClaimWizardModal(){
   const modeFilters = ['all','drayage','FTL','LTL','LCL','Air'];
 
   if(_claimStep===1){
-    $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+    $('modal-root').innerHTML=`<div class="overlay">
     <div class="modal" style="min-width:640px;max-width:720px;max-height:85vh;display:flex;flex-direction:column">
       <div class="modal-title">⚖️ File a new claim — Step 1: Select shipment</div>
       <div class="modal-body" style="flex:1;overflow:hidden;display:flex;flex-direction:column;gap:0">
@@ -19581,7 +19612,7 @@ function renderClaimWizardModal(){
       </div>
     </div></div>`;
   } else if(_claimStep===2){
-    $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+    $('modal-root').innerHTML=`<div class="overlay">
     <div class="modal" style="min-width:580px;max-width:660px">
       <div class="modal-title">⚖️ Claim details — ${_claimDraft.shipmentId}</div>
       <div class="modal-body">
@@ -19729,7 +19760,7 @@ function openClaimDetail(claimId){
 
   const stageIdx = CLAIM_STATUSES.findIndex(s=>s.key===cl.status)||0;
 
-  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  $('modal-root').innerHTML=`<div class="overlay">
   <div class="modal" style="min-width:580px;max-width:660px;max-height:90vh;overflow-y:auto">
     <div class="modal-title">⚖️ ${cl.id}</div>
     <div class="modal-body">
@@ -22949,7 +22980,7 @@ setTimeout(()=>{
 </script>
 
 <script>
-function openModal(html){$('modal-root').innerHTML='<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal">'+html+'</div></div>';}
+function openModal(html){$('modal-root').innerHTML='<div class="overlay"><div class="modal">'+html+'</div></div>';}
 /* ── PRE-QUOTE REQUEST TRACKER ──────────────────────────────── */
 // Allows entering a rate request BEFORE pricing is received
 // Status flow: Pending → Priced → Quoted → Booked
@@ -24206,6 +24237,10 @@ function openVendorRateRequest(id, method){
       <div style="max-height:150px;overflow:auto;border:1px solid var(--gray-100);border-radius:8px;padding:4px">${carrierRows}</div>
       <input id="vrr-extra" placeholder="Additional emails, comma-separated" style="width:100%;margin-top:8px;padding:7px 10px;border:1px solid #d1d5db;border-radius:8px;font-size:13px">
     </div>
+    <div style="margin-top:12px">
+      <label style="font-size:11px;font-weight:700;color:#666;display:block;margin-bottom:4px">CC on every rate request (your team gets a copy)</label>
+      <input id="vrr-cc" value="${(window.MARIO_CC_DEFAULT||'mk@shifl.com, julianny@shifl.com').replace(/"/g,'&quot;')}" placeholder="CC emails, comma-separated — leave blank for none" style="width:100%;padding:7px 10px;border:1px solid #d1d5db;border-radius:8px;font-size:13px">
+    </div>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
       <button class="btn" onclick="closeModal()">Cancel</button>
       <button class="btn blue" id="vrr-send-btn" onclick="doSendVendorRateRequest('${id}')">📧 Send rate request</button>
@@ -24221,11 +24256,12 @@ async function doSendVendorRateRequest(id){
   document.querySelectorAll('.vrr-carrier:checked').forEach(cb=>recips.push({email:cb.value, name:cb.getAttribute('data-name')||''}));
   (($('vrr-extra')||{}).value||'').split(',').map(x=>x.trim()).filter(Boolean).forEach(e=>recips.push({email:e,name:''}));
   if(!recips.length){alert('Select at least one carrier or add an email.');return;}
+  const ccVal=((($('vrr-cc')||{}).value)||'').split(',').map(x=>x.trim()).filter(Boolean).join(', ')||null;
   const btn=$('vrr-send-btn'); if(btn){btn.textContent='Queuing...';btn.disabled=true;}
   // Queue each email into Supabase; the Google sender script delivers them from trucking@shifl.com
   const rows=recips.map(rc=>({
     to_email: rc.email,
-    cc_email: null,
+    cc_email: ccVal,
     subject: subject,
     body_text: body.replace(/\[Carrier \/ Name\]/g, rc.name||'there'),
     from_alias: 'trucking@shifl.com',
@@ -27359,7 +27395,7 @@ function openEditQuoteModal(id){
     ...(S.quotes||[]).map(x=>x.carrier).filter(Boolean)
   ])].filter(Boolean);
 
-  $('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
+  $('modal-root').innerHTML=`<div class="overlay">
   <div class="modal" style="min-width:560px;max-width:640px;max-height:90vh;overflow-y:auto">
     <div class="modal-title">✏️ Edit quote — #${q.quoteNum} · ${q.customer}</div>
     <div class="modal-body">
