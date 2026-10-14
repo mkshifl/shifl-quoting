@@ -16199,7 +16199,9 @@ async function _rateConPDF(id){
   doc.setTextColor(255,255,255);doc.setFont('helvetica','bold');doc.setFontSize(18);
   doc.text('RATE CONFIRMATION'+(rc.rev>0?(' — REV '+rc.rev):''),M,13);
   doc.setFont('helvetica','normal');doc.setFontSize(9);
-  doc.text(A(p.legal||'Shifl Inc.')+'  ·  MC '+A(p.mc||'—')+'  ·  DOT '+A(p.dot||'—'),M,20);
+  var _mc=String(p.mc||'').replace(/^\s*mc[#:\s-]*/i,'').trim()||'—';
+  var _dot=String(p.dot||'').replace(/^\s*(usdot|dot)[#:\s-]*/i,'').trim()||'—';
+  doc.text(A(p.legal||'Shifl Inc.')+'  ·  MC '+A(_mc)+'  ·  DOT '+A(_dot),M,20);
   if(p.address)doc.text(A(p.address),M,25);
   doc.setFontSize(9);doc.text('Shifl Load #: '+A(ref),W-M,13,{align:'right'});
   doc.text('Issued: '+localDateStr(),W-M,19,{align:'right'});
@@ -16280,7 +16282,7 @@ async function _rateConPDF(id){
   doc.setFont('helvetica','normal');doc.setFontSize(8);
   doc.text('Carrier signature / date',M,y+4);doc.text('Broker signature / date',W-M-80,y+4);
   doc.setFontSize(7.5);doc.setTextColor(gray[0],gray[1],gray[2]);
-  doc.text('By signing, carrier accepts this load and all terms above. Return signed within 30 minutes or before pickup, whichever is first.',M,y+11,{maxWidth:W-M*2});
+  doc.text('By signing, carrier accepts this load and all terms above. Return signed within 15 minutes.',M,y+11,{maxWidth:W-M*2});
   return {doc:doc,rc:rc,q:q,ref:ref};
 }
 async function rcGeneratePDF(id,silent){
@@ -16314,7 +16316,7 @@ async function rcEmailCarrier(id){
   var body='Hi '+(rc.carrier.dispatchName||'team')+',\n\nPlease find attached the rate confirmation for Shifl load '+r.ref+'.\n\n'+
     'Total: '+fmtD(_rcTotal(rc))+' '+(rc.rate.currency||'USD')+'\n'+
     (rc.stops&&rc.stops[0]?('Pickup: '+(_rcStopAddr(rc.stops[0])||'')+(rc.stops[0].window?(' ('+rc.stops[0].window+')'):'')+'\n'):'')+
-    '\nSign and return within 30 minutes or before pickup, whichever is first. No verbal changes — any change needs a revised rate con.\n\nThank you,\nShifl Dispatch';
+    '\nSign and return within 15 minutes. No verbal changes — any change needs a revised rate con.\n\nThank you,\nShifl Dispatch';
   var btn=document.querySelector('.modal-foot .btn.blue'); if(btn){btn.textContent='Sending…';btn.disabled=true;}
   try{
     var row={to_email:to,cc_email:cc,subject:subj,body_text:body,from_alias:'trucking@shifl.com',
