@@ -3339,6 +3339,7 @@ function showFqQuoteModal(idx){
       ${notesHtml}
       <div class="modal-foot">
         <button class="btn" onclick="closeModal()">Close</button>
+        <button class="btn" onclick="editFqQuoteInfo(${idx})">✏️ Edit</button>
         ${carrierBtn}
         ${bolBtn}
         <button class="btn" onclick="duplicateFqQuote(${idx})">⧉ Duplicate</button>
@@ -3346,6 +3347,41 @@ function showFqQuoteModal(idx){
         <button class="btn blue" onclick="downloadFqPDF(${idx})">📄 Download PDF</button>
       </div>
     </div></div>`;
+}
+
+// Edit a freight quote's customer, carrier and pricing — works at any status (Quoted, Booked, …).
+function editFqQuoteInfo(idx){
+  const q=(window._fqHistory||[])[idx]; if(!q) return;
+  openModal(
+    '<div class="modal-title">✏️ Edit quote'+(q.shiflRef?(' · '+escH(q.shiflRef)):'')+'</div>'+
+    '<div style="padding:4px 2px">'+
+    '<div style="font-size:11px;color:#64748b;margin-bottom:14px">Change the customer, carrier, and pricing. Profit recalculates automatically. Works whether the load is Quoted or already Booked.</div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">'+
+      '<div style="grid-column:1/3"><label style="font-size:11px;font-weight:700;color:#64748b;display:block;margin-bottom:4px">Customer name</label><input id="efq-customer" value="'+escH(q.customer||'')+'" style="width:100%;padding:8px 10px;border:1px solid #d1d5db;border-radius:7px;font-size:13px"></div>'+
+      '<div style="grid-column:1/3"><label style="font-size:11px;font-weight:700;color:#64748b;display:block;margin-bottom:4px">Carrier name</label><input id="efq-carrier" value="'+escH(q.carrier||'')+'" style="width:100%;padding:8px 10px;border:1px solid #d1d5db;border-radius:7px;font-size:13px"></div>'+
+      '<div><label style="font-size:11px;font-weight:700;color:#64748b;display:block;margin-bottom:4px">Carrier cost ($)</label><input id="efq-carrierRate" value="'+(Number(q.carrierRate)||0)+'" inputmode="decimal" style="width:100%;padding:8px 10px;border:1px solid #d1d5db;border-radius:7px;font-size:13px"></div>'+
+      '<div><label style="font-size:11px;font-weight:700;color:#64748b;display:block;margin-bottom:4px">Customer rate ($)</label><input id="efq-customerRate" value="'+(Number(q.customerRate)||0)+'" inputmode="decimal" style="width:100%;padding:8px 10px;border:1px solid #d1d5db;border-radius:7px;font-size:13px"></div>'+
+    '</div></div>'+
+    '<div class="modal-foot"><button class="btn" onclick="showFqQuoteModal('+idx+')">Cancel</button>'+
+    '<button class="btn blue" onclick="saveFqQuoteInfo('+idx+')">Save changes</button></div>'
+  );
+}
+async function saveFqQuoteInfo(idx){
+  const q=(window._fqHistory||[])[idx]; if(!q) return;
+  const customer=(($('efq-customer')||{}).value||'').trim();
+  const carrier=(($('efq-carrier')||{}).value||'').trim();
+  const carrierRate=parseFloat(($('efq-carrierRate')||{}).value)||0;
+  const customerRate=parseFloat(($('efq-customerRate')||{}).value)||0;
+  const before=(q.customer||'—')+' / '+(q.carrier||'—')+' / '+fmtD(q.carrierRate||0)+' → '+fmtD(q.customerRate||0);
+  q.customer=customer; q.carrier=carrier; q.carrierRate=carrierRate; q.customerRate=customerRate;
+  q.profit=customerRate-carrierRate; q.profitPct=customerRate>0?(q.profit/customerRate):0;
+  try{localStorage.setItem('fq_history',JSON.stringify(window._fqHistory));}catch(e){}
+  try{await dbSaveFqQuote(q);}catch(e){console.warn('fq edit save:',e);}
+  try{logAction('fq_quote_edited',(q.shiflRef||q.id)+' — '+before+'  ⇒  '+(customer||'—')+' / '+(carrier||'—')+' / '+fmtD(carrierRate)+' → '+fmtD(customerRate),'fq_quote',q.id);}catch(e){}
+  closeModal();
+  showToast('✅ Quote updated — customer, carrier & pricing saved','success',2600);
+  if(S.view==='freight'&&S.fqTab==='log') renderFqLog();
+  showFqQuoteModal(idx);
 }
 
 function printFqQuote(idx){
