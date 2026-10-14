@@ -14921,6 +14921,13 @@ function deleteTMSLoad(id){
 
 // ── ADVANCE LOAD STATUS ────────────────────────────────────────────
 async function advanceTMSLoad(id,newStatus){
+  // Spec: a signed rate con must be on the load before the truck is dispatched.
+  if(newStatus==='Dispatched'){
+    var _rc=(getTMSMeta(id)||{}).rateCon;
+    if(!_rc||_rc.status!=='Signed'){
+      if(!confirm('No signed rate confirmation is on this load yet.\n\nPer policy the signed rate con should be attached before dispatch. Dispatch anyway?')) return;
+    }
+  }
   var fqIdx=(window._fqHistory||[]).findIndex(function(q){return q.id===id;});
   var dIdx=(S.quotes||[]).findIndex(function(q){return q.id===id;});
   var prevStatus=fqIdx>=0?window._fqHistory[fqIdx].status:dIdx>=0?S.quotes[dIdx].status:newStatus;
@@ -15722,8 +15729,9 @@ function openTMSLoadDetail(id){
 
   // Doc checklist
   const _bolUpload=getBolUpload(id);
+  const _rcStatus=(meta.rateCon&&meta.rateCon.status)||'—';
   const docs=[
-    {label:'Rate confirmation',key:'rateCon',icon:'📧'},
+    {label:'Rate confirmation'+(meta.rateCon&&meta.rateCon.rev>0?(' (Rev '+meta.rateCon.rev+')'):'')+(_rcStatus!=='—'?(' · '+_rcStatus):''),key:'rateCon',check:_rcStatus==='Signed',icon:'📧'},
     {label:'BOL',key:'bolNum',check:!!meta.bolNum||!!_bolUpload,icon:'📄',uploaded:!!_bolUpload,uploadData:_bolUpload},
     {label:'POD',key:'podUploaded',check:!!meta.podUploaded,icon:'✅'},
     {label:'Customer invoice',key:'custInv',check:hasCInv,icon:'🧾'},
@@ -15925,34 +15933,415 @@ function fileClaim(id){
   openTMSLoadDetail(id);
 }
 
-// ── 6. RATE CONFIRMATION PDF ──────────────────────────────────────
-async function openTMSRateCon(id){
-  const q=(window._fqHistory||[]).find(q=>q.id===id);
-  if(!q){showToast('Load not found','error');return;}
-  const meta=getTMSMeta(id);
-  if(!await loadJsPDF()){showToast('PDF library loading...','info');return;}
-  const{jsPDF}=window.jspdf;const doc=new jsPDF({unit:'mm',format:'letter'});
-  const W=216,M=14,navy=[26,46,74];
-  doc.setFillColor(...navy);doc.rect(0,0,W,32,'F');
-  doc.setTextColor(255,255,255);doc.setFont('helvetica','bold');doc.setFontSize(20);
-  doc.text('RATE CONFIRMATION',M,14);
-  doc.setFontSize(10);doc.setFont('helvetica','normal');
-  doc.text('Shifl Logistics · Freight Brokerage',M,22);
-  doc.text('Ref: '+(meta.bookingNum||id),W-M,14,{align:'right'});
-  doc.text('Date: '+localDateStr(),W-M,22,{align:'right'});
-  doc.setTextColor(0);let y=42;
-  const sec=t=>{doc.setFillColor(240,244,248);doc.rect(M,y-4,W-M*2,7,'F');doc.setFont('helvetica','bold');doc.setFontSize(9);doc.setTextColor(...navy);doc.text(t,M+2,y);doc.setTextColor(0);y+=10;};
-  const row=(l,v)=>{doc.setFont('helvetica','bold');doc.setFontSize(9);doc.text(l+':',M,y);doc.setFont('helvetica','normal');doc.text(v||'—',M+45,y);y+=7;};
-  sec('CARRIER INFORMATION');row('Carrier',q.carrier);row('Mode',q.fqMode);y+=3;
-  sec('SHIPMENT DETAILS');row('Pickup ZIP',q.pickupZip);row('Delivery ZIP',q.deliveryZip);row('Pickup appointment',meta.pickupAppt||'TBD');row('Delivery appointment',meta.deliveryAppt||'TBD');row('Weight',q.weight?(q.weight+' lbs'):'TBD');row('Commodity',q.commodity||meta.commodity||'General freight, no hazmat');y+=3;
-  sec('RATE');doc.setFont('helvetica','bold');doc.setFontSize(16);doc.setTextColor(...navy);doc.text(fmtD(q.carrierRate||0),M,y);doc.setFontSize(9);doc.setTextColor(100);doc.text('All-in rate · Payment terms: Net 30',M+35,y);doc.setTextColor(0);y+=12;
-  if(meta.bolNotes){sec('SPECIAL INSTRUCTIONS');doc.setFont('helvetica','normal');doc.setFontSize(9);doc.text(doc.splitTextToSize(meta.bolNotes,W-M*2),M,y);y+=doc.splitTextToSize(meta.bolNotes,W-M*2).length*5+6;}
-  y+=8;doc.setDrawColor(...navy);doc.setLineWidth(.5);doc.line(M,y,90,y);doc.line(120,y,W-M,y);
-  doc.setFontSize(8);doc.text('Carrier signature / date',M,y+4);doc.text('Broker signature / date',120,y+4);
-  doc.setFontSize(7);doc.setTextColor(150);doc.text('By accepting this load, carrier agrees to all terms. Contact: dispatch@shifl.com',W/2,270,{align:'center'});
-  doc.save('RateCon_'+(meta.bookingNum||id)+'_'+escH(q.carrier||'carrier').replace(/\s/g,'_')+'.pdf');
-  saveTMSMeta(id,{rateConSent:true});
-  showToast('Rate confirmation PDF downloaded','success',2000);
+// ── 6. RATE CONFIRMATION (full — per Shifl rate-con spec) ─────────
+// Broker profile: Shifl's identity + default terms that every rate con inherits.
+const RC_BROKER_KEY='shifl_broker_profile';
+function getBrokerProfile(){
+  var d; try{d=JSON.parse(localStorage.getItem(RC_BROKER_KEY)||'null');}catch(e){d=null;}
+  var def={legal:'Shifl Inc.',mc:'',dot:'',address:'',dispatchName:'',dispatchPhone:'',dispatchEmail:'dispatch@shifl.com',remit:'',
+    terms:{detentionFree:'2 hours',detentionRate:'$50/hr after free time',layover:'$250/day',tonu:'$150',
+      lumper:'Reimbursed with receipt',trackingApp:'Required — ELD / Macropoint / Project44 link',
+      checkCall:'Daily 8:00 AM ET + arrival & departure at every stop',noTrackFine:'',
+      payment:'Net 30 from receipt of signed rate con, clean POD & carrier invoice',quickPay:'2% / Net 2 (optional)'}};
+  if(!d) return def;
+  d.terms=Object.assign({},def.terms,d.terms||{});
+  return Object.assign({},def,d);
+}
+function saveBrokerProfile(p){ try{localStorage.setItem(RC_BROKER_KEY,JSON.stringify(p));}catch(e){} }
+function openBrokerProfile(){
+  var p=getBrokerProfile(), t=p.terms;
+  var i=function(id,v,ph){return '<input id="'+id+'" value="'+escH(v||'')+'" placeholder="'+(ph||'')+'" style="width:100%;padding:7px 9px;border:1px solid #d1d5db;border-radius:7px;font-size:12px">';};
+  var lbl=function(x){return '<label style="font-size:10px;font-weight:700;color:#64748b;display:block;margin:0 0 3px">'+x+'</label>';};
+  openModal(
+    '<div class="modal-title">🏢 Broker profile & default terms</div>'+
+    '<div style="padding:4px 2px;max-height:68vh;overflow:auto">'+
+    '<div style="font-size:11px;color:#64748b;margin-bottom:12px">Appears on every rate con header and pre-fills the terms. Fill once.</div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">'+
+      '<div style="grid-column:1/3">'+lbl('Legal broker name')+i('bp-legal',p.legal,'Shifl Inc.')+'</div>'+
+      '<div>'+lbl('MC #')+i('bp-mc',p.mc,'MC123456')+'</div>'+
+      '<div>'+lbl('DOT #')+i('bp-dot',p.dot,'DOT1234567')+'</div>'+
+      '<div style="grid-column:1/3">'+lbl('Broker address')+i('bp-addr',p.address,'Street, City, State ZIP')+'</div>'+
+      '<div>'+lbl('Dispatch contact name')+i('bp-dname',p.dispatchName,'')+'</div>'+
+      '<div>'+lbl('Dispatch phone')+i('bp-dphone',p.dispatchPhone,'')+'</div>'+
+      '<div>'+lbl('Dispatch email')+i('bp-demail',p.dispatchEmail,'dispatch@shifl.com')+'</div>'+
+      '<div>'+lbl('Remit-to (for invoices)')+i('bp-remit',p.remit,'')+'</div>'+
+    '</div>'+
+    '<div style="font-size:11px;font-weight:800;color:#1a2e4a;margin:6px 0 8px;letter-spacing:.3px">DEFAULT TERMS</div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'+
+      '<div>'+lbl('Detention — free time')+i('bp-detfree',t.detentionFree,'2 hours')+'</div>'+
+      '<div>'+lbl('Detention — rate after')+i('bp-detrate',t.detentionRate,'$50/hr')+'</div>'+
+      '<div>'+lbl('Layover')+i('bp-layover',t.layover,'$250/day')+'</div>'+
+      '<div>'+lbl('TONU (truck ordered not used)')+i('bp-tonu',t.tonu,'$150')+'</div>'+
+      '<div style="grid-column:1/3">'+lbl('Lumper')+i('bp-lumper',t.lumper,'')+'</div>'+
+      '<div style="grid-column:1/3">'+lbl('Tracking requirement')+i('bp-track',t.trackingApp,'')+'</div>'+
+      '<div style="grid-column:1/3">'+lbl('Check-call schedule')+i('bp-ccall',t.checkCall,'')+'</div>'+
+      '<div style="grid-column:1/3">'+lbl('No-tracking fine (optional)')+i('bp-notrack',t.noTrackFine,'')+'</div>'+
+      '<div style="grid-column:1/3">'+lbl('Payment terms')+i('bp-pay',t.payment,'')+'</div>'+
+      '<div style="grid-column:1/3">'+lbl('Quick-pay option')+i('bp-qpay',t.quickPay,'')+'</div>'+
+    '</div></div>'+
+    '<div class="modal-foot"><button class="btn" onclick="closeModal()">Cancel</button>'+
+    '<button class="btn blue" onclick="saveBrokerProfileFromForm()">Save profile</button></div>'
+  );
+}
+function saveBrokerProfileFromForm(){
+  var g=function(id){return (($(id)||{}).value||'').trim();};
+  saveBrokerProfile({legal:g('bp-legal'),mc:g('bp-mc'),dot:g('bp-dot'),address:g('bp-addr'),
+    dispatchName:g('bp-dname'),dispatchPhone:g('bp-dphone'),dispatchEmail:g('bp-demail'),remit:g('bp-remit'),
+    terms:{detentionFree:g('bp-detfree'),detentionRate:g('bp-detrate'),layover:g('bp-layover'),tonu:g('bp-tonu'),
+      lumper:g('bp-lumper'),trackingApp:g('bp-track'),checkCall:g('bp-ccall'),noTrackFine:g('bp-notrack'),
+      payment:g('bp-pay'),quickPay:g('bp-qpay')}});
+  closeModal();showToast('🏢 Broker profile saved','success',2200);
+}
+
+// Build a fresh rate con prefilled from the load, carrier network, and broker defaults.
+function _rcDefault(q,meta){
+  var p=getBrokerProfile();
+  var c=(S.carriers||[]).find(function(x){return x&&x.name&&q.carrier&&x.name.toLowerCase()===String(q.carrier).toLowerCase();})||{};
+  return {
+    rev:0,status:'Draft',generatedAt:null,sentAt:null,sentTo:'',signed:null,
+    carrier:{legal:q.carrier||'',mc:c.mc||c.mc_number||'',dot:c.dot||c.dot_number||'',
+      dispatchName:c.contact_name||'',dispatchPhone:c.phone||'',dispatchEmail:c.email||''},
+    stops:[
+      {type:'Pickup',facility:'',address:q.pickupZip||'',date:meta.pickupApptDate||'',window:meta.pickupAppt||'FCFS',refs:q.shiflRef||meta.bookingNum||''},
+      {type:'Delivery',facility:'',address:q.deliveryZip||'',date:meta.deliveryApptDate||'',window:meta.deliveryAppt||'FCFS',refs:''}
+    ],
+    equipment:{type:q.fqEquip||q.fqMode||'Dry van 53\'',length:'53\'',reeferTemp:'',reeferMode:'',tarpsStraps:'',seal:'Required'},
+    freight:{commodity:q.commodity||meta.commodity||'General freight, no hazmat',weight:q.weight?(q.weight+' lbs'):'',
+      pieces:meta.pieces||'',hazmat:'None',declaredValue:''},
+    rate:{linehaul:Number(q.carrierRate||0),fuel:0,accessorials:[],currency:'USD'},
+    terms:Object.assign({},p.terms),
+    history:[]
+  };
+}
+function getRateCon(id){
+  var q=(window._fqHistory||[]).find(function(x){return x.id===id;})||(window._aqHistory||[]).find(function(x){return x.id===id;});
+  if(!q) return null;
+  var meta=getTMSMeta(id);
+  var rc=meta.rateCon;
+  if(!rc){ rc=_rcDefault(q,meta); }
+  else { rc.terms=Object.assign({},getBrokerProfile().terms,rc.terms||{}); if(!Array.isArray(rc.history))rc.history=[]; }
+  return {q:q,meta:meta,rc:rc};
+}
+function _rcTotal(rc){
+  var acc=(rc.rate.accessorials||[]).reduce(function(s,a){return s+(Number(a.amount)||0);},0);
+  return (Number(rc.rate.linehaul)||0)+(Number(rc.rate.fuel)||0)+acc;
+}
+function _rcPersist(id,rc){ saveTMSMeta(id,{rateCon:rc,rateConStatus:rc.status,rateConRev:rc.rev}); }
+
+// ── Editor ──────────────────────────────────────────────────────
+function openTMSRateCon(id){
+  var ctx=getRateCon(id);
+  if(!ctx){showToast('Load not found','error',2200);return;}
+  var q=ctx.q, rc=ctx.rc;
+  var p=getBrokerProfile();
+  var warnMC = (!p.mc||!p.dot) ? '<div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:8px 11px;margin-bottom:12px;font-size:11px;color:#92400e">⚠ Your broker MC/DOT isn\'t set — <button onclick="openBrokerProfile()" style="background:none;border:none;color:#2563eb;font-weight:700;cursor:pointer;text-decoration:underline;padding:0;font-family:inherit;font-size:11px">add it in Broker profile</button> so it prints on the rate con.</div>' : '';
+  var revBadge = rc.rev>0 ? '<span style="font-size:11px;font-weight:800;color:#b45309;background:#fffbeb;border:1px solid #fcd34d;padding:2px 9px;border-radius:99px;margin-left:8px">Rev '+rc.rev+'</span>' : '';
+  var statusColor={Draft:'#64748b',Sent:'#2563eb',Signed:'#16a34a'}[rc.status]||'#64748b';
+  var ti=function(path,v,ph,w){return '<input data-rc="'+path+'" value="'+escH(v==null?'':v)+'" placeholder="'+(ph||'')+'" style="width:'+(w||'100%')+';padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:12px">';};
+  var lbl=function(x){return '<label style="font-size:10px;font-weight:700;color:#64748b;display:block;margin:0 0 3px">'+x+'</label>';};
+  // Stops
+  var stopsHtml=(rc.stops||[]).map(function(s,i){
+    return '<div style="border:1px solid #e5e7eb;border-radius:9px;padding:10px;margin-bottom:8px;background:#fafafa">'+
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px">'+
+        '<select data-rc="stops.'+i+'.type" style="font-size:11px;font-weight:800;border:1px solid #d1d5db;border-radius:6px;padding:3px 7px;color:#1a2e4a">'+
+          ['Pickup','Delivery'].map(function(o){return '<option'+(o===s.type?' selected':'')+'>'+o+'</option>';}).join('')+'</select>'+
+        '<button onclick="_rcDelStop(\''+id+'\','+i+')" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:12px;font-weight:700">Remove</button>'+
+      '</div>'+
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:7px">'+
+        '<div style="grid-column:1/3">'+lbl('Facility name')+ti('stops.'+i+'.facility',s.facility,'Warehouse / shipper name')+'</div>'+
+        '<div style="grid-column:1/3">'+lbl('Full address')+ti('stops.'+i+'.address',s.address,'Street, City, State ZIP')+'</div>'+
+        '<div>'+lbl('Date')+ti('stops.'+i+'.date',s.date,'MM/DD/YYYY')+'</div>'+
+        '<div>'+lbl('Appt / FCFS window')+ti('stops.'+i+'.window',s.window,'08:00–15:00 or FCFS')+'</div>'+
+        '<div style="grid-column:1/3">'+lbl('Reference / PO #s')+ti('stops.'+i+'.refs',s.refs,'')+'</div>'+
+      '</div></div>';
+  }).join('');
+  // Accessorials
+  var accHtml=(rc.rate.accessorials||[]).map(function(a,i){
+    return '<div style="display:flex;gap:7px;margin-bottom:6px;align-items:center">'+
+      '<input data-rc="rate.accessorials.'+i+'.label" value="'+escH(a.label||'')+'" placeholder="Accessorial (e.g. Detention)" style="flex:1;padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:12px">'+
+      '<input data-rc="rate.accessorials.'+i+'.amount" value="'+escH(a.amount==null?'':a.amount)+'" placeholder="0" inputmode="decimal" style="width:100px;padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:12px;text-align:right">'+
+      '<button onclick="_rcDelAcc(\''+id+'\','+i+')" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:12px;font-weight:700">✕</button></div>';
+  }).join('');
+  var histHtml=(rc.history||[]).length? (rc.history||[]).slice().reverse().map(function(h){
+    return '<div style="font-size:11px;color:#64748b;padding:4px 0;border-bottom:1px solid #f1f5f9">Rev '+h.rev+' · '+h.action+' · '+new Date(h.at).toLocaleString('en-US',{timeZone:'America/New_York',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})+(h.note?(' — '+escH(h.note)):'')+'</div>';
+  }).join('') : '<div style="font-size:11px;color:#9ca3af">No history yet.</div>';
+  var tv=function(k){return escH(rc.terms[k]||'');};
+
+  openModal(
+    '<div class="modal-title" style="display:flex;align-items:center;flex-wrap:wrap">📄 Rate confirmation — '+escH(q.customer||'')+revBadge+
+      '<span style="margin-left:auto;font-size:11px;font-weight:800;color:'+statusColor+';background:'+statusColor+'18;padding:2px 10px;border-radius:99px">'+rc.status+'</span></div>'+
+    '<div style="padding:2px 2px;max-height:66vh;overflow:auto">'+warnMC+
+    '<div style="display:flex;justify-content:flex-end;margin-bottom:8px"><button onclick="openBrokerProfile()" style="font-size:11px;background:none;border:1px solid #e5e7eb;border-radius:6px;padding:4px 9px;cursor:pointer;color:#475569;font-family:inherit">🏢 Broker profile</button></div>'+
+    // Carrier
+    '<div style="font-size:11px;font-weight:800;color:#1a2e4a;margin:4px 0 7px;letter-spacing:.3px">CARRIER</div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:14px">'+
+      '<div style="grid-column:1/4">'+lbl('Carrier legal name')+ti('carrier.legal',rc.carrier.legal,'')+'</div>'+
+      '<div>'+lbl('Carrier MC #')+ti('carrier.mc',rc.carrier.mc,'MC######')+'</div>'+
+      '<div>'+lbl('Carrier DOT #')+ti('carrier.dot',rc.carrier.dot,'')+'</div>'+
+      '<div>'+lbl('Dispatcher')+ti('carrier.dispatchName',rc.carrier.dispatchName,'')+'</div>'+
+      '<div>'+lbl('Dispatch phone')+ti('carrier.dispatchPhone',rc.carrier.dispatchPhone,'')+'</div>'+
+      '<div style="grid-column:2/4">'+lbl('Dispatch email (where rate con is sent)')+ti('carrier.dispatchEmail',rc.carrier.dispatchEmail,'dispatch@carrier.com')+'</div>'+
+    '</div>'+
+    // Stops
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin:4px 0 7px"><span style="font-size:11px;font-weight:800;color:#1a2e4a;letter-spacing:.3px">STOPS</span>'+
+      '<button onclick="_rcAddStop(\''+id+'\')" style="font-size:11px;font-weight:700;background:#f5f3ff;border:1px solid #c4b5fd;color:#7c3aed;border-radius:6px;padding:4px 10px;cursor:pointer;font-family:inherit">+ Add stop</button></div>'+
+    stopsHtml+
+    // Equipment
+    '<div style="font-size:11px;font-weight:800;color:#1a2e4a;margin:14px 0 7px;letter-spacing:.3px">EQUIPMENT</div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:14px">'+
+      '<div>'+lbl('Type')+ti('equipment.type',rc.equipment.type,'Dry van / Reefer / Flatbed')+'</div>'+
+      '<div>'+lbl('Length')+ti('equipment.length',rc.equipment.length,'53\'')+'</div>'+
+      '<div>'+lbl('Seal')+ti('equipment.seal',rc.equipment.seal,'Required')+'</div>'+
+      '<div>'+lbl('Reefer temp')+ti('equipment.reeferTemp',rc.equipment.reeferTemp,'e.g. 34°F')+'</div>'+
+      '<div>'+lbl('Reefer mode')+ti('equipment.reeferMode',rc.equipment.reeferMode,'Continuous / Cycle')+'</div>'+
+      '<div>'+lbl('Tarps / straps (flatbed)')+ti('equipment.tarpsStraps',rc.equipment.tarpsStraps,'')+'</div>'+
+    '</div>'+
+    // Freight
+    '<div style="font-size:11px;font-weight:800;color:#1a2e4a;margin:4px 0 7px;letter-spacing:.3px">FREIGHT</div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:14px">'+
+      '<div style="grid-column:1/3">'+lbl('Commodity')+ti('freight.commodity',rc.freight.commodity,'')+'</div>'+
+      '<div>'+lbl('Weight')+ti('freight.weight',rc.freight.weight,'')+'</div>'+
+      '<div>'+lbl('Pieces / pallets')+ti('freight.pieces',rc.freight.pieces,'')+'</div>'+
+      '<div>'+lbl('Hazmat')+ti('freight.hazmat',rc.freight.hazmat,'None / UN#, class')+'</div>'+
+      '<div>'+lbl('Declared value (if > $100K)')+ti('freight.declaredValue',rc.freight.declaredValue,'')+'</div>'+
+    '</div>'+
+    // Rate
+    '<div style="font-size:11px;font-weight:800;color:#1a2e4a;margin:4px 0 7px;letter-spacing:.3px">RATE ('+escH(rc.rate.currency||'USD')+')</div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">'+
+      '<div>'+lbl('Linehaul')+ti('rate.linehaul',rc.rate.linehaul,'0')+'</div>'+
+      '<div>'+lbl('Fuel (if separate)')+ti('rate.fuel',rc.rate.fuel,'0')+'</div>'+
+    '</div>'+
+    '<div style="margin-bottom:6px"><span style="font-size:10px;font-weight:700;color:#64748b">Agreed accessorials</span></div>'+accHtml+
+    '<button onclick="_rcAddAcc(\''+id+'\')" style="font-size:11px;font-weight:700;background:#f8fafc;border:1px dashed #cbd5e1;color:#475569;border-radius:6px;padding:5px 10px;cursor:pointer;font-family:inherit;margin-bottom:10px">+ Add accessorial</button>'+
+    '<div style="text-align:right;font-size:14px;font-weight:800;color:#1a2e4a;margin-bottom:14px">Total: '+fmtD(_rcTotal(rc))+'</div>'+
+    // Terms (editable, from broker defaults)
+    '<div style="font-size:11px;font-weight:800;color:#1a2e4a;margin:4px 0 7px;letter-spacing:.3px">TERMS <span style="font-weight:600;color:#9ca3af">(from your broker defaults — edit for this load if needed)</span></div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:6px">'+
+      '<div>'+lbl('Detention — free')+ti('terms.detentionFree',tv('detentionFree'))+'</div>'+
+      '<div>'+lbl('Detention — rate')+ti('terms.detentionRate',tv('detentionRate'))+'</div>'+
+      '<div>'+lbl('Layover')+ti('terms.layover',tv('layover'))+'</div>'+
+      '<div>'+lbl('TONU')+ti('terms.tonu',tv('tonu'))+'</div>'+
+      '<div style="grid-column:1/3">'+lbl('Lumper')+ti('terms.lumper',tv('lumper'))+'</div>'+
+      '<div style="grid-column:1/3">'+lbl('Tracking')+ti('terms.trackingApp',tv('trackingApp'))+'</div>'+
+      '<div style="grid-column:1/3">'+lbl('Check-call schedule')+ti('terms.checkCall',tv('checkCall'))+'</div>'+
+      '<div style="grid-column:1/3">'+lbl('Payment terms')+ti('terms.payment',tv('payment'))+'</div>'+
+      '<div style="grid-column:1/3">'+lbl('Quick-pay')+ti('terms.quickPay',tv('quickPay'))+'</div>'+
+    '</div>'+
+    // History + signed
+    '<div style="font-size:11px;font-weight:800;color:#1a2e4a;margin:14px 0 7px;letter-spacing:.3px">REVISION HISTORY</div>'+histHtml+
+    (rc.signed?('<div style="margin-top:10px;background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:9px 11px;font-size:12px;color:#166534;display:flex;justify-content:space-between;align-items:center">✅ Signed copy on file: '+escH(rc.signed.name)+' <button onclick="rcViewSigned(\''+id+'\')" style="font-size:11px;font-weight:700;background:#fff;border:1px solid #86efac;color:#16a34a;border-radius:6px;padding:3px 10px;cursor:pointer;font-family:inherit">View</button></div>'):'')+
+    '</div>'+
+    // Footer actions
+    '<div class="modal-foot" style="flex-wrap:wrap">'+
+      '<button class="btn" onclick="_rcSaveFromForm(\''+id+'\',true)">💾 Save draft</button>'+
+      (rc.rev>=0&&rc.generatedAt?'<button class="btn" onclick="rcNewRevision(\''+id+'\')">✎ New revision</button>':'')+
+      '<button class="btn" onclick="rcUploadSigned(\''+id+'\')">📎 Upload signed</button>'+
+      '<button class="btn" onclick="rcGeneratePDF(\''+id+'\')">📄 Generate PDF</button>'+
+      '<button class="btn blue" onclick="rcEmailCarrier(\''+id+'\')">📧 Generate &amp; email carrier</button>'+
+    '</div>'
+  );
+}
+// Read every data-rc field back into the rc object.
+function _rcSyncFromForm(id){
+  var ctx=getRateCon(id); if(!ctx) return null; var rc=ctx.rc;
+  document.querySelectorAll('[data-rc]').forEach(function(el){
+    var path=el.getAttribute('data-rc'), val=el.value;
+    var parts=path.split('.'), o=rc;
+    for(var k=0;k<parts.length-1;k++){
+      var key=parts[k];
+      if(Array.isArray(o)) key=Number(key);
+      if(o[key]==null) o[key]=/^\d+$/.test(parts[k+1])?[]:{};
+      o=o[key];
+    }
+    var last=parts[parts.length-1]; if(Array.isArray(o)) last=Number(last);
+    o[last]=val;
+  });
+  // numeric coercions
+  rc.rate.linehaul=Number(rc.rate.linehaul)||0;
+  rc.rate.fuel=Number(rc.rate.fuel)||0;
+  (rc.rate.accessorials||[]).forEach(function(a){a.amount=Number(a.amount)||0;});
+  return rc;
+}
+function _rcSaveFromForm(id,toast){
+  var rc=_rcSyncFromForm(id); if(!rc) return;
+  _rcPersist(id,rc);
+  if(toast){closeModal();showToast('💾 Rate con draft saved','success',2000);try{if(typeof openTMSLoadDetail==='function')openTMSLoadDetail(id);}catch(e){}}
+  return rc;
+}
+function _rcAddStop(id){var rc=_rcSyncFromForm(id);rc.stops.push({type:'Delivery',facility:'',address:'',date:'',window:'FCFS',refs:''});_rcPersist(id,rc);openTMSRateCon(id);}
+function _rcDelStop(id,i){var rc=_rcSyncFromForm(id);rc.stops.splice(i,1);if(!rc.stops.length)rc.stops.push({type:'Pickup',facility:'',address:'',date:'',window:'FCFS',refs:''});_rcPersist(id,rc);openTMSRateCon(id);}
+function _rcAddAcc(id){var rc=_rcSyncFromForm(id);rc.rate.accessorials.push({label:'',amount:0});_rcPersist(id,rc);openTMSRateCon(id);}
+function _rcDelAcc(id,i){var rc=_rcSyncFromForm(id);rc.rate.accessorials.splice(i,1);_rcPersist(id,rc);openTMSRateCon(id);}
+
+// ── PDF (full spec) ─────────────────────────────────────────────
+async function _rateConPDF(id){
+  var ctx=getRateCon(id); if(!ctx) return null;
+  var q=ctx.q, meta=ctx.meta, rc=ctx.rc, p=getBrokerProfile();
+  if(!await loadJsPDF()){showToast('PDF library loading — try again','info',2200);return null;}
+  var A=function(s){return String(s==null?'':s).replace(/→/g,' to ').replace(/—/g,'-').replace(/[^\x20-\x7E\xA0-\xFF]/g,'');};
+  var jsPDF=window.jspdf.jsPDF, doc=new jsPDF({unit:'mm',format:'letter'});
+  var W=216,H=279,M=14,navy=[26,46,74],gray=[100,116,139];
+  var ref=meta.bookingNum||q.shiflRef||id;
+  var y=0;
+  // Header
+  doc.setFillColor(navy[0],navy[1],navy[2]);doc.rect(0,0,W,30,'F');
+  doc.setTextColor(255,255,255);doc.setFont('helvetica','bold');doc.setFontSize(18);
+  doc.text('RATE CONFIRMATION'+(rc.rev>0?(' — REV '+rc.rev):''),M,13);
+  doc.setFont('helvetica','normal');doc.setFontSize(9);
+  doc.text(A(p.legal||'Shifl Inc.')+'  ·  MC '+A(p.mc||'—')+'  ·  DOT '+A(p.dot||'—'),M,20);
+  if(p.address)doc.text(A(p.address),M,25);
+  doc.setFontSize(9);doc.text('Shifl Load #: '+A(ref),W-M,13,{align:'right'});
+  doc.text('Issued: '+localDateStr(),W-M,19,{align:'right'});
+  var disp=[p.dispatchName,p.dispatchPhone,p.dispatchEmail].filter(Boolean).join(' · ');
+  if(disp)doc.text(A(disp),W-M,25,{align:'right'});
+  doc.setTextColor(0);y=38;
+  function ensure(h){if(y+h>H-18){doc.addPage();y=18;}}
+  function sec(t){ensure(12);doc.setFillColor(240,244,248);doc.rect(M,y-4.5,W-M*2,7,'F');doc.setFont('helvetica','bold');doc.setFontSize(9);doc.setTextColor(navy[0],navy[1],navy[2]);doc.text(A(t),M+2,y);doc.setTextColor(0);y+=9;}
+  function kv(l,v,x,colW){doc.setFont('helvetica','bold');doc.setFontSize(8.5);doc.text(A(l),x,y);doc.setFont('helvetica','normal');var tx=doc.splitTextToSize(A(v||'—'),colW-34);doc.text(tx,x+32,y);return tx.length;}
+  function rowKV(l,v){ensure(7);kv(l,v,M,W-M*2);y+=7;}
+  // Carrier
+  sec('CARRIER');
+  rowKV('Carrier',rc.carrier.legal);
+  ensure(7);kv('MC #',rc.carrier.mc,M,(W-M*2)/2);kv('DOT #',rc.carrier.dot,M+(W-M*2)/2,(W-M*2)/2);y+=7;
+  ensure(7);kv('Dispatcher',rc.carrier.dispatchName,M,(W-M*2)/2);kv('Phone',rc.carrier.dispatchPhone,M+(W-M*2)/2,(W-M*2)/2);y+=7;
+  rowKV('Dispatch email',rc.carrier.dispatchEmail);y+=2;
+  // Stops
+  sec('STOPS');
+  (rc.stops||[]).forEach(function(s,i){
+    ensure(26);
+    doc.setFont('helvetica','bold');doc.setFontSize(9);doc.setTextColor(navy[0],navy[1],navy[2]);
+    doc.text((i+1)+'. '+A(s.type||'Stop'),M,y);doc.setTextColor(0);y+=5.5;
+    doc.setFont('helvetica','normal');doc.setFontSize(8.5);
+    if(s.facility){doc.text(A(s.facility),M+4,y);y+=5;}
+    if(s.address){var at=doc.splitTextToSize(A(s.address),W-M*2-4);doc.text(at,M+4,y);y+=at.length*4.6;}
+    var line=[s.date?('Date: '+A(s.date)):'',s.window?('Appt: '+A(s.window)):''].filter(Boolean).join('    ');
+    if(line){doc.text(line,M+4,y);y+=5;}
+    if(s.refs){doc.text('Ref/PO: '+A(s.refs),M+4,y);y+=5;}
+    y+=2;
+  });
+  y+=1;
+  // Equipment
+  sec('EQUIPMENT');
+  var eq=rc.equipment;
+  ensure(7);kv('Type',eq.type,M,(W-M*2)/2);kv('Length',eq.length,M+(W-M*2)/2,(W-M*2)/2);y+=7;
+  ensure(7);kv('Seal',eq.seal,M,(W-M*2)/2);kv('Reefer',[eq.reeferTemp,eq.reeferMode].filter(Boolean).join(' / '),M+(W-M*2)/2,(W-M*2)/2);y+=7;
+  if(eq.tarpsStraps){rowKV('Tarps/straps',eq.tarpsStraps);}
+  y+=1;
+  // Freight
+  sec('FREIGHT');
+  var fr=rc.freight;
+  rowKV('Commodity',fr.commodity);
+  ensure(7);kv('Weight',fr.weight,M,(W-M*2)/2);kv('Pieces/pallets',fr.pieces,M+(W-M*2)/2,(W-M*2)/2);y+=7;
+  ensure(7);kv('Hazmat',fr.hazmat,M,(W-M*2)/2);kv('Declared value',fr.declaredValue,M+(W-M*2)/2,(W-M*2)/2);y+=7;
+  y+=1;
+  // Rate
+  sec('RATE');
+  function money(l,v){ensure(6.5);doc.setFont('helvetica','normal');doc.setFontSize(9);doc.text(A(l),M+2,y);doc.text(fmtD(v),W-M-2,y,{align:'right'});y+=6;}
+  money('Linehaul',Number(rc.rate.linehaul)||0);
+  if(Number(rc.rate.fuel)>0)money('Fuel surcharge',Number(rc.rate.fuel));
+  (rc.rate.accessorials||[]).forEach(function(a){if(a.label||a.amount)money(a.label||'Accessorial',Number(a.amount)||0);});
+  ensure(9);doc.setDrawColor(navy[0],navy[1],navy[2]);doc.setLineWidth(.4);doc.line(M,y-1,W-M,y-1);y+=1.5;
+  doc.setFont('helvetica','bold');doc.setFontSize(12);doc.setTextColor(navy[0],navy[1],navy[2]);
+  doc.text('TOTAL ('+A(rc.rate.currency||'USD')+')',M+2,y+2);doc.text(fmtD(_rcTotal(rc)),W-M-2,y+2,{align:'right'});
+  doc.setTextColor(0);y+=10;
+  // Terms
+  var t=rc.terms;
+  sec('ACCESSORIAL TERMS');
+  function para(txt){ensure(6);doc.setFont('helvetica','normal');doc.setFontSize(8.5);var tx=doc.splitTextToSize(A(txt),W-M*2-4);doc.text(tx,M+2,y);y+=tx.length*4.5+1.5;}
+  para('Detention: '+t.detentionFree+' free, then '+t.detentionRate+'.');
+  para('Layover: '+t.layover+'.   TONU: '+t.tonu+'.');
+  para('Lumper: '+t.lumper+'.');
+  sec('TRACKING');
+  para('Tracking: '+t.trackingApp+'.');
+  para('Check calls: '+t.checkCall+'.');
+  if(t.noTrackFine)para('No-tracking fine: '+t.noTrackFine+'.');
+  sec('PAYMENT');
+  para(t.payment+'.');
+  if(t.quickPay)para('Quick-pay: '+t.quickPay+'.');
+  para('Required documents for payment: signed rate confirmation, clean signed POD, carrier invoice.');
+  sec('RULES');
+  para('No re-brokering or co-brokering. Driver must not depart with damaged or short freight without calling dispatch. Any change to rate, stops or dates requires a revised rate confirmation re-signed by the carrier; no verbal changes. This load is governed by the Shifl Broker-Carrier Agreement.');
+  // Signatures
+  ensure(26);y+=6;
+  doc.setDrawColor(navy[0],navy[1],navy[2]);doc.setLineWidth(.4);
+  doc.line(M,y,M+80,y);doc.line(W-M-80,y,W-M,y);
+  doc.setFont('helvetica','normal');doc.setFontSize(8);
+  doc.text('Carrier signature / date',M,y+4);doc.text('Broker signature / date',W-M-80,y+4);
+  doc.setFontSize(7.5);doc.setTextColor(gray[0],gray[1],gray[2]);
+  doc.text('By signing, carrier accepts this load and all terms above. Return signed within 30 minutes or before pickup, whichever is first.',M,y+11,{maxWidth:W-M*2});
+  return {doc:doc,rc:rc,q:q,ref:ref};
+}
+async function rcGeneratePDF(id,silent){
+  // Capture any unsaved edits in the open editor before building the PDF.
+  try{ if(document.querySelector('[data-rc]')) _rcSaveFromForm(id,false); }catch(e){}
+  var r=await _rateConPDF(id); if(!r) return null;
+  var fname='RateCon_'+String(r.ref).replace(/[^A-Za-z0-9_-]/g,'_')+(r.rc.rev>0?('_Rev'+r.rc.rev):'')+'.pdf';
+  if(!silent){
+    r.doc.save(fname);
+    r.rc.generatedAt=new Date().toISOString();
+    r.rc.history.push({rev:r.rc.rev,at:r.rc.generatedAt,action:'PDF generated'});
+    _rcPersist(id,r.rc);
+    showToast('📄 Rate con PDF downloaded ('+fname+')','success',2600);
+    try{if($('modal-root').innerHTML)openTMSRateCon(id);}catch(e){}
+  }
+  return {doc:r.doc,fname:fname,rc:r.rc,q:r.q,ref:r.ref};
+}
+async function rcEmailCarrier(id){
+  var rc=_rcSaveFromForm(id,false); if(!rc) return;
+  var to=(rc.carrier.dispatchEmail||'').trim();
+  if(!to){showToast('Add the carrier dispatch email first','error',2800);return;}
+  var gen=await rcGeneratePDF(id,true); if(!gen) return;
+  gen.doc.save(gen.fname); // download so the user can attach it
+  rc.sentAt=new Date().toISOString();rc.sentTo=to;rc.status='Sent';
+  rc.generatedAt=rc.generatedAt||rc.sentAt;
+  rc.history.push({rev:rc.rev,at:rc.sentAt,action:'Emailed to carrier',note:to});
+  _rcPersist(id,rc);
+  var subj='Shifl Rate Confirmation — Load '+gen.ref+(rc.rev>0?(' (Rev '+rc.rev+')'):'');
+  var body='Hi '+(rc.carrier.dispatchName||'team')+',\n\nPlease find attached the rate confirmation for Shifl load '+gen.ref+'.\n\n'+
+    'Total: '+fmtD(_rcTotal(rc))+' '+(rc.rate.currency||'USD')+'\n'+
+    (rc.stops&&rc.stops[0]?('Pickup: '+(rc.stops[0].address||'')+(rc.stops[0].window?(' ('+rc.stops[0].window+')'):'')+'\n'):'')+
+    '\nSign and return within 30 minutes or before pickup, whichever is first. No verbal changes — any change needs a revised rate con.\n\nThank you,\nShifl Dispatch';
+  var url='https://mail.google.com/mail/?view=cm&fs=1&to='+encodeURIComponent(to)+'&su='+encodeURIComponent(subj)+'&body='+encodeURIComponent(body);
+  var w=window.open(url,'_blank');
+  closeModal();
+  showToast('📧 PDF downloaded + email opened to '+to+' — attach the PDF and send. Status: Sent.',w?'success':'warning',6000);
+  try{if(typeof openTMSLoadDetail==='function')openTMSLoadDetail(id);}catch(e){}
+}
+function rcNewRevision(id){
+  var rc=_rcSaveFromForm(id,false); if(!rc) return;
+  var note=prompt('What changed in this revision? (rate / stops / dates)','');
+  if(note===null) return;
+  rc.rev=(rc.rev||0)+1;rc.status='Draft';rc.signed=null;rc.sentAt=null;rc.sentTo='';
+  rc.history.push({rev:rc.rev,at:new Date().toISOString(),action:'Revision created',note:note||''});
+  _rcPersist(id,rc);
+  showToast('✎ Rev '+rc.rev+' created — regenerate and re-send for signature','info',3200);
+  openTMSRateCon(id);
+}
+function rcUploadSigned(id){
+  var rc=_rcSaveFromForm(id,false); if(!rc) return;
+  var input=document.createElement('input');input.type='file';input.accept='.pdf,.jpg,.jpeg,.png,.doc,.docx';
+  input.onchange=function(){
+    var file=input.files[0]; if(!file) return;
+    var reader=new FileReader();
+    reader.onload=function(e){
+      rc.signed={name:file.name,data:e.target.result,type:file.type,uploadedAt:new Date().toISOString()};
+      rc.status='Signed';
+      rc.history.push({rev:rc.rev,at:rc.signed.uploadedAt,action:'Signed copy uploaded',note:file.name});
+      _rcPersist(id,rc);
+      showToast('✅ Signed rate con uploaded: '+file.name,'success',2600);
+      openTMSRateCon(id);
+    };
+    reader.readAsDataURL(file);
+  };
+  input.click();
+}
+function rcViewSigned(id){
+  var ctx=getRateCon(id); if(!ctx||!ctx.rc.signed){showToast('No signed copy on file','warn',2000);return;}
+  var d=ctx.rc.signed,win=window.open();
+  if(!win){showToast('Pop-up blocked — allow pop-ups to view','warn',2600);return;}
+  if(d.type&&d.type.includes('pdf'))win.document.write('<html><body style="margin:0"><embed src="'+d.data+'" width="100%" height="100%" type="application/pdf"></body></html>');
+  else win.document.write('<html><body style="margin:0;background:#111;display:flex;align-items:center;justify-content:center;min-height:100vh"><img src="'+d.data+'" style="max-width:100%;max-height:100vh;object-fit:contain"></body></html>');
+  win.document.title=d.name||'Signed rate con';
 }
 
 // ── 7. CARRIER CAPACITY BOARD ─────────────────────────────────────
