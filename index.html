@@ -16002,8 +16002,8 @@ function _rcDefault(q,meta){
     carrier:{legal:q.carrier||'',mc:c.mc||c.mc_number||'',dot:c.dot||c.dot_number||'',
       dispatchName:c.contact_name||'',dispatchPhone:c.phone||'',dispatchEmail:c.email||''},
     stops:[
-      {type:'Pickup',facility:'',address:q.pickupZip||'',date:meta.pickupApptDate||'',window:meta.pickupAppt||'FCFS',refs:q.shiflRef||meta.bookingNum||''},
-      {type:'Delivery',facility:'',address:q.deliveryZip||'',date:meta.deliveryApptDate||'',window:meta.deliveryAppt||'FCFS',refs:''}
+      {type:'Pickup',facility:'',street:'',city:'',state:'',zip:q.pickupZip||'',date:meta.pickupApptDate||'',window:meta.pickupAppt||'FCFS',refs:q.shiflRef||meta.bookingNum||''},
+      {type:'Delivery',facility:'',street:'',city:'',state:'',zip:q.deliveryZip||'',date:meta.deliveryApptDate||'',window:meta.deliveryAppt||'FCFS',refs:''}
     ],
     equipment:{type:q.fqEquip||q.fqMode||'Dry van 53\'',length:'53\'',reeferTemp:'',reeferMode:'',tarpsStraps:'',seal:'Required'},
     freight:{commodity:q.commodity||meta.commodity||'General freight, no hazmat',weight:q.weight?(q.weight+' lbs'):'',
@@ -16047,12 +16047,15 @@ function openTMSRateCon(id){
           ['Pickup','Delivery'].map(function(o){return '<option'+(o===s.type?' selected':'')+'>'+o+'</option>';}).join('')+'</select>'+
         '<button onclick="_rcDelStop(\''+id+'\','+i+')" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:12px;font-weight:700">Remove</button>'+
       '</div>'+
-      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:7px">'+
-        '<div style="grid-column:1/3">'+lbl('Facility name')+ti('stops.'+i+'.facility',s.facility,'Warehouse / shipper name')+'</div>'+
-        '<div style="grid-column:1/3">'+lbl('Full address')+ti('stops.'+i+'.address',s.address,'Street, City, State ZIP')+'</div>'+
+      '<div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:7px">'+
+        '<div style="grid-column:1/4">'+lbl('Facility name')+ti('stops.'+i+'.facility',s.facility,'Warehouse / shipper name')+'</div>'+
+        '<div style="grid-column:1/4">'+lbl('Street address')+ti('stops.'+i+'.street',s.street,'123 Main St')+'</div>'+
+        '<div>'+lbl('City')+ti('stops.'+i+'.city',s.city,'City')+'</div>'+
+        '<div>'+lbl('State')+ti('stops.'+i+'.state',s.state,'NJ')+'</div>'+
+        '<div>'+lbl('ZIP')+ti('stops.'+i+'.zip',s.zip,'07001')+'</div>'+
         '<div>'+lbl('Date')+ti('stops.'+i+'.date',s.date,'MM/DD/YYYY')+'</div>'+
         '<div>'+lbl('Appt / FCFS window')+ti('stops.'+i+'.window',s.window,'08:00–15:00 or FCFS')+'</div>'+
-        '<div style="grid-column:1/3">'+lbl('Reference / PO #s')+ti('stops.'+i+'.refs',s.refs,'')+'</div>'+
+        '<div>'+lbl('Reference / PO #s')+ti('stops.'+i+'.refs',s.refs,'')+'</div>'+
       '</div></div>';
   }).join('');
   // Accessorials
@@ -16065,7 +16068,7 @@ function openTMSRateCon(id){
   var histHtml=(rc.history||[]).length? (rc.history||[]).slice().reverse().map(function(h){
     return '<div style="font-size:11px;color:#64748b;padding:4px 0;border-bottom:1px solid #f1f5f9">Rev '+h.rev+' · '+h.action+' · '+new Date(h.at).toLocaleString('en-US',{timeZone:'America/New_York',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})+(h.note?(' — '+escH(h.note)):'')+'</div>';
   }).join('') : '<div style="font-size:11px;color:#9ca3af">No history yet.</div>';
-  var tv=function(k){return escH(rc.terms[k]||'');};
+  var tv=function(k){return rc.terms[k]||'';};  // raw — ti() escapes
 
   openModal(
     '<div class="modal-title" style="display:flex;align-items:center;flex-wrap:wrap">📄 Rate confirmation — '+escH(q.customer||'')+revBadge+
@@ -16168,8 +16171,16 @@ function _rcSaveFromForm(id,toast){
   if(toast){closeModal();showToast('💾 Rate con draft saved','success',2000);try{if(typeof openTMSLoadDetail==='function')openTMSLoadDetail(id);}catch(e){}}
   return rc;
 }
-function _rcAddStop(id){var rc=_rcSyncFromForm(id);rc.stops.push({type:'Delivery',facility:'',address:'',date:'',window:'FCFS',refs:''});_rcPersist(id,rc);openTMSRateCon(id);}
-function _rcDelStop(id,i){var rc=_rcSyncFromForm(id);rc.stops.splice(i,1);if(!rc.stops.length)rc.stops.push({type:'Pickup',facility:'',address:'',date:'',window:'FCFS',refs:''});_rcPersist(id,rc);openTMSRateCon(id);}
+function _rcAddStop(id){var rc=_rcSyncFromForm(id);rc.stops.push({type:'Delivery',facility:'',street:'',city:'',state:'',zip:'',date:'',window:'FCFS',refs:''});_rcPersist(id,rc);openTMSRateCon(id);}
+function _rcDelStop(id,i){var rc=_rcSyncFromForm(id);rc.stops.splice(i,1);if(!rc.stops.length)rc.stops.push({type:'Pickup',facility:'',street:'',city:'',state:'',zip:'',date:'',window:'FCFS',refs:''});_rcPersist(id,rc);openTMSRateCon(id);}
+// Compose a stop's address line from street/city/state/zip (falls back to legacy single address).
+function _rcStopAddr(s){
+  if(s.street||s.city||s.state||s.zip){
+    var cityLine=[s.city,[s.state,s.zip].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+    return [s.street,cityLine].filter(Boolean).join(', ');
+  }
+  return s.address||'';
+}
 function _rcAddAcc(id){var rc=_rcSyncFromForm(id);rc.rate.accessorials.push({label:'',amount:0});_rcPersist(id,rc);openTMSRateCon(id);}
 function _rcDelAcc(id,i){var rc=_rcSyncFromForm(id);rc.rate.accessorials.splice(i,1);_rcPersist(id,rc);openTMSRateCon(id);}
 
@@ -16213,7 +16224,8 @@ async function _rateConPDF(id){
     doc.text((i+1)+'. '+A(s.type||'Stop'),M,y);doc.setTextColor(0);y+=5.5;
     doc.setFont('helvetica','normal');doc.setFontSize(8.5);
     if(s.facility){doc.text(A(s.facility),M+4,y);y+=5;}
-    if(s.address){var at=doc.splitTextToSize(A(s.address),W-M*2-4);doc.text(at,M+4,y);y+=at.length*4.6;}
+    var _addr=_rcStopAddr(s);
+    if(_addr){var at=doc.splitTextToSize(A(_addr),W-M*2-4);doc.text(at,M+4,y);y+=at.length*4.6;}
     var line=[s.date?('Date: '+A(s.date)):'',s.window?('Appt: '+A(s.window)):''].filter(Boolean).join('    ');
     if(line){doc.text(line,M+4,y);y+=5;}
     if(s.refs){doc.text('Ref/PO: '+A(s.refs),M+4,y);y+=5;}
@@ -16290,21 +16302,40 @@ async function rcEmailCarrier(id){
   var rc=_rcSaveFromForm(id,false); if(!rc) return;
   var to=(rc.carrier.dispatchEmail||'').trim();
   if(!to){showToast('Add the carrier dispatch email first','error',2800);return;}
-  var gen=await rcGeneratePDF(id,true); if(!gen) return;
-  gen.doc.save(gen.fname); // download so the user can attach it
-  rc.sentAt=new Date().toISOString();rc.sentTo=to;rc.status='Sent';
-  rc.generatedAt=rc.generatedAt||rc.sentAt;
-  rc.history.push({rev:rc.rev,at:rc.sentAt,action:'Emailed to carrier',note:to});
-  _rcPersist(id,rc);
-  var subj='Shifl Rate Confirmation — Load '+gen.ref+(rc.rev>0?(' (Rev '+rc.rev+')'):'');
-  var body='Hi '+(rc.carrier.dispatchName||'team')+',\n\nPlease find attached the rate confirmation for Shifl load '+gen.ref+'.\n\n'+
+  // Build the PDF and hand it to Mario to send (with the PDF attached) from trucking@shifl.com.
+  var r=await _rateConPDF(id); if(!r) return;
+  var fname='RateCon_'+String(r.ref).replace(/[^A-Za-z0-9_-]/g,'_')+(rc.rev>0?('_Rev'+rc.rev):'')+'.pdf';
+  var b64;
+  try{ b64=r.doc.output('datauristring').split(',')[1]; }catch(e){ b64=null; }
+  if(!b64){showToast('Could not build the PDF — try Generate PDF instead','error',3200);return;}
+  var p=getBrokerProfile();
+  var cc=(p.dispatchEmail&&p.dispatchEmail!==to)?p.dispatchEmail:null;   // keep Shifl a copy
+  var subj='Shifl Rate Confirmation — Load '+r.ref+(rc.rev>0?(' (Rev '+rc.rev+')'):'');
+  var body='Hi '+(rc.carrier.dispatchName||'team')+',\n\nPlease find attached the rate confirmation for Shifl load '+r.ref+'.\n\n'+
     'Total: '+fmtD(_rcTotal(rc))+' '+(rc.rate.currency||'USD')+'\n'+
-    (rc.stops&&rc.stops[0]?('Pickup: '+(rc.stops[0].address||'')+(rc.stops[0].window?(' ('+rc.stops[0].window+')'):'')+'\n'):'')+
+    (rc.stops&&rc.stops[0]?('Pickup: '+(_rcStopAddr(rc.stops[0])||'')+(rc.stops[0].window?(' ('+rc.stops[0].window+')'):'')+'\n'):'')+
     '\nSign and return within 30 minutes or before pickup, whichever is first. No verbal changes — any change needs a revised rate con.\n\nThank you,\nShifl Dispatch';
-  var url='https://mail.google.com/mail/?view=cm&fs=1&to='+encodeURIComponent(to)+'&su='+encodeURIComponent(subj)+'&body='+encodeURIComponent(body);
-  var w=window.open(url,'_blank');
-  closeModal();
-  showToast('📧 PDF downloaded + email opened to '+to+' — attach the PDF and send. Status: Sent.',w?'success':'warning',6000);
+  var btn=document.querySelector('.modal-foot .btn.blue'); if(btn){btn.textContent='Sending…';btn.disabled=true;}
+  try{
+    var row={to_email:to,cc_email:cc,subject:subj,body_text:body,from_alias:'trucking@shifl.com',
+      status:'queued',meta:'ratecon '+id+' rev'+rc.rev,attachment_b64:b64,attachment_name:fname,created_at:new Date().toISOString()};
+    var res=await db.from('outbound_emails').insert([row]);
+    if(res&&res.error) throw new Error(res.error.message);
+    rc.sentAt=new Date().toISOString();rc.sentTo=to;rc.status='Sent';
+    rc.generatedAt=rc.generatedAt||rc.sentAt;
+    rc.history.push({rev:rc.rev,at:rc.sentAt,action:'Sent to carrier (Mario)',note:to+(cc?(' · cc '+cc):'')});
+    _rcPersist(id,rc);
+    try{ logAction('ratecon_sent', r.ref+' → '+to+(rc.rev>0?(' (Rev '+rc.rev+')'):''), 'fq_quote', id); }catch(e){}
+    closeModal();
+    showToast('📧 Rate con queued — Mario is emailing '+to+(cc?(' (cc '+cc+')'):'')+' from trucking@shifl.com within ~1 min. Status: Sent.','success',6000);
+  }catch(e){
+    if(btn){btn.textContent='📧 Generate & email carrier';btn.disabled=false;}
+    // Fallback: download the PDF + open a prefilled email so the send isn't blocked.
+    try{r.doc.save(fname);}catch(_){}
+    var url='https://mail.google.com/mail/?view=cm&fs=1&to='+encodeURIComponent(to)+(cc?('&cc='+encodeURIComponent(cc)):'')+'&su='+encodeURIComponent(subj)+'&body='+encodeURIComponent(body);
+    window.open(url,'_blank');
+    showToast('Could not reach Mario\'s send queue ('+e.message+'). Downloaded the PDF and opened an email — attach it and send.','warning',7000);
+  }
   try{if(typeof openTMSLoadDetail==='function')openTMSLoadDetail(id);}catch(e){}
 }
 function rcNewRevision(id){
