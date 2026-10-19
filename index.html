@@ -6123,11 +6123,6 @@ async function downloadTlInternalPDF(idx){
   }
   y=68;
 
-  function checkPage(){
-    if(y>252){doc.addPage();y=16;
-      doc.setFillColor(255,255,255);doc.rect(0,0,W,H,'F');
-    }
-  }
   function secHeader(colorArr,title,subInfo){
     checkPage();
     doc.setFillColor(...colorArr);doc.roundedRect(M,y,CW,10,1,1,'F');
