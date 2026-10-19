@@ -8343,6 +8343,13 @@ async function upsertCarrier(name, mode) {
   } catch(e){ console.log('Carrier upsert:',e.message); }
 }
 
+// Save a carrier's free-text note (ports covered, limits, etc.) inline from the table.
+async function saveCarrierNote(id,val){
+  try{
+    const{error}=await db.from('carriers').update({notes:(val||'').trim(),updated_at:new Date().toISOString()}).eq('id',id);
+    if(error) throw error;
+  }catch(e){ console.warn('carrier note save:',e); showToast('Could not save note — is the carriers.notes column added?','error',3000); }
+}
 async function renderCarriers(){
   $('topbar-right').innerHTML=`<button class="btn" onclick="openCarrierFraudDetector()">🚨 Fraud check</button><button class="btn" onclick="openInsuranceLapseTracker()">🔔 Insurance</button><button class="btn blue" onclick="showCarrierModal()">+ Add carrier</button>`;
   $('page').innerHTML='<div style="text-align:center;padding:40px"><div class="loading-spin" style="margin:0 auto 12px"></div><div style="color:var(--gray-400);font-size:13px">Loading carriers...</div></div>';
@@ -8388,6 +8395,10 @@ async function renderCarriers(){
         <td style="min-width:130px;font-size:13px">${c.contact_name||'<span style="color:var(--gray-400)">—</span>'}</td>
         <td style="min-width:120px;font-size:12px;color:var(--gray-500)">${c.phone||'—'}</td>
         <td style="min-width:160px;font-size:12px;color:var(--gray-500)">${c.email||'—'}</td>
+        <td onclick="event.stopPropagation()" style="min-width:200px">
+          <input type="text" value="${escH(c.notes||'')}" onclick="event.stopPropagation()" onchange="saveCarrierNote('${c.id}',this.value)" placeholder="Ports / limits…"
+            style="width:100%;min-width:180px;border:1px solid transparent;background:${c.notes?'#f8fafc':'transparent'};border-radius:5px;padding:5px 8px;font-size:12px;color:var(--gray-700);font-family:inherit;outline:none"
+            onfocus="this.style.border='1px solid var(--steel)';this.style.background='#fff'" onblur="this.style.border='1px solid transparent';this.style.background=this.value?'#f8fafc':'transparent'"></td>
         <td style="min-width:100px">
           <div style="display:flex;flex-direction:column;gap:2px">
             <span style="font-size:10px;font-weight:700;padding:1px 7px;border-radius:99px;display:inline-block;width:fit-content;background:${isOnboarded?'#dcfce7':'#fef3c7'};color:${isOnboarded?'#16a34a':'#92400e'}">${obStatus.icon} ${obStatus.label}</span>
@@ -8426,6 +8437,7 @@ async function renderCarriers(){
             <th style="min-width:130px">Contact</th>
             <th style="min-width:120px">Phone</th>
             <th style="min-width:160px">Email</th>
+            <th style="min-width:200px">Notes</th>
             <th style="min-width:100px">Status</th>
             <th style="min-width:180px">Actions</th>
           </tr></thead>
