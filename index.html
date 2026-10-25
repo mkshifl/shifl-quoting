@@ -6661,36 +6661,31 @@ function renderActive(){
       : `<div class="af"><div class="afl">Warehouse</div><div class="afv">${s.warehouse||'—'}</div></div>
          <div class="af"><div class="afl">Out carrier</div><div class="afv">${s.outCarrier||'—'}</div></div>`;
 
-    return `<div class="active-card-v2" id="acard-${s.id}" draggable="true" data-id="${s.id}"
-      style="background:#fff;border:1.5px solid ${borderCol};border-radius:12px;overflow:hidden;cursor:grab"
+    const stripe = s.type==='drayage'?'#1e3a5f':s.type==='transload'?'#c2410c':(fqMode==='FTL'?'#1e40af':fqMode==='LTL'?'#6d28d9':fqMode==='LCL'?'#0f766e':'#1e40af');
+    return `<div class="active-card-v2 acard${isUrgent?' acard-urg':''}" id="acard-${s.id}" draggable="true" data-id="${s.id}"
+      style="--sc:${isUrgent?'#dc2626':stripe}"
       ondragstart="acDragStart(event)" ondragover="acDragOver(event)" ondrop="acDrop(event)" ondragleave="acDragLeave(event)" ondragend="acDragEnd(event)">
-      <div style="background:${headBg};padding:10px 13px;border-bottom:1px solid ${borderCol};display:flex;align-items:center;gap:7px">
-        <span style="color:var(--gray-300);font-size:16px;cursor:grab">⠿</span>
-        <span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:99px;text-transform:uppercase;letter-spacing:.04em;background:${mc.bc};color:${mc.tc};flex-shrink:0">${modeLabel}</span>
-        ${isUrgent?'<span style="background:#ef4444;color:#fff;font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;flex-shrink:0">URGENT</span>':''}
-        <span style="font-size:13px;font-weight:700;color:var(--navy);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${s.customer}</span>
-        <button onclick="setActiveTracking('${s.id}','urgent',${!isUrgent});renderActive()"
-          style="flex-shrink:0;padding:3px 9px;border-radius:99px;border:1px solid ${isUrgent?'#ef4444':'var(--gray-200)'};background:${isUrgent?'#ef4444':'transparent'};color:${isUrgent?'#fff':'var(--gray-400)'};font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">
-          🔥 ${isUrgent?'Hot':'Flag'}
-        </button>
-        <span style="font-size:13px;font-weight:700;color:#2563eb;flex-shrink:0">${fmtD(s.total)}</span>
+      <div class="acard-h">
+        <span class="acard-grip">⠿</span>
+        <span class="acard-mode" style="background:${stripe}">${modeLabel}</span>
+        ${isUrgent?'<span class="acard-urgent">Urgent</span>':''}
+        <span class="acard-cust">${s.customer}</span>
+        <button onclick="setActiveTracking('${s.id}','urgent',${!isUrgent});renderActive()" class="acard-flag${isUrgent?' on':''}">🔥 ${isUrgent?'Hot':'Flag'}</button>
+        <span class="acard-rate">${fmtD(s.total)}</span>
       </div>
-      <div style="padding:10px 13px">
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px 12px;margin-bottom:9px">
+      <div class="acard-b">
+        <div class="acard-grid">
           <div class="af"><div class="afl">Carrier</div><div class="afv">${s.carrier||'—'}</div></div>
           <div class="af"><div class="afl">Delivery</div><div class="afv">${s.to||s.zip||'—'}</div></div>
-          <div class="af"><div class="afl">Shifl ref</div><div class="afv" style="color:#2563eb;font-family:monospace;font-size:11px">${s.shiflRef||'—'}</div></div>
+          <div class="af"><div class="afl">Shifl ref</div><div class="afv" style="color:#2563eb;font-family:'IBM Plex Mono',monospace;font-size:11.5px">${s.shiflRef||'—'}</div></div>
           <div class="af"><div class="afl">Day</div><div class="afv">Day ${daysActive}</div></div>
           ${extraFields}
         </div>
-        ${s.type==='drayage'?`<div style="margin-bottom:7px">${etaBadge}</div>`:''}
-        ${cd?`<div;align-items:center;gap:4px;padding:4px 9px;border-radius:5px;font-size:11px;font-weight:600;margin-bottom:9px;${cd.cls==='due-ok'?'background:#f0fdf4;color:#15803d':cd.cls==='due-warn'?'background:#fffbeb;color:#92400e':'background:#fef2f2;color:#991b1b'}">
-          ${cd.cls==='due-ok'?'✓':cd.cls==='due-warn'?'⚡':'⚠️'} ${cd.label}
-        </div>`:''}
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;flex-wrap:wrap">
-          <div style="display:flex;gap:4px;flex-wrap:wrap">
-            <button onclick="${s.type==='drayage'?`setView('log');render();setTimeout(()=>showQuoteModal('${s.id}'),100)`:s.type==='freight'?`setView('freight');setFqTab('log');setTimeout(()=>{const idx=(window._fqHistory||[]).findIndex(q=>q.id==='${s.id}');if(idx>=0)showFqQuoteModal(idx);},100)`:`setView('transload');setTlTab('log');setTimeout(()=>{const idx=(window._tlHistory||[]).findIndex(q=>q.id==='${s.id}');if(idx>=0)showTlQuoteModal(idx);},100)`}"
-              class="acbtn">📄 Quote</button>
+        ${s.type==='drayage'?`<div style="margin:2px 0 8px">${etaBadge}</div>`:''}
+        ${cd?`<div class="acard-cd ${cd.cls==='due-ok'?'ok':cd.cls==='due-warn'?'warn':'hot'}">${cd.cls==='due-ok'?'✓':cd.cls==='due-warn'?'⚡':'⚠️'} ${cd.label}</div>`:''}
+        <div class="acard-foot">
+          <div class="acard-acts">
+            <button onclick="${s.type==='drayage'?`setView('log');render();setTimeout(()=>showQuoteModal('${s.id}'),100)`:s.type==='freight'?`setView('freight');setFqTab('log');setTimeout(()=>{const idx=(window._fqHistory||[]).findIndex(q=>q.id==='${s.id}');if(idx>=0)showFqQuoteModal(idx);},100)`:`setView('transload');setTlTab('log');setTimeout(()=>{const idx=(window._tlHistory||[]).findIndex(q=>q.id==='${s.id}');if(idx>=0)showTlQuoteModal(idx);},100)`}" class="acbtn">📄 Quote</button>
             <button onclick="changeShipmentCarrier('${s.type}','${s.id}','${(s.carrier||'').replace(/'/g,'')}')" class="acbtn">🚛 Carrier</button>
             <button onclick="toggleFlag('${s.type}','${s.id}')" class="acbtn${flagged?' acbtn-red':''}" title="${flagged?'Remove flag':'Flag issue'}">🚨</button>
             <button onclick="showTrackingModal('${s.type}','${s.id}')" class="acbtn${trackUrl?' acbtn-blue':''}" title="Tracking">${trackUrl?'📍':'🔗'}</button>
@@ -6698,19 +6693,10 @@ function renderActive(){
             ${can('delete_quotes')?`<button onclick="deleteShipment('${s.type}','${s.id}')" class="acbtn acbtn-red" title="Delete">🗑️</button>`:''}
           </div>
           ${!isCompleted
-            ?`<button onclick="markShipmentClosed('${s.type}','${s.id}','Delivered')"
-                style="padding:5px 14px;background:#16a34a;color:#fff;border:none;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap">
-                ✅ Delivered
-              </button>`
+            ?`<button onclick="markShipmentClosed('${s.type}','${s.id}','Delivered')" class="acard-done">✓ Delivered</button>`
             :`<div style="display:flex;gap:6px">
-                <button onclick="revertToActive('${s.type}','${s.id}')"
-                  style="padding:5px 12px;background:#fff;color:#d97706;border:1.5px solid #fbbf24;border-radius:6px;cursor:pointer;font-size:11px;font-weight:700;font-family:inherit">
-                  ↩️ Revert
-                </button>
-                <button onclick="sendInvoiceFromShipment('${s.type}','${s.id}')"
-                  style="padding:5px 12px;background:#fff;color:var(--steel);border:1.5px solid var(--steel);border-radius:6px;cursor:pointer;font-size:11px;font-weight:700;font-family:inherit">
-                  🧾 Invoice
-                </button>
+                <button onclick="revertToActive('${s.type}','${s.id}')" class="acard-revert">↩ Revert</button>
+                <button onclick="sendInvoiceFromShipment('${s.type}','${s.id}')" class="acard-inv">🧾 Invoice</button>
               </div>`}
         </div>
       </div>
@@ -6719,17 +6705,38 @@ function renderActive(){
 
   $('page').innerHTML=`
     <style>
-      .af{} .afl{font-size:9px;font-weight:600;color:var(--gray-400);text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px} .afv{font-size:12px;font-weight:500;color:var(--navy);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-      .acbtn{padding:5px 8px;background:none;border:1px solid var(--gray-200);border-radius:5px;font-size:12px;cursor:pointer;font-family:inherit;color:var(--gray-500)}
-      .acbtn:hover{background:var(--gray-50)}
+      .acard{background:#fff;border:1px solid var(--nb,#e3e8ef);border-left:3px solid var(--sc,#2563eb);border-radius:12px;overflow:hidden;cursor:grab;box-shadow:0 1px 2px rgba(16,30,54,.05);transition:box-shadow .12s,transform .12s}
+      .acard:hover{box-shadow:0 8px 22px rgba(16,30,54,.1);transform:translateY(-1px)}
+      .acard-urg{border-color:#fca5a5}
+      .acard-h{display:flex;align-items:center;gap:8px;padding:11px 13px;border-bottom:1px solid var(--nb,#e3e8ef)}
+      .acard-grip{color:#c5ccd6;font-size:15px;cursor:grab;flex-shrink:0}
+      .acard-mode{font-size:10px;font-weight:700;letter-spacing:.03em;padding:2px 8px;border-radius:6px;color:#fff;flex-shrink:0;white-space:nowrap}
+      .acard-urgent{background:#dc2626;color:#fff;font-size:9px;font-weight:700;padding:2px 7px;border-radius:5px;text-transform:uppercase;flex-shrink:0}
+      .acard-cust{font-size:14px;font-weight:700;color:var(--ink,#0f1623);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;letter-spacing:-.01em}
+      .acard-flag{flex-shrink:0;padding:4px 10px;border-radius:99px;border:1px solid var(--nb2,#cdd5e0);background:#fff;color:#8a94a3;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit}
+      .acard-flag.on{border-color:#dc2626;background:#dc2626;color:#fff}
+      .acard-rate{font-size:15px;font-weight:700;color:var(--steel,#2563eb);flex-shrink:0;font-variant-numeric:tabular-nums}
+      .acard-b{padding:12px 13px}
+      .acard-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px 14px;margin-bottom:10px}
+      .af{min-width:0} .afl{font-size:9px;font-weight:700;color:#8a94a3;text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px} .afv{font-size:12.5px;font-weight:600;color:var(--ink,#0f1623);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+      .acard-cd{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:7px;font-size:11px;font-weight:700;margin-bottom:10px}
+      .acard-cd.ok{background:#e9f7ee;color:#15803d}.acard-cd.warn{background:#fdf3e2;color:#b45309}.acard-cd.hot{background:#fdecec;color:#dc2626}
+      .acard-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+      .acard-acts{display:flex;gap:5px;flex-wrap:wrap}
+      .acbtn{padding:6px 9px;background:#fff;border:1px solid var(--nb2,#cdd5e0);border-radius:7px;font-size:12px;cursor:pointer;font-family:inherit;color:#56616f}
+      .acbtn:hover{background:#f6f8fb}
       .acbtn-red{color:#dc2626;border-color:#fecaca;background:#fff8f8}
       .acbtn-blue{color:#2563eb;border-color:#bfdbfe;background:#eff6ff}
+      .acard-done{padding:7px 15px;background:#16a34a;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap}
+      .acard-done:hover{background:#15803d}
+      .acard-revert{padding:7px 13px;background:#fff;color:#b45309;border:1px solid #fbbf24;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700;font-family:inherit}
+      .acard-inv{padding:7px 13px;background:#fff;color:var(--steel,#2563eb);border:1px solid var(--steel,#2563eb);border-radius:8px;cursor:pointer;font-size:12px;font-weight:700;font-family:inherit}
       .active-card-v2.ac-drag-over{outline:2px dashed #2563eb;outline-offset:2px}
       .active-card-v2.ac-dragging{opacity:.35}
     </style>
-    <div style="padding:14px 18px">
+    <div style="padding:14px 4px">
       ${filterBar}
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px" id="active-grid">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px" id="active-grid">
         ${cards}
       </div>
     </div>`;
