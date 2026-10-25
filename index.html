@@ -727,6 +727,36 @@ input:focus,select:focus,textarea:focus{border-color:var(--steel)!important;box-
 
 /* Mono ref numbers in tables */
 .ref{color:#1d4ed8;font-weight:500}
+
+/* ── Dispatch kanban (renderTMSDispatch) ── */
+.kb-wrap{display:flex;gap:14px;overflow-x:auto;padding-bottom:16px}
+.kb-col{flex:1;min-width:236px;max-width:300px;background:#f6f8fb;border:1px solid var(--nb);border-radius:14px;padding:10px 10px 4px}
+.kb-head{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin:4px 4px 12px;padding-bottom:9px;border-bottom:1px solid var(--nb)}
+.kb-dot{width:8px;height:8px;border-radius:50%}
+.kb-ct{margin-left:auto;font-size:11px;font-weight:700;background:#fff;border:1px solid var(--nb);color:var(--ink-mut);padding:1px 8px;border-radius:99px}
+.kb-empty{padding:24px 10px;text-align:center;color:#9ca3af;font-size:12px}
+.lc{background:#fff;border:1px solid var(--nb);border-left:3px solid var(--c,#2563eb);border-radius:11px;padding:13px;margin-bottom:10px;box-shadow:0 1px 2px rgba(16,30,54,.05);cursor:pointer;transition:box-shadow .12s,transform .12s}
+.lc:hover{box-shadow:0 8px 22px rgba(16,30,54,.12);transform:translateY(-1px)}
+.lc-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.lc-mode{font-size:10px;font-weight:700;letter-spacing:.03em;padding:2px 8px;border-radius:6px;color:#fff;text-transform:uppercase}
+.lc-date{font-size:11px;color:var(--ink-faint);font-family:'IBM Plex Mono',monospace}
+.lc-cust{font-size:14px;font-weight:700;color:var(--ink);letter-spacing:-.01em;line-height:1.2}
+.lc-lane{font-size:12px;color:var(--ink-mut);margin-top:3px;display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+.lc-lane .ar{color:#9ca3af}
+.lc-meta{font-size:12px;color:#374151;margin-top:8px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.lc-meta .car{font-weight:600}
+.lc-rate{color:var(--steel);font-weight:700;font-variant-numeric:tabular-nums}
+.lc-chip{display:inline-flex;align-items:center;gap:5px;border-radius:7px;padding:3px 9px;font-size:11px;font-weight:700;margin-top:10px}
+.lc-ref{display:flex;align-items:center;gap:7px;margin-top:10px;background:#f6f8fb;border:1px solid var(--nb);border-radius:8px;padding:4px 9px}
+.lc-ref .l{font-size:9px;font-weight:700;color:var(--ink-faint);text-transform:uppercase;letter-spacing:.05em}
+.lc-ref input{flex:1;min-width:0;border:none!important;background:transparent!important;box-shadow:none!important;font-family:'IBM Plex Mono',monospace;font-size:11.5px;font-weight:600;color:var(--steel);outline:none;padding:1px 2px!important}
+.lc-dots{display:flex;gap:5px;margin-top:10px;align-items:center}
+.lc-acts{display:flex;gap:6px;margin-top:11px;flex-wrap:wrap}
+.lc-b{font-size:11px;font-weight:700;padding:6px 10px;border-radius:7px;cursor:pointer;font-family:inherit;border:1px solid var(--nb2);background:#fff;color:#374151}
+.lc-b:hover{background:#f6f8fb}
+.lc-b.pri{background:var(--c,#2563eb);border-color:var(--c,#2563eb);color:#fff}
+.lc-b.pri:hover{filter:brightness(.95)}
+.lc-b.gho{background:transparent}
 </style>
 <script>
 // Force clear service worker and caches
