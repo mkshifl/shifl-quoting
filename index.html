@@ -764,6 +764,22 @@ input:focus,select:focus,textarea:focus{border-color:var(--steel)!important;box-
 @media(prefers-reduced-motion:reduce){.eta-amber{animation:none}}
 .eta-ack-row{display:flex;align-items:center;gap:10px;padding:11px 13px;border:1px solid var(--nb,#e3e8ef);border-radius:9px;margin-bottom:9px;font-size:13.5px;font-weight:600;cursor:pointer}
 .eta-ack-row input{width:17px;height:17px;accent-color:#2563eb}
+
+/* ── DAT load board ── */
+.datb{display:inline-flex;align-items:center;gap:5px;border-radius:99px;padding:3px 10px;font-size:11px;font-weight:700;white-space:nowrap}
+.datb.posted{background:#eef4ff;color:#1d4ed8;border:1px solid #bfdbfe}
+.datb.posted .dot{width:6px;height:6px;border-radius:50%;background:currentColor;animation:datpulse 1.2s infinite}
+@keyframes datpulse{0%,100%{opacity:1}50%{opacity:.4}}
+.datb.covdat{background:#e9f7ee;color:#15803d}
+.datb.covoff{background:#e6faf6;color:#0f766e}
+.datb.notcov{background:#fdf3e2;color:#b45309;border:1px solid #fbbf24;animation:etaflash 1.1s ease-in-out infinite}
+.datlogo{font-size:10px;font-weight:800;letter-spacing:.06em;background:#0d1117;color:#fff;padding:2px 7px;border-radius:5px}
+.dat-h{font-size:12px;font-weight:700;color:var(--ink-faint,#8a94a3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:12px;display:flex;align-items:center;gap:7px}
+.dat-cov{display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px}
+.dat-cov button{border:1px solid var(--nb2,#cdd5e0);background:#fff;border-radius:9px;padding:9px 6px;font-size:11.5px;font-weight:700;cursor:pointer;color:var(--ink-mut,#56616f);font-family:inherit}
+.dat-cov button.on.g{border-color:#15803d;background:#e9f7ee;color:#15803d}
+.dat-cov button.on.t{border-color:#0f766e;background:#e6faf6;color:#0f766e}
+.dat-cov button.on.a{border-color:#b45309;background:#fdf3e2;color:#b45309}
 </style>
 <script>
 // Force clear service worker and caches
@@ -15258,6 +15274,7 @@ function renderTMSDispatch(tabBar,kpis,loads){
         <div class="lc-top"><span class="lc-mode" style="background:${mc}">${l.fqMode}</span><span class="lc-date">${l.date}</span></div>
         <div class="lc-cust">${l.customer||'—'}</div>
         ${(()=>{const b=etaAmberBadge(l.id);return b?'<div style="margin-top:6px">'+b+'</div>':'';})()}
+        ${(()=>{const b=datBadge(l.id,(meta.pickupAppt||''));return b?'<div style="margin-top:6px">'+b+'</div>':'';})()}
         <div class="lc-lane"><span>${l.pickupZip||'—'}</span><span class="ar">→</span><span>${l.deliveryZip||'—'}</span></div>
         <div class="lc-meta"><span class="car">${l.carrier||'Unassigned'}</span>${l.weight?`<span>· ${Number(l.weight).toLocaleString()} lbs</span>`:''}${l.customerRate?`<span>· <span class="lc-rate">${fmtD(l.customerRate)}</span></span>`:''}</div>
         ${((typeof _currentUser!=='undefined'&&_currentUser&&_currentUser.role==='super_admin')&&((Number(l.customerRate)||0)||(Number(l.carrierRate)||0)))?(()=>{
@@ -16294,6 +16311,7 @@ function openTMSLoadDetail(id){
         <div class="field" style="margin-bottom:8px"><label style="font-size:11px">ETA</label><input type="date" value="${meta.eta||''}" onchange="saveTMSMeta('${id}',{eta:this.value});showSavedIndicator()"></div>
         <div class="field"><label style="font-size:11px">PRO / Tracking #</label><input type="text" value="${escH(meta.proNum||'')}" placeholder="PRO number" onchange="saveTMSMeta('${id}',{proNum:this.value});showSavedIndicator()"></div>
       </div>
+      ${datSection(id, meta.pickupAppt||'')}
     </div>
 
     <!-- Middle: Timeline + Checklist -->
@@ -16388,6 +16406,42 @@ function saveEtaAck(id){
 }
 function _imgToDataURL(file,max){ max=max||1100; return new Promise(res=>{ const r=new FileReader(); r.onload=()=>{ const img=new Image(); img.onload=()=>{ let w=img.width,h=img.height; if(w>max||h>max){ if(w>=h){h=Math.round(h*max/w);w=max;}else{w=Math.round(w*max/h);h=max;} } try{ const c=document.createElement('canvas'); c.width=w;c.height=h; c.getContext('2d').drawImage(img,0,0,w,h); res(c.toDataURL('image/jpeg',0.72)); }catch(e){ res(r.result); } }; img.onerror=()=>res(r.result); img.src=r.result; }; r.onerror=()=>res(null); r.readAsDataURL(file); }); }
 function viewCcImage(src){ $('modal-root').innerHTML=`<div class="overlay" onclick="closeModal()"><img src="${src}" style="max-width:92vw;max-height:88vh;border-radius:12px;box-shadow:0 20px 60px rgba(0,0,0,.4)"></div>`; }
+
+// ── DAT LOAD BOARD (post + coverage tracking for freight) ───────────────────
+function _datState(id){ const m=getTMSMeta(id)||{}; return {posted:!!m.datPosted,postedAt:m.datPostedAt||'',postedBy:m.datPostedBy||'',coverage:m.datCoverage||''}; }
+function datBadge(id,pickupISO){
+  const d=_datState(id);
+  if(d.coverage==='on') return '<span class="datb covdat">✓ Covered on DAT</span>';
+  if(d.coverage==='off') return '<span class="datb covoff">✓ Covered off DAT</span>';
+  if(d.posted){
+    let near=(d.coverage==='notcovered');
+    if(pickupISO){ const t=new Date(pickupISO).getTime(); if(!isNaN(t)&&(t-Date.now())<=86400000) near=true; }
+    return near ? '<span class="datb notcov">⚠ Posted · not covered</span>' : '<span class="datb posted"><span class="dot"></span>Posted on DAT</span>';
+  }
+  return '';
+}
+function datPost(id){ saveTMSMeta(id,{datPosted:true,datPostedAt:new Date().toISOString(),datPostedBy:(_currentUser&&_currentUser.name)||'',datCoverage:''}); try{logAction('dat_post','Posted on DAT','load',id);}catch(e){} if(typeof showToast==='function') showToast('📋 Posted on DAT'); _datRefresh(id); }
+function datRemove(id){ saveTMSMeta(id,{datPosted:false,datPostedAt:'',datCoverage:''}); _datRefresh(id); }
+function datSetCoverage(id,cov){ saveTMSMeta(id,{datCoverage:cov}); try{logAction('dat_cover','DAT coverage: '+cov,'load',id);}catch(e){} _datRefresh(id); }
+function _datRefresh(id){ try{ if(S.view==='tms'&&typeof renderTMS==='function') renderTMS(); }catch(e){} try{ if(typeof openTMSLoadDetail==='function') openTMSLoadDetail(id); }catch(e){} }
+function datSection(id,pickupISO){
+  const d=_datState(id);
+  if(!d.posted){
+    return `<div class="card"><div class="dat-h"><span class="datlogo">DAT</span> Load board</div>
+      <button class="btn blue" style="width:100%;justify-content:center" onclick="datPost('${id}')">📋 Post this load to DAT</button>
+      <div style="font-size:11px;color:var(--gray-400);margin-top:8px">Mark the load live on DAT so the board shows it's searching for a carrier.</div></div>`;
+  }
+  const fmt=t=>{try{return new Date(t).toLocaleString('en-US',{timeZone:'America/New_York',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});}catch(e){return '';}};
+  const on=d.coverage==='on',off=d.coverage==='off',nc=d.coverage==='notcovered';
+  return `<div class="card"><div class="dat-h"><span class="datlogo">DAT</span> Load board</div>
+    <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-bottom:10px"><span class="datb posted"><span class="dot"></span>Posted on DAT</span><span style="font-size:11px;color:var(--gray-400)">${d.postedAt?('Posted '+fmt(d.postedAt)):''}${d.postedBy?(' · '+escH(d.postedBy)):''}</span><button onclick="datRemove('${id}')" style="margin-left:auto;font-size:11px;padding:4px 10px;border:1px solid var(--gray-200);border-radius:7px;background:#fff;cursor:pointer;font-family:inherit">Remove</button></div>
+    <div style="font-size:11px;font-weight:700;color:var(--gray-500);margin-bottom:8px">How was it covered?</div>
+    <div class="dat-cov">
+      <button class="${on?'on g':''}" onclick="datSetCoverage('${id}','on')">✓ On DAT</button>
+      <button class="${off?'on t':''}" onclick="datSetCoverage('${id}','off')">✓ Off DAT</button>
+      <button class="${nc?'on a':''}" onclick="datSetCoverage('${id}','notcovered')">⚠ Not covered</button>
+    </div></div>`;
+}
 
 function openCheckcallModal(id){
   $('modal-root').innerHTML=`<div class="overlay">
