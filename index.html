@@ -8729,7 +8729,7 @@ async function renderCarriers(){
             <button class="btn btn-sm" onclick="event.stopPropagation();showCarrierModal('${c.id}')" title="Edit">✏️</button>
             <button class="btn btn-sm" onclick="event.stopPropagation();openCarrierRateChart('${c.name.replace(/'/g,"\'")}')" title="Rate history">📈</button>
             <button class="btn btn-sm" onclick="event.stopPropagation();toggleBlacklist('${c.name.replace(/'/g,"\'") }');renderCarriers()" style="color:${isBlacklisted(c.name)?'var(--red)':'var(--gray-400)'}" title="Blacklist">🚫</button>
-            <button class="btn btn-sm" data-cid="${c.id}" data-cname="${c.name}" onclick="event.stopPropagation();confirmDeleteCarrier(this.dataset.cid,this.dataset.cname)" style="color:#dc2626;border-color:#fca5a5" title="Delete">🗑️</button>
+            ${(_currentUser&&(_currentUser.role==='admin'||_currentUser.role==='super_admin'))?`<button class="btn btn-sm" data-cid="${c.id}" data-cname="${c.name}" onclick="event.stopPropagation();confirmDeleteCarrier(this.dataset.cid,this.dataset.cname)" style="color:#dc2626;border-color:#fca5a5" title="Delete carrier (admins & super-admins)">🗑️</button>`:''}
           </div>
         </td>
       </tr>`;
@@ -8783,7 +8783,7 @@ async function showCarrierModal(id) {
       </div>
       <div class="field"><label>Notes</label><textarea id="car-notes" rows="2" style="width:100%;padding:8px;border:1px solid var(--gray-300);border-radius:var(--radius);font-size:13px;font-family:inherit;resize:vertical">${c.notes||''}</textarea></div>
       <div class="modal-foot">
-        ${id?`<button class="btn" onclick="delCarrier('${id}','${(c.name||'').replace(/'/g,'')}')" style="margin-right:auto;color:var(--red);border-color:#fca5a5">🗑️ Delete</button>`:''}
+        ${(id&&_currentUser&&(_currentUser.role==='admin'||_currentUser.role==='super_admin'))?`<button class="btn" onclick="delCarrier('${id}','${(c.name||'').replace(/'/g,'')}')" style="margin-right:auto;color:var(--red);border-color:#fca5a5">🗑️ Delete</button>`:''}
         <button class="btn" onclick="closeModal()">Cancel</button>
         <button class="btn blue" onclick="saveCarrier('${id||''}')">Save carrier</button>
       </div>
@@ -8803,6 +8803,7 @@ async function saveCarrier(id){
 }
 
 async function delCarrier(id,name){
+  if(!_currentUser||!(_currentUser.role==='admin'||_currentUser.role==='super_admin')){ if(typeof showToast==='function')showToast('Only admins and super admins can delete carriers','warn'); return; }
   if(!confirm(`Delete "${name}" from your carrier network?`))return;
   await db.from('carriers').delete().eq('id',id);
   closeModal();renderCarriers();
@@ -26798,6 +26799,7 @@ function confirmDeleteCarrier(id, name){
 }
 
 async function deleteCarrierConfirmed(id, name){
+  if(!_currentUser||!(_currentUser.role==='admin'||_currentUser.role==='super_admin')){ if(typeof showToast==='function')showToast('Only admins and super admins can delete carriers','warn'); closeModal(); return; }
   try{
     // Delete from Supabase if connected
     if(typeof db!=='undefined'&&db){
