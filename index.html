@@ -1870,10 +1870,10 @@ function render(){
 function getMatches(){
   const qi=S.qi;
   const isExport=qi.drayType==='export';
-  const matchZip=isExport?qi.pickupZip:qi.zip;
+  const matchZip=String((isExport?qi.pickupZip:qi.zip)||'').trim();
   return S.rates.filter(r=>{
     if(!r.active) return false;
-    if(r.zip!==matchZip) return false;
+    if(String(r.zip||'').trim()!==matchZip) return false;
     if(!(r.ld===qi.ld||r.ld==='Both')) return false;
     if(isExport&&!r.exportBase) return false; // must have export rate
     return true;
@@ -1889,7 +1889,7 @@ function buildCarrierComparison(matches){
   if(!searchZip) return `<div class="empty"><div class="empty-ico">🔍</div><p>${qi?.drayType==='export'?'Enter pickup ZIP':'Enter a delivery ZIP to see carrier rates'}</p></div>`;
   if(!matches.length){
     const total=S.rates.filter(r=>r.active).length;
-    const zipMatches=S.rates.filter(r=>r.active&&r.zip===qi.zip).length;
+    const zipMatches=S.rates.filter(r=>r.active&&String(r.zip||'').trim()===String(qi.zip||'').trim()).length;
     return `<div class="empty"><div class="empty-ico">🚚</div>
       <p style="font-weight:700;color:var(--gray-600)">No carriers found</p>
       <p style="font-size:12px;color:var(--gray-400);margin-top:4px">
@@ -5267,7 +5267,7 @@ function buildTlStepHTML(tl){
 // ── STEP 1: Inbound Drayage ───────────────────────────────────────────────
 function buildTlStep1(tl){
   // Find matching drayage carriers
-  const matches=S.rates.filter(r=>r.active&&r.zip===tl.drayZip&&(r.ld===tl.drayLd||r.ld==='Both')).sort((a,b)=>totMode(a,tl.drayLd)-totMode(b,tl.drayLd));
+  const matches=S.rates.filter(r=>r.active&&String(r.zip||"").trim()===String(tl.drayZip||"").trim()&&(r.ld===tl.drayLd||r.ld==='Both')).sort((a,b)=>totMode(a,tl.drayLd)-totMode(b,tl.drayLd));
   const sel=S.rates.find(r=>r.id===tl.selDrayId);
   const carrierCards=matches.map(r=>{
     const isSelected=tl.selDrayId===r.id;
@@ -7454,7 +7454,7 @@ async function submitAdd(){
   const carrier=$v('carrier');if(!carrier){alert('Carrier name required.');return;}
   const _rt=($('rf-rate-type')||{}).value||'import';
   const _bcoTagsAdd=[...document.querySelectorAll('#bco-tags-wrap button[data-tag]')].filter(b=>b.style.background.includes('1a2e4a')||b.style.background==='#1a2e4a').map(b=>b.dataset.tag);
-  const nr={id:uid(),region:$v('region'),carrier,port:$v('port'),destination:$v('destination'),zip:$v('zip'),ld:$v('ld'),active:true,notes:$v('notes'),bcoTags:_bcoTagsAdd,base:_rt==='export'?0:parseFloat($v('base'))||0,exportBase:_rt==='import'?0:parseFloat($v('exportBase'))||0,customAcc:collectCustomAcc()};
+  const nr={id:uid(),region:$v('region'),carrier,port:$v('port').trim(),destination:$v('destination').trim(),zip:$v('zip').trim(),ld:$v('ld'),active:true,notes:$v('notes'),bcoTags:_bcoTagsAdd,base:_rt==='export'?0:parseFloat($v('base'))||0,exportBase:_rt==='import'?0:parseFloat($v('exportBase'))||0,customAcc:collectCustomAcc()};
   CHARGES.filter(c=>c!=='base').forEach(c=>{nr[c]=parseFloat($v(c))||0;});
   setSaving(true);try{await dbSaveRate(nr);S.rates.push(nr);logAction('rate_added',`${nr.carrier||'—'} | ${nr.port||'—'} → ${nr.zip||'—'}`,'rate',nr.id);closeModal();renderRates();}catch(e){alert('Error: '+e.message);}finally{setSaving(false);}
 }
@@ -7467,7 +7467,7 @@ async function submitEdit(id){
   const r=S.rates.find(r=>r.id===id);if(!r) return;const carrier=$v('carrier');if(!carrier){alert('Carrier name required.');return;}
   const _bcoTags=[...document.querySelectorAll('#bco-tags-wrap button[data-tag]')].filter(b=>b.style.background.includes('1a2e4a')||b.style.background==='#1a2e4a').map(b=>b.dataset.tag);
   const _rtE=($('rf-rate-type')||{}).value||'import';
-  Object.assign(r,{region:$v('region'),carrier,port:$v('port'),destination:$v('destination'),zip:$v('zip'),ld:$v('ld'),notes:$v('notes'),bcoTags:_bcoTags||[],customAcc:collectCustomAcc(),base:_rtE==='export'?0:parseFloat($v('base'))||0,exportBase:_rtE==='import'?0:parseFloat($v('exportBase'))||0});
+  Object.assign(r,{region:$v('region'),carrier,port:$v('port').trim(),destination:$v('destination').trim(),zip:$v('zip').trim(),ld:$v('ld'),notes:$v('notes'),bcoTags:_bcoTags||[],customAcc:collectCustomAcc(),base:_rtE==='export'?0:parseFloat($v('base'))||0,exportBase:_rtE==='import'?0:parseFloat($v('exportBase'))||0});
   CHARGES.filter(c=>c!=='base').forEach(c=>{r[c]=parseFloat($v(c))||0;});
   setSaving(true);try{await dbSaveRate(r);logAction('rate_edited',`${r.carrier||'—'} | ${r.port||'—'} → ${r.zip||'—'}`,'rate',r.id);closeModal();renderRates();}catch(e){alert('Error: '+e.message);}finally{setSaving(false);}
 }
@@ -7698,7 +7698,7 @@ async function updateStatus(id,status){
 function showBookingModal(id){
   const q=S.quotes.find(q=>q.id===id);if(!q) return;
   // All active carriers on this zip so user can switch if needed
-  const carriersOnZip=S.rates.filter(r=>r.active&&r.zip===q.zip&&(r.ld===q.ld||r.ld==='Both'))
+  const carriersOnZip=S.rates.filter(r=>r.active&&String(r.zip||"").trim()===String(q.zip||"").trim()&&(r.ld===q.ld||r.ld==='Both'))
     .sort((a,b)=>totMode(a,q.ld)-totMode(b,q.ld));
   const opts=carriersOnZip.map(r=>`<option value="${r.id}"${r.carrier===q.carrier?' selected':''}>${r.carrier} — carrier total: ${fmt(totMode(r,q.ld))}</option>`).join('');
 
@@ -8729,7 +8729,7 @@ async function renderCarriers(){
             <button class="btn btn-sm" onclick="event.stopPropagation();showCarrierModal('${c.id}')" title="Edit">✏️</button>
             <button class="btn btn-sm" onclick="event.stopPropagation();openCarrierRateChart('${c.name.replace(/'/g,"\'")}')" title="Rate history">📈</button>
             <button class="btn btn-sm" onclick="event.stopPropagation();toggleBlacklist('${c.name.replace(/'/g,"\'") }');renderCarriers()" style="color:${isBlacklisted(c.name)?'var(--red)':'var(--gray-400)'}" title="Blacklist">🚫</button>
-            ${canDeleteCarrier()?`<button class="btn btn-sm" data-cid="${c.id}" data-cname="${c.name}" onclick="event.stopPropagation();confirmDeleteCarrier(this.dataset.cid,this.dataset.cname)" style="color:#dc2626;border-color:#fca5a5" title="Delete carrier (admins & super-admins)">🗑️</button>`:''}
+            <button class="btn btn-sm" data-cid="${c.id}" data-cname="${c.name}" onclick="event.stopPropagation();confirmDeleteCarrier(this.dataset.cid,this.dataset.cname)" style="color:#dc2626;border-color:#fca5a5" title="Delete carrier (admins & super-admins)">🗑️</button>
           </div>
         </td>
       </tr>`;
@@ -8783,7 +8783,7 @@ async function showCarrierModal(id) {
       </div>
       <div class="field"><label>Notes</label><textarea id="car-notes" rows="2" style="width:100%;padding:8px;border:1px solid var(--gray-300);border-radius:var(--radius);font-size:13px;font-family:inherit;resize:vertical">${c.notes||''}</textarea></div>
       <div class="modal-foot">
-        ${(id&&canDeleteCarrier())?`<button class="btn" onclick="delCarrier('${id}','${(c.name||'').replace(/'/g,'')}')" style="margin-right:auto;color:var(--red);border-color:#fca5a5">🗑️ Delete</button>`:''}
+        ${id?`<button class="btn" onclick="delCarrier('${id}','${(c.name||'').replace(/'/g,'')}')" style="margin-right:auto;color:var(--red);border-color:#fca5a5">🗑️ Delete</button>`:''}
         <button class="btn" onclick="closeModal()">Cancel</button>
         <button class="btn blue" onclick="saveCarrier('${id||''}')">Save carrier</button>
       </div>
@@ -8802,12 +8802,18 @@ async function saveCarrier(id){
   }catch(e){alert('Error: '+e.message);}
 }
 
-// Admins AND super-admins can delete carriers (case-insensitive on the role string).
-function canDeleteCarrier(){ if(!_currentUser) return false; var r=String(_currentUser.role||'').trim().toLowerCase(); return r==='super_admin'||r==='admin'; }
+// Admins AND super-admins can delete carriers. Matches any role containing "admin" (admin, Admin, super_admin, administrator…).
+function canDeleteCarrier(){ if(!_currentUser) return false; return String(_currentUser.role||'').trim().toLowerCase().indexOf('admin')>=0; }
+function _denyDelCarrier(){ if(typeof showToast==='function') showToast("Your account role is \""+((_currentUser&&_currentUser.role)||'none')+"\" — only admins & super-admins can delete carriers. An admin can fix your role in Admin → Users.",'warn',8000); }
 async function delCarrier(id,name){
-  if(!canDeleteCarrier()){ if(typeof showToast==='function')showToast('Only admins and super admins can delete carriers','warn'); return; }
+  if(!canDeleteCarrier()){ _denyDelCarrier(); return; }
   if(!confirm(`Delete "${name}" from your carrier network?`))return;
-  try{ const {error}=await db.from('carriers').delete().eq('id',id); if(error) throw error; showToast(name+' deleted','success',2500); }
+  try{
+    const {data,error}=await db.from('carriers').delete().eq('id',id).select();
+    if(error) throw error;
+    if(!data||!data.length){ showToast('“'+name+'” was NOT deleted — the database blocked it (row-level security on the carriers table). An owner needs to add a DELETE policy in Supabase. Nothing was removed.','warn',11000); closeModal(); return; }
+    showToast(name+' deleted','success',2500);
+  }
   catch(e){ showToast('Could not delete '+name+': '+((e&&e.message)||e)+' — check the carriers table delete policy in Supabase.','warn',9000); }
   closeModal();renderCarriers();
 }
@@ -10693,7 +10699,7 @@ function changeShipmentCarrier(type,id,currentCarrier){
   if(type==='drayage'){
     const q=S.quotes.find(q=>q.id===id);
     if(q){
-      const matches=S.rates.filter(r=>r.active&&r.zip===q.zip&&(r.ld===q.ld||r.ld==='Both'))
+      const matches=S.rates.filter(r=>r.active&&String(r.zip||"").trim()===String(q.zip||"").trim()&&(r.ld===q.ld||r.ld==='Both'))
         .sort((a,b)=>totMode(a,q.ld)-totMode(b,q.ld));
       if(matches.length){
         rateRows=matches.map(r=>{
@@ -26788,6 +26794,7 @@ function carrierOnboardBtn(name){
 
 <script>
 function confirmDeleteCarrier(id, name){
+  if(!canDeleteCarrier()){ _denyDelCarrier(); return; }
   openModal(`
     <div style="max-width:380px;text-align:center;padding:8px">
       <div style="font-size:36px;margin-bottom:10px">🗑️</div>
@@ -26802,21 +26809,24 @@ function confirmDeleteCarrier(id, name){
 }
 
 async function deleteCarrierConfirmed(id, name){
-  if(!canDeleteCarrier()){ if(typeof showToast==='function')showToast('Only admins and super admins can delete carriers','warn'); closeModal(); return; }
-  let removed=false, errMsg='';
+  if(!canDeleteCarrier()){ _denyDelCarrier(); closeModal(); return; }
+  let removed=false, errMsg='', blocked=false;
   try{
     if(typeof db!=='undefined'&&db){
       const res=await Promise.race([
-        db.from('carriers').delete().eq('id',id),
+        db.from('carriers').delete().eq('id',id).select(),
         new Promise((_,rej)=>setTimeout(()=>rej(new Error('timed out reaching the database')),6000))
       ]);
-      if(res&&res.error) errMsg=res.error.message; else removed=true;
+      if(res&&res.error) errMsg=res.error.message;
+      else if(res&&res.data&&res.data.length) removed=true;
+      else blocked=true; // 200 OK but 0 rows removed → row-level security blocked the DELETE
     } else { removed=true; }
   }catch(e){ errMsg=(e&&e.message)||String(e); }
-  // Clean up this device's local onboarding data
-  ['co_onb_','carrier_w9_','carrier_ins_','carrier_perf_','carrier_rate_hist_'].forEach(prefix=>{ try{localStorage.removeItem(prefix+name);}catch(e){} });
+  // Only clean up this device's local onboarding data if the row was actually removed
+  if(removed){ ['co_onb_','carrier_w9_','carrier_ins_','carrier_perf_','carrier_rate_hist_'].forEach(prefix=>{ try{localStorage.removeItem(prefix+name);}catch(e){} }); }
   closeModal();
   if(removed) showToast(name+' deleted','success',2500);
+  else if(blocked) showToast('“'+name+'” was NOT deleted — the database blocked it (row-level security on the carriers table). It only looked deleted. An owner needs to add a DELETE policy in Supabase; see the fix I sent.','warn',12000);
   else showToast('Could not delete '+name+': '+(errMsg||'database error')+' — check the carriers table delete policy in Supabase.','warn',9000);
   if(typeof renderCarriers==='function') renderCarriers();
 }
