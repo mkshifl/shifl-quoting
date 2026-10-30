@@ -8729,7 +8729,7 @@ async function renderCarriers(){
             <button class="btn btn-sm" onclick="event.stopPropagation();showCarrierModal('${c.id}')" title="Edit">✏️</button>
             <button class="btn btn-sm" onclick="event.stopPropagation();openCarrierRateChart('${c.name.replace(/'/g,"\'")}')" title="Rate history">📈</button>
             <button class="btn btn-sm" onclick="event.stopPropagation();toggleBlacklist('${c.name.replace(/'/g,"\'") }');renderCarriers()" style="color:${isBlacklisted(c.name)?'var(--red)':'var(--gray-400)'}" title="Blacklist">🚫</button>
-            ${(_currentUser&&(_currentUser.role==='admin'||_currentUser.role==='super_admin'))?`<button class="btn btn-sm" data-cid="${c.id}" data-cname="${c.name}" onclick="event.stopPropagation();confirmDeleteCarrier(this.dataset.cid,this.dataset.cname)" style="color:#dc2626;border-color:#fca5a5" title="Delete carrier (admins & super-admins)">🗑️</button>`:''}
+            ${canDeleteCarrier()?`<button class="btn btn-sm" data-cid="${c.id}" data-cname="${c.name}" onclick="event.stopPropagation();confirmDeleteCarrier(this.dataset.cid,this.dataset.cname)" style="color:#dc2626;border-color:#fca5a5" title="Delete carrier (admins & super-admins)">🗑️</button>`:''}
           </div>
         </td>
       </tr>`;
@@ -8783,7 +8783,7 @@ async function showCarrierModal(id) {
       </div>
       <div class="field"><label>Notes</label><textarea id="car-notes" rows="2" style="width:100%;padding:8px;border:1px solid var(--gray-300);border-radius:var(--radius);font-size:13px;font-family:inherit;resize:vertical">${c.notes||''}</textarea></div>
       <div class="modal-foot">
-        ${(id&&_currentUser&&(_currentUser.role==='admin'||_currentUser.role==='super_admin'))?`<button class="btn" onclick="delCarrier('${id}','${(c.name||'').replace(/'/g,'')}')" style="margin-right:auto;color:var(--red);border-color:#fca5a5">🗑️ Delete</button>`:''}
+        ${(id&&canDeleteCarrier())?`<button class="btn" onclick="delCarrier('${id}','${(c.name||'').replace(/'/g,'')}')" style="margin-right:auto;color:var(--red);border-color:#fca5a5">🗑️ Delete</button>`:''}
         <button class="btn" onclick="closeModal()">Cancel</button>
         <button class="btn blue" onclick="saveCarrier('${id||''}')">Save carrier</button>
       </div>
@@ -8802,10 +8802,13 @@ async function saveCarrier(id){
   }catch(e){alert('Error: '+e.message);}
 }
 
+// Admins AND super-admins can delete carriers (case-insensitive on the role string).
+function canDeleteCarrier(){ if(!_currentUser) return false; var r=String(_currentUser.role||'').trim().toLowerCase(); return r==='super_admin'||r==='admin'; }
 async function delCarrier(id,name){
-  if(!_currentUser||!(_currentUser.role==='admin'||_currentUser.role==='super_admin')){ if(typeof showToast==='function')showToast('Only admins and super admins can delete carriers','warn'); return; }
+  if(!canDeleteCarrier()){ if(typeof showToast==='function')showToast('Only admins and super admins can delete carriers','warn'); return; }
   if(!confirm(`Delete "${name}" from your carrier network?`))return;
-  await db.from('carriers').delete().eq('id',id);
+  try{ const {error}=await db.from('carriers').delete().eq('id',id); if(error) throw error; showToast(name+' deleted','success',2500); }
+  catch(e){ showToast('Could not delete '+name+': '+((e&&e.message)||e)+' — check the carriers table delete policy in Supabase.','warn',9000); }
   closeModal();renderCarriers();
 }
 
@@ -26799,22 +26802,22 @@ function confirmDeleteCarrier(id, name){
 }
 
 async function deleteCarrierConfirmed(id, name){
-  if(!_currentUser||!(_currentUser.role==='admin'||_currentUser.role==='super_admin')){ if(typeof showToast==='function')showToast('Only admins and super admins can delete carriers','warn'); closeModal(); return; }
+  if(!canDeleteCarrier()){ if(typeof showToast==='function')showToast('Only admins and super admins can delete carriers','warn'); closeModal(); return; }
+  let removed=false, errMsg='';
   try{
-    // Delete from Supabase if connected
     if(typeof db!=='undefined'&&db){
-      await Promise.race([
+      const res=await Promise.race([
         db.from('carriers').delete().eq('id',id),
-        new Promise((_,rej)=>setTimeout(()=>rej(),4000))
+        new Promise((_,rej)=>setTimeout(()=>rej(new Error('timed out reaching the database')),6000))
       ]);
-    }
-  }catch(e){}
-  // Always clean up localStorage onboarding data
-  ['co_onb_','carrier_w9_','carrier_ins_','carrier_perf_','carrier_rate_hist_','co_onb_'].forEach(prefix=>{
-    localStorage.removeItem(prefix+name);
-  });
+      if(res&&res.error) errMsg=res.error.message; else removed=true;
+    } else { removed=true; }
+  }catch(e){ errMsg=(e&&e.message)||String(e); }
+  // Clean up this device's local onboarding data
+  ['co_onb_','carrier_w9_','carrier_ins_','carrier_perf_','carrier_rate_hist_'].forEach(prefix=>{ try{localStorage.removeItem(prefix+name);}catch(e){} });
   closeModal();
-  showToast(name+' deleted','success',2500);
+  if(removed) showToast(name+' deleted','success',2500);
+  else showToast('Could not delete '+name+': '+(errMsg||'database error')+' — check the carriers table delete policy in Supabase.','warn',9000);
   if(typeof renderCarriers==='function') renderCarriers();
 }
 </script>
