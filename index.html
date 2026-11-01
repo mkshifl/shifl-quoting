@@ -1883,6 +1883,31 @@ function getMatches(){
     return av-bv;
   });
 }
+// Nearby/fuzzy rate suggestions when there's no exact ZIP+move-type match.
+function getNearbyRates(){
+  const qi=S.qi;
+  const isExport=qi.drayType==='export';
+  const z=String((isExport?qi.pickupZip:qi.zip)||'').trim();
+  if(z.length<3) return {prefix:[],otherLd:[]};
+  const p3=z.slice(0,3);
+  const act=S.rates.filter(r=>r.active);
+  // same ZIP, but a move type that doesn't match the current one
+  const otherLd=act.filter(r=>String(r.zip||'').trim()===z && !(r.ld===qi.ld||r.ld==='Both') && (!isExport||r.exportBase));
+  // nearby ZIP (same 3-digit prefix), move type ok
+  const near=act.filter(r=>{
+    const rz=String(r.zip||'').trim();
+    return rz!==z && rz.length>=3 && rz.slice(0,3)===p3 && (r.ld===qi.ld||r.ld==='Both') && (!isExport||r.exportBase);
+  }).sort((a,b)=>totMode(a,qi.ld)-totMode(b,qi.ld));
+  const seen=new Set(), prefix=[];
+  near.forEach(r=>{const k=String(r.zip||'').trim()+'|'+r.carrier;if(!seen.has(k)){seen.add(k);prefix.push(r);}});
+  return {prefix:prefix.slice(0,6),otherLd:otherLd.slice(0,4)};
+}
+function jumpToLane(zip,ld){
+  if(S.qi.drayType==='export'){S.qi.pickupZip=zip;} else {S.qi.zip=zip;}
+  if(ld) S.qi.ld=ld;
+  S.selId=null;
+  renderQuote();
+}
 function buildCarrierComparison(matches){
   const qi=S.qi;
   const searchZip=qi?.drayType==='export'?(qi.pickupZip||qi.zip):qi.zip;
@@ -1890,8 +1915,21 @@ function buildCarrierComparison(matches){
   if(!matches.length){
     const total=S.rates.filter(r=>r.active).length;
     const zipMatches=S.rates.filter(r=>r.active&&String(r.zip||'').trim()===String(qi.zip||'').trim()).length;
-    return `<div class="empty"><div class="empty-ico">🚚</div>
-      <p style="font-weight:700;color:var(--gray-600)">No carriers found</p>
+    const nb=getNearbyRates();
+    const p3=String(qi.zip||'').trim().slice(0,3);
+    const nearbyHtml=(nb.otherLd.length||nb.prefix.length)?`
+      <div style="margin-top:14px;text-align:left;border-top:1px solid #f1f5f9;padding:12px 14px 2px">
+        ${nb.otherLd.length?`<div style="font-size:11px;font-weight:700;color:#92400e;margin-bottom:6px">⚠ Same ZIP, different move type — click to switch</div>
+          ${nb.otherLd.map(r=>`<div onclick="jumpToLane('${String(r.zip||'').trim()}','${r.ld}')" style="cursor:pointer;display:flex;justify-content:space-between;gap:8px;padding:7px 10px;margin-bottom:4px;background:#fffbeb;border:1px solid #fde68a;border-radius:7px">
+            <span style="font-size:12px;font-weight:600;color:#1e3a5f">${r.carrier} · ${r.ld}</span>
+            <span style="font-size:12px;color:#92400e;font-weight:700">${fmtD(totMode(r,r.ld))}</span></div>`).join('')}`:''}
+        ${nb.prefix.length?`<div style="font-size:11px;font-weight:700;color:#1d4ed8;margin:10px 0 6px">📍 Nearby ZIPs (${p3}xx) — click to use that lane</div>
+          ${nb.prefix.map(r=>`<div onclick="jumpToLane('${String(r.zip||'').trim()}','')" style="cursor:pointer;display:flex;justify-content:space-between;gap:8px;padding:7px 10px;margin-bottom:4px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:7px">
+            <span style="font-size:12px;font-weight:600;color:#1e3a5f">${r.carrier} <span style="color:#64748b;font-weight:500">· ${r.zip}${r.destination?' · '+r.destination:''}</span></span>
+            <span style="font-size:12px;color:#2563eb;font-weight:700">${fmtD(totMode(r,qi.ld))}</span></div>`).join('')}`:''}
+      </div>`:'';
+    return `<div class="empty" style="padding:20px 0 4px"><div class="empty-ico">🚚</div>
+      <p style="font-weight:700;color:var(--gray-600)">${nearbyHtml?'No exact match — try one of these':'No carriers found'}</p>
       <p style="font-size:12px;color:var(--gray-400);margin-top:4px">
         Searching: <strong>${searchZip}</strong> · <strong>${qi.ld}</strong>${qi.drayType==='export'?' (Export)':' (Import)'}<br>
         ${total===0
@@ -1900,7 +1938,7 @@ function buildCarrierComparison(matches){
           ?`<span style="color:var(--amber)">⚠ ${total} rate${total!==1?'s':''} exist but none for ZIP <strong>${qi.zip}</strong></span>`
           :`<span style="color:var(--amber)">⚠ ${zipMatches} rate${zipMatches!==1?'s':''} for ZIP ${qi.zip} but none match <strong>${qi.ld}</strong></span>`
         }
-      </p></div>`;
+      </p>${nearbyHtml}</div>`;
   }
 
   const multiPort=[...new Set(matches.map(r=>r.port).filter(Boolean))].length>1;
@@ -2310,6 +2348,19 @@ function onCustomerInput(v){
   const match=S.customers.find(c=>(c.company||'').toLowerCase()===v.toLowerCase()||(c.name||'').toLowerCase()===v.toLowerCase());
   S.qi.customerId=match?match.id:null;
   S.qi.customerEmail=match?match.email:'';
+  // Remember this customer's usual markup: pre-fill from their most recent drayage quote
+  if(match && !S._skipMarkupPrefill){
+    const last=(S.quotes||[]).filter(q=>(q.customer||'').toLowerCase()===v.toLowerCase()&&q.baseMarkup&&typeof q.baseMarkup.amount!=='undefined')
+      .sort((a,b)=>new Date(b.date||0)-new Date(a.date||0))[0];
+    if(last&&last.baseMarkup){
+      const cur=S.qi.baseMarkup||{};
+      if(cur.mode!==last.baseMarkup.mode||Number(cur.amount)!==Number(last.baseMarkup.amount)){
+        S.qi.baseMarkup={...last.baseMarkup};
+        if($('pricing-section')) refreshPricingAndPreview();
+        if(typeof showToast==='function') showToast('Loaded '+(match.company||match.name||v)+'’s usual markup ('+(last.baseMarkup.mode==='pct'?last.baseMarkup.amount+'%':'$'+last.baseMarkup.amount)+')','info',2600);
+      }
+    }
+  }
   // Update just the email display row without touching the input
   const emailDiv=document.getElementById('cust-email-row');
   if(emailDiv){
