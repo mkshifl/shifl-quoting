@@ -27473,12 +27473,38 @@ setTimeout(()=>{
    Auto-checks onboarding boxes when docs are uploaded
    ============================================================ */
 
+// Carrier documents (W-9, COI, authority, etc.) live in Supabase portal_docs (kind='carrier_docs'),
+// one row per carrier holding the docs array. localStorage is only a best-effort device cache —
+// a single COI/W-9 PDF exceeds the ~5MB localStorage quota, which is why uploads used to silently vanish.
+window._carrierDocsCache = window._carrierDocsCache || {};
+function _cdocRowId(name){ return 'cdocs_'+String(name||'').toLowerCase().replace(/[^a-z0-9]+/g,'_'); }
+async function loadCarrierDocsFor(name){
+  if(typeof db==='undefined'||!db) return false;
+  try{
+    const {data,error}=await db.from('portal_docs').select('data_b64').eq('kind','carrier_docs').eq('id',_cdocRowId(name)).limit(1);
+    if(error) throw error;
+    let arr=[];
+    if(data&&data[0]&&data[0].data_b64){ try{ arr=JSON.parse(data[0].data_b64)||[]; }catch(e){ arr=[]; } }
+    window._carrierDocsCache[name]=arr;
+    try{ localStorage.setItem('carrier_docs_'+name,JSON.stringify(arr)); }catch(e){}
+    return true;
+  }catch(e){ return false; }
+}
 function getCarrierDocs(name){
+  if(window._carrierDocsCache && window._carrierDocsCache[name]) return window._carrierDocsCache[name];
   try{return JSON.parse(localStorage.getItem('carrier_docs_'+name)||'[]');}catch(e){return[];}
 }
 function saveCarrierDocs(name,docs){
-  try{localStorage.setItem('carrier_docs_'+name,JSON.stringify(docs));}catch(e){
-    showToast('File too large for local storage','error',3000);
+  window._carrierDocsCache=window._carrierDocsCache||{};
+  window._carrierDocsCache[name]=docs; // in-memory is always authoritative for this session
+  try{localStorage.setItem('carrier_docs_'+name,JSON.stringify(docs));}catch(e){/* localStorage is only a cache now — Supabase is the real store, so quota errors are harmless */}
+  if(typeof db!=='undefined'&&db){
+    db.from('portal_docs').upsert({
+      id:_cdocRowId(name), load_id:_cdocRowId(name), customer:name, kind:'carrier_docs',
+      name:'Carrier documents — '+name, data_b64:JSON.stringify(docs), uploaded_at:new Date().toISOString()
+    }).then(({error})=>{ if(error&&typeof showToast==='function') showToast('⚠ Document saved on this device but did NOT sync to your team ('+(error.message||error)+'). Make sure the portal_docs table exists in Supabase.','warn',9000); }).catch(()=>{});
+  } else if(typeof showToast==='function'){
+    showToast('⚠ Document saved on this device only — not connected to the database. Reconnect so your team can see it.','warn',7000);
   }
 }
 
@@ -27598,6 +27624,8 @@ window.openCarrierOnboarding=function(name){
     wrap.style.marginBottom='14px';
     wrap.innerHTML=renderCarrierFileUpload(name);
     footer.parentElement.insertBefore(wrap,footer);
+    // Pull this carrier's docs from Supabase (what the whole team sees), then refresh the section
+    loadCarrierDocsFor(name).then(()=>{ const w=document.getElementById('carrier-docs-wrap-'+name.replace(/\s/g,'_')); if(w) w.innerHTML=renderCarrierFileUpload(name); });
   },200);
 };
 </script>
