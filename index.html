@@ -1627,6 +1627,7 @@ let _importRows=[];
 async function initApp(){
   showLiquidLoader('Starting…');setLiquidProgress(10);
   try{ loadCoiPin(); }catch(e){}
+  try{ loadAllCarrierOnboard(true); }catch(e){}
   try{ window._bolsLastLoad=Date.now(); loadBols().then(()=>{ try{ if(typeof render==='function') render(); }catch(e){} }); }catch(e){}
   try{
     $('loading-msg').textContent='Starting…';
@@ -8763,6 +8764,7 @@ async function renderCarriers(){
       window._carriersAll=carriers; window._carriersAllAt=Date.now();
     }
     const all=carriers||[];
+    await loadAllCarrierOnboard(); // shared COI/W-9/onboarding flags before building rows (throttled)
     const _dupes=findCarrierDupes(all);
     const dupeBanner=_dupes.length?`<div style="background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:10px 14px;margin-bottom:12px;display:flex;align-items:center;gap:10px">
       <span style="font-size:18px">🔎</span>
@@ -26588,8 +26590,15 @@ const COB_FIELDS={
   ]
 };
 
+// Carrier onboarding data (MC/DOT, COI/W-9 flags, insurance expiry, etc.) is shared via Supabase
+// portal_docs (kind='carrier_onboard'). localStorage is only a device cache — otherwise the
+// "COI on file / W-9 / Book-ready" flags live on one browser and revert on reload or another device.
+window._carrierOnbCache = window._carrierOnbCache || {};
+function _conbRowId(name){ return 'conb_'+String(name||'').toLowerCase().replace(/[^a-z0-9]+/g,'_'); }
 function getCarrierOnboardData(name){
-  // Merge old onboarding data + old w9 data + old insurance data
+  // Shared cache wins (what the whole team sees)
+  if(window._carrierOnbCache && window._carrierOnbCache[name]) return window._carrierOnbCache[name];
+  // Fallback: merge legacy localStorage keys
   const onb=JSON.parse(localStorage.getItem('co_onb_'+name)||'{}');
   const w9=JSON.parse(localStorage.getItem('carrier_w9_'+name)||'{}');
   const ins=JSON.parse(localStorage.getItem('carrier_ins_'+name)||'{}');
@@ -26604,10 +26613,35 @@ function getCarrierOnboardData(name){
   });
 }
 function saveCarrierOnboardData(name,data){
-  localStorage.setItem('co_onb_'+name,JSON.stringify(data));
+  window._carrierOnbCache=window._carrierOnbCache||{};
+  window._carrierOnbCache[name]=data;
+  window._carrierOnbAt=0; // force next render to re-pull the shared copy
+  try{ localStorage.setItem('co_onb_'+name,JSON.stringify(data)); }catch(e){}
   // Keep legacy keys in sync so old badges still work
-  if(data.w9) localStorage.setItem('carrier_w9_'+name,JSON.stringify({onFile:true,ein:data.ein||'',legalName:data.legalName||''}));
-  if(data.insurance&&data.insExpiry) localStorage.setItem('carrier_ins_'+name,JSON.stringify({expiry:data.insExpiry,amount:data.insAmount||'',insurer:data.insCompany||''}));
+  try{ if(data.w9) localStorage.setItem('carrier_w9_'+name,JSON.stringify({onFile:true,ein:data.ein||'',legalName:data.legalName||''})); }catch(e){}
+  try{ if(data.insurance&&data.insExpiry) localStorage.setItem('carrier_ins_'+name,JSON.stringify({expiry:data.insExpiry,amount:data.insAmount||'',insurer:data.insCompany||''})); }catch(e){}
+  if(typeof db!=='undefined'&&db){
+    db.from('portal_docs').upsert({
+      id:_conbRowId(name), load_id:_conbRowId(name), customer:name, kind:'carrier_onboard',
+      name:'Carrier onboarding — '+name, data_b64:JSON.stringify(data), uploaded_at:new Date().toISOString()
+    }).then(({error})=>{ if(error&&typeof showToast==='function') showToast('⚠ Onboarding saved on this device but did NOT sync to your team ('+(error.message||error)+'). Check the portal_docs table in Supabase.','warn',9000); }).catch(()=>{});
+  } else if(typeof showToast==='function'){
+    showToast('⚠ Saved on this device only — not connected to the database.','warn',6000);
+  }
+}
+// Pull every carrier's onboarding record into the shared cache (throttled).
+async function loadAllCarrierOnboard(force){
+  if(typeof db==='undefined'||!db) return false;
+  if(!force && window._carrierOnbAt && (Date.now()-window._carrierOnbAt<12000)) return false;
+  try{
+    const {data,error}=await db.from('portal_docs').select('customer,data_b64').eq('kind','carrier_onboard');
+    if(error) throw error;
+    const c={};
+    (data||[]).forEach(r=>{ if(r.customer && r.data_b64){ try{ c[r.customer]=JSON.parse(r.data_b64); }catch(e){} } });
+    window._carrierOnbCache=c;
+    window._carrierOnbAt=Date.now();
+    return true;
+  }catch(e){ return false; }
 }
 
 function isCarrierOnboarded(name){
