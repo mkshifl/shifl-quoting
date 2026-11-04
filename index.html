@@ -29042,6 +29042,12 @@ async function pmSyncToSheet(){
       newRows.push([q.date||'',q.shiflRef||'',q.customer||'',(q.pickupZip||'')+'→'+(q.deliveryZip||''),q.carrier||'','Freight',q.status||'',+(p.cost||0).toFixed(2),+(p.revenue||0).toFixed(2),profit,p.margin?+(p.margin*100).toFixed(1):0,+(profit*0.15).toFixed(2),'FALSE']);
       newRefs.push(q.shiflRef);
     });
+    (window._tlHistory||[]).filter(function(q){return DONE.indexOf(q.status)>=0&&q.shiflRef&&synced.indexOf(q.shiflRef)<0;}).forEach(function(q){
+      var p=getShipmentProfit(q,'transload');var profit=+(p.profit||0).toFixed(2);
+      var lane=(q.drayPort?q.drayPort.split(',')[0]:'')+'→'+(q.warehouseName||'')+'→'+(q.outDeliveryZip||'');
+      newRows.push([q.date||'',q.shiflRef||'',q.customer||'',lane,q.warehouseName||'','Transload',q.status||'',+(p.cost||0).toFixed(2),+(p.revenue||0).toFixed(2),profit,p.margin?+(p.margin*100).toFixed(1):0,+(profit*0.15).toFixed(2),'FALSE']);
+      newRefs.push(q.shiflRef);
+    });
     if(!newRows.length){showToast('Nothing new to sync','info',2000);if(btn){btn.textContent='📊 Sync to Sheet';btn.disabled=false;}return;}
     var headers=['Date','Ref #','Customer','Lane','Carrier','Mode','Status','Carrier Cost','Customer Rate','Profit','Margin %','My 15% ($)','Shifl Payout'];
     // Only write the header row the first time — re-posting it every sync duplicates headers in the sheet.
