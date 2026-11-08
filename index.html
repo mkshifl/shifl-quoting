@@ -2113,6 +2113,7 @@ function buildCarrierComparison(matches){
         <div style="font-size:10px;color:#9ca3af;margin-top:1px">${r.destination||''}${multiPort&&r.port?` · ${r.port}`:''}${r.notes?` · <span style="color:#d97706">${r.notes}</span>`:''}</div>
         ${r.bcoTags&&r.bcoTags.length?`<div style="display:flex;flex-wrap:wrap;gap:3px;margin-top:3px">${r.bcoTags.map(t=>`<span style="font-size:9px;font-weight:700;padding:1px 7px;border-radius:99px;background:#fef3c7;color:#92400e;border:1px solid #fde68a">${t}</span>`).join('')}</div>`:''}
         ${(()=>{const pct=custTotal>0?Math.round(profit/custTotal*100):0;const mcol=pct>=15?'#0E7A48':pct>=8?'#9A6212':'#C0392F';const cw=custTotal>0?Math.max(4,Math.min(96,Math.round(carrierTotal/custTotal*100))):0;return `<div title="Buy ${fmtD(carrierTotal)} · Margin ${fmtD(profit)} (${pct}%) · Sell ${fmtD(custTotal)}" style="margin-top:8px;height:6px;border-radius:4px;background:#E6E8EC;overflow:hidden;display:flex"><span style="height:6px;width:${cw}%;background:#AEB5BE;opacity:.6"></span><span style="height:6px;flex:1;background:${mcol}"></span></div>`;})()}
+        ${(()=>{const floor=(typeof window.SHIFL_MARGIN_FLOOR==='number'?window.SHIFL_MARGIN_FLOOR:0.08);const pct=custTotal>0?profit/custTotal:0;if(custTotal>0&&(profit<0||pct<floor)){const neg=profit<0;return `<div style="margin-top:6px;font-size:10px;font-weight:700;color:${neg?'#C0392F':'#9A6212'};display:flex;align-items:center;gap:4px">${neg?'🛑 Books at a loss':'⚠ Below '+Math.round(floor*100)+'% margin floor'}</div>`;}return '';})()}
       </div>
       <div style="text-align:right;flex-shrink:0;padding-right:10px;border-right:1px solid #f3f4f6">
         <div style="font-size:14px;font-weight:800;color:#1e3a5f">${fmtD(carrierBase)}</div>
@@ -3398,6 +3399,9 @@ async function updateFqStatus(idx,status){
   }
   if(status==='Booked'){if(!requireCan('book_quotes','You do not have permission to book quotes.')) return;}
   else if(!requireCan('update_status','Only Admins can change quote status.')) return;
+  if(status==='Booked'){
+    try{ var _gf=(window._fqHistory||[])[idx]; if(_gf&&typeof marginGuardConfirm==='function'){ var _gfp=getShipmentProfit(_gf,'freight'); if(!marginGuardConfirm(_gfp.revenue,_gfp.cost,(_gf.fqMode||'load'))) return; } }catch(e){}
+  }
   if(status==='Booked'){setTimeout(fireConfetti,200);showToast('🎉 Quote booked!','success',4000);}
   const _fq=(window._fqHistory||[])[idx];if(_fq) logAction('status_changed',`${_fq.fqMode||'Freight'} — ${_fq.customer||'—'} | ${_fq.pickupZip||'—'} → ${_fq.deliveryZip||'—'} → ${status}`,'fq_quote',_fq.id);
   if(!window._fqHistory||!window._fqHistory[idx]) return;
@@ -7845,8 +7849,11 @@ function renderLog(){
 }
 function onLogFilter(v){S.logFilter=v;const t=$('log-tbody');if(t){t.innerHTML=buildLogRows();setTimeout(()=>setupDragReorder('log-tbody'),100);}}
 async function updateStatus(id,status){
-  // Intercept Booked — show carrier confirmation modal first
-  if(status==='Booked'){showBookingModal(id);return;}
+  // Intercept Booked — margin guardrail, then carrier confirmation modal
+  if(status==='Booked'){
+    try{ var _gq=S.quotes.find(q=>q.id===id); if(_gq&&typeof marginGuardConfirm==='function'){ var _gp=getShipmentProfit(_gq,'drayage'); if(!marginGuardConfirm(_gp.revenue,_gp.cost,'drayage load')) return; } }catch(e){}
+    showBookingModal(id);return;
+  }
   setSaving(true);try{await dbUpdateQuoteStatus(id,status);const q=S.quotes.find(q=>q.id===id);if(q) q.status=status;const t=$('log-tbody');if(t) t.innerHTML=buildLogRows();updateActiveBadge();}catch(e){alert('Error: '+e.message);}finally{setSaving(false);}
 }
 
@@ -16374,6 +16381,7 @@ function renderTMS(){
     {id:'loads',icon:'ti-list',label:'Loads'},
     {id:'invoicing',icon:'ti-receipt',label:'Invoicing'},
     {id:'bol',icon:'ti-file-text',label:'BOL'},
+    {id:'insights',icon:'ti-chart-dots',label:'Insights'},
     {id:'reports',icon:'ti-report-analytics',label:'Reports'},
   ];
   // Secondary tabs — in "More" dropdown
@@ -16387,6 +16395,7 @@ function renderTMS(){
     {id:'calendar',icon:'ti-calendar',label:'Calendar'},
     {id:'vault',icon:'ti-shield-check',label:'Carrier vault'},
     {id:'map',icon:'ti-map',label:'Map'},
+    {id:'tempo',icon:'ti-bolt',label:'Tempo'},
   ];
   const tabs=[...primaryTabs,...secondaryTabs];
 
@@ -16431,12 +16440,14 @@ function renderTMS(){
   else if(sub==='scorecard')  renderTMSScorecard(tabBar,loads);
   else if(sub==='calendar')   renderTMSCalendar(tabBar);
   else if(sub==='map')        renderTMSMap(tabBar);
+  else if(sub==='tempo')      renderTMSTempo(tabBar);
   else if(sub==='escalation') renderLateEscalation(tabBar);
   else if(sub==='templates')  renderTMSTemplates(tabBar);
   else if(sub==='vault')      renderCarrierVault(tabBar);
   else if(sub==='capacity')   renderTMSCapacity(tabBar);
   else if(sub==='claims')     renderTMSClaims(tabBar,loads);
   else if(sub==='tools')      renderTMSTools(tabBar);
+  else if(sub==='insights')   renderTMSInsights(tabBar,loads);
   else if(sub==='reports')    renderTMSReports(tabBar,loads);
 }
 
@@ -18521,30 +18532,22 @@ function renderTMSCalendar(tabBar){
 
 // ── LOAD MAP VIEW ─────────────────────────────────────────────────
 function renderTMSMap(tabBar){
-  const loads=getTMSLoads();
-  const stateCounts={};
-  loads.filter(l=>['Dispatched','In Transit','Out for Delivery'].includes(l.status)).forEach(l=>{
-    const state=zipToState(l.pickupZip||'')||zipToState(l.deliveryZip||'');
-    if(state){stateCounts[state]=(stateCounts[state]||0)+1;}
-  });
-  const maxC=Math.max(...Object.values(stateCounts),1);
-
-  // Simple US state grid (abbreviated)
-  const states=['ME','NH','VT','MA','RI','CT','NY','NJ','PA','DE','MD','DC','VA','WV','NC','SC','GA','FL','AL','MS','TN','KY','OH','IN','MI','WI','IL','MO','AR','LA','TX','OK','KS','NE','SD','ND','MN','IA','MO','AK','HI','MT','WY','CO','NM','AZ','UT','NV','ID','OR','WA','CA'];
-  const uniq=[...new Set(states)];
-
+  // Real geographic map (Leaflet + OSM). DOM shell here; pins booted after mount.
+  // See _tmsMapBoot / _geoZip / _ensureLeaflet (appended script).
+  const INK='#111419',INK3='#8A929D',LINE='#E6E8EC';
   $('page').innerHTML=tabBar+`
-  <div style="font-size:14px;font-weight:800;color:var(--navy);margin-bottom:12px">🗺️ Active loads by state</div>
-  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">
-    ${uniq.map(s=>{const c=stateCounts[s]||0;const intensity=c?Math.round(c/maxC*9)+1:0;const col=c?`rgba(46,117,182,${intensity*0.1})`:' var(--gray-50)';const border=c?'var(--steel)':'var(--gray-200)';return`<div onclick="${c?`tmsFilter('all')`:'()'}" title="${s}: ${c} loads" style="width:44px;height:38px;border:1.5px solid ${border};border-radius:6px;background:${col};display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:${c?'pointer':'default'}"><div style="font-size:10px;font-weight:700;color:${c?'var(--steel)':'var(--gray-400)'}">${s}</div>${c?`<div style="font-size:11px;font-weight:900;color:var(--steel)">${c}</div>`:''}</div>`;}).join('')}
+  <div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-bottom:14px">
+    <div><div style="font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:20px;color:${INK};letter-spacing:-.02em">Load map</div>
+      <div style="font-size:13px;color:${INK3};margin-top:2px">Active loads plotted by delivery ZIP · click a pin for the load</div></div>
+    <div id="tms-map-legend" style="display:flex;gap:12px;font-size:11px;color:${INK3};align-items:center"></div>
   </div>
-  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px">
-    ${loads.filter(l=>['Dispatched','In Transit','Out for Delivery'].includes(l.status)).map(l=>`<div onclick="openTMSLoadDetail('${l.id}')" class="card" style="cursor:pointer;border-left:3px solid ${tmsStatusColor(l.status)}">
-      <div style="font-size:13px;font-weight:700;color:var(--navy)">${escH(l.customer||'—')}</div>
-      <div style="font-size:11px;color:var(--gray-500)">${escH((l.pickupZip||'?')+' → '+(l.deliveryZip||'?'))}</div>
-      <div style="font-size:11px;font-weight:600;color:${tmsStatusColor(l.status)};margin-top:4px">${l.status}</div>
-    </div>`).join('')||'<div class="empty"><div class="empty-ico">🗺️</div><p>No active loads in transit</p></div>'}
+  <div style="display:grid;grid-template-columns:1fr 300px;gap:14px;align-items:start">
+    <div id="tms-leaflet-map" style="height:560px;border:1px solid ${LINE};border-radius:14px;overflow:hidden;background:#EAEEF3;position:relative">
+      <div id="tms-map-status" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:${INK3};font-size:13px;z-index:400">Loading map…</div>
+    </div>
+    <div id="tms-map-list" style="max-height:560px;overflow:auto"></div>
   </div>`;
+  setTimeout(function(){ try{ _tmsMapBoot(); }catch(e){ var s=document.getElementById('tms-map-status'); if(s) s.textContent='Map unavailable — '+e.message; } },40);
 }
 
 function zipToState(zip){
@@ -29180,7 +29183,6 @@ async function pmSyncToSheet(){
   }catch(e){if(btn){btn.textContent='❌ Failed';btn.disabled=false;}showToast('Sync failed: '+e.message,'error',3000);}
 }
 </script>
-/* fix 1785343934 */
 <script>
 /* ===== REBUILD · Wave 1 — Dispatch deal board (overrides earlier renderTMSDispatch) ===== */
 function _rbMoney(n){ try{ return fmtD(Number(n)||0); }catch(e){ return '$'+(Number(n)||0).toLocaleString(); } }
@@ -29362,5 +29364,271 @@ function renderTMSDispatch(tabBar,kpis,loads){
   }
   start();
   setTimeout(clean,800); setTimeout(clean,2200);
+})();
+</script>
+
+<script>
+/* ════════════════════════════════════════════════════════════════════
+   TMS INSIGHTS — Broker intelligence board (live data)
+   Features: #1 Lane profitability · #8 Exception board · #17 Carrier
+   scorecard · #30 DAT coverage · #44 Win/loss analysis
+   ════════════════════════════════════════════════════════════════════ */
+(function(){
+  var INK='#111419',INK2='#464D57',INK3='#8A929D',LINE='#E6E8EC',LINE2='#EFF1F4',
+      WASH='#EEF1FB',NAVY='#26357A',BLUE='#3A5BD9',SURF='#fff',CANV='#F4F5F7';
+  var GRN='#0E7A48',GRNB='#E7F4EC',AMB='#9A6212',AMBB='#FBF2E0',RED='#C0392F',REDB='#FBEBE9';
+  var HF="'Bricolage Grotesque',system-ui,sans-serif", BFF="'Archivo',system-ui,sans-serif";
+
+  var WON=['Booked','Dispatched','In Transit','Out for Delivery','Delivered','Invoiced','Paid'];
+  var ACTIVE=['Booked','Dispatched','In Transit','Out for Delivery'];
+  var LOST=['Lost','Declined','Lost to competitor','No bid','Lost Bid'];
+  var EXPIRED=['Expired'];
+
+  function _z3(z){ z=String(z||'').trim(); return z?z.slice(0,3)+'xx':'—'; }
+  function _isSA(){ try{ return typeof _currentUser!=='undefined'&&_currentUser&&_currentUser.role==='super_admin'; }catch(e){ return false; } }
+  function _mcol(m){ return m>=.15?GRN:m>=.08?AMB:RED; }
+  function _mbg(m){ return m>=.15?GRNB:m>=.08?AMBB:REDB; }
+  function _money0(n){ n=Number(n)||0; return '$'+Math.round(n).toLocaleString(); }
+  function _pct(n){ return (n*100).toFixed(n>=.1?0:1)+'%'; }
+  function _esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+
+  // Unified deal list across drayage / freight / transload
+  function _deals(){
+    var out=[];
+    try{(S.quotes||[]).forEach(function(q){ var p=getShipmentProfit(q,'drayage'); out.push({src:'Drayage',mode:'Drayage',id:q.id,customer:q.customer||'—',carrier:q.carrier||'',status:q.status||'',origin:(q.port||'Port'),dest:_z3(q.zip),date:q.date||'',rev:p.revenue,cost:p.cost,profit:p.profit,margin:p.margin}); });}catch(e){}
+    try{(window._fqHistory||[]).forEach(function(q){ var p=getShipmentProfit(q,'freight'); out.push({src:'Freight',mode:q.fqMode||'FTL',id:q.id,customer:q.customer||'—',carrier:q.carrier||'',status:q.status||'',origin:_z3(q.pickupZip),dest:_z3(q.deliveryZip),date:q.date||'',rev:p.revenue,cost:p.cost,profit:p.profit,margin:p.margin}); });}catch(e){}
+    try{(window._tlHistory||[]).forEach(function(q){ var p=getShipmentProfit(q,'transload'); out.push({src:'Transload',mode:'Transload',id:q.id,customer:q.customer||'—',carrier:q.carrier||q.drayCarrier||'',status:q.status||'',origin:(q.drayPort||'Port'),dest:_z3(q.outDeliveryZip),date:q.date||'',rev:p.revenue,cost:p.cost,profit:p.profit,margin:p.margin}); });}catch(e){}
+    return out;
+  }
+
+  // ── Reusable chrome ──────────────────────────────────────────────
+  function _card(title,sub,body,extra){
+    return '<div style="background:'+SURF+';border:1px solid '+LINE+';border-radius:14px;padding:18px 18px 16px;'+(extra||'')+'">'
+      +'<div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:14px">'
+      +'<div><div style="font-family:'+HF+';font-weight:700;font-size:15px;color:'+INK+';letter-spacing:-.01em">'+title+'</div>'
+      +(sub?'<div style="font-size:12px;color:'+INK3+';margin-top:2px">'+sub+'</div>':'')+'</div></div>'
+      +body+'</div>';
+  }
+  function _emptyRow(msg){ return '<div style="padding:26px 10px;text-align:center;color:'+INK3+';font-size:13px;background:'+CANV+';border-radius:10px">'+msg+'</div>'; }
+  function _chip(txt,col,bg){ return '<span style="display:inline-block;font-size:11px;font-weight:600;padding:2px 8px;border-radius:99px;background:'+bg+';color:'+col+';white-space:nowrap">'+txt+'</span>'; }
+
+  // ════════════════════════════════════════════════════════════════
+  function renderTMSInsights(tabBar,loads){
+    loads=loads||getTMSLoads();
+    var isSA=_isSA();
+    var deals=_deals();
+    var won=deals.filter(function(d){return WON.indexOf(d.status)>=0;});
+    var lost=deals.filter(function(d){return LOST.indexOf(d.status)>=0;});
+    var expired=deals.filter(function(d){return EXPIRED.indexOf(d.status)>=0;});
+
+    // ── Headline KPIs ──────────────────────────────────────────────
+    var grossMargin=won.reduce(function(s,d){return s+(d.profit||0);},0);
+    var grossRev=won.reduce(function(s,d){return s+(d.rev||0);},0);
+    var avgMargin=grossRev>0?grossMargin/grossRev:0;
+    var winRate=(won.length+lost.length)>0?won.length/(won.length+lost.length):0;
+    var activeLoads=loads.filter(function(l){return ACTIVE.indexOf(l.status)>=0;});
+    var needCoverage=activeLoads.filter(function(l){return !l.carrier;}).length;
+    var openExceptions=activeLoads.filter(function(l){ var r=[]; try{r=loadAttention(l);}catch(e){} return r.length||!l.carrier; }).length;
+
+    function kpi(lbl,val,col,note){
+      return '<div style="background:'+SURF+';border:1px solid '+LINE+';border-radius:12px;padding:13px 15px">'
+        +'<div style="font-size:11px;font-weight:600;color:'+INK3+';text-transform:none">'+lbl+'</div>'
+        +'<div style="font-family:'+HF+';font-weight:700;font-size:24px;color:'+(col||INK)+';letter-spacing:-.02em;margin-top:3px">'+val+'</div>'
+        +(note?'<div style="font-size:11px;color:'+INK3+';margin-top:1px">'+note+'</div>':'')+'</div>';
+    }
+    var kpiCards=[];
+    if(isSA){ kpiCards.push(kpi('Gross margin',_money0(grossMargin),_mcol(avgMargin),won.length+' booked loads'));
+              kpiCards.push(kpi('Avg margin',_pct(avgMargin),_mcol(avgMargin),'blended, booked')); }
+    else { kpiCards.push(kpi('Revenue booked',_money0(grossRev),NAVY,won.length+' loads')); }
+    kpiCards.push(kpi('Win rate',_pct(winRate),winRate>=.4?GRN:winRate>=.25?AMB:RED,won.length+' won · '+lost.length+' lost'));
+    kpiCards.push(kpi('Active loads',String(activeLoads.length),INK,'in the board now'));
+    kpiCards.push(kpi('Needs a carrier',String(needCoverage),needCoverage?AMB:GRN,'uncovered'));
+    kpiCards.push(kpi('Open exceptions',String(openExceptions),openExceptions?RED:GRN,'need a touch'));
+    var kpiBand='<div style="display:grid;grid-template-columns:repeat('+kpiCards.length+',1fr);gap:10px;margin-bottom:16px">'+kpiCards.join('')+'</div>';
+
+    // ── #1 Lane profitability ──────────────────────────────────────
+    var laneMap={};
+    won.forEach(function(d){ var k=d.origin+'  →  '+d.dest; if(!laneMap[k])laneMap[k]={lane:k,n:0,rev:0,profit:0}; var L=laneMap[k];L.n++;L.rev+=d.rev||0;L.profit+=d.profit||0; });
+    var lanes=Object.keys(laneMap).map(function(k){var L=laneMap[k];L.margin=L.rev>0?L.profit/L.rev:0;return L;})
+      .sort(function(a,b){return b.n-a.n||b.rev-a.rev;}).slice(0,10);
+    var maxN=lanes.reduce(function(m,L){return Math.max(m,L.n);},1);
+    var laneBody;
+    if(!lanes.length){ laneBody=_emptyRow('No booked lanes yet. As quotes convert to loads, your most-traveled lanes rank here by margin.'); }
+    else {
+      laneBody=lanes.map(function(L){
+        var w=Math.max(6,Math.round(L.n/maxN*100));
+        var mcell=isSA?('<div style="min-width:64px;text-align:right"><span style="font-family:'+HF+';font-weight:700;font-size:14px;color:'+_mcol(L.margin)+'">'+_pct(L.margin)+'</span></div>'
+          +'<div style="min-width:78px;text-align:right;font-size:12px;color:'+INK2+';font-weight:600">'+_money0(L.profit)+'</div>'):'';
+        return '<div style="display:flex;align-items:center;gap:12px;padding:9px 0;border-bottom:1px solid '+LINE2+'">'
+          +'<div style="flex:1;min-width:0">'
+            +'<div style="font-size:13px;font-weight:600;color:'+INK+';white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+_esc(L.lane)+'</div>'
+            +'<div style="height:5px;border-radius:99px;background:'+LINE2+';margin-top:6px;overflow:hidden"><div style="height:100%;width:'+w+'%;border-radius:99px;background:'+(isSA?_mcol(L.margin):NAVY)+'"></div></div>'
+          +'</div>'
+          +'<div style="min-width:52px;text-align:right"><span style="font-family:'+HF+';font-weight:700;font-size:14px;color:'+INK+'">'+L.n+'</span><div style="font-size:10px;color:'+INK3+'">loads</div></div>'
+          +'<div style="min-width:78px;text-align:right;font-size:12px;color:'+INK2+';font-weight:600">'+_money0(L.rev)+'</div>'
+          +mcell
+          +'</div>';
+      }).join('');
+    }
+    var laneCard=_card('Lane profitability','Booked volume ranked'+(isSA?', colored by margin':''),laneBody);
+
+    // ── #17 Carrier scorecard ──────────────────────────────────────
+    var carrMap={};
+    won.forEach(function(d){ var c=(d.carrier||'').trim(); if(!c)return; if(!carrMap[c])carrMap[c]={carrier:c,n:0,rev:0,profit:0}; var C=carrMap[c];C.n++;C.rev+=d.rev||0;C.profit+=d.profit||0; });
+    var carriers=Object.keys(carrMap).map(function(c){var C=carrMap[c];C.margin=C.rev>0?C.profit/C.rev:0;
+      try{C.coi=(typeof isCarrierCompliant==='function')?isCarrierCompliant(C.carrier):null;}catch(e){C.coi=null;} return C;})
+      .sort(function(a,b){return b.n-a.n||b.rev-a.rev;}).slice(0,10);
+    var carrBody;
+    if(!carriers.length){ carrBody=_emptyRow('No carriers on booked loads yet. Assign carriers on the dispatch board to build their scorecards.'); }
+    else {
+      carrBody='<div style="display:flex;flex-direction:column">'
+        +'<div style="display:flex;align-items:center;gap:10px;padding:0 0 8px;font-size:11px;font-weight:600;color:'+INK3+'">'
+          +'<div style="flex:1">Carrier</div><div style="width:44px;text-align:right">Loads</div>'
+          +(isSA?'<div style="width:58px;text-align:right">Margin</div>':'<div style="width:72px;text-align:right">Revenue</div>')
+          +'<div style="width:46px;text-align:right">COI</div></div>'
+        +carriers.map(function(C){
+          var coi=C.coi===true?_chip('✓','#0E7A48',GRNB):C.coi===false?_chip('!',RED,REDB):_chip('—',INK3,LINE2);
+          return '<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-top:1px solid '+LINE2+'">'
+            +'<div style="flex:1;min-width:0;font-size:13px;font-weight:600;color:'+INK+';white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+_esc(C.carrier)+'</div>'
+            +'<div style="width:44px;text-align:right;font-family:'+HF+';font-weight:700;font-size:14px;color:'+INK+'">'+C.n+'</div>'
+            +(isSA?'<div style="width:58px;text-align:right;font-weight:700;font-size:13px;color:'+_mcol(C.margin)+'">'+_pct(C.margin)+'</div>'
+                 :'<div style="width:72px;text-align:right;font-size:12px;font-weight:600;color:'+INK2+'">'+_money0(C.rev)+'</div>')
+            +'<div style="width:46px;text-align:right">'+coi+'</div></div>';
+        }).join('')+'</div>';
+    }
+    var carrCard=_card('Carrier scorecard','Top carriers by volume'+(isSA?' · margin & compliance':' · compliance'),carrBody);
+
+    // ── #30 DAT coverage ───────────────────────────────────────────
+    var tlLoads=activeLoads.filter(function(l){return ['FTL','LTL','Box Truck'].indexOf(l.fqMode)>=0||l._tmsType==='freight';});
+    var posted=[],coveredOn=[],uncoveredPosted=[];
+    tlLoads.forEach(function(l){ var d={}; try{d=_datState(l.id);}catch(e){} if(d.posted){posted.push(l); if(d.coverage)coveredOn.push(l); else uncoveredPosted.push(l);} });
+    var funnel=[
+      {lbl:'Truckload loads active',n:tlLoads.length,col:NAVY},
+      {lbl:'Posted to DAT',n:posted.length,col:BLUE},
+      {lbl:'Covered',n:coveredOn.length,col:GRN}
+    ];
+    var fMax=Math.max(1,tlLoads.length);
+    var datBody='<div style="display:flex;flex-direction:column;gap:9px;margin-bottom:12px">'
+      +funnel.map(function(F){ var w=Math.max(4,Math.round(F.n/fMax*100));
+        return '<div><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px"><span style="color:'+INK2+';font-weight:600">'+F.lbl+'</span><span style="font-family:'+HF+';font-weight:700;color:'+F.col+'">'+F.n+'</span></div>'
+          +'<div style="height:8px;border-radius:99px;background:'+LINE2+';overflow:hidden"><div style="height:100%;width:'+w+'%;background:'+F.col+';border-radius:99px"></div></div></div>';
+      }).join('')+'</div>';
+    if(uncoveredPosted.length){
+      datBody+='<div style="font-size:11px;font-weight:600;color:'+AMB+';margin:4px 0 6px">Posted but uncovered — '+uncoveredPosted.length+'</div>'
+        +uncoveredPosted.slice(0,5).map(function(l){
+          return '<div onclick="openTMSLoadDetail(\''+l.id+'\')" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:8px;padding:7px 10px;border:1px solid '+AMBB+';background:'+AMBB+'40;border-radius:8px;margin-bottom:5px">'
+            +'<span style="font-size:12px;font-weight:600;color:'+INK+';white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+_esc(l.customer||'—')+' · '+_esc(l.pickupZip||'')+'→'+_esc(l.deliveryZip||'')+'</span>'
+            +_chip('Source carrier',AMB,AMBB)+'</div>';
+        }).join('');
+    } else if(posted.length){ datBody+='<div style="font-size:12px;color:'+GRN+';font-weight:600">Everything posted is covered. 🎯</div>'; }
+    else { datBody+=_emptyRow('No loads on the DAT board yet. Post a load from Dispatch and its coverage funnel builds here.'); }
+    var datCard=_card('DAT coverage','Post → cover funnel on live truckload loads',datBody);
+
+    // ── #8 Exception board ─────────────────────────────────────────
+    var exc=[];
+    activeLoads.forEach(function(l){ var r=[]; try{r=(loadAttention(l)||[]).slice();}catch(e){} if(!l.carrier)r.unshift('Needs a carrier'); if(r.length)exc.push({l:l,r:r}); });
+    exc.sort(function(a,b){return b.r.length-a.r.length;});
+    var excBody;
+    if(!exc.length){ excBody=_emptyRow('Clear board — nothing needs a touch right now. 🎉'); }
+    else {
+      excBody=exc.slice(0,14).map(function(x){ var l=x.l;
+        var chips=x.r.map(function(rr){ var isHot=/overdue|uncovered|needs a carrier|eta/i.test(rr); return _chip(_esc(rr),isHot?RED:AMB,isHot?REDB:AMBB); }).join(' ');
+        return '<div onclick="openTMSLoadDetail(\''+l.id+'\')" style="cursor:pointer;display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid '+LINE2+'">'
+          +'<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;color:'+INK+';white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+_esc(l.customer||'—')+'</div>'
+          +'<div style="font-size:11px;color:'+INK3+';margin-top:2px">'+_esc((l.pickupZip||l.port||'')+' → '+(l.deliveryZip||l.zip||''))+' · '+_esc(l.fqMode||l._tmsType||'')+(l.carrier?' · '+_esc(l.carrier):'')+'</div></div>'
+          +'<div style="display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end;max-width:260px">'+chips+'</div></div>';
+      }).join('');
+      if(exc.length>14) excBody+='<div style="font-size:12px;color:'+INK3+';padding-top:10px">+ '+(exc.length-14)+' more need attention</div>';
+    }
+    var excCard=_card('Exception board',exc.length?exc.length+' active load'+(exc.length>1?'s':'')+' need a touch':'Loads that need action','<div style="max-height:420px;overflow:auto">'+excBody+'</div>');
+
+    // ── #44 Win / loss ─────────────────────────────────────────────
+    var custMap={};
+    deals.forEach(function(d){ var c=d.customer||'—'; if(!custMap[c])custMap[c]={cust:c,won:0,lost:0,rev:0}; var C=custMap[c];
+      if(WON.indexOf(d.status)>=0){C.won++;C.rev+=d.rev||0;} else if(LOST.indexOf(d.status)>=0){C.lost++;} });
+    var custs=Object.keys(custMap).map(function(c){var C=custMap[c];C.tot=C.won+C.lost;C.wr=C.tot>0?C.won/C.tot:0;return C;})
+      .filter(function(C){return C.tot>0;}).sort(function(a,b){return b.tot-a.tot;}).slice(0,8);
+    var wlTop='<div style="display:flex;gap:10px;margin-bottom:14px">'
+      +'<div style="flex:1;text-align:center;background:'+GRNB+';border-radius:10px;padding:10px"><div style="font-family:'+HF+';font-weight:700;font-size:22px;color:'+GRN+'">'+won.length+'</div><div style="font-size:11px;color:'+GRN+';font-weight:600">Won</div></div>'
+      +'<div style="flex:1;text-align:center;background:'+REDB+';border-radius:10px;padding:10px"><div style="font-family:'+HF+';font-weight:700;font-size:22px;color:'+RED+'">'+lost.length+'</div><div style="font-size:11px;color:'+RED+';font-weight:600">Lost</div></div>'
+      +'<div style="flex:1;text-align:center;background:'+AMBB+';border-radius:10px;padding:10px"><div style="font-family:'+HF+';font-weight:700;font-size:22px;color:'+AMB+'">'+expired.length+'</div><div style="font-size:11px;color:'+AMB+';font-weight:600">Expired</div></div>'
+      +'</div>';
+    var wlBody;
+    if(!custs.length){ wlBody=wlTop+_emptyRow('No decided quotes yet. Once quotes are marked Booked or Lost, win rates by customer show here.'); }
+    else {
+      wlBody=wlTop+'<div style="font-size:11px;font-weight:600;color:'+INK3+';margin-bottom:4px">Win rate by customer</div>'
+        +custs.map(function(C){ var w=Math.round(C.wr*100);
+          return '<div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid '+LINE2+'">'
+            +'<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;color:'+INK+';white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+_esc(C.cust)+'</div>'
+            +'<div style="height:5px;border-radius:99px;background:'+LINE2+';margin-top:6px;overflow:hidden"><div style="height:100%;width:'+Math.max(3,w)+'%;border-radius:99px;background:'+(C.wr>=.5?GRN:C.wr>=.3?AMB:RED)+'"></div></div></div>'
+            +'<div style="min-width:46px;text-align:right;font-family:'+HF+';font-weight:700;font-size:14px;color:'+(C.wr>=.5?GRN:C.wr>=.3?AMB:RED)+'">'+w+'%</div>'
+            +'<div style="min-width:64px;text-align:right;font-size:11px;color:'+INK3+'">'+C.won+'/'+C.tot+' quotes</div></div>';
+        }).join('');
+    }
+    var wlCard=_card('Win / loss','Booked vs lost across every mode',wlBody);
+
+    // ── #16 Quotes to follow up (expiration window) ────────────────
+    var EXP_DAYS=(window.SHIFL_QUOTE_EXP_DAYS||30);
+    var OPEN=['Quoted','Pending','Draft',''];
+    var todayMs=Date.now();
+    function _daysSince(ds){ if(!ds)return 0; var t=new Date(ds+'T00:00:00').getTime(); return isNaN(t)?0:Math.floor((todayMs-t)/864e5); }
+    var follow=deals.filter(function(d){return OPEN.indexOf(d.status)>=0;}).map(function(d){
+      var age=_daysSince(d.date), left=EXP_DAYS-age; return {d:d,age:age,left:left};
+    }).sort(function(a,b){return a.left-b.left;});
+    var followBody;
+    if(!follow.length){ followBody=_emptyRow('No open quotes waiting. Quotes you send sit here until they book, lose, or expire.'); }
+    else {
+      followBody=follow.slice(0,12).map(function(x){ var d=x.d;
+        var urgent=x.left<=3, warn=x.left<=7;
+        var leftTxt = x.left<=0 ? 'Expired' : x.left+'d left';
+        var leftChip=_chip(leftTxt, x.left<=0?RED:urgent?RED:warn?AMB:INK3, x.left<=0?REDB:urgent?REDB:warn?AMBB:LINE2);
+        return '<div style="display:flex;align-items:center;gap:12px;padding:9px 0;border-bottom:1px solid '+LINE2+'">'
+          +'<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;color:'+INK+';white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+_esc(d.customer)+'</div>'
+          +'<div style="font-size:11px;color:'+INK3+';margin-top:2px">'+_esc(d.origin+' → '+d.dest)+' · '+_esc(d.mode)+' · quoted '+(x.age===0?'today':x.age+'d ago')+(isSA?' · '+_money0(d.rev):'')+'</div></div>'
+          +leftChip+'</div>';
+      }).join('');
+      var expiringSoon=follow.filter(function(x){return x.left<=7&&x.left>0;}).length;
+      if(expiringSoon) followBody+='<div style="margin-top:10px;font-size:12px;color:'+AMB+';font-weight:600">'+expiringSoon+' quote'+(expiringSoon>1?'s':'')+' expiring within 7 days — worth a follow-up call</div>';
+    }
+    var followCard=_card('Quotes to follow up',follow.length+' open · '+EXP_DAYS+'-day expiry window',followBody);
+
+    // ── Assemble ───────────────────────────────────────────────────
+    var head='<div style="margin-bottom:16px"><div style="font-family:'+HF+';font-weight:700;font-size:22px;color:'+INK+';letter-spacing:-.02em">Insights</div>'
+      +'<div style="font-size:13px;color:'+INK3+';margin-top:2px">Live broker intelligence across drayage, freight &amp; transload'+(isSA?'':' · margin figures are visible to super-admins')+'</div></div>';
+    var grid=
+      '<div style="display:grid;grid-template-columns:1.1fr .9fr;gap:14px;margin-bottom:14px">'+laneCard+carrCard+'</div>'
+      +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">'+excCard+datCard+'</div>'
+      +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">'+wlCard+followCard+'</div>';
+
+    $('page').innerHTML=tabBar+'<div style="font-family:'+BFF+';color:'+INK+'">'+head+kpiBand+grid+'</div>';
+  }
+  window.renderTMSInsights=renderTMSInsights;
+})();
+</script>
+<script>
+/* ════════════════════════════════════════════════════════════════════
+   MARGIN GUARDRAIL (#11) — warn before booking a thin / negative load.
+   Floor is overridable: window.SHIFL_MARGIN_FLOOR (fraction, default .08)
+   ════════════════════════════════════════════════════════════════════ */
+(function(){
+  if(typeof window.SHIFL_MARGIN_FLOOR!=='number') window.SHIFL_MARGIN_FLOOR=0.08;
+  function _m(v){ try{ return (typeof fmtD==='function')?fmtD(Number(v)||0):'$'+(Number(v)||0).toFixed(2);}catch(e){return '$'+(Number(v)||0);} }
+  window.marginGuard=function(rev,cost){
+    rev=Number(rev)||0; cost=Number(cost)||0; var profit=rev-cost, pct=rev>0?profit/rev:0;
+    var floor=window.SHIFL_MARGIN_FLOOR;
+    return {rev:rev,cost:cost,profit:profit,pct:pct,floor:floor,neg:profit<0,below:(rev>0&&pct<floor)};
+  };
+  // Returns true to proceed, false to abort. Only prompts when below floor / at a loss.
+  window.marginGuardConfirm=function(rev,cost,label){
+    var g=window.marginGuard(rev,cost);
+    if(!g.below && !g.neg) return true;
+    if(g.rev<=0 && g.cost<=0) return true; // no pricing yet — don't block
+    var line='Sell '+_m(g.rev)+'  ·  Cost '+_m(g.cost)+'  ·  Margin '+_m(g.profit)+' ('+Math.round(g.pct*100)+'%)';
+    var msg=(g.neg
+      ? '⚠️ This '+(label||'load')+' books at a LOSS.\n\n'
+      : '⚠️ Margin is below your '+Math.round(g.floor*100)+'% floor.\n\n')
+      +line+'\n\nBook it anyway?';
+    try{ return confirm(msg); }catch(e){ return true; }
+  };
 })();
 </script>
