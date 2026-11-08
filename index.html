@@ -867,6 +867,34 @@ body:not(.dark) .acc-btn.open .acc-icon{color:#3A5BD9!important}
 body:not(.dark) .acc-sub a,body:not(.dark) .acc-sub button.sub-link{color:#5A626C!important}
 body:not(.dark) .acc-sub a:hover,body:not(.dark) .acc-sub button.sub-link:hover{color:#111419!important;background:#F5F7FA!important}
 body:not(.dark) .acc-sub a.active,body:not(.dark) .acc-sub button.sub-link.active{color:#2F3F8F!important;background:#EEF1FB!important;border-left-color:#3A5BD9!important}
+/* =================== REBUILD · Wave 3 — Component primitives (light; applies to all content screens) =================== */
+body:not(.dark) .card{background:#fff!important;border:1px solid #E6E8EC!important;border-radius:12px!important;box-shadow:0 1px 2px rgba(16,24,40,.04)!important}
+body:not(.dark) .sec-head{font-family:'Bricolage Grotesque','Archivo',sans-serif!important;text-transform:none!important;letter-spacing:-.01em!important;font-size:13.5px!important;font-weight:600!important;color:#111419!important;border-bottom:1px solid #EFF1F4!important;padding-bottom:9px!important}
+body:not(.dark) .btn{border-radius:8px!important;font-weight:600!important}
+body:not(.dark) .btn.blue,body:not(.dark) .btn.primary{background:#26357A!important;border-color:#26357A!important;color:#fff!important}
+body:not(.dark) .btn.blue:hover,body:not(.dark) .btn.primary:hover{background:#1E2A63!important}
+body:not(.dark) .field label{text-transform:none!important;letter-spacing:0!important;font-size:11.5px!important;font-weight:600!important;color:#8A929D!important}
+body:not(.dark) .field input,body:not(.dark) .field select,body:not(.dark) .field textarea{border:1px solid #E0E3E8!important;border-radius:8px!important;color:#111419!important}
+body:not(.dark) .field input:focus,body:not(.dark) .field select:focus,body:not(.dark) .field textarea:focus{border-color:#3A5BD9!important;box-shadow:0 0 0 3px #EEF1FB!important}
+body:not(.dark) .kpi{background:#fff!important;border:1px solid #E6E8EC!important;border-left-width:1px!important;border-radius:12px!important;box-shadow:none!important}
+body:not(.dark) .kpi:hover{border-color:#C9CFD8!important}
+body:not(.dark) .kpi-val{font-family:'Bricolage Grotesque','Archivo',sans-serif!important;letter-spacing:-.02em!important;color:#111419!important}
+body:not(.dark) .badge{border-radius:999px!important;font-weight:600!important}
+body:not(.dark) thead th{text-transform:none!important;letter-spacing:0!important;color:#8A929D!important;font-weight:600!important;font-size:11.5px!important}
+/* =================== REBUILD · Wave 4 — Sidebar Option A (compact pill, line icons) =================== */
+body:not(.dark) #main-nav{padding:5px 8px}
+body:not(.dark) #main-nav .acc-btn{display:flex!important;align-items:center;justify-content:flex-start!important;gap:10px!important;height:33px!important;min-height:33px!important;padding:0 10px!important;margin:1px 0!important;border-left:0!important;border-radius:8px!important;font-size:13px!important;font-weight:500!important;color:#4A515B!important;background:transparent!important}
+body:not(.dark) #main-nav .acc-btn:hover{background:#F5F7FA!important;color:#111419!important}
+body:not(.dark) #main-nav .acc-btn.open,body:not(.dark) #main-nav .acc-btn.active,body:not(.dark) #main-nav .acc-btn.active-nav{background:#EEF1FB!important;color:#26357A!important;font-weight:600!important;border-left:0!important}
+body:not(.dark) #main-nav .acc-btn .rb-nic{display:flex;flex-shrink:0;align-items:center}
+body:not(.dark) #main-nav .acc-btn .rb-nic svg{width:17px;height:17px;color:#9099A4}
+body:not(.dark) #main-nav .acc-btn.open .rb-nic svg,body:not(.dark) #main-nav .acc-btn.active .rb-nic svg,body:not(.dark) #main-nav .acc-btn.active-nav .rb-nic svg{color:#3A5BD9}
+body:not(.dark) #main-nav .acc-btn .rb-nlbl{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+body:not(.dark) #main-nav .acc-btn .rb-nbadge{margin-left:auto!important;font-size:10.5px!important;font-weight:700!important;border-radius:999px!important;padding:1px 7px!important}
+body:not(.dark) #main-nav .acc-btn .rb-nchev{margin-left:auto;color:#C2C8D0!important;font-size:9px!important}
+body:not(.dark) #main-nav .nav-section-label{font-size:10px!important;font-weight:700!important;letter-spacing:.04em!important;text-transform:uppercase!important;color:#AEB5BE!important;padding:10px 10px 3px!important;margin:0!important}
+body:not(.dark) #main-nav .acc-sep{margin:7px 10px!important;border-top:1px solid #F0F2F5!important;background:transparent!important;height:0!important}
+body:not(.dark) #main-nav .acc-sub button.sub-link,body:not(.dark) #main-nav .acc-sub a{height:30px!important;font-size:12.5px!important}
 </style>
 <script>
 // Force clear service worker and caches
@@ -29251,4 +29279,58 @@ function renderTMSDispatch(tabBar,kpis,loads){
     : `<div class="empty"><div class="empty-ico">🚚</div><p>No FTL/LTL loads yet — book a freight quote to start</p><button class="btn blue" onclick="goTo('freight','builder')">+ New freight quote</button></div>`;
   $('page').innerHTML = tabBar + `<div class="rbd" data-theme="light">${inner}</div>`;
 }
+</script>
+<script>
+/* ===== REBUILD · Wave 4 — Sidebar icons (Option A) ===== */
+(function(){
+  var ICONS={
+    pulse:'<path d="M3 12h4l2-6 4 13 2.5-7H21"/>',
+    kanban:'<rect x="3" y="4" width="5" height="16" rx="1.2"/><rect x="10" y="4" width="5" height="11" rx="1.2"/><rect x="17" y="4" width="4" height="7" rx="1.2"/>',
+    anchor:'<circle cx="12" cy="5" r="2"/><path d="M12 7v13M5 13a7 7 0 0014 0M4 13h2M18 13h2"/>',
+    truck:'<rect x="1.5" y="6" width="13" height="10" rx="1.3"/><path d="M14.5 9.5H18l3 3V16h-6.5"/><circle cx="5.5" cy="18" r="1.7"/><circle cx="17.5" cy="18" r="1.7"/>',
+    plane:'<path d="M11 4.5l1 6 7.5 4v1.6l-7.5-2 .5 4 2 1.4v1.2l-3.5-1-3.5 1v-1.2l2-1.4.5-4-7.5 2V14.5l7.5-4 1-6a.9.9 0 011.5 0z"/>',
+    swap:'<path d="M4 8h13l-3.2-3.2M20 16H7l3.2 3.2"/>',
+    receipt:'<path d="M5.5 3h13v18l-2.6-1.7L13.3 21 11 19.3 8.6 21 6 19.3 5.5 21z"/><path d="M8.5 8h7M8.5 12h4.5"/>',
+    sparkle:'<path d="M12 3.5l1.8 4.7 4.7 1.8-4.7 1.8L12 16.5l-1.8-4.7L5.5 10l4.7-1.8z"/>',
+    bot:'<rect x="4" y="8" width="16" height="11" rx="2.3"/><path d="M12 8V4.5M9 13h.01M15 13h.01M2.5 12.5v2M21.5 12.5v2"/>',
+    shield:'<path d="M12 3.2l7.5 2.8v5c0 4.8-3.8 8.5-7.5 9.5-3.7-1-7.5-4.7-7.5-9.5v-5z"/>',
+    tools:'<path d="M14.5 6.5a3.3 3.3 0 00-4.3 4.3L4 17l3 3 6.2-6.2a3.3 3.3 0 004.3-4.3l-2.1 2.1-2.2-2.2z"/>',
+    contact:'<rect x="5" y="3" width="14" height="18" rx="2.2"/><circle cx="12" cy="10" r="2.4"/><path d="M8.3 17a3.7 3.7 0 017.4 0"/>',
+    inbox:'<path d="M4 13l2-8.5h12L20 13M4 13v5a1 1 0 001 1h14a1 1 0 001-1v-5M4 13h5l1 2h4l1-2h5"/>',
+    network:'<circle cx="6" cy="6.5" r="2.4"/><circle cx="18" cy="6.5" r="2.4"/><circle cx="12" cy="18" r="2.4"/><path d="M7.7 8.1l3.1 7.9M16.3 8.1L13 16M8.4 6.5h7.2"/>',
+    gear:'<circle cx="12" cy="12" r="3.1"/><path d="M12 3.5v2.3M12 18.2v2.3M4.4 12H6.7M17.3 12h2.3M6.3 6.3l1.6 1.6M16.1 16.1l1.6 1.6M17.7 6.3l-1.6 1.6M7.9 16.1l-1.6 1.6"/>'
+  };
+  var MAP={'nav-active':'pulse','nav-tms':'kanban','acc-drayage':'anchor','acc-freight':'truck','acc-air':'plane','acc-transload':'swap','nav-invoicing':'receipt','nav-paige':'sparkle','nav-mario':'bot','nav-claims':'shield','nav-broker-tools':'tools','nav-phonebook':'contact','nav-requests':'inbox','nav-carriers':'network','acc-admin':'gear'};
+  var EMOJI=/[←-⇿⌀-➿⬀-⯿️‍\u{1F000}-\u{1FAFF}\u{1F1E6}-\u{1F1FF}]/gu;
+  function iconize(){
+    try{
+      document.querySelectorAll('#main-nav .acc-btn').forEach(function(btn){
+        var key=MAP[btn.id]; if(!key||btn.dataset.rbIcon) return;
+        var badge=btn.querySelector('span[id*="badge"]');
+        var chev=btn.querySelector('.acc-icon');
+        var tmp=btn.cloneNode(true);
+        tmp.querySelectorAll('span[id*="badge"],.acc-icon').forEach(function(e){e.remove();});
+        var label=(tmp.textContent||'').replace(EMOJI,'').replace(/\s+/g,' ').trim();
+        btn.textContent='';
+        var ic=document.createElement('span'); ic.className='rb-nic';
+        ic.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7">'+ICONS[key]+'</svg>';
+        var lb=document.createElement('span'); lb.className='rb-nlbl'; lb.textContent=label;
+        btn.appendChild(ic); btn.appendChild(lb);
+        if(badge){ badge.classList.add('rb-nbadge'); btn.appendChild(badge); }
+        if(chev){ chev.classList.add('rb-nchev'); btn.appendChild(chev); }
+        btn.dataset.rbIcon='1';
+      });
+    }catch(e){}
+  }
+  // single-active guard: clear stale .active from other top-level items on nav click (capture phase, before goTo)
+  try{
+    var nav=document.getElementById('main-nav');
+    if(nav) nav.addEventListener('click',function(e){
+      var b=e.target.closest('.acc-btn'); if(!b) return;
+      document.querySelectorAll('#main-nav .acc-btn.active').forEach(function(x){ if(x!==b) x.classList.remove('active'); });
+    },true);
+  }catch(e){}
+  iconize();
+  setTimeout(iconize,600); setTimeout(iconize,1800); setTimeout(iconize,3500);
+})();
 </script>
