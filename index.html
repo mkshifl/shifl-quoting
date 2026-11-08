@@ -28,6 +28,7 @@
 <title>Shifl — Logistics Platform</title>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=Bricolage+Grotesque:opsz,wght@12..48,500;12..48,600;12..48,700&display=swap">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -21522,6 +21523,68 @@ body.dark .nav-btn{color:#94a3b8}
 body.dark .nav-btn:hover,body.dark .nav-btn.active{background:rgba(255,255,255,.08);color:#e2e8f0}
 body.dark .modal-title{border-color:#334155}
 body.dark .modal-foot{border-color:#334155}
+/* =================== REBUILD · Wave 1 — Brokerage deal board (scoped to .rbd) =================== */
+.rbd{font-family:'Archivo',system-ui,-apple-system,sans-serif;color:#111419}
+.rbd .rb-stats{display:flex;align-items:stretch;gap:0;padding:2px 2px 16px;flex-wrap:wrap}
+.rbd .rb-stat{padding:2px 22px 2px 0;margin-right:22px;border-right:1px solid #EFF1F4}
+.rbd .rb-stat:last-child{border-right:0;margin-right:0}
+.rbd .rb-stat .k{font-size:11.5px;color:#8A929D;font-weight:500;margin-bottom:3px}
+.rbd .rb-stat .v{font-family:'Bricolage Grotesque','Archivo',sans-serif;font-size:23px;font-weight:600;letter-spacing:-.02em;line-height:1;display:flex;align-items:baseline;gap:4px}
+.rbd .rb-stat .v small{font-family:'Archivo';font-size:12px;font-weight:600;color:#8A929D}
+.rbd .rb-stat .v .d{width:7px;height:7px;border-radius:50%;background:#9A6212;align-self:center;margin-right:3px}
+.rbd .rb-stat.good .v{color:#0E7A48}
+.rbd .rb-stat.alert .v{color:#9A6212}
+.rbd .rb-filters{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:14px}
+.rbd .rb-chip{height:30px;border:1px solid #E6E8EC;background:#fff;border-radius:999px;padding:0 13px;font-size:12.5px;font-weight:500;color:#464D57;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:7px}
+.rbd .rb-chip .n{color:#8A929D;font-variant-numeric:tabular-nums}
+.rbd .rb-chip.on{background:#111419;border-color:#111419;color:#fff}
+.rbd .rb-chip.on .n{color:#AEB5BE}
+.rbd .rb-chip.warn.on{background:#9A6212;border-color:#9A6212;color:#fff}
+.rbd .rb-board{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;align-items:start}
+.rbd .rb-col{background:#FAFBFC;border:1px solid #EFF1F4;border-radius:12px;padding:9px 9px 4px}
+.rbd .rb-colhead{display:flex;align-items:center;gap:8px;padding:4px 6px 10px}
+.rbd .rb-colhead .cdot{width:7px;height:7px;border-radius:50%}
+.rbd .rb-colhead .cname{font-size:12.5px;font-weight:600}
+.rbd .rb-colhead .cct{margin-left:auto;font-size:11px;color:#8A929D;background:#fff;border:1px solid #E6E8EC;border-radius:999px;padding:1px 8px;font-variant-numeric:tabular-nums}
+.rbd .rb-empty{color:#AEB5BE;font-size:12px;text-align:center;padding:14px 0}
+.rbd .rb-load{background:#fff;border:1px solid #E6E8EC;border-radius:10px;padding:11px 12px 12px;margin-bottom:8px;cursor:pointer}
+.rbd .rb-load:hover{border-color:#AEB5BE}
+.rbd .rb-lh{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.rbd .rb-cust{font-size:13px;font-weight:600;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:'Bricolage Grotesque','Archivo',sans-serif}
+.rbd .rb-mode{margin-left:auto;flex-shrink:0;font-size:10px;font-weight:700;padding:2px 7px;border-radius:5px;color:#464D57;background:#FAFBFC;border:1px solid #E6E8EC;text-transform:uppercase}
+.rbd .rb-mode.ftl{color:#3A5BD9}.rbd .rb-mode.ltl{color:#7A3EA8}.rbd .rb-mode.lcl{color:#157061}.rbd .rb-mode.air{color:#2F62C4}
+.rbd .rb-lane{font-size:12px;color:#464D57;font-weight:500;margin-bottom:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rbd .rb-lane .arr{color:#AEB5BE;padding:0 4px}
+.rbd .rb-deal{margin-bottom:2px}
+.rbd .rb-deal .dlab{display:flex;justify-content:space-between;align-items:baseline;font-size:11px;margin-bottom:6px}
+.rbd .rb-deal .dlab .cost{color:#8A929D}
+.rbd .rb-deal .dlab .cost b{color:#464D57;font-weight:600;font-variant-numeric:tabular-nums}
+.rbd .rb-deal .dlab .mg{font-weight:700;font-variant-numeric:tabular-nums;font-size:12px}
+.rbd .rb-spread{height:7px;border-radius:5px;background:#E6E8EC;overflow:hidden;display:flex}
+.rbd .rb-spread .cseg{height:7px;background:#AEB5BE;opacity:.6}
+.rbd .rb-spread .mseg{height:7px;flex:1}
+.rbd .rb-deal .dsell{display:flex;justify-content:space-between;align-items:baseline;margin-top:8px}
+.rbd .rb-deal .dsell .carr{font-size:12px;color:#464D57;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rbd .rb-deal .dsell .sell{font-size:13.5px;font-weight:700;font-variant-numeric:tabular-nums;flex-shrink:0;padding-left:8px}
+.rbd .mgood{color:#0E7A48}.rbd .mwarn{color:#9A6212}.rbd .mstop{color:#C0392F}
+.rbd .mgoodbg{background:#0E7A48}.rbd .mwarnbg{background:#9A6212}.rbd .mstopbg{background:#C0392F}
+.rbd .rb-cover{display:flex;align-items:center;gap:8px;margin-bottom:4px;padding:9px 10px;border:1px dashed #EBD6A6;border-radius:8px;background:#FBF3E2}
+.rbd .rb-cover .ct2{font-size:12px;font-weight:600;color:#9A6212}
+.rbd .rb-cover .find{margin-left:auto;font-size:11px;font-weight:700;color:#fff;background:#9A6212;border-radius:6px;padding:3px 10px}
+.rbd .rb-flag{display:flex;align-items:center;gap:5px;font-size:11px;font-weight:600;color:#9A6212;margin-bottom:9px}
+.rbd .rb-badge{margin-bottom:6px}
+.rbd .rb-sub{font-size:11px;color:#8A929D;margin-top:8px}
+.rbd .rb-sub.amber{color:#9A6212;font-weight:600}
+.rbd .rb-chipx{display:inline-block;margin-top:8px;font-size:10.5px;font-weight:700;border-radius:7px;padding:3px 9px}
+.rbd .rb-ref{margin-top:10px;padding-top:8px;border-top:1px solid #EFF1F4;display:flex;align-items:center;gap:7px;font-size:11px;color:#8A929D}
+.rbd .rb-ref .l{font-weight:600}
+.rbd .rb-ref input{flex:1;min-width:0;border:none;background:transparent;font-family:inherit;font-size:11.5px;font-weight:600;color:#2F62C4;outline:none;font-variant-numeric:tabular-nums;padding:1px 2px}
+.rbd .rb-dots{display:flex;gap:5px;margin-top:9px;flex-wrap:wrap}
+.rbd .rb-acts{display:flex;gap:5px;flex-wrap:wrap;margin-top:10px}
+.rbd .rb-b{border:1px solid #E6E8EC;background:#fff;border-radius:7px;padding:5px 9px;font-family:inherit;font-size:11.5px;font-weight:600;color:#464D57;cursor:pointer}
+.rbd .rb-b:hover{border-color:#AEB5BE}
+.rbd .rb-b.pri{background:#26357A;border-color:#26357A;color:#fff}
+@media(max-width:1250px){.rbd .rb-board{grid-template-columns:repeat(3,1fr)}}
 </style></head><body>
   <div class="cover">
     <div style="font-size:12px;opacity:.6;margin-bottom:8px;text-transform:uppercase;letter-spacing:.1em">${period} · Shifl Logistics</div>
