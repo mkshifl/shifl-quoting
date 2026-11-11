@@ -1645,6 +1645,17 @@ async function dbSaveCustomer(c){
 async function dbDeleteCustomer(id){
   const{error}=await db.from('customers').delete().eq('id',id); if(error) throw error;
 }
+// Best-effort localStorage write. On quota-exceeded, drops expendable,
+// re-fetchable caches (geocoded ZIPs) and retries once. Never throws — the
+// real source of truth is Supabase, so a full cache must never block a save.
+function safeSetItem(key,val){
+  try{ localStorage.setItem(key,val); return true; }
+  catch(e){
+    try{ var drop=[]; for(var i=0;i<localStorage.length;i++){ var k=localStorage.key(i); if(k&&k.indexOf('geozip_')===0) drop.push(k); } drop.forEach(function(k){ try{localStorage.removeItem(k);}catch(_){} }); }catch(_){}
+    try{ localStorage.setItem(key,val); return true; }catch(e2){ return false; }
+  }
+}
+function saveCustomersCache(){ try{ return safeSetItem('shifl_customers_cache',JSON.stringify(S.customers||[])); }catch(e){ return false; } }
 
 async function dbLoadFqQuotes(){
   const{data,error}=await db.from('fq_quotes').select('*').order('created_at',{ascending:false});
@@ -1820,7 +1831,7 @@ async function initApp(){
     try{S.tl=defaultTlState();}catch(e){S.tl={};}
     setTimeout(async()=>{
       try{const q=await withTimeout(dbLoadQuotes(),10000,null);if(q){S.quotes=q;localStorage.setItem('shifl_quotes_cache',JSON.stringify(q));}}catch(e){}
-      try{const c=await withTimeout(dbLoadCustomers(),8000,null);if(c){S.customers=c;localStorage.setItem('shifl_customers_cache',JSON.stringify(c));}}catch(e){}
+      try{const c=await withTimeout(dbLoadCustomers(),8000,null);if(c){S.customers=c;safeSetItem('shifl_customers_cache',JSON.stringify(c));}}catch(e){}
       try{const fq=await withTimeout(dbLoadFqQuotes(),8000,null);if(fq){window._fqHistory=fq;localStorage.setItem('fq_history',JSON.stringify(fq));}}catch(e){}
       try{await withTimeout(loadClaims(),8000,null);updateClaimsBadge();if(S.view==='claims')renderClaims();}catch(e){}
       try{updateActiveBadge();updateInvNavBadge();}catch(e){}
@@ -4189,7 +4200,7 @@ async function submitAddCustomer(){
     notes:($('f-cnotes')||{}).value?.trim()||''};
   setSaving(true);
   try{await dbSaveCustomer(c);S.customers.push(c);S.customers.sort((a,b)=>(a.company||'').localeCompare(b.company||''));
-    closeModal();const t=$('cust-tbody');if(t) t.innerHTML=buildCustomerRows();
+    saveCustomersCache();closeModal();const t=$('cust-tbody');if(t) t.innerHTML=buildCustomerRows();
   }catch(e){alert('Error: '+e.message);}finally{setSaving(false);}
 }
 
@@ -4209,7 +4220,7 @@ async function submitEditCustomer(id){
     email:($('f-cemail')||{}).value?.trim()||'',phone:($('f-cphone')||{}).value?.trim()||'',
     notes:($('f-cnotes')||{}).value?.trim()||''});
   setSaving(true);
-  try{await dbSaveCustomer(c);closeModal();const t=$('cust-tbody');if(t) t.innerHTML=buildCustomerRows();
+  try{await dbSaveCustomer(c);saveCustomersCache();closeModal();const t=$('cust-tbody');if(t) t.innerHTML=buildCustomerRows();
   }catch(e){alert('Error: '+e.message);}finally{setSaving(false);}
 }
 
@@ -4357,7 +4368,7 @@ if(!rec.zip&&!rec.address&&!rec.label){alert('Add at least a label, street addre
 if(locId){const i=c.locations.findIndex(x=>x.id===locId);if(i>=0)c.locations[i]=rec;else c.locations.push(rec);}
 else c.locations.push(rec);
 setSaving(true);
-try{await dbSaveCustomer(c);localStorage.setItem('shifl_customers_cache',JSON.stringify(S.customers));closeModal();renderPhoneBook();}
+try{await dbSaveCustomer(c);saveCustomersCache();closeModal();renderPhoneBook();}
 catch(e){alert('Error: '+e.message);}finally{setSaving(false);}
 }
 async function delLocation(custId,locId){
@@ -4365,7 +4376,7 @@ const c=S.customers.find(x=>x.id===custId);if(!c)return;
 if(!confirm('Delete this location?'))return;
 c.locations=(c.locations||[]).filter(x=>x.id!==locId);
 setSaving(true);
-try{await dbSaveCustomer(c);localStorage.setItem('shifl_customers_cache',JSON.stringify(S.customers));renderPhoneBook();}
+try{await dbSaveCustomer(c);saveCustomersCache();renderPhoneBook();}
 catch(e){alert('Error: '+e.message);}finally{setSaving(false);}
 }
 function bookFromCustomer(custId){
@@ -8935,6 +8946,7 @@ async function renderCarriers(){
         <td style="min-width:120px;font-size:12px;color:var(--gray-500)">${c.phone||'—'}</td>
         <td style="min-width:160px;font-size:12px;color:var(--gray-500)">${c.email||'—'}</td>
         <td onclick="event.stopPropagation()" style="min-width:200px">
+          ${c.lanes?`<div title="Lanes they called about (FTL / box truck)" style="font-size:11px;color:#1e40af;background:#eff6ff;border:1px solid #dbeafe;border-radius:5px;padding:3px 7px;margin-bottom:4px;line-height:1.35"><b>🛣️ Lanes:</b> ${escH(c.lanes)}</div>`:''}
           <input type="text" value="${escH(c.notes||'')}" onclick="event.stopPropagation()" onchange="saveCarrierNote('${c.id}',this.value)" placeholder="Ports / limits…"
             style="width:100%;min-width:180px;border:1px solid transparent;background:${c.notes?'#f8fafc':'transparent'};border-radius:5px;padding:5px 8px;font-size:12px;color:var(--gray-700);font-family:inherit;outline:none"
             onfocus="this.style.border='1px solid var(--steel)';this.style.background='#fff'" onblur="this.style.border='1px solid transparent';this.style.background=this.value?'#f8fafc':'transparent'"></td>
@@ -8998,9 +9010,13 @@ async function showCarrierModal(id) {
       <div class="field"><label>Modes they serve</label>
         <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:6px">
           ${CARRIER_MODES.map(m=>`<label style="display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer;font-weight:400">
-            <input type="checkbox" value="${m}" ${(c.modes||[]).includes(m)?'checked':''} style="width:auto"> ${m}
+            <input type="checkbox" value="${m}" ${(c.modes||[]).includes(m)?'checked':''} onchange="_carLanesToggle()" style="width:auto"> ${m}
           </label>`).join('')}
         </div>
+      </div>
+      <div class="field" id="car-lanes-wrap" style="${((c.modes||[]).includes('FTL')||(c.modes||[]).includes('Box Truck'))?'':'display:none'}">
+        <label>Lanes they called about <span style="font-weight:400;color:var(--gray-400);font-size:11px;text-transform:none;letter-spacing:0">— FTL / box truck</span></label>
+        <textarea id="car-lanes" rows="2" placeholder="e.g. Newark, NJ → Chicago, IL · Atlanta → Miami" style="width:100%;padding:8px;border:1px solid var(--gray-300);border-radius:var(--radius);font-size:13px;font-family:inherit;resize:vertical">${escH(c.lanes||'')}</textarea>
       </div>
       <div class="field"><label>Point of contact name</label><input type="text" id="car-poc" value="${c.contact_name||''}" placeholder="Dispatcher or sales contact"></div>
       <div class="g2">
@@ -9016,14 +9032,32 @@ async function showCarrierModal(id) {
     </div></div>`;
 }
 
+// Show the "lanes they called about" field only for FTL / box truck carriers.
+function _carLanesToggle(){
+  const checked=Array.from(($('modal-root')||document).querySelectorAll('input[type=checkbox]:checked')).map(e=>e.value);
+  const show=checked.includes('FTL')||checked.includes('Box Truck');
+  const w=$('car-lanes-wrap'); if(w) w.style.display=show?'':'none';
+}
 async function saveCarrier(id){
   const name=($('car-name')||{}).value?.trim();
   if(!name){alert('Carrier name is required.');return;}
   const modes=Array.from($('modal-root').querySelectorAll('input[type=checkbox]:checked')).map(e=>e.value);
-  const d={name,modes,contact_name:$('car-poc')?.value?.trim()||null,phone:$('car-ph')?.value?.trim()||null,email:$('car-em')?.value?.trim().toLowerCase()||null,notes:$('car-notes')?.value?.trim()||null,updated_at:new Date().toISOString()};
+  const isFtl=modes.includes('FTL')||modes.includes('Box Truck');
+  const lanes=isFtl?($('car-lanes')?.value?.trim()||''):'';
+  const base={name,modes,contact_name:$('car-poc')?.value?.trim()||null,phone:$('car-ph')?.value?.trim()||null,email:$('car-em')?.value?.trim().toLowerCase()||null,notes:$('car-notes')?.value?.trim()||null,updated_at:new Date().toISOString()};
+  async function writeRow(row){
+    if(id){const{error}=await db.from('carriers').update(row).eq('id',id);if(error)throw error;}
+    else{const{error}=await db.from('carriers').insert({...row,id:uid(),created_at:new Date().toISOString()});if(error)throw error;}
+  }
   try{
-    if(id){const{error}=await db.from('carriers').update(d).eq('id',id);if(error)throw error;}
-    else{const{error}=await db.from('carriers').insert({...d,id:uid(),created_at:new Date().toISOString()});if(error)throw error;}
+    try{
+      await writeRow({...base,lanes:lanes||null});
+    }catch(err){
+      // carriers table may not have a 'lanes' column yet — fold the lanes into
+      // notes so they still save (shared via Supabase) and show as a blurb.
+      const notes2=lanes?((base.notes?base.notes+' · ':'')+'FTL lanes: '+lanes):base.notes;
+      await writeRow({...base,notes:notes2});
+    }
     _invCarriers();closeModal();renderCarriers();
   }catch(e){alert('Error: '+e.message);}
 }
@@ -29592,13 +29626,55 @@ function renderTMSDispatch(tabBar,kpis,loads){
     }
     var followCard=_card('Quotes to follow up',follow.length+' open · '+EXP_DAYS+'-day expiry window',followBody);
 
+    // ── #32 Accessorial recovery (drayage quoted-but-unbilled) ─────
+    var ACCL={chassis:'Chassis',prepull:'Pre-pull',det_port:'Port detention',det_cust:'Customer detention',storage:'Storage',bobtail:'Bobtail',genset:'Genset',triaxle:'Tri-axle',ovw43:'Overweight 43k',ovw48:'Overweight 48k',toll:'Tolls'};
+    var accBilled=['Delivered','Invoiced','Dispatched','In Transit','Out for Delivery','Booked'];
+    var accTot={}, accGrand=0, accLoads=0;
+    (typeof S!=='undefined'&&S.quotes?S.quotes:[]).forEach(function(q){
+      if(accBilled.indexOf(q.status)<0) return;
+      var hasInv=false; try{ hasInv=!!(typeof getInvoice==='function'&&getInvoice(q.id)); }catch(e){}
+      if(hasInv) return;
+      var cu=q.customerRates||{}, any=0;
+      Object.keys(ACCL).forEach(function(k){ var v=Number(cu[k])||0; if(v>0){ accTot[k]=(accTot[k]||0)+v; accGrand+=v; any+=v; } });
+      if(any>0) accLoads++;
+    });
+    var accRows=Object.keys(ACCL).filter(function(k){return accTot[k]>0;}).sort(function(a,b){return accTot[b]-accTot[a];});
+    var accBody;
+    if(!accGrand){ accBody=_emptyRow('Nothing waiting — accessorials on booked drayage loads are all invoiced. 🎯'); }
+    else {
+      accBody='<div style="display:flex;align-items:flex-end;gap:12px;margin-bottom:12px"><div style="font-family:'+HF+';font-weight:700;font-size:30px;color:'+GRN+';letter-spacing:-.02em">'+_money0(accGrand)+'</div><div style="font-size:12px;color:'+INK3+';padding-bottom:5px">quoted on '+accLoads+' load'+(accLoads>1?'s':'')+', not yet invoiced</div></div>'
+        +accRows.map(function(k){ return '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid '+LINE2+'"><span style="font-size:13px;color:'+INK2+'">'+ACCL[k]+'</span><span style="font-family:'+HF+';font-weight:700;font-size:14px;color:'+INK+'">'+_money0(accTot[k])+'</span></div>'; }).join('')
+        +'<div style="margin-top:10px;font-size:12px;color:'+INK3+'">Invoice these loads to capture the accessorials before they age out.</div>';
+    }
+    var accCard=_card('Accessorial recovery','Chassis, detention &amp; pre-pull quoted but not billed',accBody);
+
+    // ── #41 Smart duplicate-quote detection ────────────────────────
+    var dups=(typeof findQuoteDupes==='function')?findQuoteDupes(45):[];
+    var dupBody;
+    if(!dups.length){ dupBody=_emptyRow('No duplicate quotes found — every customer-and-lane pair is quoted once.'); }
+    else {
+      dupBody=dups.slice(0,8).map(function(g){
+        var ln=String(g.lane||'').replace('|',' → ');
+        var chips=g.quotes.slice(0,4).map(function(q){ var col=WON.indexOf(q.status)>=0?GRN:LOST.indexOf(q.status)>=0?RED:INK3; var bg=WON.indexOf(q.status)>=0?GRNB:LOST.indexOf(q.status)>=0?REDB:LINE2; return _chip((q.date||'—')+(isSA&&q.rev?' · '+_money0(q.rev):'')+' · '+(q.status||'—'),col,bg); }).join(' ');
+        return '<div style="padding:10px 0;border-bottom:1px solid '+LINE2+'">'
+          +'<div style="display:flex;justify-content:space-between;gap:10px;align-items:baseline"><div style="font-size:13px;font-weight:600;color:'+INK+';white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+_esc(g.customer)+'</div>'
+          +_chip(g.quotes.length+'×',RED,REDB)+'</div>'
+          +'<div style="font-size:11px;color:'+INK3+';margin:2px 0 7px">'+_esc(ln)+' · '+_esc(g.mode)+'</div>'
+          +'<div style="display:flex;gap:5px;flex-wrap:wrap">'+chips+'</div></div>';
+      }).join('');
+      dupBody+='<div style="margin-top:10px;font-size:12px;color:'+AMB+';font-weight:600">'+dups.length+' customer-and-lane pair'+(dups.length>1?'s':'')+' quoted more than once — reuse the last rate or confirm it\'s a repeat shipment.</div>';
+    }
+    var dupCount=dups.reduce(function(s,g){return s+g.quotes.length;},0);
+    var dupCard=_card('Duplicate quotes',dups.length?dups.length+' repeat pair'+(dups.length>1?'s':'')+' · '+dupCount+' quotes':'Same customer + lane, quoted twice',dupBody);
+
     // ── Assemble ───────────────────────────────────────────────────
     var head='<div style="margin-bottom:16px"><div style="font-family:'+HF+';font-weight:700;font-size:22px;color:'+INK+';letter-spacing:-.02em">Insights</div>'
       +'<div style="font-size:13px;color:'+INK3+';margin-top:2px">Live broker intelligence across drayage, freight &amp; transload'+(isSA?'':' · margin figures are visible to super-admins')+'</div></div>';
     var grid=
       '<div style="display:grid;grid-template-columns:1.1fr .9fr;gap:14px;margin-bottom:14px">'+laneCard+carrCard+'</div>'
       +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">'+excCard+datCard+'</div>'
-      +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">'+wlCard+followCard+'</div>';
+      +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">'+wlCard+followCard+'</div>'
+      +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">'+accCard+dupCard+'</div>';
 
     $('page').innerHTML=tabBar+'<div style="font-family:'+BFF+';color:'+INK+'">'+head+kpiBand+grid+'</div>';
   }
@@ -29629,6 +29705,237 @@ function renderTMSDispatch(tabBar,kpis,loads){
       : '⚠️ Margin is below your '+Math.round(g.floor*100)+'% floor.\n\n')
       +line+'\n\nBook it anyway?';
     try{ return confirm(msg); }catch(e){ return true; }
+  };
+})();
+</script>
+
+<script>
+/* ════════════════════════════════════════════════════════════════════
+   LOAD MAP (#5) — Leaflet + OpenStreetMap, ZIP geocoded via zippopotam.us
+   (free, no key, CORS) and cached in localStorage. Works on the live site.
+   ════════════════════════════════════════════════════════════════════ */
+(function(){
+  var ACTIVE=['Dispatched','In Transit','Out for Delivery'];
+  var _leafletLoading=null, _map=null, _layer=null;
+
+  function _ensureLeaflet(){
+    if(window.L&&window.L.map) return Promise.resolve();
+    if(_leafletLoading) return _leafletLoading;
+    _leafletLoading=new Promise(function(res,rej){
+      try{
+        if(!document.getElementById('leaflet-css')){
+          var lk=document.createElement('link'); lk.id='leaflet-css'; lk.rel='stylesheet';
+          lk.href='https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css';
+          document.head.appendChild(lk);
+        }
+        var sc=document.createElement('script');
+        sc.src='https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js';
+        sc.onload=function(){ res(); };
+        sc.onerror=function(){ rej(new Error('could not load map library (offline?)')); };
+        document.head.appendChild(sc);
+        setTimeout(function(){ if(!(window.L&&window.L.map)) rej(new Error('map library timed out')); },12000);
+      }catch(e){ rej(e); }
+    });
+    return _leafletLoading;
+  }
+
+  function _norm5(z){ z=String(z||'').replace(/[^0-9]/g,''); return z.length>=5?z.slice(0,5):''; }
+  window._geoZip=function(zip){
+    var z=_norm5(zip); if(!z) return Promise.resolve(null);
+    var key='geozip_'+z, cached=null;
+    try{ cached=localStorage.getItem(key); }catch(e){}
+    if(cached!=null){ try{ var v=JSON.parse(cached); return Promise.resolve(v); }catch(e){} }
+    return fetch('https://api.zippopotam.us/us/'+z).then(function(r){ return r.ok?r.json():null; }).then(function(j){
+      var out=null; if(j&&j.places&&j.places[0]){ out={lat:+j.places[0].latitude,lng:+j.places[0].longitude,city:j.places[0]['place name']||'',st:j.places[0]['state abbreviation']||''}; }
+      try{ localStorage.setItem(key,JSON.stringify(out)); }catch(e){}
+      return out;
+    }).catch(function(){ return null; });
+  };
+
+  window._tmsMapBoot=function(){
+    var loads=getTMSLoads().filter(function(l){return ACTIVE.indexOf(l.status)>=0;});
+    var statusCol=(typeof tmsStatusColor==='function')?tmsStatusColor:function(){return '#2563eb';};
+    // legend
+    var lg=document.getElementById('tms-map-legend');
+    if(lg) lg.innerHTML=['Dispatched','In Transit','Out for Delivery'].map(function(s){
+      return '<span style="display:inline-flex;align-items:center;gap:5px"><span style="width:9px;height:9px;border-radius:50%;background:'+statusCol(s)+'"></span>'+s+'</span>';
+    }).join('');
+    // side list
+    var list=document.getElementById('tms-map-list');
+    if(list) list.innerHTML = loads.length? loads.map(function(l){
+      return '<div onclick="openTMSLoadDetail(\''+l.id+'\')" style="cursor:pointer;background:#fff;border:1px solid #E6E8EC;border-left:3px solid '+statusCol(l.status)+';border-radius:10px;padding:10px 12px;margin-bottom:8px">'
+        +'<div style="font-size:13px;font-weight:600;color:#111419;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+(l.customer||'—')+'</div>'
+        +'<div style="font-size:11px;color:#8A929D;margin-top:2px">'+(l.pickupZip||'?')+' → '+(l.deliveryZip||'?')+'</div>'
+        +'<div style="font-size:11px;font-weight:600;color:'+statusCol(l.status)+';margin-top:3px">'+l.status+(l.carrier?' · '+l.carrier:'')+'</div></div>';
+    }).join('') : '<div style="padding:24px 10px;text-align:center;color:#8A929D;font-size:13px">No active loads in transit</div>';
+
+    var statusEl=document.getElementById('tms-map-status');
+    if(!loads.length){ if(statusEl) statusEl.textContent='No active loads to plot'; return; }
+
+    _ensureLeaflet().then(function(){
+      var el=document.getElementById('tms-leaflet-map'); if(!el) return;
+      if(statusEl) statusEl.style.display='none';
+      try{ if(_map){ _map.remove(); _map=null; } }catch(e){}
+      _map=L.map(el,{scrollWheelZoom:true,attributionControl:true}).setView([39.5,-98.35],4);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:18,attribution:'&copy; OpenStreetMap'}).addTo(_map);
+      _layer=L.layerGroup().addTo(_map);
+      var pts=[], pending=loads.length, placed=0;
+      function done(){
+        pending--;
+        if(pending<=0){
+          if(pts.length){ try{ _map.fitBounds(pts,{padding:[40,40],maxZoom:7}); }catch(e){} }
+          if(statusEl){ if(!placed){ statusEl.style.display='flex'; statusEl.textContent='Could not geocode any ZIPs (offline?)'; } }
+        }
+      }
+      // throttle geocode calls slightly to respect the free API
+      loads.forEach(function(l,i){
+        setTimeout(function(){
+          var zip=l.deliveryZip||l.pickupZip;
+          window._geoZip(zip).then(function(g){
+            if(g&&_layer){
+              placed++;
+              var col=statusCol(l.status);
+              var icon=L.divIcon({className:'',html:'<div style="width:16px;height:16px;border-radius:50%;background:'+col+';border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4)"></div>',iconSize:[16,16],iconAnchor:[8,8]});
+              var m=L.marker([g.lat,g.lng],{icon:icon}).addTo(_layer);
+              m.bindPopup('<div style="font-family:system-ui;font-size:13px"><b>'+(l.customer||'—')+'</b><br>'+(l.pickupZip||'?')+' → '+(l.deliveryZip||'?')+(g.city?'<br>'+g.city+', '+g.st:'')+'<br><span style="color:'+col+';font-weight:600">'+l.status+'</span>'+(l.carrier?' · '+l.carrier:'')+'<br><a href="#" onclick="openTMSLoadDetail(\''+l.id+'\');return false;">Open load</a></div>');
+              pts.push([g.lat,g.lng]);
+            }
+            done();
+          });
+        }, i*140);
+      });
+    }).catch(function(e){
+      if(statusEl){ statusEl.style.display='flex'; statusEl.innerHTML='Map needs internet to load tiles. The load list on the right still works.'; }
+    });
+  };
+})();
+</script>
+<script>
+/* ════════════════════════════════════════════════════════════════════
+   TEMPO LIVE (#37) — team email response-time board.
+   Reads a Supabase 'tempo_metrics' table that your Tempo Apps Script
+   writes to. Rows: {rep, date, threads, avg_response_min,
+   median_response_min, sla_breaches}. Shows a setup state until data lands.
+   ════════════════════════════════════════════════════════════════════ */
+(function(){
+  var INK='#111419',INK2='#464D57',INK3='#8A929D',LINE='#E6E8EC',LINE2='#EFF1F4',
+      WASH='#EEF1FB',NAVY='#26357A',SURF='#fff',CANV='#F4F5F7',
+      GRN='#0E7A48',AMB='#9A6212',RED='#C0392F';
+  var HF="'Bricolage Grotesque',sans-serif";
+  window._tempoCache=window._tempoCache||null;
+
+  function _fmtMin(m){ m=Number(m)||0; if(m<60) return Math.round(m)+'m'; var h=Math.floor(m/60), mm=Math.round(m%60); return h+'h'+(mm?' '+mm+'m':''); }
+
+  function _tempoShell(tabBar,bodyHtml,note){
+    var head='<div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-bottom:16px">'
+      +'<div><div style="font-family:'+HF+';font-weight:700;font-size:20px;color:'+INK+';letter-spacing:-.02em">Tempo</div>'
+      +'<div style="font-size:13px;color:'+INK3+';margin-top:2px">Team email response times, live'+(note?' · '+note:'')+'</div></div>'
+      +'<button onclick="_tempoRefresh()" style="font-family:inherit;font-size:12px;font-weight:600;color:'+NAVY+';background:'+WASH+';border:1px solid #D7DEF5;border-radius:8px;padding:7px 12px;cursor:pointer">↻ Refresh</button></div>';
+    $('page').innerHTML=tabBar+'<div style="font-family:\'Archivo\',sans-serif;color:'+INK+'">'+head+bodyHtml+'</div>';
+  }
+
+  function _setupState(tabBar){
+    var steps=[
+      'In your Tempo Apps Script, after it scores a thread, upsert a daily row per rep into a Supabase <b>tempo_metrics</b> table.',
+      'Columns: <code>rep</code> (text), <code>date</code> (date), <code>threads</code> (int), <code>avg_response_min</code> (numeric), <code>median_response_min</code> (numeric), <code>sla_breaches</code> (int).',
+      'Once rows land, this board shows today & this-week response times and a per-rep leaderboard automatically.'
+    ];
+    var body='<div style="background:'+SURF+';border:1px solid '+LINE+';border-radius:14px;padding:22px">'
+      +'<div style="display:inline-flex;align-items:center;gap:8px;background:'+WASH+';color:'+NAVY+';font-size:12px;font-weight:600;padding:5px 11px;border-radius:99px;margin-bottom:14px">⚡ Tempo not connected yet</div>'
+      +'<div style="font-size:14px;color:'+INK2+';max-width:640px;line-height:1.55;margin-bottom:16px">Tempo lives in your Gmail Apps Script, so this board needs a small feed. Point Tempo at a <b>tempo_metrics</b> table and the numbers show up here — no other change to your TMS.</div>'
+      +'<div style="display:flex;flex-direction:column;gap:10px;max-width:680px">'
+      +steps.map(function(s,i){ return '<div style="display:flex;gap:11px;align-items:flex-start"><div style="flex-shrink:0;width:22px;height:22px;border-radius:50%;background:'+NAVY+';color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center">'+(i+1)+'</div><div style="font-size:13px;color:'+INK2+';line-height:1.5;padding-top:1px">'+s+'</div></div>'; }).join('')
+      +'</div>'
+      +'<div style="margin-top:18px;font-size:12px;color:'+INK3+'">Ask me for the exact Apps Script snippet and I\'ll paste it — it\'s about 10 lines.</div>'
+      +'</div>';
+    _tempoShell(tabBar,body,'awaiting data');
+  }
+
+  function _board(tabBar,rows){
+    // aggregate this week
+    var totThreads=rows.reduce(function(s,r){return s+(+r.threads||0);},0);
+    var wAvg=totThreads>0?rows.reduce(function(s,r){return s+(+r.avg_response_min||0)*(+r.threads||0);},0)/totThreads:0;
+    var meds=rows.map(function(r){return +r.median_response_min||0;}).filter(function(x){return x>0;}).sort(function(a,b){return a-b;});
+    var med=meds.length?meds[Math.floor(meds.length/2)]:0;
+    var breaches=rows.reduce(function(s,r){return s+(+r.sla_breaches||0);},0);
+    var today=new Date().toISOString().slice(0,10);
+    var todayThreads=rows.filter(function(r){return (r.date||'').slice(0,10)===today;}).reduce(function(s,r){return s+(+r.threads||0);},0);
+
+    function kpi(lbl,val,col,note){ return '<div style="background:'+SURF+';border:1px solid '+LINE+';border-radius:12px;padding:14px 16px"><div style="font-size:11px;font-weight:600;color:'+INK3+'">'+lbl+'</div><div style="font-family:'+HF+';font-weight:700;font-size:24px;color:'+(col||INK)+';margin-top:3px">'+val+'</div>'+(note?'<div style="font-size:11px;color:'+INK3+';margin-top:1px">'+note+'</div>':'')+'</div>'; }
+    var avgCol=wAvg<=30?GRN:wAvg<=120?AMB:RED;
+    var kpis='<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px">'
+      +kpi('Avg first response',_fmtMin(wAvg),avgCol,'this week, weighted')
+      +kpi('Median response',_fmtMin(med),med<=30?GRN:med<=120?AMB:RED,'this week')
+      +kpi('Threads handled',String(totThreads),INK,todayThreads+' today')
+      +kpi('SLA breaches',String(breaches),breaches?RED:GRN,'over target')
+      +'</div>';
+
+    // per-rep leaderboard
+    var repMap={};
+    rows.forEach(function(r){ var k=r.rep||'—'; if(!repMap[k])repMap[k]={rep:k,threads:0,sumAvg:0,breaches:0}; var R=repMap[k]; R.threads+=(+r.threads||0); R.sumAvg+=(+r.avg_response_min||0)*(+r.threads||0); R.breaches+=(+r.sla_breaches||0); });
+    var reps=Object.keys(repMap).map(function(k){var R=repMap[k];R.avg=R.threads>0?R.sumAvg/R.threads:0;return R;}).sort(function(a,b){return a.avg-b.avg;});
+    var lb='<div style="background:'+SURF+';border:1px solid '+LINE+';border-radius:14px;padding:18px">'
+      +'<div style="font-family:'+HF+';font-weight:700;font-size:15px;color:'+INK+';margin-bottom:12px">Response leaderboard</div>'
+      +'<div style="display:flex;align-items:center;gap:10px;padding-bottom:8px;font-size:11px;font-weight:600;color:'+INK3+'"><div style="width:22px"></div><div style="flex:1">Rep</div><div style="width:80px;text-align:right">Avg resp</div><div style="width:70px;text-align:right">Threads</div><div style="width:70px;text-align:right">Breaches</div></div>'
+      +reps.map(function(R,i){ var medal=i===0?'🥇':i===1?'🥈':i===2?'🥉':''; var ac=R.avg<=30?GRN:R.avg<=120?AMB:RED;
+        return '<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-top:1px solid '+LINE2+'"><div style="width:22px;text-align:center">'+(medal||'<span style="color:'+INK3+';font-size:12px">'+(i+1)+'</span>')+'</div>'
+          +'<div style="flex:1;font-size:13px;font-weight:600;color:'+INK+';white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+R.rep+'</div>'
+          +'<div style="width:80px;text-align:right;font-weight:700;color:'+ac+'">'+_fmtMin(R.avg)+'</div>'
+          +'<div style="width:70px;text-align:right;color:'+INK2+'">'+R.threads+'</div>'
+          +'<div style="width:70px;text-align:right;color:'+(R.breaches?RED:INK3)+';font-weight:'+(R.breaches?700:400)+'">'+R.breaches+'</div></div>';
+      }).join('')+'</div>';
+    _tempoShell(tabBar,kpis+lb,'live from Tempo');
+  }
+
+  window._tempoRefresh=function(){ window._tempoCache=null; renderTMSTempo(window._lastTempoTabBar||''); };
+
+  window.renderTMSTempo=function(tabBar){
+    window._lastTempoTabBar=tabBar;
+    if(window._tempoCache){ if(window._tempoCache.length) _board(tabBar,window._tempoCache); else _setupState(tabBar); return; }
+    // loading
+    _tempoShell(tabBar,'<div style="padding:40px;text-align:center;color:'+INK3+';font-size:13px">Loading Tempo…</div>','');
+    if(typeof db==='undefined'||!db){ _setupState(tabBar); return; }
+    var weekAgo=new Date(Date.now()-7*864e5).toISOString().slice(0,10);
+    try{
+      db.from('tempo_metrics').select('*').gte('date',weekAgo).then(function(res){
+        if(res&&!res.error&&res.data){ window._tempoCache=res.data; if(res.data.length) _board(tabBar,res.data); else _setupState(tabBar); }
+        else { _setupState(tabBar); }
+      }).catch(function(){ _setupState(tabBar); });
+    }catch(e){ _setupState(tabBar); }
+  };
+})();
+</script>
+<script>
+/* ════════════════════════════════════════════════════════════════════
+   SMART DUPLICATE-QUOTE DETECTION (#41)
+   Groups quotes by customer + lane + mode; a group with 2+ quotes is a
+   likely repeat. Used by the Insights "Duplicate quotes" board.
+   ════════════════════════════════════════════════════════════════════ */
+(function(){
+  window.findQuoteDupes=function(windowDays){
+    windowDays=windowDays||45;
+    var items=[];
+    try{(typeof S!=='undefined'&&S.quotes?S.quotes:[]).forEach(function(q){ items.push({src:'Drayage',id:q.id,customer:q.customer||'',lane:(q.port||'?')+'|'+(q.zip||'?'),mode:'Drayage',date:q.date||'',status:q.status||'',rev:(q.customerRates&&q.customerRates.total)||0}); });}catch(e){}
+    try{(window._fqHistory||[]).forEach(function(q){ items.push({src:'Freight',id:q.id,customer:q.customer||'',lane:(q.pickupZip||'?')+'|'+(q.deliveryZip||'?'),mode:q.fqMode||'FTL',date:q.date||'',status:q.status||'',rev:q.customerRate||0}); });}catch(e){}
+    var groups={};
+    items.forEach(function(it){
+      var ck=String(it.customer||'').trim().toLowerCase();
+      if(!ck||it.lane==='?|?') return;
+      var key=ck+'::'+it.lane+'::'+it.mode;
+      (groups[key]=groups[key]||[]).push(it);
+    });
+    var out=[];
+    Object.keys(groups).forEach(function(k){
+      var arr=groups[k]; if(arr.length<2) return;
+      arr.sort(function(a,b){return new Date(b.date||0)-new Date(a.date||0);});
+      // keep only groups where 2+ quotes fall within the window of each other
+      var newest=new Date(arr[0].date||0).getTime();
+      var near=arr.filter(function(x){ var t=new Date(x.date||0).getTime(); return isNaN(t)||isNaN(newest)?true:(newest-t)<=windowDays*864e5; });
+      if(near.length<2) return;
+      out.push({customer:arr[0].customer,lane:arr[0].lane,mode:arr[0].mode,quotes:arr});
+    });
+    out.sort(function(a,b){return b.quotes.length-a.quotes.length;});
+    return out;
   };
 })();
 </script>
