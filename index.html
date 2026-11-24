@@ -30046,8 +30046,9 @@ function renderTMSDispatch(tabBar,kpis,loads){
   function _drayNote(q){ var cr=q.carrierRates||{}; var p=[]; Object.keys(_ACCLBL).forEach(function(k){ var v=+cr[k]||0; if(v>0&&k!=='base') p.push(_ACCLBL[k]+' $'+Math.round(v)); }); return p.length?('+ '+p.join(' · ')):''; }
   function _derivedFromQuotes(){
     var out=[];
-    try{ var _dq=(typeof S!=='undefined'&&S&&S.quotes)?S.quotes:[]; _dq.forEach(function(q){ if(!q||!q.carrier) return; var rate=_drayTotal(q); if(!(rate>0)) return;
-      out.push({id:'q_'+q.id,delivery_zip:q.zip||'',mode:'Drayage',origin:q.port||'',carrier:q.carrier,rate:rate,date:q.date||'',note:_drayNote(q),contact:'',_source:'quote',status:q.status||''}); });}catch(e){}
+    try{ var _dq=(typeof S!=='undefined'&&S&&S.quotes)?S.quotes:[]; _dq.forEach(function(q){ if(!q) return;
+      var rate=_drayTotal(q); if(!(rate>0)){ var cu=q.customerRates&&q.customerRates.total; rate=+cu||0; } if(!(rate>0)) return;
+      out.push({id:'q_'+q.id,delivery_zip:q.zip||'',mode:'Drayage',origin:q.port||'',carrier:q.carrier||'(no carrier)',rate:rate,date:q.date||'',note:_drayNote(q),contact:'',_source:'quote',status:q.status||''}); });}catch(e){}
     try{(window._fqHistory||[]).forEach(function(q){ if(!q||!q.carrier) return; var rate=+q.carrierRate||0; if(!(rate>0)) return;
       out.push({id:'f_'+q.id,delivery_zip:q.deliveryZip||'',mode:q.fqMode||'FTL',origin:q.pickupZip||'',carrier:q.carrier,rate:rate,date:q.date||'',note:'',contact:'',_source:'quote',status:q.status||''}); });}catch(e){}
     try{(window._tlHistory||[]).forEach(function(q){ if(!q) return; var carrier=q.outCarrier||q.drayCarrier||''; var rate=(+q.drayCarrierCost||0)+(+q.warehouseCost||0)+(+q.outCarrierCost||0); if(!carrier||!(rate>0)) return;
@@ -30152,8 +30153,11 @@ function renderTMSDispatch(tabBar,kpis,loads){
     var rates=_srAll();
     var q=_z5(S.srQuery||'');
 
+    var _byMode={}; rates.forEach(function(r){ _byMode[r.mode]=(_byMode[r.mode]||0)+1; });
+    var _counts=Object.keys(_byMode).sort(function(a,b){return _byMode[b]-_byMode[a];}).map(function(m){return _byMode[m]+' '+m;}).join(' · ')||'none yet';
     var head='<div style="margin-bottom:16px"><div style="font-family:'+HF+';font-weight:700;font-size:22px;letter-spacing:-.02em">Carrier Sourcing</div>'
-      +'<div style="font-size:13px;color:'+INK3+';margin-top:2px">Every rate your team has been quoted, searchable by delivery ZIP — auto-filled from your quotes plus anything you log by hand. '+rates.length+' rate'+(rates.length!==1?'s':'')+' on file.</div></div>';
+      +'<div style="font-size:13px;color:'+INK3+';margin-top:2px">Every rate your team has been quoted, searchable by delivery ZIP — auto-filled from your quotes plus anything you log by hand.</div>'
+      +'<div style="font-size:12px;color:'+INK3+';margin-top:4px">On file: <b style="color:'+INK2+'">'+_counts+'</b></div></div>';
 
     var search='<div style="display:flex;gap:10px;align-items:center;margin-bottom:18px">'
       +'<div style="position:relative;flex:1;max-width:380px"><span style="position:absolute;left:13px;top:50%;transform:translateY(-50%);color:'+INK3+';font-size:15px">⌕</span>'
