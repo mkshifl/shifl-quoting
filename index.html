@@ -30046,7 +30046,7 @@ function renderTMSDispatch(tabBar,kpis,loads){
   function _drayNote(q){ var cr=q.carrierRates||{}; var p=[]; Object.keys(_ACCLBL).forEach(function(k){ var v=+cr[k]||0; if(v>0&&k!=='base') p.push(_ACCLBL[k]+' $'+Math.round(v)); }); return p.length?('+ '+p.join(' · ')):''; }
   function _derivedFromQuotes(){
     var out=[];
-    try{(window.S&&S.quotes||[]).forEach(function(q){ if(!q||!q.carrier) return; var rate=_drayTotal(q); if(!(rate>0)) return;
+    try{ var _dq=(typeof S!=='undefined'&&S&&S.quotes)?S.quotes:[]; _dq.forEach(function(q){ if(!q||!q.carrier) return; var rate=_drayTotal(q); if(!(rate>0)) return;
       out.push({id:'q_'+q.id,delivery_zip:q.zip||'',mode:'Drayage',origin:q.port||'',carrier:q.carrier,rate:rate,date:q.date||'',note:_drayNote(q),contact:'',_source:'quote',status:q.status||''}); });}catch(e){}
     try{(window._fqHistory||[]).forEach(function(q){ if(!q||!q.carrier) return; var rate=+q.carrierRate||0; if(!(rate>0)) return;
       out.push({id:'f_'+q.id,delivery_zip:q.deliveryZip||'',mode:q.fqMode||'FTL',origin:q.pickupZip||'',carrier:q.carrier,rate:rate,date:q.date||'',note:'',contact:'',_source:'quote',status:q.status||''}); });}catch(e){}
