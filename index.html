@@ -13722,7 +13722,7 @@ function renderProfitMonitor(){
       margin:(p=>p.margin)(getShipmentProfit(q,'drayage')),
       isActual:(p=>p.isActual)(getShipmentProfit(q,'drayage')),
       modeLabel:'Drayage',
-      addedToSheet:localStorage.getItem('pm_sheet_'+q.id)==='1'
+      addedToSheet:_pmOnSheet(q)
     }));
     const fq=(window._fqHistory||[]).filter(q=>statusSet.includes(q.status)).map(q=>({
       id:q.id,type:'freight',customer:q.customer||'—',shiflRef:q.shiflRef||'—',
@@ -13734,7 +13734,7 @@ function renderProfitMonitor(){
       margin:(p=>p.margin)(getShipmentProfit(q,'freight')),
       isActual:(p=>p.isActual)(getShipmentProfit(q,'freight')),
       modeLabel:q.fqMode||'Freight',
-      addedToSheet:localStorage.getItem('pm_sheet_'+q.id)==='1'
+      addedToSheet:_pmOnSheet(q)
     }));
     const aq=(window._aqHistory||[]).filter(q=>statusSet.includes(q.status)).map(q=>({
       id:q.id,type:'air',customer:q.customer||'—',shiflRef:q.shiflRef||q.quoteNum||'—',
@@ -13745,7 +13745,7 @@ function renderProfitMonitor(){
       profit:(q.customerRates?.total||q.customerRate||0)-(q.carrierRates?.total||0),
       margin:q.customerRates?.total>0?((q.customerRates.total-(q.carrierRates?.total||0))/q.customerRates.total):0,
       isActual:false,modeLabel:'Air',
-      addedToSheet:localStorage.getItem('pm_sheet_'+q.id)==='1'
+      addedToSheet:_pmOnSheet(q)
     }));
     const tl=(window._tlHistory||[]).filter(q=>statusSet.includes(q.status)).map(q=>({
       id:q.id,type:'transload',customer:q.customer||'—',shiflRef:q.shiflRef||'—',
@@ -13757,7 +13757,7 @@ function renderProfitMonitor(){
       margin:(p=>p.margin)(getShipmentProfit(q,'transload')),
       isActual:(p=>p.isActual)(getShipmentProfit(q,'transload')),
       modeLabel:'Transload',
-      addedToSheet:localStorage.getItem('pm_sheet_'+q.id)==='1'
+      addedToSheet:_pmOnSheet(q)
     }));
     return [...dray,...fq,...tl,...aq];
   }
@@ -13812,7 +13812,7 @@ function renderProfitMonitor(){
   const delivCnt  = buildRows(DONE_ST).length;
   const allCnt    = buildRows(ALL_ST).length;
 
-  $('topbar-right').innerHTML='<div style="display:flex;gap:8px"><button onclick="pmDownloadCSV()" style="display:flex;align-items:center;gap:6px;padding:7px 14px;border-radius:8px;border:none;background:linear-gradient(135deg,#059669,#34d399);color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">📥 Download CSV</button><button onclick="pmSyncToSheet()" id="pm-sync-btn" style="display:flex;align-items:center;gap:6px;padding:7px 14px;border-radius:8px;border:none;background:linear-gradient(135deg,#2563eb,#60a5fa);color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">📊 Sync to Sheet</button></div>';
+  $('topbar-right').innerHTML='<div style="display:flex;gap:8px;align-items:center"><button onclick="pmDownloadCSV()" style="display:flex;align-items:center;gap:6px;padding:7px 14px;border-radius:8px;border:none;background:linear-gradient(135deg,#059669,#34d399);color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">📥 Download CSV</button><button onclick="pmSyncToSheet()" id="pm-sync-btn" style="display:flex;align-items:center;gap:6px;padding:7px 14px;border-radius:8px;border:none;background:linear-gradient(135deg,#2563eb,#60a5fa);color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">📊 Sync to Sheet</button><button onclick="pmTestSheet()" title="Open the webhook in a new tab to see if it is live" style="padding:7px 10px;border-radius:8px;border:1px solid #d1d5db;background:#fff;color:#374151;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">🧪 Test</button><button onclick="pmResyncAll()" title="Forget what has been synced and re-push every delivered/invoiced load on the next sync" style="padding:7px 10px;border-radius:8px;border:1px solid #d1d5db;background:#fff;color:#374151;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">↻ Re-sync all</button><button onclick="pmSetSheetUrl()" title="Paste a new Apps Script /exec URL after redeploying" style="padding:7px 10px;border-radius:8px;border:1px solid #d1d5db;background:#fff;color:#374151;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">⚙️ URL</button></div>';
 
   $('page').style.padding='12px 12px';
 
@@ -13954,13 +13954,44 @@ function renderProfitMonitor(){
 
 function pmSetPageSize(v){ S.pmPageSize = (v==='all'?'all':(parseInt(v,10)||30)); S.pmPage=1; renderProfitMonitor(); }
 function pmGoPage(n){ n=parseInt(n,10)||1; if(n<1)n=1; S.pmPage=n; renderProfitMonitor(); }
-function pmToggleSheet(id, addIt){
-  if(addIt==='true'||addIt===true){
-    localStorage.setItem('pm_sheet_'+id,'1');
-    showToast('✅ Marked as added to spreadsheet','success',2000);
+// True if a load is already on the sheet: individually checked (pm_sheet_<id>)
+// OR bulk-synced (its ref is in pm_synced_refs). One source of truth for the ✓.
+function _pmOnSheet(q){
+  try{ if(localStorage.getItem('pm_sheet_'+q.id)==='1') return true;
+    var s=JSON.parse(localStorage.getItem('pm_synced_refs')||'[]');
+    return !!q.shiflRef && q.shiflRef!=='—' && s.indexOf(q.shiflRef)>=0;
+  }catch(e){ return localStorage.getItem('pm_sheet_'+q.id)==='1'; }
+}
+// Build one sheet row for a single load id, in the same column order as the bulk sync.
+function _pmBuildRow(id){
+  var q,type,lane,carrier,modeLabel;
+  q=(window.S&&S.quotes||[]).find(function(x){return x.id===id;}); if(q){type='drayage';lane=(q.port||'')+'→'+(q.zip||'');carrier=q.carrier||'';modeLabel='Drayage';}
+  if(!q){q=(window._fqHistory||[]).find(function(x){return x.id===id;}); if(q){type='freight';lane=(q.pickupZip||'')+'→'+(q.deliveryZip||'');carrier=q.carrier||'';modeLabel=q.fqMode||'Freight';}}
+  if(!q){q=(window._tlHistory||[]).find(function(x){return x.id===id;}); if(q){type='transload';lane=(q.drayPort?q.drayPort.split(',')[0]:'')+'→'+(q.warehouseName||'')+'→'+(q.outDeliveryZip||'');carrier=q.warehouseName||'';modeLabel='Transload';}}
+  if(!q){q=(window._aqHistory||[]).find(function(x){return x.id===id;}); if(q){type='air';lane=(q.originAirport||'')+'→'+(q.destAirport||'');carrier=q.carrier||'';modeLabel='Air';}}
+  if(!q) return null;
+  var p=getShipmentProfit(q,type); var profit=+(p.profit||0).toFixed(2);
+  var row=[q.date||'',q.shiflRef||'',q.customer||'',lane,carrier,modeLabel,q.status||'',+(p.cost||0).toFixed(2),+(p.revenue||0).toFixed(2),profit,p.margin?+(p.margin*100).toFixed(1):0,+(profit*0.15).toFixed(2),'FALSE'];
+  return {row:row,ref:q.shiflRef||'',q:q};
+}
+// Per-load checkmark: checking PUSHES that one load to the sheet and remembers it;
+// unchecking forgets it so you can push it again (e.g. if it didn't land the first time).
+async function pmToggleSheet(id, addIt){
+  var checking=(addIt==='true'||addIt===true);
+  var built=_pmBuildRow(id);
+  function _syncRefs(mutate){ try{ var s=JSON.parse(localStorage.getItem('pm_synced_refs')||'[]'); mutate(s); localStorage.setItem('pm_synced_refs',JSON.stringify(s)); }catch(e){} }
+  if(checking){
+    if(!built){ showToast('Could not find this load to push','error',3000); return; }
+    try{
+      await fetch(_pmSheetUrl(),{method:'POST',mode:'no-cors',body:JSON.stringify({rows:[built.row]})});
+      try{ localStorage.setItem('pm_sheet_'+id,'1'); }catch(e){}
+      if(built.ref) _syncRefs(function(s){ if(s.indexOf(built.ref)<0) s.push(built.ref); });
+      showToast('Pushed to the sheet. If it doesn\'t show up, tap 🧪 Test to check the webhook.','success',5000);
+    }catch(e){ showToast('Push failed: '+e.message,'error',3000); }
   } else {
-    localStorage.removeItem('pm_sheet_'+id);
-    showToast('Removed from spreadsheet','info',1500);
+    try{ localStorage.removeItem('pm_sheet_'+id); }catch(e){}
+    if(built&&built.ref) _syncRefs(function(s){ var i=s.indexOf(built.ref); if(i>=0) s.splice(i,1); });
+    showToast('Unchecked — tap the checkmark again to push this load to the sheet','info',3500);
   }
   renderProfitMonitor();
 }
@@ -13978,7 +14009,7 @@ function pmDownloadCSV(){
     customerRate:getShipmentProfit(q,'drayage').revenue,
     profit:getShipmentProfit(q,'drayage').profit,
     margin:getShipmentProfit(q,'drayage').margin,
-    addedToSheet:localStorage.getItem('pm_sheet_'+q.id)==='1'
+    addedToSheet:_pmOnSheet(q)
   }));
   const fq=(window._fqHistory||[]).filter(q=>WON.includes(q.status)).map(q=>({
     id:q.id,type:q.fqMode||'Freight',customer:q.customer||'—',shiflRef:q.shiflRef||'—',
@@ -13988,7 +14019,7 @@ function pmDownloadCSV(){
     customerRate:getShipmentProfit(q,'freight').revenue,
     profit:getShipmentProfit(q,'freight').profit,
     margin:getShipmentProfit(q,'freight').margin,
-    addedToSheet:localStorage.getItem('pm_sheet_'+q.id)==='1'
+    addedToSheet:_pmOnSheet(q)
   }));
   const tl=(window._tlHistory||[]).filter(q=>WON.includes(q.status)).map(q=>({
     id:q.id,type:'Transload',customer:q.customer||'—',shiflRef:q.shiflRef||'—',
@@ -13998,7 +14029,7 @@ function pmDownloadCSV(){
     customerRate:getShipmentProfit(q,'transload').revenue,
     profit:getShipmentProfit(q,'transload').profit,
     margin:getShipmentProfit(q,'transload').margin,
-    addedToSheet:localStorage.getItem('pm_sheet_'+q.id)==='1'
+    addedToSheet:_pmOnSheet(q)
   }));
   let all=[...dray,...fq,...tl];
   const today=localDateStr();
@@ -29177,8 +29208,26 @@ async function saveEditedQuote(id){
   if(_tbody) _tbody.innerHTML=buildLogRows();
 }
 
+var PM_SHEET_URL_DEFAULT='https://script.google.com/macros/s/AKfycbx745DyAxscIyC3Rn_IFG7jHjohBbgWIaz8vZsB-JMGmPcx_KIpe67aionjy2-f35UeDw/exec';
+function _pmSheetUrl(){ try{ return localStorage.getItem('pm_sheet_url')||PM_SHEET_URL_DEFAULT; }catch(e){ return PM_SHEET_URL_DEFAULT; } }
+// Open the webhook in a new tab so you can SEE whether it's live. A working
+// Apps Script shows a page/response; a stale or broken one shows a Google
+// error or sign-in — that's the usual reason "synced" shows but the sheet stays empty.
+function pmTestSheet(){ try{ window.open(_pmSheetUrl(),'_blank'); showToast('Opened the webhook in a new tab — if it shows a Google error or sign-in page, redeploy the Apps Script and paste the new URL under ⚙️ URL','info',8000); }catch(e){} }
+function pmSetSheetUrl(){
+  var cur=_pmSheetUrl();
+  var v=prompt('Paste the Apps Script Web App URL (ends in /exec).\n\nIn Apps Script: Deploy → Manage deployments → copy the Web app URL. If you redeployed, the URL changes — paste the new one here.',cur);
+  if(v==null) return;
+  v=v.trim();
+  if(v && !/^https:\/\/script\.google\.com\/.*\/exec$/.test(v)){ if(!confirm('That doesn\'t look like a /exec Apps Script URL. Save it anyway?')) return; }
+  try{ if(v){ localStorage.setItem('pm_sheet_url',v); localStorage.removeItem('pm_headers_sent'); showToast('Webhook URL saved. Headers will be re-sent on the next sync.','success',4000); } else { localStorage.removeItem('pm_sheet_url'); showToast('Reset to the default webhook URL.','info',3000); } }catch(e){ showToast('Could not save: '+e.message,'error',4000); }
+}
+function pmResyncAll(){
+  if(!confirm('Re-push EVERY delivered/invoiced/paid load to the sheet on the next sync?\n\nUse this if the sheet is empty but the app said it synced. It clears the "already synced" memory so nothing is skipped. (If rows are already in the sheet, this can create duplicates.)')) return;
+  try{ localStorage.removeItem('pm_synced_refs'); localStorage.removeItem('pm_headers_sent'); showToast('Cleared sync memory. Hit "Sync to Sheet" now to re-push everything.','success',5000); }catch(e){ showToast('Could not reset: '+e.message,'error',4000); }
+}
 async function pmSyncToSheet(){
-  var SHEET_URL='https://script.google.com/macros/s/AKfycbx745DyAxscIyC3Rn_IFG7jHjohBbgWIaz8vZsB-JMGmPcx_KIpe67aionjy2-f35UeDw/exec';
+  var SHEET_URL=_pmSheetUrl();
   var btn=document.getElementById('pm-sync-btn');
   if(btn){btn.textContent='⏳ Syncing...';btn.disabled=true;}
   try{
@@ -29211,9 +29260,11 @@ async function pmSyncToSheet(){
     }
     await fetch(SHEET_URL,{method:'POST',mode:'no-cors',body:JSON.stringify({rows:newRows})});
     localStorage.setItem('pm_synced_refs',JSON.stringify(synced.concat(newRefs)));
-    if(btn){btn.textContent='✅ '+newRows.length+' added!';btn.style.background='linear-gradient(135deg,#059669,#34d399)';}
+    if(btn){btn.textContent='📤 Sent '+newRows.length;btn.style.background='linear-gradient(135deg,#059669,#34d399)';}
     setTimeout(function(){if(btn){btn.textContent='📊 Sync to Sheet';btn.style.background='linear-gradient(135deg,#2563eb,#60a5fa)';btn.disabled=false;}},3000);
-    showToast('✅ Added '+newRows.length+' new loads to TMS Numbers tab','success',3000);
+    // no-cors can't confirm the sheet received it — tell the truth and point to Test if it's empty.
+    showToast('Sent '+newRows.length+' load'+(newRows.length>1?'s':'')+' to the sheet. If they don\'t show up, tap 🧪 Test to check the webhook.','success',6000);
+    try{ if(typeof renderProfitMonitor==='function' && document.getElementById('pm-sync-btn')) setTimeout(function(){ if(document.getElementById('pm-sync-btn')) renderProfitMonitor(); },3200); }catch(e){}
   }catch(e){if(btn){btn.textContent='❌ Failed';btn.disabled=false;}showToast('Sync failed: '+e.message,'error',3000);}
 }
 </script>
