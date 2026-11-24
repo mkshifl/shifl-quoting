@@ -30037,6 +30037,28 @@ function renderTMSDispatch(tabBar,kpis,loads){
   }
   window.loadSourcingRates=loadSourcingRates;
 
+  // ── Auto-ingest from quotes ──────────────────────────────────────
+  // Any quote (drayage / freight / transload) with a carrier + carrier rate
+  // becomes a sourcing rate automatically, accessorials folded into the note.
+  // Read live from the quote stores — nothing stored twice, updates when a quote does.
+  var _ACCLBL={base:'base',chassis:'chassis',prepull:'pre-pull',det_port:'port det',det_cust:'cust det',storage:'storage',ovw43:'ovw43',ovw48:'ovw48',bobtail:'bobtail',toll:'toll',genset:'genset',triaxle:'tri-axle'};
+  function _drayTotal(q){ var cr=q.carrierRates||{}; if(cr.total) return +cr.total||0; return Object.keys(_ACCLBL).reduce(function(s,k){return s+(+cr[k]||0);},0); }
+  function _drayNote(q){ var cr=q.carrierRates||{}; var p=[]; Object.keys(_ACCLBL).forEach(function(k){ var v=+cr[k]||0; if(v>0&&k!=='base') p.push(_ACCLBL[k]+' $'+Math.round(v)); }); return p.length?('+ '+p.join(' · ')):''; }
+  function _derivedFromQuotes(){
+    var out=[];
+    try{(window.S&&S.quotes||[]).forEach(function(q){ if(!q||!q.carrier) return; var rate=_drayTotal(q); if(!(rate>0)) return;
+      out.push({id:'q_'+q.id,delivery_zip:q.zip||'',mode:'Drayage',origin:q.port||'',carrier:q.carrier,rate:rate,date:q.date||'',note:_drayNote(q),contact:'',_source:'quote',status:q.status||''}); });}catch(e){}
+    try{(window._fqHistory||[]).forEach(function(q){ if(!q||!q.carrier) return; var rate=+q.carrierRate||0; if(!(rate>0)) return;
+      out.push({id:'f_'+q.id,delivery_zip:q.deliveryZip||'',mode:q.fqMode||'FTL',origin:q.pickupZip||'',carrier:q.carrier,rate:rate,date:q.date||'',note:'',contact:'',_source:'quote',status:q.status||''}); });}catch(e){}
+    try{(window._tlHistory||[]).forEach(function(q){ if(!q) return; var carrier=q.outCarrier||q.drayCarrier||''; var rate=(+q.drayCarrierCost||0)+(+q.warehouseCost||0)+(+q.outCarrierCost||0); if(!carrier||!(rate>0)) return;
+      var n=[]; if(+q.drayCarrierCost)n.push('dray $'+Math.round(q.drayCarrierCost)); if(+q.warehouseCost)n.push('whse $'+Math.round(q.warehouseCost)); if(+q.outCarrierCost)n.push('out $'+Math.round(q.outCarrierCost));
+      out.push({id:'tl_'+q.id,delivery_zip:q.outDeliveryZip||'',mode:'Transload',origin:q.drayPort||'',carrier:carrier,rate:rate,date:q.date||'',note:(n.length?'+ '+n.join(' · '):''),contact:'',_source:'quote',status:q.status||''}); });}catch(e){}
+    return out.filter(function(r){ return !!_z5(r.delivery_zip); });
+  }
+  // All sourcing rates = auto-derived from quotes + manually logged.
+  function _srAll(){ return _merge(_derivedFromQuotes(), window._sourcingRates||[]); }
+  window._srAll=_srAll;
+
   window.saveSourcingRate=async function(rec){
     rec.id=rec.id||('sr_'+Date.now()+'_'+Math.random().toString(36).slice(2,7));
     rec.created_at=rec.created_at||new Date().toISOString();
@@ -30126,11 +30148,12 @@ function renderTMSDispatch(tabBar,kpis,loads){
       +'<button onclick="sourcingSyncToTeam()" title="Push your locally-saved rates up to the shared table" style="padding:8px 12px;border-radius:9px;border:1px solid '+LINE+';background:#fff;color:'+INK2+';font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">↻ Sync to team</button>'
       +'<button onclick="openLogRate()" style="display:flex;align-items:center;gap:6px;padding:8px 15px;border-radius:9px;border:none;background:'+NAVY+';color:#fff;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">+ Log a rate</button></div>';
     $('page').innerHTML='<div style="font-family:'+BFF+';color:'+INK+';padding:4px 2px"><div style="color:'+INK3+';font-size:13px;padding:30px 0;text-align:center">Loading rates…</div></div>';
-    var rates=await loadSourcingRates();
+    await loadSourcingRates();
+    var rates=_srAll();
     var q=_z5(S.srQuery||'');
 
     var head='<div style="margin-bottom:16px"><div style="font-family:'+HF+';font-weight:700;font-size:22px;letter-spacing:-.02em">Carrier Sourcing</div>'
-      +'<div style="font-size:13px;color:'+INK3+';margin-top:2px">Every rate your team has been quoted, searchable by delivery ZIP. '+rates.length+' rate'+(rates.length!==1?'s':'')+' logged.</div></div>';
+      +'<div style="font-size:13px;color:'+INK3+';margin-top:2px">Every rate your team has been quoted, searchable by delivery ZIP — auto-filled from your quotes plus anything you log by hand. '+rates.length+' rate'+(rates.length!==1?'s':'')+' on file.</div></div>';
 
     var search='<div style="display:flex;gap:10px;align-items:center;margin-bottom:18px">'
       +'<div style="position:relative;flex:1;max-width:380px"><span style="position:absolute;left:13px;top:50%;transform:translateY(-50%);color:'+INK3+';font-size:15px">⌕</span>'
@@ -30146,7 +30169,7 @@ function renderTMSDispatch(tabBar,kpis,loads){
 
   function _srRender(){
     var box=document.getElementById('sr-results'); if(!box) return;
-    var rates=window._sourcingRates||[];
+    var rates=_srAll();
     var q=_z5(S.srQuery||'');
     if(!q){
       box.innerHTML='<div style="background:'+SURF+';border:1px dashed '+LINE+';border-radius:14px;padding:34px 20px;text-align:center;color:'+INK3+'">'
@@ -30170,11 +30193,16 @@ function renderTMSDispatch(tabBar,kpis,loads){
       var col=_mColor(m);
       var summary=vals.length?('<span style="font-size:12px;color:'+INK2+';font-weight:600">'+(lo===hi?_money(lo):_money(lo)+'–'+_money(hi))+'</span><span style="font-size:11px;color:'+INK3+'"> · avg '+_money(avg)+'</span>'):'';
       var body=rows.map(function(r){
+        var isQuote=r._source==='quote';
+        var stale=/lost|expired|cancel/i.test(r.status||'');
+        var tag=isQuote
+          ? '<span title="Auto-filled from a quote" style="font-size:10px;font-weight:600;color:'+(stale?AMB:NAVY)+';background:'+(stale?'#FBF2E0':WASH)+';padding:2px 7px;border-radius:99px;white-space:nowrap">quote'+(r.status?' · '+_esc(r.status):'')+'</span>'
+          : '<button onclick="deleteSourcingRate(\''+r.id+'\')" title="Delete" style="border:none;background:transparent;color:'+INK3+';cursor:pointer;font-size:13px;padding:4px">🗑</button>';
         return '<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid '+LINE2+'">'
           +'<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;color:'+INK+';white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+_esc(r.carrier||'—')+'</div>'
-          +'<div style="font-size:11px;color:'+INK3+';margin-top:2px">'+_esc(r.origin||'?')+' → '+_esc(r.delivery_zip||'')+' · '+_esc(r.date||'')+(r.contact?' · '+_esc(r.contact):'')+(r.note?' · '+_esc(r.note):'')+'</div></div>'
+          +'<div style="font-size:11px;color:'+INK3+';margin-top:2px">'+[_esc(r.origin||'?')+' → '+_esc(r.delivery_zip||''),(r.date?_esc(r.date):''),(r.contact?_esc(r.contact):''),(r.note?_esc(r.note):'')].filter(Boolean).join(' · ')+'</div></div>'
           +'<div style="font-family:'+HF+';font-weight:700;font-size:16px;color:'+col+';white-space:nowrap">'+_money(r.rate)+'</div>'
-          +'<button onclick="deleteSourcingRate(\''+r.id+'\')" title="Delete" style="border:none;background:transparent;color:'+INK3+';cursor:pointer;font-size:13px;padding:4px">🗑</button></div>';
+          +tag+'</div>';
       }).join('');
       return '<div style="background:'+SURF+';border:1px solid '+LINE+';border-radius:14px;padding:16px 18px;margin-bottom:12px">'
         +'<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:4px">'
