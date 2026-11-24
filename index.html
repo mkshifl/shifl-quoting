@@ -1192,6 +1192,11 @@ if('caches' in window){
           <span style="font-size:15px">🤝</span>Carrier Network
         </span>
       </button>
+      <button class="acc-btn" id="nav-sourcing" data-view="sourcing" onclick="goTo('sourcing')" style="font-size:13px">
+        <span style="display:flex;align-items:center;gap:10px">
+          <span style="font-size:15px">🧭</span>Carrier Sourcing
+        </span>
+      </button>
 
       <!-- ADMIN -->
       <!-- ADMIN (conditional) -->
@@ -1939,7 +1944,7 @@ function setView(v){
   S.view=v;
   document.querySelectorAll('.nav-btn,.sub-link').forEach(b=>b.classList.remove('active'));
   const navEl=$('nav-'+v);if(navEl) navEl.classList.add('active');
-  const titles={tms:'TMS',quote:'Quote builder',customers:'Customers',phonebook:'Phone Book',rates:'Carrier rates',carrierquotes:'Carrier quotes',draftquotes:"Mario's quotes",log:'Quote log',dash:'Dashboard',freight:'Freight Quoting',transload:'Transload Quoting',active:'Active Shipments',admin:'Admin Panel',reports:'Reports',activity:'Activity Log',auditlog:'Audit Log',carriers:'Carrier Network',air:'Air Freight',home:'Home',invoicing:'Invoicing',requests:'Rate Requests'};
+  const titles={tms:'TMS',quote:'Quote builder',customers:'Customers',phonebook:'Phone Book',rates:'Carrier rates',carrierquotes:'Carrier quotes',draftquotes:"Mario's quotes",log:'Quote log',dash:'Dashboard',freight:'Freight Quoting',transload:'Transload Quoting',active:'Active Shipments',admin:'Admin Panel',reports:'Reports',activity:'Activity Log',auditlog:'Audit Log',carriers:'Carrier Network',sourcing:'Carrier Sourcing',air:'Air Freight',home:'Home',invoicing:'Invoicing',requests:'Rate Requests'};
   $('view-title').textContent=titles[v]||v;
   openAccFor(v);
   updateSubActive(v);
@@ -1958,6 +1963,7 @@ function render(){
   else if(S.view==='active')     renderActive();
   else if(S.view==='requests')   renderCustomerRequests();
   else if(S.view==='carriers')   renderCarriers();
+  else if(S.view==='sourcing')   renderCarrierSourcing();
   else if(S.view==='admin')      renderAdmin();
   else if(S.view==='activity')   renderActivity();
   else if(S.view==='air')         renderAirFreight();
@@ -2428,9 +2434,12 @@ function renderQuote(){
         <div id="lane-history-body">${buildLaneHistory(qi.zip,qi.ld)}</div>
       </div>
       <div class="card">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0" id="carriers-head-wrap">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0;gap:8px" id="carriers-head-wrap">
           <div class="sec-head" id="carriers-head" style="margin-bottom:0">Carriers · ${qi.zip||'—'} · ${qi.ld}${(qi.containerCount||1)>1?` <span class="badge" style="background:#f59e0b;color:#fff">×${qi.containerCount}</span>`:''}</div>
+          <div style="display:flex;align-items:center;gap:8px">
           ${matches.length?`<span style="font-size:10px;font-weight:700;padding:2px 9px;border-radius:99px;background:#dbeafe;color:#1d4ed8">${matches.length} match${matches.length!==1?'es':''}</span>`:''}
+          <button onclick="openLogRate({mode:'Drayage',origin:(S.qi.port||''),delivery_zip:(S.qi.zip||'')})" title="Save a rate a carrier quoted for this lane — even if you're not booking them" style="font-size:11px;font-weight:600;padding:4px 10px;border-radius:7px;border:1px solid #d1d5db;background:#fff;color:#374151;cursor:pointer;font-family:inherit;white-space:nowrap">💾 Save a quoted rate</button>
+          </div>
         </div>
         <div id="carriers-body" style="margin:0 -14px">${buildCarrierComparison(matches)}</div>
       </div>
@@ -29988,5 +29997,155 @@ function renderTMSDispatch(tabBar,kpis,loads){
     out.sort(function(a,b){return b.quotes.length-a.quotes.length;});
     return out;
   };
+})();
+</script>
+
+<script>
+/* ════════════════════════════════════════════════════════════════════
+   CARRIER SOURCING (#sourcing) — capture every rate a carrier quotes, even
+   when you don't book, then search by delivery ZIP to see the market by mode.
+   Shared via Supabase table 'sourcing_rates'; falls back to localStorage so
+   it works before the table exists (per-device until then).
+   ════════════════════════════════════════════════════════════════════ */
+(function(){
+  var INK='#111419',INK2='#464D57',INK3='#8A929D',LINE='#E6E8EC',LINE2='#EFF1F4',
+      WASH='#EEF1FB',NAVY='#26357A',BLUE='#3A5BD9',SURF='#fff',CANV='#F4F5F7',
+      GRN='#0E7A48',GRNB='#E7F4EC',AMB='#9A6212',RED='#C0392F';
+  var HF="'Bricolage Grotesque',system-ui,sans-serif", BFF="'Archivo',system-ui,sans-serif";
+  var MODES=['Drayage','FTL','LTL','Box Truck','LCL','Air'];
+  var _lsAt=0;
+  window._sourcingRates=window._sourcingRates||null;
+
+  function _esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+  function _z5(z){ return String(z||'').replace(/[^0-9]/g,'').slice(0,5); }
+  function _money(n){ n=Number(n)||0; return '$'+Math.round(n).toLocaleString(); }
+  function _mColor(m){ return {Drayage:'#1e3a5f',FTL:'#1d4ed8',LTL:'#6d28d9',LCL:'#0369a1','Box Truck':'#b45309',Air:'#0f766e'}[m]||'#475569'; }
+  function _local(){ try{ return JSON.parse(localStorage.getItem('sourcing_rates')||'[]'); }catch(e){ return []; } }
+  function _saveLocal(arr){ try{ return (typeof safeSetItem==='function')?safeSetItem('sourcing_rates',JSON.stringify(arr)):(localStorage.setItem('sourcing_rates',JSON.stringify(arr)),true); }catch(e){ return false; } }
+  function _merge(a,b){ var seen={},out=[]; (a||[]).concat(b||[]).forEach(function(r){ if(r&&r.id&&!seen[r.id]){seen[r.id]=1;out.push(r);} }); return out; }
+
+  async function loadSourcingRates(force){
+    if(!force && window._sourcingRates && (Date.now()-_lsAt<12000)) return window._sourcingRates;
+    var local=_local(), remote=[];
+    try{ if(typeof db!=='undefined'&&db){ var r=await db.from('sourcing_rates').select('*'); if(r&&!r.error&&r.data) remote=r.data; } }catch(e){}
+    var all=_merge(remote,local).sort(function(a,b){ return String(b.created_at||b.date||'').localeCompare(String(a.created_at||a.date||'')); });
+    window._sourcingRates=all; _lsAt=Date.now();
+    return all;
+  }
+
+  window.saveSourcingRate=async function(rec){
+    rec.id=rec.id||('sr_'+Date.now()+'_'+Math.random().toString(36).slice(2,7));
+    rec.created_at=rec.created_at||new Date().toISOString();
+    try{ rec.created_by=(window._currentUser&&_currentUser.name)||''; }catch(e){}
+    // local first (instant + offline)
+    var local=_local(); local.unshift(rec); _saveLocal(local);
+    window._sourcingRates=_merge([rec],window._sourcingRates||[]);
+    // best-effort shared write
+    try{ if(typeof db!=='undefined'&&db){ var r=await db.from('sourcing_rates').insert(rec); if(r&&r.error) return {ok:true,shared:false,err:r.error.message}; return {ok:true,shared:true}; } }catch(e){ return {ok:true,shared:false,err:e.message}; }
+    return {ok:true,shared:false};
+  };
+
+  window.deleteSourcingRate=async function(id){
+    if(!confirm('Delete this saved rate?')) return;
+    var local=_local().filter(function(r){return r.id!==id;}); _saveLocal(local);
+    window._sourcingRates=(window._sourcingRates||[]).filter(function(r){return r.id!==id;});
+    try{ if(typeof db!=='undefined'&&db) await db.from('sourcing_rates').delete().eq('id',id); }catch(e){}
+    renderCarrierSourcing();
+  };
+
+  // ── Log-a-rate modal (also called from the quote builder with a prefill) ──
+  window.openLogRate=function(prefill){
+    prefill=prefill||{};
+    var opts=MODES.map(function(m){return '<option value="'+m+'"'+((prefill.mode===m)?' selected':'')+'>'+m+'</option>';}).join('');
+    $('modal-root').innerHTML='<div class="overlay"><div class="modal" style="max-width:460px">'
+      +'<div class="modal-title">Log a carrier rate</div>'
+      +'<div style="font-size:12px;color:'+INK3+';margin:-6px 0 14px">Save a rate you were quoted — even if you\'re not booking it. It builds your lane history.</div>'
+      +'<div class="g2"><div class="field"><label>Delivery ZIP *</label><input id="sr-zip" value="'+_esc(_z5(prefill.delivery_zip))+'" placeholder="e.g. 30301" inputmode="numeric"></div>'
+      +'<div class="field"><label>Mode</label><select id="sr-mode">'+opts+'</select></div></div>'
+      +'<div class="field"><label>Origin <span style="font-weight:400;color:'+INK3+';font-size:11px;text-transform:none;letter-spacing:0">— port, city or ZIP</span></label><input id="sr-origin" value="'+_esc(prefill.origin||'')+'" placeholder="e.g. Newark, NJ / LAX / 07001"></div>'
+      +'<div class="g2"><div class="field"><label>Carrier *</label><input id="sr-carrier" value="'+_esc(prefill.carrier||'')+'" placeholder="Who quoted it"></div>'
+      +'<div class="field"><label>Rate ($) *</label><input id="sr-rate" value="'+_esc(prefill.rate||'')+'" placeholder="e.g. 2200" inputmode="decimal"></div></div>'
+      +'<div class="g2"><div class="field"><label>Contact / phone</label><input id="sr-contact" value="'+_esc(prefill.contact||'')+'" placeholder="Dispatcher, phone"></div>'
+      +'<div class="field"><label>Date</label><input id="sr-date" type="date" value="'+(prefill.date||localDateStr())+'"></div></div>'
+      +'<div class="field"><label>Note</label><input id="sr-note" value="'+_esc(prefill.note||'')+'" placeholder="Equipment, validity, conditions…"></div>'
+      +'<div class="modal-foot"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn blue" onclick="submitLogRate()">Save rate</button></div>'
+      +'</div></div>';
+    setTimeout(function(){ var z=$('sr-zip'); if(z&&!z.value){z.focus();} else { var c=$('sr-carrier'); if(c)c.focus(); } },40);
+  };
+
+  window.submitLogRate=async function(){
+    var zip=_z5(($('sr-zip')||{}).value), carrier=(($('sr-carrier')||{}).value||'').trim(), rate=parseFloat((($('sr-rate')||{}).value||'').replace(/[^0-9.]/g,''));
+    if(!zip){ alert('Delivery ZIP is required.'); return; }
+    if(!carrier){ alert('Carrier is required.'); return; }
+    if(!rate||rate<=0){ alert('Enter a rate.'); return; }
+    var rec={ delivery_zip:zip, mode:($('sr-mode')||{}).value||'FTL', origin:(($('sr-origin')||{}).value||'').trim(),
+      carrier:carrier, rate:rate, contact:(($('sr-contact')||{}).value||'').trim(), date:($('sr-date')||{}).value||localDateStr(), note:(($('sr-note')||{}).value||'').trim() };
+    var res=await saveSourcingRate(rec);
+    closeModal();
+    if(res.shared) showToast('Rate saved & shared with your team','success',3000);
+    else showToast('Rate saved on this device'+(res.err?' (team sync pending — create the sourcing_rates table)':''),'info',4500);
+    if(S.view==='sourcing'){ S.srQuery=zip; renderCarrierSourcing(); }
+  };
+
+  // ── Main page ────────────────────────────────────────────────────
+  window.renderCarrierSourcing=async function(){
+    $('topbar-right').innerHTML='<button onclick="openLogRate()" style="display:flex;align-items:center;gap:6px;padding:8px 15px;border-radius:9px;border:none;background:'+NAVY+';color:#fff;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">+ Log a rate</button>';
+    $('page').innerHTML='<div style="font-family:'+BFF+';color:'+INK+';padding:4px 2px"><div style="color:'+INK3+';font-size:13px;padding:30px 0;text-align:center">Loading rates…</div></div>';
+    var rates=await loadSourcingRates();
+    var q=_z5(S.srQuery||'');
+
+    var head='<div style="margin-bottom:16px"><div style="font-family:'+HF+';font-weight:700;font-size:22px;letter-spacing:-.02em">Carrier Sourcing</div>'
+      +'<div style="font-size:13px;color:'+INK3+';margin-top:2px">Every rate your team has been quoted, searchable by delivery ZIP. '+rates.length+' rate'+(rates.length!==1?'s':'')+' logged.</div></div>';
+
+    var search='<div style="display:flex;gap:10px;align-items:center;margin-bottom:18px">'
+      +'<div style="position:relative;flex:1;max-width:380px"><span style="position:absolute;left:13px;top:50%;transform:translateY(-50%);color:'+INK3+';font-size:15px">⌕</span>'
+      +'<input id="sr-search" value="'+_esc(q)+'" oninput="S.srQuery=this.value;_srFilter()" placeholder="Enter delivery ZIP…" inputmode="numeric" style="width:100%;padding:12px 14px 12px 36px;font-size:15px;border:1.5px solid '+LINE+';border-radius:11px;font-family:inherit;outline:none" onfocus="this.style.borderColor=\''+NAVY+'\'" onblur="this.style.borderColor=\''+LINE+'\'"></div>'
+      +(q?'<button onclick="S.srQuery=\'\';renderCarrierSourcing()" style="padding:9px 13px;border:1px solid '+LINE+';background:#fff;border-radius:9px;font-size:12px;font-weight:600;color:'+INK2+';cursor:pointer;font-family:inherit">Clear</button>':'')+'</div>';
+
+    $('page').innerHTML='<div style="font-family:'+BFF+';color:'+INK+';padding:4px 2px">'+head+search+'<div id="sr-results"></div></div>';
+    _srRender();
+  };
+
+  window._srFilter=function(){ _srRender(); };
+
+  function _srRender(){
+    var box=document.getElementById('sr-results'); if(!box) return;
+    var rates=window._sourcingRates||[];
+    var q=_z5(S.srQuery||'');
+    if(!q){
+      box.innerHTML='<div style="background:'+SURF+';border:1px dashed '+LINE+';border-radius:14px;padding:34px 20px;text-align:center;color:'+INK3+'">'
+        +'<div style="font-size:30px;margin-bottom:8px">🧭</div>'
+        +'<div style="font-size:14px;color:'+INK2+';font-weight:600;margin-bottom:4px">Search a delivery ZIP to see every rate you\'ve been quoted there</div>'
+        +'<div style="font-size:12px">Grouped by mode, newest first — carrier, origin, price and who to call.</div>'
+        +(rates.length?'':'<div style="margin-top:14px"><button onclick="openLogRate()" style="padding:8px 15px;border-radius:9px;border:none;background:'+NAVY+';color:#fff;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">+ Log your first rate</button></div>')+'</div>';
+      return;
+    }
+    var hits=rates.filter(function(r){ return _z5(r.delivery_zip).indexOf(q)===0; });
+    if(!hits.length){
+      box.innerHTML='<div style="background:'+SURF+';border:1px solid '+LINE+';border-radius:14px;padding:30px 20px;text-align:center;color:'+INK3+'"><div style="font-size:14px;color:'+INK2+';font-weight:600">No rates logged for '+_esc(q)+' yet</div><div style="font-size:12px;margin-top:4px">Next time a carrier quotes this lane, tap <b>+ Log a rate</b> and it\'ll show up here.</div></div>';
+      return;
+    }
+    var byMode={}; hits.forEach(function(r){ (byMode[r.mode||'Other']=byMode[r.mode||'Other']||[]).push(r); });
+    var order=MODES.concat(['Other']);
+    var html=order.filter(function(m){return byMode[m];}).map(function(m){
+      var rows=byMode[m].slice().sort(function(a,b){return String(b.date||'').localeCompare(String(a.date||''));});
+      var vals=rows.map(function(r){return Number(r.rate)||0;}).filter(function(n){return n>0;});
+      var lo=vals.length?Math.min.apply(null,vals):0, hi=vals.length?Math.max.apply(null,vals):0, avg=vals.length?vals.reduce(function(s,n){return s+n;},0)/vals.length:0;
+      var col=_mColor(m);
+      var summary=vals.length?('<span style="font-size:12px;color:'+INK2+';font-weight:600">'+(lo===hi?_money(lo):_money(lo)+'–'+_money(hi))+'</span><span style="font-size:11px;color:'+INK3+'"> · avg '+_money(avg)+'</span>'):'';
+      var body=rows.map(function(r){
+        return '<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid '+LINE2+'">'
+          +'<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;color:'+INK+';white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+_esc(r.carrier||'—')+'</div>'
+          +'<div style="font-size:11px;color:'+INK3+';margin-top:2px">'+_esc(r.origin||'?')+' → '+_esc(r.delivery_zip||'')+' · '+_esc(r.date||'')+(r.contact?' · '+_esc(r.contact):'')+(r.note?' · '+_esc(r.note):'')+'</div></div>'
+          +'<div style="font-family:'+HF+';font-weight:700;font-size:16px;color:'+col+';white-space:nowrap">'+_money(r.rate)+'</div>'
+          +'<button onclick="deleteSourcingRate(\''+r.id+'\')" title="Delete" style="border:none;background:transparent;color:'+INK3+';cursor:pointer;font-size:13px;padding:4px">🗑</button></div>';
+      }).join('');
+      return '<div style="background:'+SURF+';border:1px solid '+LINE+';border-radius:14px;padding:16px 18px;margin-bottom:12px">'
+        +'<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:4px">'
+        +'<div style="display:flex;align-items:center;gap:8px"><span style="width:9px;height:9px;border-radius:50%;background:'+col+'"></span><span style="font-family:'+HF+';font-weight:700;font-size:15px;color:'+INK+'">'+_esc(m)+'</span><span style="font-size:11px;color:'+INK3+'">'+rows.length+' rate'+(rows.length>1?'s':'')+'</span></div>'
+        +'<div>'+summary+'</div></div>'+body+'</div>';
+    }).join('');
+    box.innerHTML='<div style="font-size:12px;color:'+INK3+';margin-bottom:10px">Rates to <b style="color:'+INK+'">'+_esc(q)+'</b> — '+hits.length+' across '+Object.keys(byMode).length+' mode'+(Object.keys(byMode).length>1?'s':'')+'</div>'+html;
+  }
 })();
 </script>
